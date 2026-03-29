@@ -4,6 +4,20 @@ This hub is a **memory layer** for AI agents: it stores conversations, supports 
 
 **Audience:** Builders wiring agents (LangGraph, Llama Stack, OpenAI Assistants, MCP, custom tools) to a single memory backend.
 
+**Related docs:** [Roadmap](roadmap.md) · [Architecture](architecture.md)
+
+---
+
+## Roadmap alignment
+
+Delivery is **phased** (see [roadmap.md](roadmap.md)):
+
+- **Phase 1 (MVP):** End-users ingest **ChatGPT exports** first (official ZIP → normalized data). Agents still interact **only** with the hub’s **HTTP API** — they do not parse ZIP exports themselves.
+- **Phase 2+:** Additional **sources** (Gemini Takeout, Claude HTML, local LLM logs, **Copilot** via paste / extension / logs / future APIs) feed the same schema once parsers exist.
+- **Phase 5 (roadmap):** First-class **agent integration** (LangGraph toolkits, MCP server, templates) sits on top of the same `search` / `retrieve` / `ask` surface.
+
+Optional MCP tools such as `memory.summarize` or `memory.timeline` assume **later** intelligence/timeline work in the roadmap; until then, agents rely on `/search` and `/ask` (and `/conversation/{id}`) as implemented.
+
 ---
 
 ## What agents can do
@@ -115,4 +129,4 @@ Plain-text equivalent:
 - **MCP:** If you add an MCP server in front of this API, map each tool to the corresponding method and path above.
 - **Safety:** Treat the hub like any other backend: validate inputs, handle errors and timeouts, and avoid logging full message bodies if logs are shared.
 
-For ingestion, normalization, and local-first setup, see the project [README](../README.md).
+For product overview, ingestion scope by phase, and local-first setup, see the [README](../README.md) and [roadmap](roadmap.md).

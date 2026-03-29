@@ -1,8 +1,8 @@
 # ai-memory-hub — architecture
 
-**ai-memory-hub** is a local-first memory engine that unifies AI conversations from multiple platforms into one searchable, RAG-ready knowledge hub. This document describes subsystems, data flow, the canonical schema, API surface, extensibility, and privacy assumptions.
+**ai-memory-hub** is a local-first memory engine that unifies AI conversations from multiple platforms into one searchable, RAG-ready knowledge hub, **rolled out in phases** (ChatGPT export first for MVP — see [roadmap](roadmap.md)). This document describes subsystems, data flow, the canonical schema, API surface, extensibility, and privacy assumptions.
 
-**Related docs:** [Agent integration (HTTP tools)](agents.md) · [Project overview](../README.md)
+**Related docs:** [Roadmap](roadmap.md) · [Agent integration (HTTP tools)](agents.md) · [Project overview](../README.md)
 
 ---
 
@@ -10,7 +10,7 @@
 
 | Layer | Responsibility |
 |--------|----------------|
-| Ingestion | Import raw exports; platform-specific parsers |
+| Ingestion | Import raw exports; **MVP:** ChatGPT ZIP first; **later:** multi-platform parsers (heterogeneous inputs) |
 | Normalization | One unified conversation JSON + chunking metadata |
 | Storage | Vector index (semantic) + metadata DB (records, filters) |
 | Query & inference | Search, RAG, optional summarization / topics |
@@ -24,7 +24,7 @@ Design principle: **modules are swappable** — parsers, vector stores, embeddin
 
 Use these grounded facts when reasoning about the system (spec / target design; a given repo checkout may not implement every piece yet):
 
-- **Data plane:** exports → parsers → **unified schema** → chunks + embeddings → **vector store** + **metadata DB**.
+- **Data plane (phased):** **Phase 1** — ChatGPT **official export (ZIP)** → parser → **unified schema** → chunks + embeddings → **vector store** + **metadata DB**. **Phase 2+** — same pipeline with additional parsers (e.g. Gemini Takeout, Claude HTML, local LLM logs; **Copilot** has **no** ChatGPT-like export — paste, browser capture, VS Code `.jsonl` logs, or future APIs per [roadmap](roadmap.md)).
 - **Query plane:** `POST /search` (retrieve chunks), `POST /ask` (RAG), `GET /conversation/{id}` (fetch record).
 - **Privacy default:** local-first; no mandatory cloud; no telemetry described in this architecture.
 - **Extension:** new sources = new parser module; new backends = implement store/provider interfaces.
@@ -36,7 +36,7 @@ Use these grounded facts when reasoning about the system (spec / target design; 
 
 ```mermaid
 flowchart TB
-  Ing["Ingestion layer\n(ChatGPT, Gemini, …)"]
+  Ing["Ingestion layer\n(MVP: ChatGPT ZIP; + multi-source)"]
   Norm["Normalization layer\nUnified conversation JSON"]
   VS["Vector store\n(Chroma / LanceDB / …)"]
   Emb["Embedding engine\n(OpenAI / Llama / local)"]
@@ -59,7 +59,7 @@ ASCII equivalent:
 ```
                 +---------------------------+
                 |     Ingestion layer       |
-                |  (ChatGPT, Gemini, etc.)  |
+                | (ChatGPT MVP; + sources) |
                 +-------------+-------------+
                               |
                               v
@@ -96,7 +96,11 @@ ASCII equivalent:
 
 ## 1. Ingestion layer
 
-Imports conversations from multiple AI platforms. Each platform has its own parser module.
+Imports conversations from **multiple** AI platforms over time; **each** platform has its own parser module.
+
+**MVP (Phase 1, per [roadmap](roadmap.md)):** implement **ChatGPT** ingestion first — the product exposes an **official, structured ZIP export**, which is the lowest-friction path to a working pipeline.
+
+**Phase 2+:** add parsers for other sources. **Microsoft Copilot** is a special case: there is **no** structured export comparable to ChatGPT’s. Practical strategies include **manual paste**, **browser/DOM capture** (optional extension), **VS Code Copilot `.jsonl` logs** when available, and a **future API-based** importer if Microsoft exposes history APIs.
 
 **Planned layout (example):**
 
@@ -338,7 +342,7 @@ Any MCP-compatible client can call these once the server implements them.
 
 **ai-memory-hub** is structured as a **modular, local-first** pipeline:
 
-1. **Ingest** multi-platform exports
+1. **Ingest** — **ChatGPT export first (MVP)**; then additional platforms and capture modes per [roadmap](roadmap.md)
 2. **Normalize** to a single schema
 3. **Embed** and **store** vectors + metadata
 4. **Query** via search and RAG

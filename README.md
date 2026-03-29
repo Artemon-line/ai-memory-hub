@@ -1,8 +1,8 @@
 # ai-memory-hub
 
-A **local-first**, extensible memory engine that unifies AI conversations (ChatGPT, Gemini, Copilot, Claude, local LLMs) into one **searchable**, **RAG-ready** knowledge hub.
+A **local-first**, extensible memory engine that unifies AI conversations (ChatGPT first for MVP, then Gemini, Copilot, Claude, local LLMs, and more) into one **searchable**, **RAG-ready** knowledge hub.
 
-It ingests chats, normalizes them, embeds them, stores them, and lets you query that history with **semantic search** or **retrieval-augmented generation** — a personal memory layer you control.
+It ingests chats, normalizes them, embeds them, stores them, and lets you query that history with **semantic search** or **retrieval-augmented generation** — a personal memory layer you control. **Delivery is phased:** see [docs/roadmap.md](docs/roadmap.md).
 
 **Goal:** keep ideas, plans, and insights findable across tools and sessions, without sending your history to a third party by default.
 
@@ -12,14 +12,14 @@ It ingests chats, normalizes them, embeds them, stores them, and lets you query 
 
 ### Multi-source ingestion
 
-Import or capture conversations from:
+**MVP (Phase 1):** [ChatGPT ZIP export](docs/roadmap.md) — official structured format, implemented first.
 
-- ChatGPT (ZIP export)
+**Phase 2 and beyond** (same unified schema; see [roadmap](docs/roadmap.md)):
+
 - Gemini (Google Takeout)
-- Claude
-- Microsoft Copilot
-- Local LLMs (Ollama, Llama Stack, LM Studio)
-- Browser copy/paste or extensions
+- Claude (HTML export and grouping)
+- Microsoft Copilot — **no ChatGPT-like export**; capture via paste importer, optional browser extension, optional VS Code `.jsonl` logs, or future APIs
+- Local LLMs (Ollama, LM Studio, Llama Stack logs)
 
 ### Unified memory schema
 
@@ -64,7 +64,7 @@ Data stays on your machine: no required cloud, no tracking, and no mandatory ext
 ```
                 +-----------------------+
                 |   Ingestion modules   |
-                |  (ChatGPT, Gemini…)   |
+                | (ChatGPT MVP → more)  |
                 +-----------+-----------+
                             |
                             v
@@ -109,34 +109,17 @@ The following paths describe the **intended** repository layout as the project g
 | Inference | `inference/rag.py`, `inference/summarizer.py`, `inference/topic_extractor.py` |
 | API | `backend/main.py` |
 
-For how **AI agents** should call the hub (search / retrieve / ask), see [docs/agents.md](docs/agents.md).
+For how **AI agents** should call the hub (search / retrieve / ask), see [docs/agents.md](docs/agents.md). For system layers and data flow, see [docs/architecture.md](docs/architecture.md).
 
 ---
 
 ## Roadmap
 
-### MVP
+The single source of truth for milestones and checklists is **[docs/roadmap.md](docs/roadmap.md)**. In short:
 
-- [ ] ChatGPT ingestion
-- [ ] Unified schema
-- [ ] Vector store (Chroma or LanceDB)
-- [ ] Semantic search endpoint
-- [ ] RAG endpoint
-
-### Phase 2
-
-- [ ] Gemini ingestion
-- [ ] Copilot ingestion
-- [ ] Topic clustering
-- [ ] Timeline reconstruction
-- [ ] UI dashboard
-
-### Phase 3
-
-- [ ] MCP provider
-- [ ] Agent memory integration
-- [ ] Plugin system
-- [ ] Local embeddings
+- **Phase 1 (MVP):** ChatGPT-only ingestion → unified schema → vector store + SQLite → `/search`, `/conversation/{id}`, `/ask`.
+- **Phase 2:** Multi-source ingestion (Gemini, Copilot workarounds, Claude, local LLMs).
+- **Later phases:** Intelligence layer, UI and SDKs, agent/MCP integration, advanced memory features, optional cloud sync.
 
 ---
 
