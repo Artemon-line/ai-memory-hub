@@ -1,132 +1,113 @@
-# AI agents and ai-memory-hub
+# Agent Integration
 
-This hub is a **memory layer** for AI agents: it stores conversations, supports semantic retrieval, and can answer questions with RAG over your personal history.
+ai-memory-hub exposes a small MCP and API surface so agents can write and read memory without owning storage or ingestion logic.
 
-**Audience:** Builders wiring agents (LangGraph, Llama Stack, OpenAI Assistants, MCP, custom tools) to a single memory backend.
+Related docs:
+- Architecture: `architecture.md`
+- Project overview: `../README.md`
 
-**Related docs:** [Roadmap](roadmap.md) · [Architecture](architecture.md)
+## How Agents Interact With The Hub
 
----
+Agents act as ingestion and retrieval clients.
 
-## Roadmap alignment
+- Ingest: format JSON -> call `memory.insert`
+- Search: call `memory.search` with a query
+- Retrieve: call `memory.retrieve` by ID
 
-Delivery is **phased** (see [roadmap.md](roadmap.md)):
+## MCP Tools
 
-- **Phase 1 (MVP):** End-users ingest **ChatGPT exports** first (official ZIP → normalized data). Agents still interact **only** with the hub’s **HTTP API** — they do not parse ZIP exports themselves.
-- **Phase 2+:** Additional **sources** (Gemini Takeout, Claude HTML, local LLM logs, **Copilot** via paste / extension / logs / future APIs) feed the same schema once parsers exist.
-- **Phase 5 (roadmap):** First-class **agent integration** (LangGraph toolkits, MCP server, templates) sits on top of the same `search` / `retrieve` / `ask` surface.
+Tool names and schemas are implementation-specific, but the intended core surface is:
 
-Optional MCP tools such as `memory.summarize` or `memory.timeline` assume **later** intelligence/timeline work in the roadmap; until then, agents rely on `/search` and `/ask` (and `/conversation/{id}`) as implemented.
-
----
-
-## What agents can do
-
-- Retrieve past conversations
-- Search for relevant context
-- Summarize historical discussions
-- Extract facts, decisions, or plans
-- Build timelines
-- Maintain continuity across sessions
-
-**Example prompts users might run through an agent:**
-
-- “What did I say about upgrading my GPU last month?”
-- “Find all conversations where I discussed FastAPI RAG.”
-- “Summarize everything I learned about Llama Stack.”
-
----
-
-## Interaction model
-
-Agents talk to the hub **only through its HTTP API**. They do **not** read raw export files or database files directly.
-
-| Operation | Method | Path | Role |
-|-----------|--------|------|------|
-| Search | `POST` | `/search` | Semantic search across stored conversations |
-| Retrieve | `GET` | `/conversation/{id}` | Fetch one conversation (or message scope the API defines) |
-| Ask (RAG) | `POST` | `/ask` | Retrieval-augmented answer over memory |
-
-### Search
-
-Semantic search over stored conversations.
-
-```http
-POST /search
-Content-Type: application/json
-```
+### `memory.insert`
 
 ```json
 {
-  "query": "gpu upgrade"
+  "conversation": {
+    "id": "uuid",
+    "source": "copilot",
+    "timestamp": "YYYY-MM-DDTHH:MM:SSZ",
+    "messages": [
+      { "role": "user", "text": "..." },
+      { "role": "assistant", "text": "..." }
+    ],
+    "metadata": { "tags": [], "topics": [], "imported_at": "YYYY-MM-DDTHH:MM:SSZ" }
+  }
 }
 ```
 
-### Retrieve
+Return should include a status and the stored conversation id.
 
-Load a specific conversation by identifier (exact shape of `{id}` and response follows your deployed API contract).
-
-```http
-GET /conversation/{id}
-```
-
-### Ask (RAG run query + optional retrieval limits)
-
-```http
-POST /ask
-Content-Type: application/json
-```
+### `memory.search`
 
 ```json
 {
-  "query": "What were my plans for the PC upgrade?",
+  "query": "gpu upgrade",
   "top_k": 5
 }
 ```
 
-`top_k` controls how many chunks or hits to pull into context before generation (if your server supports it).
+### `memory.retrieve`
 
----
-
-## Architecture (conceptual)
-
-```mermaid
-flowchart TB
-  Agent["AI agent\n(LangGraph, MCP client, etc.)"]
-  API["ai-memory-hub API\nsearch · retrieve · ask"]
-  Store["Vector store + metadata"]
-
-  Agent -->|"Tools / HTTP"| API
-  API --> Store
+```json
+{
+  "id": "uuid"
+}
 ```
 
-Plain-text equivalent:
+## LangGraph Ingestion Loop (Agentic)
 
-```
-+---------------------+
-|     AI agent        |
-| (LangGraph, MCP…)   |
-+----------+----------+
-           |
-           | Tools / HTTP
-           v
-+-----------------------------+
-|     ai-memory-hub API       |
-|  search / retrieve / ask    |
-+----------+------------------+
-           |
-           v
-+-----------------------------+
-|   Vector store + metadata   |
-+-----------------------------+
+This loop is LangGraph-friendly and works for both MCP and manual ingestion.
+
+```text
+fetch -> format_json -> validate -> insert -> embed -> store -> confirm
 ```
 
----
+Step details:
 
-## Integration notes
+1. Fetch messages (MCP context or manual input)
+2. Format into JSON schema (LLM)
+3. Validate schema (Python)
+4. Insert via `memory.insert`
+5. Embed chunks
+6. Store vectors
+7. Confirm success
 
-- **Tools:** Expose `search`, `retrieve`, and `ask` as function/tool calls your agent can choose based on the user task.
-- **MCP:** If you add an MCP server in front of this API, map each tool to the corresponding method and path above.
-- **Safety:** Treat the hub like any other backend: validate inputs, handle errors and timeouts, and avoid logging full message bodies if logs are shared.
+## MCP Automatic Ingestion ("Save last N messages")
 
-For product overview, ingestion scope by phase, and local-first setup, see the [README](../README.md) and [roadmap](roadmap.md).
+Example intent:
+
+- User: "Save last 20 messages"
+- Agent fetches last 20 turns
+- Agent formats JSON
+- Agent calls `memory.insert`
+- Hub stores and confirms
+
+## Manual Ingestion Fallback
+
+When MCP context is unavailable:
+
+1. User copies raw text
+2. LLM formats JSON schema
+3. User or agent calls `memory.insert`
+
+## Example Agent Workflow
+
+```text
+User -> Agent
+  "Save last 10 messages"
+Agent -> Fetch context
+Agent -> Format JSON
+Agent -> memory.insert
+Hub -> Validate, embed, store
+Agent -> "Memory saved"
+```
+
+## Future Agent Features
+
+- Memory consolidation
+- Topic clustering
+- Timeline extraction
+- Long-term memory distillation
+- Multi-agent shared memory
+
+

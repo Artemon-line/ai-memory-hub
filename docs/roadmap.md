@@ -90,8 +90,6 @@ Copilot does not provide a structured export comparable to ChatGPT. Ingestion mu
 
 - [ ] **Manual paste importer** — user pastes a Copilot chat; parser extracts roles and messages.
 
-- [ ] **Browser extension (optional)** — capture the DOM of the Copilot chat window.
-
 - [ ] **VS Code Copilot logs (optional)** — parse local `.jsonl` logs when available.
 
 - [ ] **Future: Copilot API ingestion** — if Microsoft exposes conversation-history APIs, add a dedicated ingestion module.

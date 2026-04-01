@@ -1,351 +1,128 @@
-# ai-memory-hub — architecture
+# Architecture
 
-**ai-memory-hub** is a local-first memory engine that unifies AI conversations from multiple platforms into one searchable, RAG-ready knowledge hub, **rolled out in phases** (ChatGPT export first for MVP — see [roadmap](roadmap.md)). This document describes subsystems, data flow, the canonical schema, API surface, extensibility, and privacy assumptions.
+ai-memory-hub is a local-first memory engine built around a unified JSON schema and a config-driven provider system. It exposes interfaces for ingestion and retrieval, while letting you bring your own inference, embeddings, storage, and agent framework.
 
-**Related docs:** [Roadmap](roadmap.md) · [Agent integration (HTTP tools)](agents.md) · [Project overview](../README.md)
+Related docs:
+- Project overview: `../README.md`
+- Agent integration: `agents.md`
 
----
-
-## At a glance (humans)
-
-| Layer | Responsibility |
-|--------|----------------|
-| Ingestion | Import raw exports; **MVP:** ChatGPT ZIP first; **later:** multi-platform parsers (heterogeneous inputs) |
-| Normalization | One unified conversation JSON + chunking metadata |
-| Storage | Vector index (semantic) + metadata DB (records, filters) |
-| Query & inference | Search, RAG, optional summarization / topics |
-| Interfaces | HTTP API, optional UI, agents, MCP tools |
-
-Design principle: **modules are swappable** — parsers, vector stores, embedding providers, and interfaces can be extended without rewriting the whole stack.
-
----
-
-## At a glance (agents)
-
-Use these grounded facts when reasoning about the system (spec / target design; a given repo checkout may not implement every piece yet):
-
-- **Data plane (phased):** **Phase 1** — ChatGPT **official export (ZIP)** → parser → **unified schema** → chunks + embeddings → **vector store** + **metadata DB**. **Phase 2+** — same pipeline with additional parsers (e.g. Gemini Takeout, Claude HTML, local LLM logs; **Copilot** has **no** ChatGPT-like export — paste, browser capture, VS Code `.jsonl` logs, or future APIs per [roadmap](roadmap.md)).
-- **Query plane:** `POST /search` (retrieve chunks), `POST /ask` (RAG), `GET /conversation/{id}` (fetch record).
-- **Privacy default:** local-first; no mandatory cloud; no telemetry described in this architecture.
-- **Extension:** new sources = new parser module; new backends = implement store/provider interfaces.
-- **Agent-facing detail:** endpoint shapes and agent usage patterns are summarized in [agents.md](agents.md).
-
----
-
-## High-level diagram
-
-```mermaid
-flowchart TB
-  Ing["Ingestion layer\n(MVP: ChatGPT ZIP; + multi-source)"]
-  Norm["Normalization layer\nUnified conversation JSON"]
-  VS["Vector store\n(Chroma / LanceDB / …)"]
-  Emb["Embedding engine\n(OpenAI / Llama / local)"]
-  Meta["Metadata DB\n(SQLite / PostgreSQL)"]
-  Qry["Query and inference API\nSearch, RAG, summaries"]
-  Iface["Interface layer\nUI / agents / MCP"]
-
-  Ing --> Norm
-  Norm --> VS
-  Norm --> Meta
-  Emb --> VS
-  Qry --> VS
-  Qry --> Meta
-  Norm --> Emb
-  Qry --> Iface
-```
-
-ASCII equivalent:
-
-```
-                +---------------------------+
-                |     Ingestion layer       |
-                | (ChatGPT MVP; + sources) |
-                +-------------+-------------+
-                              |
-                              v
-                +---------------------------+
-                |    Normalization layer    |
-                |  Unified conversation JSON |
-                +-------------+-------------+
-                              |
-                              v
-        +---------------------+----------------------+
-        |                                            |
-        v                                            v
-+------------------+                      +----------------------+
-|   Vector store   | <--- embeddings ---- |   Embedding engine   |
-| (Chroma/LanceDB) |                      | (OpenAI/Llama/local) |
-+---------+--------+                      +----------+-----------+
-          |                                           |
-          +---------------------+---------------------+
-                                |
-                                v
-                +---------------------------+
-                |   Query & inference API   |
-                |  (Search, RAG, summaries)  |
-                +-------------+-------------+
-                              |
-                              v
-                +---------------------------+
-                |   Interface layer           |
-                |  UI / agents / MCP tools    |
-                +---------------------------+
-```
-
----
-
-## 1. Ingestion layer
-
-Imports conversations from **multiple** AI platforms over time; **each** platform has its own parser module.
-
-**MVP (Phase 1, per [roadmap](roadmap.md)):** implement **ChatGPT** ingestion first — the product exposes an **official, structured ZIP export**, which is the lowest-friction path to a working pipeline.
-
-**Phase 2+:** add parsers for other sources. **Microsoft Copilot** is a special case: there is **no** structured export comparable to ChatGPT’s. Practical strategies include **manual paste**, **browser/DOM capture** (optional extension), **VS Code Copilot `.jsonl` logs** when available, and a **future API-based** importer if Microsoft exposes history APIs.
-
-**Planned layout (example):**
+## High-Level System Diagram
 
 ```text
-ingestion/
-  chatgpt_parser.py
-  gemini_parser.py
-  copilot_parser.py
-  claude_parser.py
-  local_llm_parser.py
+Source Messages
+  -> LLM Formats JSON
+  -> Schema Validation
+  -> memory.insert (MCP or API)
+  -> Chunk + Embed
+  -> Vector Store
+  -> Search / Retrieve / RAG
 ```
 
-**Responsibilities:**
+## Ingestion Pipeline
 
-- Read raw exports (ZIP, JSON, HTML, Takeout, etc.)
-- Extract message threads
-- Capture metadata (timestamps, roles, sources)
-- Emit objects for the normalization layer
+The ingestion path is LLM-first and schema-first. The hub does not scrape HTML or parse DOM exports.
 
-**Design goals:**
+Steps:
 
-- **Modular:** one parser per platform
-- **Fault-tolerant:** tolerate malformed or partial exports
-- **Extensible:** add new platforms without changing unrelated code
+1. Fetch messages (MCP or manual input)
+2. Format into the unified JSON schema (LLM)
+3. Validate schema (Python)
+4. Insert via `memory.insert`
+5. Embed chunks
+6. Store vectors
+7. Confirm success
 
----
+## Normalization Layer
 
-## 2. Normalization layer
+The normalization layer enforces a single JSON schema across platforms. This ensures consistent storage, search, and retrieval regardless of source.
 
-All ingested data is converted into a **unified schema**. Example:
+Responsibilities:
 
-```json
-{
-  "id": "uuid",
-  "source": "chatgpt",
-  "timestamp": "2026-03-29T10:00:00Z",
-  "messages": [
-    { "role": "user", "text": "..." },
-    { "role": "assistant", "text": "..." }
-  ],
-  "metadata": {
-    "tags": [],
-    "topics": [],
-    "imported_at": "2026-03-29T11:00:00Z"
-  }
-}
-```
+- Validate schema
+- Normalize roles and timestamps
+- Chunk messages for embeddings
+- Attach metadata
 
-**Responsibilities:**
+## Storage Layer
 
-- Enforce consistent structure across platforms
-- Clean and sanitize text
-- Split long threads into **chunks** suitable for embedding
-- Enrich metadata (topics, tags, timestamps)
+Local-first by default. No cloud sync unless configured.
 
----
+Defaults:
 
-## 3. Storage layer
+- Metadata store: SQLite
+- Vector store: LanceDB
 
-Two conceptual parts: **vector index** and **metadata store**.
+You can replace either with your own providers via config.
 
-### 3.1 Vector store
+## Inference Layer (Search + RAG)
 
-Stores **embeddings** for semantic search.
+The inference layer is provider-driven. It consumes stored chunks and produces search results or RAG answers.
 
-**Typical backends (configurable):**
+Core flows:
 
-- ChromaDB (often a default in designs like this)
-- LanceDB
-- pgvector
-- Milvus (optional)
+- Search: embed query -> vector search -> return chunks
+- RAG: search -> build context -> generate response
 
-**Responsibilities:**
+The hub does not ship an inference engine. You configure one.
 
-- Persist embeddings
-- Similarity search (`top_k`)
-- Return scored chunks for search and RAG
+## Interface Layer (API + MCP)
 
-### 3.2 Metadata database
+ai-memory-hub exposes interfaces rather than implementations:
 
-Stores **normalized conversation records** and supports filtering.
+- MCP tools for agent workflows
+- HTTP API for direct clients
 
-**Typical backends:**
+Core MCP tools:
 
-- SQLite (local default)
-- PostgreSQL (optional)
-
-**Responsibilities:**
-
-- Store normalized objects and linkage to chunks
-- Fast lookup by ID
-- Filters: source, date range, tags, etc.
-
----
-
-## 4. Query and inference layer
-
-### 4.1 Semantic search
-
-```http
-POST /search
-Content-Type: application/json
-```
-
-```json
-{
-  "query": "gpu upgrade",
-  "top_k": 5
-}
-```
-
-**Typical pipeline:**
-
-1. Embed the query
-2. Vector search (`top_k`)
-3. Optional reranking
-4. Return relevant chunks (and IDs for citation)
-
-### 4.2 RAG (retrieval-augmented generation)
-
-```http
-POST /ask
-Content-Type: application/json
-```
-
-```json
-{
-  "query": "What were my PC upgrade plans?",
-  "top_k": 5
-}
-```
-
-**Typical pipeline:**
-
-1. Semantic search for context
-2. Build a context window
-3. Call an LLM to generate an answer
-4. Return answer **with citations** / source references where supported
-
-**Common model backends:**
-
-- OpenAI APIs
-- Llama Stack
-- Local runners (Ollama, LM Studio, custom HTTP endpoints)
-
-### 4.3 Summaries and topic extraction (optional)
-
-- Conversation summaries
-- Topic clustering
-- Timeline reconstruction
-- Memory consolidation
-
-These are **additive** capabilities on top of search/RAG.
-
----
-
-## 5. Interface layer
-
-### 5.1 HTTP API (e.g. FastAPI)
-
-Illustrative endpoint set:
-
-| Method | Path | Purpose |
-|--------|------|---------|
-| *varies* | `/ingest` | Accept exports / payloads for parsing |
-| `POST` | `/search` | Semantic search |
-| `POST` | `/ask` | RAG query |
-| `GET` | `/conversation/{id}` | Fetch one conversation |
-| *varies* | `/stats` | Usage / index statistics |
-| `GET` | `/health` | Liveness / readiness |
-
-Exact request/response contracts belong in OpenAPI or code; [agents.md](agents.md) focuses on agent-facing usage.
-
-### 5.2 UI (optional)
-
-A lightweight dashboard may support:
-
-- Uploading exports
-- Browsing conversations
-- Running searches and `/ask`
-- Inspecting relationships or timelines (future)
-
-### 5.3 Agent integration
-
-Agents treat the hub as a **memory provider** via HTTP tools or wrappers. Common ecosystem integrations:
-
-- LangGraph
-- Llama Stack
-- OpenAI Assistants (function calling)
-- MCP (Model Context Protocol)
-
-### 5.4 MCP provider (target)
-
-Exposed tool names might include:
-
+- `memory.insert`
 - `memory.search`
 - `memory.retrieve`
-- `memory.summarize`
-- `memory.timeline`
 
-Any MCP-compatible client can call these once the server implements them.
+## Bring Your Own Stack (BYOS) Model
 
----
+Bring Your Own Stack (BYOS) means you supply inference, embeddings, and storage via config.
 
-## Security and privacy model
+You can replace any provider through config.
 
-- **Local-first by default** — data stays on the user’s machine unless they configure otherwise.
-- **No mandatory cloud sync** in the baseline design.
-- **No telemetry** assumed in this architecture.
-- **External calls** only where the user opts into remote embeddings or LLMs.
-- **User owns the data** — the hub is a personal memory layer, not a shared multi-tenant product by default.
+```text
+[Ingestion]
+  LLM (yours) -> JSON Schema
+       |
+       v
+[Hub Interfaces]
+  MCP / API
+       |
+       v
+[Storage]
+  Metadata DB (yours)
+  Vector DB (yours)
+       |
+       v
+[Inference]
+  Search / RAG (yours)
+```
 
----
+## Config-Driven Provider System
 
-## Extensibility model
+All providers are defined in a single config file. The hub reads this at startup and wires the interfaces to your choices.
 
-| Change | Typical approach |
-|--------|------------------|
-| New ingestion source | Add `ingestion/<source>_parser.py` (or equivalent) |
-| New vector store | Implement the project’s `VectorStore` interface |
-| New embedding provider | Implement `EmbeddingProvider` (or equivalent) |
-| New agent capabilities | Add HTTP routes and/or MCP tools; keep contracts explicit |
+Example:
 
----
+```yaml
+storage:
+  metadata: sqlite
+  vectors: lancedb
 
-## Future enhancements
+providers:
+  inference: openai
+  embeddings: openai
+  vector_db: lancedb
 
-- Memory graphs (entity linking)
-- Automatic memory consolidation
-- Relevance decay over time
-- Multi-agent shared memory (explicit sharing policy)
-- UI timeline view
-- Local embedding models as first-class
-- Formal plugin system
+interfaces:
+  mcp: true
+  api: true
+```
 
----
 
-## Summary
 
-**ai-memory-hub** is structured as a **modular, local-first** pipeline:
 
-1. **Ingest** — **ChatGPT export first (MVP)**; then additional platforms and capture modes per [roadmap](roadmap.md)
-2. **Normalize** to a single schema
-3. **Embed** and **store** vectors + metadata
-4. **Query** via search and RAG
-5. **Expose** APIs, UI, and agent/MCP interfaces
-
-It is meant to scale from a **personal tool** to a fuller **memory platform** as components land.

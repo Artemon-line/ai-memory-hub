@@ -1,142 +1,107 @@
 # ai-memory-hub
 
-A **local-first**, extensible memory engine that unifies AI conversations (ChatGPT first for MVP, then Gemini, Copilot, Claude, local LLMs, and more) into one **searchable**, **RAG-ready** knowledge hub.
-
-It ingests chats, normalizes them, embeds them, stores them, and lets you query that history with **semantic search** or **retrieval-augmented generation** — a personal memory layer you control. **Delivery is phased:** see [docs/roadmap.md](docs/roadmap.md).
-
-**Goal:** keep ideas, plans, and insights findable across tools and sessions, without sending your history to a third party by default.
-
----
+ai-memory-hub is a local-first memory engine that lets you store, search, and reuse AI conversation history across any LLM platform. It provides interfaces, a unified JSON schema, and a config-driven provider system so you can bring your own models, databases, and tooling.
 
 ## Features
 
-### Multi-source ingestion
+- LLM-first ingestion with a unified JSON schema
+- Two ingestion modes: MCP and manual
+- Local-first defaults: SQLite (metadata) and LanceDB (vectors)
+- Bring Your Own Stack: choose inference, embeddings, vector DB, storage, and agent framework
+- Schema validation, embedding, and indexing pipeline
+- Search and retrieval interfaces via MCP and API
 
-**MVP (Phase 1):** [ChatGPT ZIP export](docs/roadmap.md) — official structured format, implemented first.
+## Bring Your Own Stack (BYOS)
 
-**Phase 2 and beyond** (same unified schema; see [roadmap](docs/roadmap.md)):
+ai-memory-hub is intentionally minimal. It does not prescribe your LLM, vector DB, embeddings, or agent framework. The hub provides interfaces and a consistent schema. All providers are configured via a simple config file.
 
-- Gemini (Google Takeout)
-- Claude (HTML export and grouping)
-- Microsoft Copilot — **no ChatGPT-like export**; capture via paste importer, optional browser extension, optional VS Code `.jsonl` logs, or future APIs
-- Local LLMs (Ollama, LM Studio, Llama Stack logs)
+You provide:
 
-### Unified memory schema
+- Inference engine (OpenAI, Llama Stack, Ollama, LM Studio, etc.)
+- Vector DB (LanceDB, Chroma, Milvus, pgvector, etc.)
+- Embeddings and guardrails
+- Storage backends
+- Agent framework
 
-Conversations are normalized to a consistent shape, for example:
+## Local-First
 
-`source` → `timestamp` → user messages → assistant messages → `metadata`
+- SQLite for metadata by default
+- LanceDB for vectors by default
+- No cloud sync unless you configure it
+- You own all data
 
-### Semantic search
+## Ingestion Model (LLM-First)
 
-Query your full history using:
+All platforms export into the same JSON schema. No browser extensions, DOM scraping, or HTML parsing.
 
-- Embeddings and vector similarity
-- Metadata filters
-- Time filters
+Two ingestion modes:
 
-### RAG over your own chats
+1. MCP ingestion: User says "Save last N messages", the agent fetches context, formats JSON, and calls `memory.insert`.
+2. Manual ingestion: User copies text, an LLM formats JSON, and the user calls `memory.insert`.
 
-Example questions:
+## Unified JSON Schema (Core)
 
-- “What did I say about upgrading my GPU?”
-- “Summarize all my RAG experiments.”
-- “Find every conversation where I discussed Llama Stack.”
+All ingestion flows target a single schema. The hub validates it, embeds it, stores it, and indexes it.
 
-### Modular design
-
-Planned extension points for:
-
-- Ingestion adapters
-- Vector stores
-- Embedding providers
-- Agents and tools
-- UI
-
-### Local-first
-
-Data stays on your machine: no required cloud, no tracking, and no mandatory external services beyond what you opt into.
-
----
-
-## Architecture (overview)
-
-```
-                +-----------------------+
-                |   Ingestion modules   |
-                | (ChatGPT MVP → more)  |
-                +-----------+-----------+
-                            |
-                            v
-                +-----------------------+
-                |   Normalization       |
-                |   Unified schema      |
-                +-----------+-----------+
-                            |
-                            v
-        +-------------------+-------------------+
-        |                                       |
-        v                                       v
-+---------------+                      +----------------+
-|  Vector store | <--- embeddings ---- | Embedding API  |
-| (Chroma etc.) |                      | (OpenAI/Llama) |
-+-------+-------+                      +--------+-------+
-        |                                       |
-        +-------------------+-------------------+
-                            |
-                            v
-                +-----------------------+
-                |   Query engine        |
-                | (search + RAG + API)  |
-                +-----------+-----------+
-                            |
-                            v
-                +-----------------------+
-                |   UI / agents / MCP   |
-                +-----------------------+
+```json
+{
+  "id": "uuid",
+  "source": "chatgpt",
+  "timestamp": "YYYY-MM-DDTHH:MM:SSZ",
+  "messages": [
+    { "role": "user", "text": "..." },
+    { "role": "assistant", "text": "..." }
+  ],
+  "metadata": {
+    "tags": [],
+    "topics": [],
+    "imported_at": "YYYY-MM-DDTHH:MM:SSZ"
+  }
+}
 ```
 
----
+## Quick Start
 
-## Planned module layout
+1. Configure providers in your config file (example: `config.yaml`).
+2. Ask your LLM to format a conversation in the unified schema.
+3. Insert via MCP: `memory.insert`.
+4. Search via MCP: `memory.search`.
 
-The following paths describe the **intended** repository layout as the project grows (not everything may exist yet in a given checkout).
+## Example Config
 
-| Area | Paths (planned) |
-|------|-------------------|
-| Ingestion | `ingestion/chatgpt_parser.py`, `ingestion/gemini_parser.py`, `ingestion/copilot_parser.py` |
-| Storage | `storage/vector_store.py`, `storage/metadata_db.py` |
-| Inference | `inference/rag.py`, `inference/summarizer.py`, `inference/topic_extractor.py` |
-| API | `backend/main.py` |
+```yaml
+storage:
+  metadata: sqlite
+  vectors: lancedb
 
-For how **AI agents** should call the hub (search / retrieve / ask), see [docs/agents.md](docs/agents.md). For system layers and data flow, see [docs/architecture.md](docs/architecture.md).
+providers:
+  inference: openai
+  embeddings: openai
+  vector_db: lancedb
 
----
+interfaces:
+  mcp: true
+  api: true
+```
 
-## Roadmap
+## High-Level Architecture
 
-The single source of truth for milestones and checklists is **[docs/roadmap.md](docs/roadmap.md)**. In short:
+```text
+Raw Messages
+  -> LLM Formats JSON
+  -> Schema Validation
+  -> memory.insert (MCP or API)
+  -> Chunk + Embed
+  -> Vector Store
+  -> Search / Retrieve / RAG
+```
 
-- **Phase 1 (MVP):** ChatGPT-only ingestion → unified schema → vector store + SQLite → `/search`, `/conversation/{id}`, `/ask`.
-- **Phase 2:** Multi-source ingestion (Gemini, Copilot workarounds, Claude, local LLMs).
-- **Later phases:** Intelligence layer, UI and SDKs, agent/MCP integration, advanced memory features, optional cloud sync.
+## Documentation
 
----
-
-## Contributing
-
-Contributions are welcome — including ideas and feedback. Open an issue or pull request anytime.
-
----
+- Architecture: `docs/architecture.md`
+- Agents: `docs/agents.md`
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT License. See `LICENSE`.
 
----
-
-## Why this exists
-
-LLMs do not remember your past chats by default. Your conversations still contain decisions, context, and knowledge worth keeping.
-
-**ai-memory-hub** is a personal, private memory layer that can grow with you and stay under your control.
