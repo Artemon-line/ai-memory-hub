@@ -1,0 +1,31 @@
+#!/usr/bin/env sh
+set -eu
+
+if ! command -v uv >/dev/null 2>&1; then
+  echo "[pre-commit] uv is required. Install uv: https://docs.astral.sh/uv/getting-started/installation/"
+  exit 1
+fi
+
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACMR)
+
+PY_FILES=$(printf "%s\n" "$STAGED_FILES" | grep -E '\.py$' || true)
+YAML_FILES=$(printf "%s\n" "$STAGED_FILES" | grep -E '\.ya?ml$' || true)
+MD_FILES=$(printf "%s\n" "$STAGED_FILES" | grep -E '\.md$' || true)
+
+if [ -n "$PY_FILES" ]; then
+  echo "[pre-commit] Linting Python files with ruff..."
+  printf "%s\n" "$PY_FILES" | xargs uvx ruff check
+fi
+
+if [ -n "$YAML_FILES" ]; then
+  echo "[pre-commit] Linting YAML files with yamllint..."
+  printf "%s\n" "$YAML_FILES" | xargs uvx yamllint -d '{extends: default, rules: {document-start: disable, truthy: disable}}'
+fi
+
+if [ -n "$MD_FILES" ]; then
+  echo "[pre-commit] Linting Markdown files with pymarkdown..."
+  printf "%s\n" "$MD_FILES" | xargs uvx --from pymarkdownlnt pymarkdown scan
+fi
+
+echo "[pre-commit] Running test suite..."
+python -m pytest -q

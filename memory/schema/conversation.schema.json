@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-memory-hub/schema/conversation.schema.json",
+  "title": "Conversation",
+  "description": "Unified schema for ingesting conversations into ai-memory-hub.",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this conversation entry."
+    },
+    "source": {
+      "type": "string",
+      "description": "Origin of the conversation (chatgpt, copilot, claude, gemini, local-llm, mcp, manual, json-import, etc.)."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp representing when the conversation occurred or was captured."
+    },
+    "title": {
+      "type": "string",
+      "description": "Optional human-readable title for the conversation.",
+      "minLength": 1
+    },
+    "messages": {
+      "type": "array",
+      "description": "Ordered list of messages in the conversation.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": ["user", "assistant"],
+            "description": "Role of the message sender."
+          },
+          "text": {
+            "type": "string",
+            "description": "Raw message text. Must preserve emojis, code blocks, and formatting."
+          }
+        },
+        "required": ["role", "text"],
+        "additionalProperties": false
+      },
+      "minItems": 1
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Additional metadata for ingestion, indexing, and retrieval.",
+      "properties": {
+        "imported_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when this entry was imported into the hub."
+        },
+        "timezone": {
+          "type": "string",
+          "description": "IANA timezone identifier (e.g., Europe/Dublin)."
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Optional user-defined tags."
+        },
+        "topics": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Optional topics extracted or assigned by agents."
+        },
+        "model": {
+          "type": "string",
+          "description": "Model used to generate assistant messages (e.g., gpt-4.1, claude-3-opus)."
+        },
+        "platform": {
+          "type": "string",
+          "description": "Platform where the conversation occurred (web, cli, vscode, desktop, api)."
+        },
+        "agent": {
+          "type": "string",
+          "description": "Agent responsible for ingestion (mcp, langgraph, manual, local-llm)."
+        },
+        "ingestion_method": {
+          "type": "string",
+          "description": "How the conversation was ingested (mcp, manual, json-import)."
+        },
+        "contains_code": {
+          "type": "boolean",
+          "description": "Whether the conversation contains code blocks."
+        }
+      },
+      "required": ["imported_at"],
+      "additionalProperties": true
+    }
+  },
+  "required": ["id", "source", "timestamp", "messages", "metadata"],
+  "additionalProperties": false
+}
