@@ -1,0 +1,78 @@
+name: ollama-chromadb-tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ollama-chromadb-tests:
+    name: Ollama + ChromaDB Tests
+    runs-on: ubuntu-latest
+
+    services:
+      chromadb:
+        image: chromadb/chroma:0.5.5
+        ports:
+          - 8001:8000
+
+    env:
+      OLLAMA_HOST: http://127.0.0.1:11434
+      CHROMA_HOST: http://127.0.0.1:8001
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pytest pytest-asyncio chromadb requests
+
+      - name: Install Ollama
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+
+      - name: Start Ollama
+        run: |
+          ollama serve > /tmp/ollama.log 2>&1 &
+          for i in {1..30}; do
+            if curl -sf "$OLLAMA_HOST/api/tags" >/dev/null; then
+              echo "Ollama is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Ollama failed to start"
+          cat /tmp/ollama.log
+          exit 1
+
+      - name: Pull Ollama model
+        run: |
+          ollama pull all-minilm
+
+      - name: Verify ChromaDB
+        run: |
+          for i in {1..30}; do
+            if curl -sf "$CHROMA_HOST/api/v1/heartbeat" >/dev/null; then
+              echo "ChromaDB is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "ChromaDB failed to start"
+          exit 1
+
+      - name: Run tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          pytest -q
