@@ -2,12 +2,6 @@
 
 `ai-memory-hub` is a local-first memory backend for AI conversation storage and retrieval.
 
-Phase 1 (MVP) is deterministic and schema-first:
-- No LangGraph
-- No LLM calls inside the hub
-- No retry/correction loops
-- Client sends already-formatted JSON
-
 ## What It Exposes
 
 - FastAPI endpoints:
