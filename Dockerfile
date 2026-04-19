@@ -1,26 +1,19 @@
 FROM python:3.14-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    MEMORY_CONFIG=/app/config.yaml
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
+COPY pyproject.toml uv.lock README.md ./
+
 RUN python -m pip install --upgrade pip && \
-    pip install \
-      fastapi>=0.135.2 \
-      jsonschema>=4.25.1 \
-      lancedb>=0.30.1 \
-      openai>=2.30.0 \
-      pydantic>=2.12.5 \
-      python-dotenv>=1.2.2 \
-      uvicorn>=0.42.0
+    pip install --no-cache-dir uv && \
+    uv sync --frozen --no-dev
 
 COPY memory ./memory
 COPY example.config.yaml /app/config.yaml
-COPY README.md ./README.md
 
-EXPOSE 8000 8765
+EXPOSE 8000
 
-CMD ["python", "-m", "memory.cli", "--config", "/app/config.yaml"]
+CMD ["uv", "run", "uvicorn", "memory.api.server:app", "--host", "0.0.0.0", "--port", "8000"]

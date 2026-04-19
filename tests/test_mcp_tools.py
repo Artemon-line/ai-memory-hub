@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import jsonschema
 import pytest
 
 from memory.ingestion import mvp_ingestion
 from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
-from memory.ingestion.provider_loader import load_ingestion_agent
+from memory.mcp_server import build_tool_handlers
 
 
 class StubEmbedder:
@@ -59,36 +58,27 @@ def _runtime() -> mvp_ingestion.RuntimeDependencies:
     )
 
 
-def _valid_conversation() -> dict[str, object]:
+def _conversation() -> dict[str, object]:
     return {
         "id": "d9fd4c95-9cb3-4fd5-b967-3027f8863210",
-        "source": "mcp",
+        "source": "claude",
         "timestamp": "2026-01-01T00:00:00Z",
-        "messages": [{"role": "user", "text": "hello"}],
+        "messages": [{"role": "user", "text": "hello mcp"}],
         "metadata": {"imported_at": "2026-01-01T00:00:00Z"},
     }
 
 
 @pytest.mark.asyncio
-async def test_mvp_ingestion_agent_ingest_messages() -> None:
+async def test_mcp_tool_handlers_insert_search_retrieve() -> None:
     agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
+    handlers = build_tool_handlers(agent)
 
-    result = await agent.ingest_messages(_valid_conversation())
+    insert_result = await handlers["memory.insert"](_conversation())
+    assert insert_result["status"] == "ok"
 
-    assert result["status"] == "ok"
-    assert result["chunks"] == 1
+    search_result = await handlers["memory.search"]("hello", 5)
+    assert search_result["status"] == "ok"
 
-
-@pytest.mark.asyncio
-async def test_mvp_ingestion_agent_rejects_invalid_json() -> None:
-    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
-    invalid = _valid_conversation()
-    del invalid["id"]
-
-    with pytest.raises(jsonschema.ValidationError):
-        await agent.ingest_messages(invalid)
-
-
-def test_provider_loader_supports_mvp_agent() -> None:
-    agent = load_ingestion_agent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
-    assert isinstance(agent, MVPIngestionAgent)
+    retrieve_result = await handlers["memory.retrieve"]("d9fd4c95-9cb3-4fd5-b967-3027f8863210")
+    assert retrieve_result["status"] == "ok"
+    assert retrieve_result["memory"]["id"] == "d9fd4c95-9cb3-4fd5-b967-3027f8863210"

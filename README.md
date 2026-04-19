@@ -1,138 +1,105 @@
 # ai-memory-hub
 
-ai-memory-hub is a local-first memory engine to store, search, and reuse AI conversation history across LLM platforms. It is schema-first and provider-driven.
+`ai-memory-hub` is a local-first memory backend for AI conversation storage and retrieval.
 
-## Features
+Phase 1 (MVP) is deterministic and schema-first:
+- No LangGraph
+- No LLM calls inside the hub
+- No retry/correction loops
+- Client sends already-formatted JSON
 
-- Deterministic MVP ingestion pipeline (no LangGraph)
-- Unified conversation JSON schema (`memory/schema/conversation.schema.json`)
-- LLM formatting with validation retry (up to 3 attempts)
-- Schema validation before storage
-- Chunking + embedding + vector storage pipeline
-- Local-first defaults: SQLite (metadata) + LanceDB (vectors)
-- MCP and API interface support
+## What It Exposes
 
-## MVP Ingestion Pipeline (Phase 1)
+- FastAPI endpoints:
+  - `POST /memory/insert`
+  - `POST /memory/search`
+  - `POST /memory/retrieve`
+- FastMCP tools:
+  - `memory.insert`
+  - `memory.search`
+  - `memory.retrieve`
 
-The ingestion pipeline is linear and deterministic:
+## Ingestion Flow
 
-1. Accept raw messages (MCP or API)
-2. Preprocess messages (optional hook)
-3. Format with LLM into unified schema
-4. Validate JSON against `conversation.schema.json`
-5. Retry format + validate up to 3 attempts if invalid
-6. Attach metadata (`source`, timestamps, optional title/metadata)
-7. Chunk messages
-8. Embed chunks
-9. Store conversation + vectors
-10. Postprocess result (optional hook)
+```python
+def ingest_messages(conversation_json):
+    validate_json(conversation_json)
+    chunks = chunk_messages(conversation_json)
+    embeddings = embed_chunks(chunks)
+    metadata_id = metadata_store.insert(conversation_json)
+    vector_store.insert(metadata_id, embeddings)
+    return {"status": "ok", "id": metadata_id, "chunks": len(chunks)}
+```
 
-Implementation files:
+## Storage
 
-- `memory/ingestion/mvp_ingestion.py`
-- `memory/ingestion/mvp_ingestion_agent.py`
-- `memory/ingestion/provider_loader.py`
+- Metadata: SQLite
+- Vectors: LanceDB (or in-memory fallback path for `pgvector` provider mode in MVP)
 
-## Configuration
+## Config
 
-Use the MVP ingestion agent in config:
+Relevant config keys:
 
 ```yaml
-storage:
-  metadata: sqlite
-  vectors: lancedb
-
 providers:
-  inference: openai
-  embeddings: openai
-  vector_db: lancedb
-  agent: mvp
+  embeddings: local   # openai | local
+  vector_db: lancedb  # lancedb | pgvector
 
 interfaces:
   mcp: true
   api: true
+
+paths:
+  data_dir: ./data
 ```
 
-See `example.config.yaml` for the full example.
-
-## Ollama Configuration
-
-To run with Ollama instead of OpenAI, update your config:
-
-```yaml
-providers:
-  inference: ollama
-  embeddings: ollama
-  vector_db: lancedb
-  agent: mvp
-
-ollama:
-  host: "http://host.docker.internal:11434"  # Docker
-  chat_model: "llama3.1:8b"
-  embedding_model: "nomic-embed-text"
-```
-
-If you run outside Docker, use:
-
-```yaml
-ollama:
-  host: "http://localhost:11434"
-```
-
-Model setup:
+## Run Locally
 
 ```bash
-ollama pull llama3.1:8b
-ollama pull nomic-embed-text
+uv sync --dev
+uv run pytest -q
+uv run uvicorn memory.api.server:app --host 127.0.0.1 --port 8000
 ```
 
-You can also mix providers, for example:
+## API Examples
 
-```yaml
-providers:
-  inference: ollama
-  embeddings: openai
+Insert:
+
+```bash
+curl -X POST http://127.0.0.1:8000/memory/insert \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "d9fd4c95-9cb3-4fd5-b967-3027f8863210",
+    "source": "chatgpt",
+    "timestamp": "2026-01-01T00:00:00Z",
+    "messages": [{"role":"user","text":"hello"}],
+    "metadata": {"imported_at": "2026-01-01T00:00:00Z"}
+  }'
 ```
 
-## Unified JSON Schema (Core)
+Search:
 
-```json
-{
-  "id": "uuid",
-  "source": "chatgpt",
-  "timestamp": "YYYY-MM-DDTHH:MM:SSZ",
-  "messages": [
-    { "role": "user", "text": "..." },
-    { "role": "assistant", "text": "..." }
-  ],
-  "metadata": {
-    "imported_at": "YYYY-MM-DDTHH:MM:SSZ",
-    "tags": [],
-    "topics": []
-  }
-}
+```bash
+curl -X POST http://127.0.0.1:8000/memory/search \
+  -H "Content-Type: application/json" \
+  -d '{"query":"hello","top_k":5}'
+```
+
+Retrieve:
+
+```bash
+curl -X POST http://127.0.0.1:8000/memory/retrieve \
+  -H "Content-Type: application/json" \
+  -d '{"id":"d9fd4c95-9cb3-4fd5-b967-3027f8863210"}'
 ```
 
 ## Tests
 
-MVP tests are in:
-
 - `tests/test_mvp_ingestion.py`
 - `tests/test_mvp_ingestion_agent.py`
-
-These cover:
-
-- valid JSON path
-- invalid JSON retry -> success
-- invalid JSON retry -> fail after 3 attempts
-- embedding + storage calls
-- deterministic behavior
-
-## Documentation
-
-- Architecture: `docs/architecture.md`
-- Agents: `docs/agents.md`
+- `tests/test_api_endpoints.py`
+- `tests/test_mcp_tools.py`
 
 ## License
 
-MIT License. See `LICENSE`.
+MIT. See `LICENSE`.

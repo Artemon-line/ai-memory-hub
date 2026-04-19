@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import jsonschema
-import pytest
+from fastapi.testclient import TestClient
 
+from memory.api.server import create_app
 from memory.ingestion import mvp_ingestion
 from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
-from memory.ingestion.provider_loader import load_ingestion_agent
 
 
 class StubEmbedder:
@@ -59,36 +58,47 @@ def _runtime() -> mvp_ingestion.RuntimeDependencies:
     )
 
 
-def _valid_conversation() -> dict[str, object]:
+def _conversation() -> dict[str, object]:
     return {
         "id": "d9fd4c95-9cb3-4fd5-b967-3027f8863210",
-        "source": "mcp",
+        "source": "chatgpt",
         "timestamp": "2026-01-01T00:00:00Z",
         "messages": [{"role": "user", "text": "hello"}],
         "metadata": {"imported_at": "2026-01-01T00:00:00Z"},
     }
 
 
-@pytest.mark.asyncio
-async def test_mvp_ingestion_agent_ingest_messages() -> None:
+def _client() -> TestClient:
     agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
-
-    result = await agent.ingest_messages(_valid_conversation())
-
-    assert result["status"] == "ok"
-    assert result["chunks"] == 1
+    app = create_app(config={"providers": {"embeddings": "local", "vector_db": "pgvector"}}, ingestion_agent=agent)
+    return TestClient(app)
 
 
-@pytest.mark.asyncio
-async def test_mvp_ingestion_agent_rejects_invalid_json() -> None:
-    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
-    invalid = _valid_conversation()
-    del invalid["id"]
-
-    with pytest.raises(jsonschema.ValidationError):
-        await agent.ingest_messages(invalid)
+def test_memory_insert_200() -> None:
+    client = _client()
+    response = client.post("/memory/insert", json=_conversation())
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
 
 
-def test_provider_loader_supports_mvp_agent() -> None:
-    agent = load_ingestion_agent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
-    assert isinstance(agent, MVPIngestionAgent)
+def test_memory_insert_400_on_invalid_schema() -> None:
+    client = _client()
+    bad_payload = _conversation()
+    bad_payload.pop("id")
+
+    response = client.post("/memory/insert", json=bad_payload)
+    assert response.status_code == 400
+
+
+def test_memory_search_and_retrieve() -> None:
+    client = _client()
+    payload = _conversation()
+    client.post("/memory/insert", json=payload)
+
+    search = client.post("/memory/search", json={"query": "hello", "top_k": 3})
+    assert search.status_code == 200
+    assert search.json()["status"] == "ok"
+
+    retrieve = client.post("/memory/retrieve", json={"id": payload["id"]})
+    assert retrieve.status_code == 200
+    assert retrieve.json()["memory"]["id"] == payload["id"]
