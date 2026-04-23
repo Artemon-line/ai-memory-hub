@@ -3,44 +3,57 @@ from __future__ import annotations
 import math
 from pathlib import Path
 from typing import Any
+import pyarrow as pa
 
 
 class LanceDBVectorStore:
-    def __init__(self, db_path: str | Path, table_name: str = "memory_vectors"):
+    def __init__(self, db_path: str | Path, table_name: str = "memory_vectors", dimension: int = 32):
         self.db_path = Path(db_path)
         self.db_path.mkdir(parents=True, exist_ok=True)
         self.table_name = table_name
+        self.dimension = dimension
 
         try:
             import lancedb
         except ImportError as exc:
-            raise RuntimeError("lancedb package is required for vector_db=lancedb") from exc
+            raise RuntimeError(
+                "lancedb package is required for vector_db=lancedb"
+            ) from exc
 
         self._db = lancedb.connect(str(self.db_path))
         self._table = self._open_or_create_table()
 
     def _open_or_create_table(self):
-        names = {item[0] if isinstance(item, (list, tuple)) else item for item in self._db.list_tables()}
-        if self.table_name in names:
-            return self._db.open_table(self.table_name)
+        schema = pa.schema(
+            [
+                pa.field("memory_id", pa.string()),
+                pa.field("chunk_index", pa.int64()),
+                pa.field("role", pa.string()),
+                pa.field("text", pa.string()),
+                pa.field("vector", pa.list_(pa.float32(), self.dimension)),
+            ]
+        )
 
-        seed = [
-            {
-                "memory_id": "__seed__",
-                "chunk_index": -1,
-                "role": "system",
-                "text": "",
-                "vector": [0.0, 0.0, 0.0],
-            }
-        ]
-        try:
-            table = self._db.create_table(self.table_name, data=seed)
-        except ValueError as exc:
-            if "already exists" not in str(exc).lower():
-                raise
-            table = self._db.open_table(self.table_name)
-        else:
-            table.delete("memory_id = '__seed__'")
+        # reuse existing table if possible
+        names = {
+            item[0] if isinstance(item, (list, tuple)) else item
+            for item in self._db.list_tables()
+        }
+        if self.table_name in names:
+            existing_table = self._db.open_table(self.table_name)
+            existing_schema = existing_table.schema
+            # Check if vector field is FixedSizeList with correct dimension
+            vector_field = existing_schema.field("vector")
+            vector_type = vector_field.type
+            if isinstance(vector_type, pa.FixedSizeListType) and vector_type.list_size == self.dimension:
+                return existing_table
+
+        # Create or overwrite table with correct schema
+        print("DB is gone")
+        table = self._db.create_table(
+            self.table_name, schema=schema, mode="overwrite"
+        )
+        table.create_index(metric="cosine")
         return table
 
     def insert(self, metadata_id: str, embeddings: list[dict[str, Any]]) -> None:
@@ -114,16 +127,15 @@ class InMemoryVectorStore:
 
 
 def _cosine_distance(a: list[float], b: list[float]) -> float:
-    if not a or not b:
+    if len(a) != len(b):
+        raise ValueError(f"Vector dimensions must match: {len(a)} vs {len(b)}")
+    if not a:
         return 1.0
 
-    dim = min(len(a), len(b))
     dot = 0.0
     norm_a = 0.0
     norm_b = 0.0
-    for index in range(dim):
-        av = float(a[index])
-        bv = float(b[index])
+    for av, bv in zip(a, b):
         dot += av * bv
         norm_a += av * av
         norm_b += bv * bv

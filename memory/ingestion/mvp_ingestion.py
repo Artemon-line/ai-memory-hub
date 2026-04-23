@@ -13,6 +13,8 @@ from memory.ingestion.validate import validate_conversation
 
 
 class EmbeddingProvider(Protocol):
+    dimension: int
+
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         ...
 
@@ -21,13 +23,19 @@ class LocalEmbeddingProvider:
     """Deterministic local embedding provider for offline/local-first mode."""
 
     def __init__(self, dimensions: int = 32):
-        self.dimensions = dimensions
+        self.dimension = dimensions
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
-        return [_hash_to_vector(text, self.dimensions) for text in texts]
+        return [_hash_to_vector(text, self.dimension) for text in texts]
 
 
 class OpenAIEmbeddingProvider:
+    _MODEL_DIMS = {
+        "text-embedding-3-small": 1536,
+        "text-embedding-3-large": 3072,
+        "text-embedding-ada-002": 1536,
+    }
+
     def __init__(self, model: str = "text-embedding-3-small", api_key: str | None = None):
         from openai import OpenAI
 
@@ -37,6 +45,7 @@ class OpenAIEmbeddingProvider:
 
         self.client = OpenAI(api_key=key)
         self.model = model
+        self.dimension = self._MODEL_DIMS.get(model, 1536)  # default to 1536 if unknown
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         response = self.client.embeddings.create(model=self.model, input=texts)
@@ -58,18 +67,18 @@ def build_runtime(config: HubConfig | dict[str, Any] | None = None) -> RuntimeDe
     data_dir = Path(cfg.paths.data_dir)
     metadata_store = SQLiteMetadataStore(data_dir / "metadata.sqlite3")
 
-    if cfg.providers.vector_db == "lancedb":
-        try:
-            vector_store = LanceDBVectorStore(data_dir / "lancedb")
-        except RuntimeError:
-            vector_store = InMemoryVectorStore()
-    else:
-        vector_store = InMemoryVectorStore()
-
     if cfg.providers.embeddings == "openai":
         embedding_provider: EmbeddingProvider = OpenAIEmbeddingProvider()
     else:
         embedding_provider = LocalEmbeddingProvider()
+
+    if cfg.providers.vector_db == "lancedb":
+        try:
+            vector_store = LanceDBVectorStore(data_dir / "lancedb", dimension=embedding_provider.dimension)
+        except RuntimeError:
+            vector_store = InMemoryVectorStore()
+    else:
+        vector_store = InMemoryVectorStore()
 
     return RuntimeDependencies(
         embedding_provider=embedding_provider,
