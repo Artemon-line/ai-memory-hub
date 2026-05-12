@@ -70,6 +70,14 @@ def parse_config(config: dict[str, Any] | None) -> HubConfig:
     )
 
 
+def normalize_config(config: HubConfig | dict[str, Any] | None) -> HubConfig:
+    if isinstance(config, HubConfig):
+        return config
+    if isinstance(config, dict):
+        return parse_config(config)
+    return load_config()
+
+
 def _load_yaml_if_available(text: str) -> dict[str, Any]:
     try:
         import yaml

@@ -68,7 +68,7 @@ def _configure_stubs() -> tuple[StubMetadataStore, StubVectorStore]:
     vectors = StubVectorStore()
     mvp_ingestion.configure_runtime(
         runtime=mvp_ingestion.RuntimeDependencies(
-            embedding_provider=StubEmbedder(),
+            embedding_provider=StubEmbedder(), # type: ignore
             metadata_store=metadata,
             vector_store=vectors,
         )

@@ -6,10 +6,10 @@ import jsonschema
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-from memory.config import HubConfig, load_config, parse_config
+from memory.config import HubConfig, normalize_config
 from memory.ingestion.base_agent import BaseIngestionAgent
 from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
-from memory.mcp_server import create_mcp_server
+from memory.interfaces.mcp_server import create_mcp_server
 
 
 class SearchRequest(BaseModel):
@@ -19,14 +19,6 @@ class SearchRequest(BaseModel):
 
 class RetrieveRequest(BaseModel):
     id: str
-
-
-def _normalize_config(config: HubConfig | dict[str, Any] | None) -> HubConfig:
-    if isinstance(config, HubConfig):
-        return config
-    if isinstance(config, dict):
-        return parse_config(config)
-    return load_config()
 
 
 def _register_api_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
@@ -57,7 +49,7 @@ def create_app(
     config: HubConfig | dict[str, Any] | None = None,
     ingestion_agent: BaseIngestionAgent | None = None,
 ) -> FastAPI:
-    cfg = _normalize_config(config)
+    cfg = normalize_config(config)
     app = FastAPI(title="ai-memory-hub", version="0.1.0")
     agent = ingestion_agent or MVPIngestionAgent(
         config={

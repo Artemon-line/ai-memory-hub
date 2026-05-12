@@ -53,7 +53,7 @@ class StubVectorStore:
 
 def _runtime() -> mvp_ingestion.RuntimeDependencies:
     return mvp_ingestion.RuntimeDependencies(
-        embedding_provider=StubEmbedder(),
+        embedding_provider=StubEmbedder(), # type: ignore
         metadata_store=StubMetadataStore(),
         vector_store=StubVectorStore(),
     )

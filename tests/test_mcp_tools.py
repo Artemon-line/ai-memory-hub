@@ -4,7 +4,7 @@ import pytest
 
 from memory.ingestion import mvp_ingestion
 from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
-from memory.mcp_server import build_tool_handlers
+from memory.interfaces.mcp_server import build_tool_handlers
 
 
 class StubEmbedder:
@@ -52,7 +52,7 @@ class StubVectorStore:
 
 def _runtime() -> mvp_ingestion.RuntimeDependencies:
     return mvp_ingestion.RuntimeDependencies(
-        embedding_provider=StubEmbedder(),
+        embedding_provider=StubEmbedder(), # type: ignore
         metadata_store=StubMetadataStore(),
         vector_store=StubVectorStore(),
     )

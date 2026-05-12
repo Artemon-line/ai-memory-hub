@@ -16,7 +16,7 @@ class DummyAgent(BaseIngestionAgent):
 
 def test_base_agent_is_abstract() -> None:
     with pytest.raises(TypeError):
-        BaseIngestionAgent(config={})
+        BaseIngestionAgent(config={}) # type: ignore
 
 
 @pytest.mark.asyncio

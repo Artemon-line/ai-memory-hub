@@ -2,18 +2,10 @@ from __future__ import annotations
 
 from typing import Any, Awaitable, Callable
 
-from memory.config import HubConfig, load_config, parse_config
+from memory.config import HubConfig, normalize_config
 from memory.ingestion.base_agent import BaseIngestionAgent
 
 ToolFn = Callable[..., Awaitable[dict[str, Any]]]
-
-
-def _normalize_config(config: HubConfig | dict[str, Any] | None) -> HubConfig:
-    if isinstance(config, HubConfig):
-        return config
-    if isinstance(config, dict):
-        return parse_config(config)
-    return load_config()
 
 
 def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
@@ -41,6 +33,10 @@ def create_mcp_server(
     config: HubConfig | dict[str, Any] | None = None,
     agent: BaseIngestionAgent
 ):
+    cfg = normalize_config(config)
+    if not cfg.interfaces.mcp:
+        raise ValueError("config.interfaces.mcp must be enabled to create MCP server")
+
     try:
         from fastmcp import FastMCP
     except ImportError as exc:
@@ -49,16 +45,7 @@ def create_mcp_server(
     mcp = FastMCP("ai-memory-hub")
     handlers = build_tool_handlers(agent)
 
-    @mcp.tool(name="memory.insert")
-    async def memory_insert(conversation_json: dict[str, Any]) -> dict[str, Any]:
-        return await handlers["memory.insert"](conversation_json)
-
-    @mcp.tool(name="memory.search")
-    async def memory_search(query: str, top_k: int = 5) -> dict[str, Any]:
-        return await handlers["memory.search"](query, top_k)
-
-    @mcp.tool(name="memory.retrieve")
-    async def memory_retrieve(id: str) -> dict[str, Any]:
-        return await handlers["memory.retrieve"](id)
+    for tool_name, tool_fn in handlers.items():
+        mcp.tool(name=tool_name)(tool_fn)
 
     return mcp

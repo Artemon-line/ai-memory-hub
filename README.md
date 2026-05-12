@@ -15,6 +15,7 @@
   - `memory.insert`
   - `memory.search`
   - `memory.retrieve`
+- MCP implementation: `memory/interfaces/mcp_server.py`
 
 ## Ingestion Flow
 
