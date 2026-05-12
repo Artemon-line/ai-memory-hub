@@ -4,7 +4,6 @@ from typing import Any, Awaitable, Callable
 
 from memory.config import HubConfig, load_config, parse_config
 from memory.ingestion.base_agent import BaseIngestionAgent
-from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
 
 ToolFn = Callable[..., Awaitable[dict[str, Any]]]
 
@@ -40,19 +39,8 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
 def create_mcp_server(
     *,
     config: HubConfig | dict[str, Any] | None = None,
-    ingestion_agent: BaseIngestionAgent | None = None,
+    agent: BaseIngestionAgent
 ):
-    cfg = _normalize_config(config)
-    agent = ingestion_agent or MVPIngestionAgent(config={
-        "providers": {
-            "embeddings": cfg.providers.embeddings,
-            "vector_db": cfg.providers.vector_db,
-            "agent": "mvp",
-        },
-        "interfaces": {"mcp": cfg.interfaces.mcp, "api": cfg.interfaces.api},
-        "paths": {"data_dir": cfg.paths.data_dir},
-    })
-
     try:
         from fastmcp import FastMCP
     except ImportError as exc:

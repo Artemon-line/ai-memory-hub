@@ -7,9 +7,11 @@ from memory.ingestion import mvp_ingestion
 from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
 
 
-class StubEmbedder:
+class StubEmbedder(mvp_ingestion.EmbeddingProvider):
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         return [[float(len(text))] for text in texts]
+    dimension: int
+
 
 
 class StubMetadataStore:
@@ -69,7 +71,7 @@ def _conversation() -> dict[str, object]:
 
 
 def _client() -> TestClient:
-    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}, "interfaces": {"api": 'true'}}, runtime=_runtime())
     app = create_app(config={"providers": {"embeddings": "local", "vector_db": "pgvector"}}, ingestion_agent=agent)
     return TestClient(app)
 

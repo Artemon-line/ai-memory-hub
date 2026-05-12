@@ -1,0 +1,65 @@
+# ai-memory-hub configuration file
+# Phase 1 (MVP): deterministic, schema-first ingestion.
+
+# -------------------------
+# STORAGE LAYER
+# -------------------------
+storage:
+  metadata: local        # SQLite metadata store (default)
+  vectors: local        # LanceDB vector store (default)
+
+# -------------------------
+# PROVIDERS (BYOS/BYOA)
+# -------------------------
+providers:
+  inference: openai       # LLM provider used for schema formatting
+  embeddings: local      # Embedding provider used for chunk vectors
+  vector_db: local      # Must match storage.vectors
+  agent: mvp              # Phase 1 ingestion agent (deterministic pipeline)
+
+# -------------------------
+# INTERFACES
+# -------------------------
+interfaces:
+  mcp: true               # Enable MCP tools (memory.insert/search/retrieve)
+  api: true               # Enable HTTP API (local-only by default)
+
+# -------------------------
+# PATHS
+# -------------------------
+paths:
+  data_dir: "./data"      # SQLite/LanceDB data path
+  logs_dir: "./logs"
+
+# -------------------------
+# SCHEMA
+# -------------------------
+schema:
+  file: "./schema/conversation.schema.json"
+
+# -------------------------
+# MCP SERVER SETTINGS
+# -------------------------
+mcp:
+  host: "127.0.0.1"
+  port: 8765
+
+# -------------------------
+# API SERVER SETTINGS
+# -------------------------
+api:
+  host: "127.0.0.1"
+  port: 8000
+  auth: none              # none | api_key
+  api_key: ""             # only used if auth: api_key
+
+# -------------------------
+# PROVIDER SETTINGS
+# -------------------------
+openai:
+  api_key: "${OPENAI_API_KEY}"
+  model: "gpt-4.1"
+
+local_llm:
+  model_path: ""          # Optional local model path
+  context_window: 8192

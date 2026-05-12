@@ -1,5 +1,7 @@
 # ai-memory-hub
 
+[![ci](https://github.com/Artemon-line/ai-memory-hub/actions/workflows/pipeline.yml/badge.svg?branch=main)](https://github.com/Artemon-line/ai-memory-hub/actions/workflows/pipeline.yml)
+
 `ai-memory-hub` is a local-first memory backend for AI conversation storage and retrieval.
 
 ## What It Exposes
@@ -8,6 +10,7 @@
   - `POST /memory/insert`
   - `POST /memory/search`
   - `POST /memory/retrieve`
+- FastMCP HTTP bridge (mounted at `/mcp` when enabled)
 - FastMCP tools:
   - `memory.insert`
   - `memory.search`
@@ -85,6 +88,28 @@ Retrieve:
 curl -X POST http://127.0.0.1:8000/memory/retrieve \
   -H "Content-Type: application/json" \
   -d '{"id":"d9fd4c95-9cb3-4fd5-b967-3027f8863210"}'
+```
+
+## MCP Bridge Example
+
+When `interfaces.mcp` is enabled, the FastMCP HTTP bridge is mounted at `/mcp`.
+Use a FastMCP client to invoke tool names such as `memory.insert`, `memory.search`, and `memory.retrieve` through that endpoint.
+
+```bash
+curl -X POST http://127.0.0.1:8000/mcp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tool": "memory.insert",
+    "arguments": {
+      "conversation_json": {
+        "id": "d9fd4c95-9cb3-4fd5-b967-3027f8863210",
+        "source": "chatgpt",
+        "timestamp": "2026-01-01T00:00:00Z",
+        "messages": [{"role":"user","text":"hello"}],
+        "metadata": {"imported_at": "2026-01-01T00:00:00Z"}
+      }
+    }
+  }'
 ```
 
 ## Tests
