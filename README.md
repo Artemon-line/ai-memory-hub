@@ -93,7 +93,8 @@ curl -X POST http://127.0.0.1:8000/memory/retrieve \
 ## MCP Bridge Example
 
 When `interfaces.mcp` is enabled, the FastMCP HTTP bridge is mounted at `/mcp`.
-Use a FastMCP client to invoke tool names such as `memory.insert`, `memory.search`, and `memory.retrieve` through that endpoint.
+Use a FastMCP client to invoke tool names such as
+`memory.insert`, `memory.search`, and `memory.retrieve` through that endpoint.
 
 ```bash
 curl -X POST http://127.0.0.1:8000/mcp \
