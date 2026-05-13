@@ -189,8 +189,8 @@ Copilot does not provide a structured export comparable to ChatGPT. Ingestion mu
 
 ### 5.4 MCP (Model Context Protocol)
 
-- [ ] `memory.search`
-- [ ] `memory.retrieve`
+- [ ] `memory_search`
+- [ ] `memory_retrieve`
 - [ ] `memory.summarize`
 - [ ] `memory.timeline`
 

@@ -73,12 +73,12 @@ async def test_mcp_tool_handlers_insert_search_retrieve() -> None:
     agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
     handlers = build_tool_handlers(agent)
 
-    insert_result = await handlers["memory.insert"](_conversation())
+    insert_result = await handlers["memory_insert"](_conversation())
     assert insert_result["status"] == "ok"
 
-    search_result = await handlers["memory.search"]("hello", 5)
+    search_result = await handlers["memory_search"]("hello", 5)
     assert search_result["status"] == "ok"
 
-    retrieve_result = await handlers["memory.retrieve"]("d9fd4c95-9cb3-4fd5-b967-3027f8863210")
+    retrieve_result = await handlers["memory_retrieve"]("d9fd4c95-9cb3-4fd5-b967-3027f8863210")
     assert retrieve_result["status"] == "ok"
     assert retrieve_result["memory"]["id"] == "d9fd4c95-9cb3-4fd5-b967-3027f8863210"

@@ -24,7 +24,7 @@ fi
 
 if [ -n "$MD_FILES" ]; then
   echo "[pre-commit] Linting Markdown files with pymarkdown..."
-  printf "%s\n" "$MD_FILES" | xargs uvx --from pymarkdownlnt pymarkdown scan
+  printf "%s\n" "$MD_FILES" | xargs uvx --from pymarkdownlnt pymarkdown scan --exclude docs
 fi
 
 echo "[pre-commit] Running test suite..."

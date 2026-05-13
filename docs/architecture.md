@@ -12,7 +12,7 @@ Related docs:
 Source Messages
   -> LLM Formats JSON
   -> Schema Validation
-  -> memory.insert (MCP or API)
+  -> memory_insert (MCP or API)
   -> Chunk + Embed
   -> Vector Store
   -> Search / Retrieve / RAG
@@ -27,7 +27,7 @@ Steps:
 1. Fetch messages (MCP or manual input)
 2. Format into the unified JSON schema (LLM)
 3. Validate schema (Python)
-4. Insert via `memory.insert`
+4. Insert via `memory_insert`
 5. Embed chunks
 6. Store vectors
 7. Confirm success
@@ -74,9 +74,9 @@ ai-memory-hub exposes interfaces rather than implementations:
 
 Core MCP tools:
 
-- `memory.insert`
-- `memory.search`
-- `memory.retrieve`
+- `memory_insert`
+- `memory_search`
+- `memory_retrieve`
 
 ## Bring Your Own Stack (BYOS) Model
 

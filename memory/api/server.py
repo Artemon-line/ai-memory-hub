@@ -50,7 +50,7 @@ def create_app(
     ingestion_agent: BaseIngestionAgent | None = None,
 ) -> FastAPI:
     cfg = normalize_config(config)
-    app = FastAPI(title="ai-memory-hub", version="0.1.0")
+    mcp_app = None
     agent = ingestion_agent or MVPIngestionAgent(
         config={
             "providers": {
@@ -66,12 +66,33 @@ def create_app(
     # ⭐ Only enable MCP if config says so
     if cfg.interfaces.mcp:
         mcp = create_mcp_server(config=cfg, agent=agent)
-        mcp_app = mcp.http_app(path=None)
+        mcp_app = mcp.http_app(path="/")
+
+    app = FastAPI(
+        title="ai-memory-hub",
+        version="0.1.0",
+        lifespan=mcp_app.lifespan if mcp_app is not None else None,
+    )
+
+    if mcp_app is not None:
         app.mount('/mcp', mcp_app)
-    
+
     # ⭐ Only enable API if config says so
     if cfg.interfaces.api:
         _register_api_routes(app, agent)
+
+    print(
+        "\n" +
+        "==============================\n" +
+        "  ai-memory-hub  |  RUNNING  \n" +
+        "==============================\n" +
+        f"  version: {app.version}\n" +
+        f"  embeddings: {cfg.providers.embeddings}\n" +
+        f"  vector_db: {cfg.providers.vector_db}\n" +
+        f"  mcp enabled: {cfg.interfaces.mcp}\n" +
+        f"  api enabled: {cfg.interfaces.api}\n" +
+        f"  data_dir: {cfg.paths.data_dir}\n"
+    )
 
     return app
 

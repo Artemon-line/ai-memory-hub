@@ -21,7 +21,7 @@ providers:
 # INTERFACES
 # -------------------------
 interfaces:
-  mcp: true               # Enable MCP tools (memory.insert/search/retrieve)
+  mcp: true               # Enable MCP tools
   api: true               # Enable HTTP API (local-only by default)
 
 # -------------------------

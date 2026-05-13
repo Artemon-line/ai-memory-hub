@@ -8,6 +8,13 @@ from memory.ingestion.base_agent import BaseIngestionAgent
 ToolFn = Callable[..., Awaitable[dict[str, Any]]]
 
 
+TOOL_DESCRIPTIONS: dict[str, str] = {
+    "memory_insert": "Insert a conversation into memory.",
+    "memory_search": "Search existing memory by text query.",
+    "memory_retrieve": "Retrieve a stored memory item by ID.",
+}
+
+
 def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
     async def memory_insert(conversation_json: dict[str, Any]) -> dict[str, Any]:
         return await agent.ingest_messages(conversation_json)
@@ -22,9 +29,9 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
         return {"status": "ok", "memory": memory}
 
     return {
-        "memory.insert": memory_insert,
-        "memory.search": memory_search,
-        "memory.retrieve": memory_retrieve,
+        "memory_insert": memory_insert,
+        "memory_search": memory_search,
+        "memory_retrieve": memory_retrieve,
     }
 
 
@@ -46,6 +53,6 @@ def create_mcp_server(
     handlers = build_tool_handlers(agent)
 
     for tool_name, tool_fn in handlers.items():
-        mcp.tool(name=tool_name)(tool_fn)
+        mcp.tool(name=tool_name, description=TOOL_DESCRIPTIONS[tool_name])(tool_fn)
 
     return mcp
