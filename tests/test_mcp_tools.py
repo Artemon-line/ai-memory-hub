@@ -82,6 +82,10 @@ async def test_mcp_tool_handlers_insert_search_retrieve() -> None:
     agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
     handlers = build_tool_handlers(agent)
 
+    validate_result = await handlers["memory_validate"](_conversation())
+    assert validate_result["status"] == "ok"
+    assert validate_result["valid"] is True
+
     insert_result = await handlers["memory_insert"](_conversation())
     assert insert_result["status"] == "ok"
 
@@ -101,6 +105,26 @@ async def test_mcp_tool_handlers_insert_search_retrieve() -> None:
 async def test_mcp_tool_handlers_invalid_inputs_return_consistent_errors() -> None:
     agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
     handlers = build_tool_handlers(agent)
+
+    validate_invalid_type = await handlers["memory_validate"]("invalid")  # type: ignore[arg-type]
+    assert validate_invalid_type["status"] == "error"
+    assert validate_invalid_type["error_code"] == "invalid_input"
+    assert validate_invalid_type["valid"] is False
+
+    invalid_conversation = dict(_conversation())
+    invalid_conversation.pop("id")
+    validate_invalid_schema = await handlers["memory_validate"](invalid_conversation)
+    assert validate_invalid_schema["status"] == "error"
+    assert validate_invalid_schema["error_code"] == "invalid_input"
+    assert validate_invalid_schema["valid"] is False
+    assert "schema validation failed" in validate_invalid_schema["error_message"]
+
+    auto_defaults_payload = {
+        "messages": [{"role": "user", "text": "auto defaults test"}],
+    }
+    insert_with_defaults = await handlers["memory_insert"](auto_defaults_payload)
+    assert insert_with_defaults["status"] == "ok"
+    assert isinstance(insert_with_defaults["id"], str)
 
     search_result = await handlers["memory_search"]("", 5)
     assert search_result["status"] == "error"

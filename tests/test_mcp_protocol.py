@@ -49,7 +49,7 @@ def test_mcp_initialize_and_tools_list_with_session() -> None:
         tools = result.get("tools")
         assert isinstance(tools, list)
         tool_names = {tool["name"] for tool in tools if isinstance(tool, dict) and "name" in tool}
-        assert {"memory_insert", "memory_search", "memory_retrieve"}.issubset(tool_names)
+        assert {"memory_validate", "memory_insert", "memory_search", "memory_retrieve"}.issubset(tool_names)
 
 
 def test_mcp_tools_list_requires_session_id() -> None:

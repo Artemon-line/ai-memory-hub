@@ -1,16 +1,20 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from urllib.parse import unquote
 from typing import Any, Awaitable, Callable
+from uuid import uuid4
 
+import jsonschema
 from memory.config import HubConfig, normalize_config
 from memory.ingestion.base_agent import BaseIngestionAgent
+from memory.ingestion.validate import validate_conversation
 
 ToolFn = Callable[..., Awaitable[dict[str, Any]]]
 
 
 TOOL_DESCRIPTIONS: dict[str, str] = {
+    "memory_validate": "Validate a conversation payload against the conversation schema.",
     "memory_insert": "Insert a conversation into memory.",
     "memory_search": "Search existing memory by text query.",
     "memory_retrieve": "Retrieve a stored memory item by ID.",
@@ -43,6 +47,30 @@ def _with_envelope_defaults(data: dict[str, Any]) -> dict[str, Any]:
     payload = _envelope(status=str(data.get("status", "ok")))
     payload.update(data)
     return payload
+
+
+def _format_schema_error(exc: jsonschema.ValidationError) -> str:
+    path = ".".join(str(part) for part in exc.path)
+    if path:
+        return f"schema validation failed at `{path}`: {exc.message}"
+    return f"schema validation failed: {exc.message}"
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _normalize_conversation_json(payload: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(payload)
+    normalized.setdefault("id", str(uuid4()))
+    normalized.setdefault("source", "mcp")
+    normalized.setdefault("timestamp", _utc_now_iso())
+    metadata = normalized.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+    metadata.setdefault("imported_at", _utc_now_iso())
+    normalized["metadata"] = metadata
+    return normalized
 
 
 def _resource_metadata(conversation: dict[str, Any] | None) -> dict[str, Any]:
@@ -237,26 +265,59 @@ def _register_prompts(mcp: Any) -> None:
     @mcp.prompt(name="save_conversation")
     def save_conversation_prompt() -> str:
         return (
-            'Call tool `memory_insert` with argument `conversation_json`.\n'
-            'Required shape: {"id":"...","source":"...","timestamp":"...","messages":[{"role":"user","text":"..."}],"metadata":{"imported_at":"..."}}.'
+            "Save this chat to ai-memory-hub using MCP tools directly.\n"
+            "Before insert, call `memory_validate` with argument `conversation_json`.\n"
+            "Only call `memory_insert` after validation passes (do not use curl or config-file reads).\n"
+            "Build `conversation_json.messages` from the full prior dialog turns in this chat (include both user and assistant turns).\n"
+            "Do not store only the save command; exclude meta instructions like 'save this conversation' unless explicitly requested.\n"
+            "Apply filters before insert: include semantic conversation content, exclude tool/debug chatter.\n"
+            "Filter out: MCP/tool instructions, operational planning text, raw JSON tool outputs, and command-like test prompts.\n"
+            "If needed, summarize excluded operational content in `metadata.notes` instead of `messages`.\n"
+            "Construct `conversation_json` to conform to `memory/schema/conversation.schema.json`.\n"
+            "If validation fails, fix payload first and re-validate before insert; do not call insert with invalid payload.\n"
+            'Required shape: {"id":"...","source":"...","timestamp":"...","messages":[{"role":"user","text":"..."}],"metadata":{"imported_at":"..."}}.\n'
+            "Example: if the user asked about Europe and the assistant answered, those turns must be in `messages`.\n"
+            "After insert succeeds, call `memory_retrieve` with the inserted id and confirm it was stored."
         )
 
     @mcp.prompt(name="search_memory")
     def search_memory_prompt(query: str) -> str:
         return (
-            f'Call tool `memory_search` with `query="{query}"` and optional '
-            "`limit`, `cursor`, `source`, `date_from`, `date_to`, `tags`."
+            "Use ai-memory-hub MCP tools directly.\n"
+            f'Call `memory_search` with `query="{query}"` and optional '
+            "`limit`, `cursor`, `source`, `date_from`, `date_to`, `tags`.\n"
+            "Return results and the next `cursor` when present."
         )
 
     @mcp.prompt(name="summarize_conversation")
     def summarize_conversation_prompt(id: str) -> str:
         return (
-            f'Call `memory_retrieve` with `id="{id}"`, then summarize the returned '
+            "Use ai-memory-hub MCP tools directly.\n"
+            f'Call `memory_retrieve` with `id=\"{id}\"`, then summarize the returned '
             "`memory.messages` in chronological order."
         )
 
 
 def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
+    async def memory_validate(conversation_json: dict[str, Any]) -> dict[str, Any]:
+        if not isinstance(conversation_json, dict):
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message="conversation_json must be an object",
+                valid=False,
+            )
+        try:
+            validate_conversation(conversation_json)
+        except jsonschema.ValidationError as exc:
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message=_format_schema_error(exc),
+                valid=False,
+            )
+        return _envelope(status="ok", valid=True)
+
     async def memory_insert(conversation_json: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(conversation_json, dict):
             return _envelope(
@@ -264,8 +325,17 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 error_code="invalid_input",
                 error_message="conversation_json must be an object",
             )
+        normalized = _normalize_conversation_json(conversation_json)
         try:
-            result = await agent.ingest_messages(conversation_json)
+            validate_conversation(normalized)
+        except jsonschema.ValidationError as exc:
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message=_format_schema_error(exc),
+            )
+        try:
+            result = await agent.ingest_messages(normalized)
         except Exception as exc:
             return _envelope(
                 status="error",
@@ -348,6 +418,7 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
         return _envelope(status="ok", id=id, memory=memory)
 
     return {
+        "memory_validate": memory_validate,
         "memory_insert": memory_insert,
         "memory_search": memory_search,
         "memory_retrieve": memory_retrieve,
