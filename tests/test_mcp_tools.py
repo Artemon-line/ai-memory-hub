@@ -67,6 +67,15 @@ def _conversation() -> dict[str, object]:
         "metadata": {"imported_at": "2026-01-01T00:00:00Z"},
     }
 
+def _conversation_two() -> dict[str, object]:
+    return {
+        "id": "2f39f5cc-6256-4ca9-a9b2-6211bc6e3702",
+        "source": "chatgpt",
+        "timestamp": "2026-01-02T00:00:00Z",
+        "messages": [{"role": "user", "text": "hello again"}],
+        "metadata": {"imported_at": "2026-01-02T00:00:00Z", "tags": ["beta"]},
+    }
+
 
 @pytest.mark.asyncio
 async def test_mcp_tool_handlers_insert_search_retrieve() -> None:
@@ -82,3 +91,75 @@ async def test_mcp_tool_handlers_insert_search_retrieve() -> None:
     retrieve_result = await handlers["memory_retrieve"]("d9fd4c95-9cb3-4fd5-b967-3027f8863210")
     assert retrieve_result["status"] == "ok"
     assert retrieve_result["memory"]["id"] == "d9fd4c95-9cb3-4fd5-b967-3027f8863210"
+    assert "results" in retrieve_result
+    assert "cursor" in retrieve_result
+    assert "error_code" in retrieve_result
+    assert "error_message" in retrieve_result
+
+
+@pytest.mark.asyncio
+async def test_mcp_tool_handlers_invalid_inputs_return_consistent_errors() -> None:
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
+    handlers = build_tool_handlers(agent)
+
+    search_result = await handlers["memory_search"]("", 5)
+    assert search_result["status"] == "error"
+    assert search_result["error_code"] == "invalid_input"
+    assert "query" in search_result["error_message"]
+    assert "id" in search_result
+    assert "results" in search_result
+    assert "cursor" in search_result
+
+    top_k_result = await handlers["memory_search"]("hello", 0)
+    assert top_k_result["status"] == "error"
+    assert top_k_result["error_code"] == "invalid_input"
+    assert "top_k" in top_k_result["error_message"]
+    assert "id" in top_k_result
+    assert "results" in top_k_result
+    assert "cursor" in top_k_result
+
+    retrieve_result = await handlers["memory_retrieve"]("")
+    assert retrieve_result["status"] == "error"
+    assert retrieve_result["error_code"] == "invalid_input"
+    assert "id" in retrieve_result["error_message"]
+    assert "results" in retrieve_result
+    assert "cursor" in retrieve_result
+
+
+@pytest.mark.asyncio
+async def test_mcp_tool_handlers_search_pagination_and_filters() -> None:
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
+    handlers = build_tool_handlers(agent)
+
+    await handlers["memory_insert"](_conversation())
+    await handlers["memory_insert"](_conversation_two())
+
+    page_one = await handlers["memory_search"]("hello", limit=1, top_k=10)
+    assert page_one["status"] == "ok"
+    assert len(page_one["results"]) == 1
+    assert page_one["cursor"] is not None
+
+    page_two = await handlers["memory_search"]("hello", limit=1, top_k=10, cursor=page_one["cursor"])
+    assert page_two["status"] == "ok"
+    assert len(page_two["results"]) == 1
+    assert page_two["cursor"] is None
+    first_id = page_one["results"][0]["id"]
+    second_id = page_two["results"][0]["id"]
+    assert first_id != second_id
+
+    filtered_source = await handlers["memory_search"]("hello", source="chatgpt", top_k=10)
+    assert filtered_source["status"] == "ok"
+    assert all(row["conversation"]["source"] == "chatgpt" for row in filtered_source["results"])
+
+    filtered_date = await handlers["memory_search"](
+        "hello",
+        date_from="2026-01-02T00:00:00Z",
+        date_to="2026-01-02T23:59:59Z",
+        top_k=10,
+    )
+    assert filtered_date["status"] == "ok"
+    assert all(row["conversation"]["timestamp"].startswith("2026-01-02") for row in filtered_date["results"])
+
+    filtered_tags = await handlers["memory_search"]("hello", tags=["beta"], top_k=10)
+    assert filtered_tags["status"] == "ok"
+    assert all("beta" in row["conversation"]["metadata"].get("tags", []) for row in filtered_tags["results"])

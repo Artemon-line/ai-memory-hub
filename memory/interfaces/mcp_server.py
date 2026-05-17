@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+from urllib.parse import unquote
 from typing import Any, Awaitable, Callable
 
 from memory.config import HubConfig, normalize_config
@@ -15,18 +17,335 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
 }
 
 
-def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
-    async def memory_insert(conversation_json: dict[str, Any]) -> dict[str, Any]:
-        return await agent.ingest_messages(conversation_json)
+def _envelope(
+    *,
+    status: str,
+    id: str | None = None,
+    results: list[Any] | None = None,
+    cursor: str | None = None,
+    error_code: str | None = None,
+    error_message: str | None = None,
+    **extra: Any,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "status": status,
+        "id": id,
+        "results": results if results is not None else [],
+        "cursor": cursor,
+        "error_code": error_code,
+        "error_message": error_message,
+    }
+    payload.update(extra)
+    return payload
 
-    async def memory_search(query: str, top_k: int = 5) -> dict[str, Any]:
-        return await agent.search(query=query, top_k=top_k)
 
-    async def memory_retrieve(id: str) -> dict[str, Any]:
+def _with_envelope_defaults(data: dict[str, Any]) -> dict[str, Any]:
+    payload = _envelope(status=str(data.get("status", "ok")))
+    payload.update(data)
+    return payload
+
+
+def _resource_metadata(conversation: dict[str, Any] | None) -> dict[str, Any]:
+    item = conversation or {}
+    metadata = item.get("metadata", {})
+    tags = metadata.get("tags", []) if isinstance(metadata, dict) else []
+    updated_at = metadata.get("updated_at") if isinstance(metadata, dict) else None
+    return {
+        "id": item.get("id"),
+        "source": item.get("source"),
+        "timestamp": item.get("timestamp"),
+        "tags": tags if isinstance(tags, list) else [],
+        "updated_at": updated_at or item.get("timestamp"),
+    }
+
+
+def _parse_date(value: str, *, field_name: str) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError(f"{field_name} must be an ISO-8601 datetime") from exc
+
+
+def _coerce_tags(tags: Any) -> list[str]:
+    if tags is None:
+        return []
+    if isinstance(tags, list) and all(isinstance(tag, str) for tag in tags):
+        return tags
+    raise ValueError("tags must be a list of strings")
+
+
+def _apply_search_filters(
+    rows: list[dict[str, Any]],
+    *,
+    source: str | None,
+    date_from: str | None,
+    date_to: str | None,
+    tags: list[str] | None,
+) -> list[dict[str, Any]]:
+    dt_from = _parse_date(date_from or "", field_name="date_from")
+    dt_to = _parse_date(date_to or "", field_name="date_to")
+    required_tags = set(_coerce_tags(tags))
+    filtered: list[dict[str, Any]] = []
+    for row in rows:
+        conversation = row.get("conversation")
+        if not isinstance(conversation, dict):
+            continue
+        if source and conversation.get("source") != source:
+            continue
+        timestamp_raw = str(conversation.get("timestamp", ""))
+        timestamp = _parse_date(timestamp_raw, field_name="conversation.timestamp")
+        if timestamp is None:
+            continue
+        if dt_from and timestamp < dt_from:
+            continue
+        if dt_to and timestamp > dt_to:
+            continue
+        metadata = conversation.get("metadata", {})
+        conversation_tags = metadata.get("tags", []) if isinstance(metadata, dict) else []
+        if not isinstance(conversation_tags, list):
+            conversation_tags = []
+        tag_set = {tag for tag in conversation_tags if isinstance(tag, str)}
+        if required_tags and not required_tags.issubset(tag_set):
+            continue
+        filtered.append(row)
+    return filtered
+
+
+def _deterministic_sort(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(
+        rows,
+        key=lambda row: (
+            float(row.get("score", 0.0)),
+            str(row.get("id", "")),
+            int(row.get("chunk_index", 0)),
+            str(row.get("text", "")),
+        ),
+    )
+
+
+def _paginate(rows: list[dict[str, Any]], *, limit: int, cursor: str | None) -> tuple[list[dict[str, Any]], str | None]:
+    if cursor is None:
+        offset = 0
+    else:
+        if not cursor.isdigit():
+            raise ValueError("cursor must be a numeric offset string")
+        offset = int(cursor)
+    page = rows[offset: offset + limit]
+    next_offset = offset + len(page)
+    next_cursor = str(next_offset) if next_offset < len(rows) else None
+    return page, next_cursor
+
+
+def _register_resources(mcp: Any, agent: BaseIngestionAgent) -> None:
+    @mcp.resource("memory://conversation/example")
+    async def conversation_example_resource() -> dict[str, Any]:
+        memory = {
+            "id": "example",
+            "source": "example",
+            "timestamp": "1970-01-01T00:00:00Z",
+            "messages": [{"role": "system", "text": "Use memory://conversation/{id} to read a stored conversation."}],
+            "metadata": {"tags": ["example"], "updated_at": "1970-01-01T00:00:00Z"},
+        }
+        return {
+            "status": "ok",
+            "id": "example",
+            "memory": memory,
+            "metadata": _resource_metadata(memory),
+        }
+
+    @mcp.resource("memory://conversation/{id}")
+    async def conversation_resource(id: str) -> dict[str, Any]:
+        if not id.strip():
+            return {"status": "error", "error_code": "invalid_input", "error_message": "id must be non-empty"}
         memory = await agent.retrieve(id)
         if memory is None:
-            return {"status": "not_found", "id": id}
-        return {"status": "ok", "memory": memory}
+            return {
+                "status": "not_found",
+                "id": id,
+                "error_code": "not_found",
+                "error_message": "memory not found",
+            }
+        return {
+            "status": "ok",
+            "id": id,
+            "memory": memory,
+            "metadata": _resource_metadata(memory),
+        }
+
+    @mcp.resource("memory://search/{query}")
+    async def search_resource(query: str, top_k: int = 5, source: str | None = None) -> dict[str, Any]:
+        if not query.strip():
+            return {
+                "status": "error",
+                "error_code": "invalid_input",
+                "error_message": "query must be non-empty",
+            }
+        result = await agent.search(query=unquote(query), top_k=top_k)
+        matches = result.get("results", [])
+        if source:
+            matches = [
+                row for row in matches
+                if isinstance(row, dict)
+                and isinstance(row.get("conversation"), dict)
+                and row["conversation"].get("source") == source
+            ]
+        return {
+            "status": "ok",
+            "id": f"search:{query}",
+            "results": matches,
+            "cursor": None,
+            "metadata": {"query": query, "top_k": top_k, "source": source},
+        }
+
+    @mcp.resource("memory://timeline/{day}")
+    async def timeline_resource(day: str, top_k: int = 20, source: str | None = None) -> dict[str, Any]:
+        try:
+            datetime.strptime(day, "%Y-%m-%d")
+        except ValueError:
+            return {
+                "status": "error",
+                "error_code": "invalid_input",
+                "error_message": "day must be YYYY-MM-DD",
+            }
+        result = await agent.search(query=day, top_k=top_k)
+        matches = result.get("results", [])
+        filtered: list[dict[str, Any]] = []
+        for row in matches:
+            if not isinstance(row, dict):
+                continue
+            conversation = row.get("conversation")
+            if not isinstance(conversation, dict):
+                continue
+            timestamp = str(conversation.get("timestamp", ""))
+            if not timestamp.startswith(day):
+                continue
+            if source and conversation.get("source") != source:
+                continue
+            filtered.append(row)
+        return {
+            "status": "ok",
+            "id": f"timeline:{day}",
+            "results": filtered,
+            "cursor": None,
+            "metadata": {"day": day, "top_k": top_k, "source": source},
+        }
+
+
+def _register_prompts(mcp: Any) -> None:
+    @mcp.prompt(name="save_conversation")
+    def save_conversation_prompt() -> str:
+        return (
+            'Call tool `memory_insert` with argument `conversation_json`.\n'
+            'Required shape: {"id":"...","source":"...","timestamp":"...","messages":[{"role":"user","text":"..."}],"metadata":{"imported_at":"..."}}.'
+        )
+
+    @mcp.prompt(name="search_memory")
+    def search_memory_prompt(query: str) -> str:
+        return (
+            f'Call tool `memory_search` with `query="{query}"` and optional '
+            "`limit`, `cursor`, `source`, `date_from`, `date_to`, `tags`."
+        )
+
+    @mcp.prompt(name="summarize_conversation")
+    def summarize_conversation_prompt(id: str) -> str:
+        return (
+            f'Call `memory_retrieve` with `id="{id}"`, then summarize the returned '
+            "`memory.messages` in chronological order."
+        )
+
+
+def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
+    async def memory_insert(conversation_json: dict[str, Any]) -> dict[str, Any]:
+        if not isinstance(conversation_json, dict):
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message="conversation_json must be an object",
+            )
+        try:
+            result = await agent.ingest_messages(conversation_json)
+        except Exception as exc:
+            return _envelope(
+                status="error",
+                error_code="insert_failed",
+                error_message=str(exc),
+            )
+
+        return _with_envelope_defaults(result)
+
+    async def memory_search(
+        query: str,
+        top_k: int = 5,
+        limit: int | None = None,
+        cursor: str | None = None,
+        source: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        tags: list[str] | None = None,
+    ) -> dict[str, Any]:
+        if not isinstance(query, str) or not query.strip():
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message="query must be a non-empty string",
+            )
+        if not isinstance(top_k, int) or top_k < 1 or top_k > 100:
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message="top_k must be an integer between 1 and 100",
+            )
+        if limit is None:
+            limit = top_k
+        if not isinstance(limit, int) or limit < 1 or limit > 100:
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message="limit must be an integer between 1 and 100",
+            )
+        try:
+            result = await agent.search(query=query, top_k=100)
+            matches = result.get("results", [])
+            if not isinstance(matches, list):
+                matches = []
+            filtered = _apply_search_filters(
+                [row for row in matches if isinstance(row, dict)],
+                source=source,
+                date_from=date_from,
+                date_to=date_to,
+                tags=tags,
+            )
+            sorted_rows = _deterministic_sort(filtered)
+            paged_rows, next_cursor = _paginate(sorted_rows, limit=limit, cursor=cursor)
+            result["results"] = paged_rows
+            result["cursor"] = next_cursor
+        except Exception as exc:
+            return _envelope(
+                status="error",
+                error_code="search_failed",
+                error_message=str(exc),
+            )
+
+        return _with_envelope_defaults(result)
+
+    async def memory_retrieve(id: str) -> dict[str, Any]:
+        if not isinstance(id, str) or not id.strip():
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message="id must be a non-empty string",
+            )
+        memory = await agent.retrieve(id)
+        if memory is None:
+            return _envelope(
+                status="not_found",
+                id=id,
+                error_code="not_found",
+                error_message="memory not found",
+            )
+        return _envelope(status="ok", id=id, memory=memory)
 
     return {
         "memory_insert": memory_insert,
@@ -54,5 +373,7 @@ def create_mcp_server(
 
     for tool_name, tool_fn in handlers.items():
         mcp.tool(name=tool_name, description=TOOL_DESCRIPTIONS[tool_name])(tool_fn)
+    _register_resources(mcp, agent)
+    _register_prompts(mcp)
 
     return mcp

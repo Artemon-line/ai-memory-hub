@@ -9,8 +9,9 @@ permissions:
 
 jobs:
   test:
-    name: MVP Tests
+    name: Core Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -30,4 +31,33 @@ jobs:
         run: uv sync --dev
 
       - name: Run tests
-        run: uv run pytest -q
+        env:
+          PYTHONHASHSEED: "0"
+        run: uv run pytest -q tests/test_mvp_ingestion.py tests/test_mvp_ingestion_agent.py tests/test_api_endpoints.py
+
+  mcp-test:
+    name: MCP Contract Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Run MCP test suite
+        env:
+          PYTHONHASHSEED: "0"
+        run: uv run pytest -q tests/test_mcp_tools.py tests/test_mcp_protocol.py tests/test_mcp_resources.py tests/test_mcp_prompts.py
