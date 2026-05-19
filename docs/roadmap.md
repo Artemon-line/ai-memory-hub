@@ -4,7 +4,7 @@ Structured plan for a **local-first** memory engine that unifies AI conversation
 
 **How to use this doc:** work **phases in order** or parallelize **within** a phase when tasks are independent. Each phase ends with a **milestone** you can demo or ship.
 
-**Related docs:** [Architecture](architecture.md) · [Agent integration](agents.md) · [Project overview](../README.md)
+**Related docs:** [Architecture](architecture.md) · [Agent integration](agents.md) · [Storage-agnostic BYOA plan](storage_agnostic_byoa_plan.md) · [Project overview](../README.md)
 
 ---
 
