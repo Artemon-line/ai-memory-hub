@@ -52,7 +52,7 @@ def test_mcp_prompts_list_and_get() -> None:
         prompts = list_result.get("prompts")
         assert isinstance(prompts, list)
         prompt_names = {item.get("name") for item in prompts if isinstance(item, dict)}
-        assert {"save_conversation", "search_memory", "summarize_conversation"}.issubset(prompt_names)
+        assert {"save_conversation", "search_memory", "ask_memory", "summarize_conversation"}.issubset(prompt_names)
 
         get_response = client.post(
             "/mcp/",
@@ -73,3 +73,23 @@ def test_mcp_prompts_list_and_get() -> None:
         text_content = messages[0]["content"]["text"]
         assert "memory_search" in text_content
         assert "query=\"hello\"" in text_content
+
+        ask_response = client.post(
+            "/mcp/",
+            json={
+                "jsonrpc": "2.0",
+                "id": 4,
+                "method": "prompts/get",
+                "params": {"name": "ask_memory", "arguments": {"question": "what changed?", "top_k": "3"}},
+            },
+            headers=headers,
+        )
+        assert ask_response.status_code == 200
+        ask_result = _event_data_json(ask_response.text)["result"]
+        assert isinstance(ask_result, dict)
+        ask_messages = ask_result.get("messages")
+        assert isinstance(ask_messages, list)
+        assert ask_messages
+        ask_text = ask_messages[0]["content"]["text"]
+        assert "memory_ask" in ask_text
+        assert "question=\"what changed?\"" in ask_text

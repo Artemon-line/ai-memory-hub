@@ -18,6 +18,7 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
     "memory_insert": "Insert a conversation into memory.",
     "memory_search": "Search existing memory by text query.",
     "memory_retrieve": "Retrieve a stored memory item by ID.",
+    "memory_ask": "Answer a question using stored memory search results.",
 }
 
 
@@ -289,6 +290,14 @@ def _register_prompts(mcp: Any) -> None:
             "Return results and the next `cursor` when present."
         )
 
+    @mcp.prompt(name="ask_memory")
+    def ask_memory_prompt(question: str, top_k: str = "5") -> str:
+        return (
+            "Use ai-memory-hub MCP tools directly.\n"
+            f'Call `memory_ask` with `question="{question}"` and optional `top_k={top_k}`.\n'
+            "Return `answer` and `citations`."
+        )
+
     @mcp.prompt(name="summarize_conversation")
     def summarize_conversation_prompt(id: str) -> str:
         return (
@@ -417,11 +426,35 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
             )
         return _envelope(status="ok", id=id, memory=memory)
 
+    async def memory_ask(question: str, top_k: int = 5) -> dict[str, Any]:
+        if not isinstance(question, str) or not question.strip():
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message="question must be a non-empty string",
+            )
+        if not isinstance(top_k, int) or top_k < 1 or top_k > 100:
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message="top_k must be an integer between 1 and 100",
+            )
+        try:
+            result = await agent.ask(question=question, top_k=top_k)
+        except Exception as exc:
+            return _envelope(
+                status="error",
+                error_code="ask_failed",
+                error_message=str(exc),
+            )
+        return _with_envelope_defaults(result)
+
     return {
         "memory_validate": memory_validate,
         "memory_insert": memory_insert,
         "memory_search": memory_search,
         "memory_retrieve": memory_retrieve,
+        "memory_ask": memory_ask,
     }
 
 

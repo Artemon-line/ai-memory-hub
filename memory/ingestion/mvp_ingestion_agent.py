@@ -28,3 +28,6 @@ class MVPIngestionAgent(BaseIngestionAgent):
 
     async def retrieve(self, memory_id: str) -> Optional[Dict[str, Any]]:
         return mvp_ingestion.retrieve(memory_id)
+
+    async def ask(self, question: str, *, top_k: int = 5) -> Dict[str, Any]:
+        return mvp_ingestion.ask(question=question, top_k=top_k)

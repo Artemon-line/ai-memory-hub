@@ -2,7 +2,8 @@
 
 [![ci](https://github.com/Artemon-line/ai-memory-hub/actions/workflows/pipeline.yml/badge.svg?branch=main)](https://github.com/Artemon-line/ai-memory-hub/actions/workflows/pipeline.yml)
 
-`ai-memory-hub` is a local-first memory backend for AI conversation storage and retrieval.
+`ai-memory-hub` is a local-first, MCP-native memory backend for AI conversation
+ingestion, storage, search, retrieval, and ask-over-memory.
 
 ## What It Exposes
 
@@ -10,11 +11,13 @@
   - `POST /memory/insert`
   - `POST /memory/search`
   - `POST /memory/retrieve`
+  - `POST /memory/ask`
 - FastMCP HTTP bridge (mounted at `/mcp` when enabled)
 - FastMCP tools:
   - `memory_insert`
   - `memory_search`
   - `memory_retrieve`
+  - `memory_ask`
 - MCP implementation: `memory/interfaces/mcp_server.py`
 
 ## Ingestion Flow
@@ -22,6 +25,7 @@
 ```python
 def ingest_messages(conversation_json):
     validate_json(conversation_json)
+    enrich_topics(conversation_json)
     chunks = chunk_messages(conversation_json)
     embeddings = embed_chunks(chunks)
     metadata_id = metadata_store.insert(conversation_json)
@@ -90,6 +94,14 @@ curl -X POST http://127.0.0.1:8000/memory/retrieve \
   -d '{"id":"d9fd4c95-9cb3-4fd5-b967-3027f8863210"}'
 ```
 
+Ask:
+
+```bash
+curl -X POST http://127.0.0.1:8000/memory/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question":"what did we store about MCP?","top_k":5}'
+```
+
 MCP streamable HTTP endpoint:
 
 `http://127.0.0.1:8000/mcp/`
@@ -129,6 +141,7 @@ curl -X POST http://127.0.0.1:8000/mcp/ \
 - `memory_insert(conversation_json)`
 - `memory_search(query, top_k=5, limit, cursor, source, date_from, date_to, tags)`
 - `memory_retrieve(id)`
+- `memory_ask(question, top_k=5)`
 
 Example `tools/call`:
 
@@ -211,6 +224,7 @@ curl -X POST http://127.0.0.1:8000/mcp/ \
 
 - `save_conversation`
 - `search_memory`
+- `ask_memory`
 - `summarize_conversation`
 
 List prompts:
@@ -235,6 +249,21 @@ curl -X POST http://127.0.0.1:8000/mcp/ \
     "id":7,
     "method":"prompts/get",
     "params":{"name":"search_memory","arguments":{"query":"hello"}}
+  }'
+```
+
+Get ask prompt:
+
+```bash
+curl -X POST http://127.0.0.1:8000/mcp/ \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Mcp-Session-Id: <SESSION_ID>" \
+  -d '{
+    "jsonrpc":"2.0",
+    "id":8,
+    "method":"prompts/get",
+    "params":{"name":"ask_memory","arguments":{"question":"what changed?","top_k":"5"}}
   }'
 ```
 

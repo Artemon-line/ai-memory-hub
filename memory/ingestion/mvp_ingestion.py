@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
@@ -60,6 +61,18 @@ class RuntimeDependencies:
 
 
 _RUNTIME: RuntimeDependencies | None = None
+_TOPIC_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    ("python", re.compile(r"\bpython\b", re.IGNORECASE)),
+    ("javascript", re.compile(r"\b(javascript|js|node\.?js|typescript|ts)\b", re.IGNORECASE)),
+    ("sql", re.compile(r"\b(sql|sqlite|postgres|mysql|database|db)\b", re.IGNORECASE)),
+    ("api", re.compile(r"\b(api|rest|endpoint|http|json-rpc)\b", re.IGNORECASE)),
+    ("mcp", re.compile(r"\b(mcp|model context protocol)\b", re.IGNORECASE)),
+    ("docker", re.compile(r"\b(docker|container|kubernetes|k8s)\b", re.IGNORECASE)),
+    ("testing", re.compile(r"\b(test|tests|pytest|unit test|integration test)\b", re.IGNORECASE)),
+    ("machine-learning", re.compile(r"\b(ai|llm|rag|embedding|vector)\b", re.IGNORECASE)),
+    ("frontend", re.compile(r"\b(frontend|ui|css|html|react|vue|angular)\b", re.IGNORECASE)),
+    ("backend", re.compile(r"\b(backend|fastapi|flask|server)\b", re.IGNORECASE)),
+]
 
 
 def build_runtime(config: HubConfig | dict[str, Any] | None = None) -> RuntimeDependencies:
@@ -102,6 +115,36 @@ def _runtime() -> RuntimeDependencies:
 
 def validate_json(obj: dict[str, Any]) -> None:
     validate_conversation(obj)
+
+
+def infer_topics(messages: list[dict[str, Any]]) -> list[str]:
+    text_blob = " ".join(str(message.get("text", "")) for message in messages)
+    topics: list[str] = []
+    for topic, pattern in _TOPIC_PATTERNS:
+        if pattern.search(text_blob):
+            topics.append(topic)
+    return topics
+
+
+def enrich_topics(obj: dict[str, Any]) -> None:
+    metadata = obj.get("metadata")
+    if not isinstance(metadata, dict):
+        return
+
+    existing = metadata.get("topics")
+    inferred = infer_topics(obj.get("messages", []))
+    if not inferred and not isinstance(existing, list):
+        return
+
+    merged: list[str] = []
+    for topic in (existing if isinstance(existing, list) else []):
+        if isinstance(topic, str) and topic not in merged:
+            merged.append(topic)
+    for topic in inferred:
+        if topic not in merged:
+            merged.append(topic)
+
+    metadata["topics"] = merged
 
 
 def chunk_messages(obj: dict[str, Any]) -> list[dict[str, Any]]:
@@ -151,17 +194,20 @@ def ingest_messages(conversation_json: dict[str, Any]) -> dict[str, Any]:
     # 1. Validate JSON against schema
     validate_json(conversation_json)
 
-    # 2. Chunk messages
+    # 2. Enrich metadata topics from message text
+    enrich_topics(conversation_json)
+
+    # 3. Chunk messages
     chunks = chunk_messages(conversation_json)
 
-    # 3. Embed chunks
+    # 4. Embed chunks
     embeddings = embed_chunks(chunks)
 
-    # 4. Store metadata + vectors
+    # 5. Store metadata + vectors
     metadata_id = store_metadata(conversation_json)
     store_vectors(metadata_id, embeddings)
 
-    # 5. Return stored object
+    # 6. Return stored object
     return {
         "status": "ok",
         "id": metadata_id,
@@ -199,6 +245,36 @@ def retrieve(memory_id: str) -> dict[str, Any] | None:
     return runtime.metadata_store.get(memory_id)
 
 
+def ask(question: str, top_k: int = 5) -> dict[str, Any]:
+    search_result = search(query=question, top_k=top_k)
+    matches = search_result.get("results", [])
+    if not matches:
+        return {
+            "status": "ok",
+            "answer": "I could not find relevant memory for that question.",
+            "citations": [],
+        }
+
+    citations: list[dict[str, Any]] = []
+    context_lines: list[str] = []
+    for row in matches:
+        citation = {
+            "id": row.get("id"),
+            "chunk_index": int(row.get("chunk_index", 0)),
+            "score": float(row.get("score", 0.0)),
+            "text": row.get("text", ""),
+        }
+        citations.append(citation)
+        context_lines.append(f"- [{citation['id']}#{citation['chunk_index']}] {citation['text']}")
+
+    answer = "Based on stored memory:\n" + "\n".join(context_lines[:top_k])
+    return {
+        "status": "ok",
+        "answer": answer,
+        "citations": citations[:top_k],
+    }
+
+
 def _hash_to_vector(text: str, dimensions: int) -> list[float]:
     digest = hashlib.sha256(text.encode("utf-8")).digest()
     values = list(digest)
@@ -206,4 +282,3 @@ def _hash_to_vector(text: str, dimensions: int) -> list[float]:
         digest = hashlib.sha256(digest).digest()
         values.extend(list(digest))
     return [(values[index] / 255.0) for index in range(dimensions)]
-

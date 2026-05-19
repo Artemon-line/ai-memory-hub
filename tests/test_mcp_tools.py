@@ -100,6 +100,11 @@ async def test_mcp_tool_handlers_insert_search_retrieve() -> None:
     assert "error_code" in retrieve_result
     assert "error_message" in retrieve_result
 
+    ask_result = await handlers["memory_ask"]("what was stored?", 3)
+    assert ask_result["status"] == "ok"
+    assert "answer" in ask_result
+    assert isinstance(ask_result["citations"], list)
+
 
 @pytest.mark.asyncio
 async def test_mcp_tool_handlers_invalid_inputs_return_consistent_errors() -> None:
@@ -148,6 +153,11 @@ async def test_mcp_tool_handlers_invalid_inputs_return_consistent_errors() -> No
     assert "id" in retrieve_result["error_message"]
     assert "results" in retrieve_result
     assert "cursor" in retrieve_result
+
+    ask_result = await handlers["memory_ask"]("", 5)
+    assert ask_result["status"] == "error"
+    assert ask_result["error_code"] == "invalid_input"
+    assert "question" in ask_result["error_message"]
 
 
 @pytest.mark.asyncio

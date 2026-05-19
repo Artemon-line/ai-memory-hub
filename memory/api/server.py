@@ -21,6 +21,11 @@ class RetrieveRequest(BaseModel):
     id: str
 
 
+class AskRequest(BaseModel):
+    question: str
+    top_k: int = Field(default=5, ge=1, le=100)
+
+
 def _register_api_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
     async def memory_insert(conversation_json: dict[str, Any]) -> dict[str, Any]:
         try:
@@ -42,6 +47,11 @@ def _register_api_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
         return {"status": "ok", "memory": conversation}
 
     app.post("/memory/retrieve")(memory_retrieve)
+
+    async def memory_ask(request: AskRequest) -> dict[str, Any]:
+        return await agent.ask(request.question, top_k=request.top_k)
+
+    app.post("/memory/ask")(memory_ask)
 
 
 def create_app(

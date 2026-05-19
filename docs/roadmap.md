@@ -12,11 +12,11 @@ Structured plan for a **local-first** memory engine that unifies AI conversation
 
 | Phase | Focus | Milestone (one line) |
 |-------|--------|----------------------|
-| 1 | MVP: ChatGPT-only ingestion, normalize, store, search, RAG | ChatGPT export → search + `/ask` over your memory |
+| 1 | MVP: MCP-native ingestion, normalize, store, search, retrieve | MCP tools/resources + HTTP `/memory/*` over your memory |
 | 2 | Multi-source ingestion | One hub across platforms, including those without official exports (e.g. Copilot) |
 | 3 | Intelligence: summaries, topics, timelines, consolidation | Knowledge engine, not just storage |
 | 4 | UI & DX | Dashboard + SDKs + packaging |
-| 5 | Agent integration | LangGraph, Llama Stack, Assistants, MCP as memory provider |
+| 5 | Agent integration | LangGraph, Llama Stack, Assistants using MCP/API memory backend |
 | 6 | Advanced memory | Graphs, decay, shared memory, plugins |
 | 7 | Optional cloud | Encrypted sync, multi-device, backup (opt-in only) |
 
@@ -27,51 +27,53 @@ Structured plan for a **local-first** memory engine that unifies AI conversation
 When planning or estimating work, treat phases as **ordered capability layers**:
 
 - **Phase 1** defines the minimum **pipeline**: **ChatGPT-only** ingestion (official ZIP export) → **unified schema** → **vector + SQLite** → **HTTP** `/search`, `/conversation/{id}`, `/ask`.
+- **Phase 1** defines the minimum **pipeline**: **schema-first ingestion** (MCP/API payloads) → **unified schema** → **vector + SQLite** → **HTTP** `/memory/search`, `/memory/retrieve` + MCP `memory_*` tools/resources.
 - **Phase 2** adds **platform-specific ingestion** (Gemini Takeout, Copilot workarounds, Claude HTML, local LLM logs); **schema and storage stay stable** if normalization boundaries are respected.
 - **Phase 3** is **offline/batch intelligence** on top of stored chunks (summaries, clustering, timelines).
 - **Phase 4** is **presentation and distribution** (UI, SDKs, OpenAPI, pip).
-- **Phase 5** aligns with [agents.md](agents.md): **tools** wrapping the same API; **MCP** maps to `memory.*` operations.
+- **Phase 5** aligns with [agents.md](agents.md): external agent frameworks consume the same memory API/MCP backend.
 - **Phases 6–7** are **extensions**; **local-first** remains default until Phase 7 is explicitly enabled.
 
 ---
 
 ## Phase 1 — Core MVP (Minimum Viable Product)
 
-**Goal:** A working memory engine with ingestion, storage, search, and RAG.
+**Goal:** A working memory engine with MCP/API ingestion, storage, search, and retrieval.
 
-### 1.1 Ingestion (ChatGPT only for MVP)
+### 1.1 Ingestion (MCP/API-first for MVP)
 
-- [ ] ChatGPT export ingestion (ZIP → JSON → normalized schema)
+- [x] Schema-validated ingestion payload (`conversation_json` -> normalized runtime object)
+- [x] MCP tool ingestion (`memory_insert`)
+- [x] HTTP ingestion (`POST /memory/insert`)
 
-    ChatGPT provides an official, structured export format — the easiest ingestion target and the one to implement first for MVP.
-
-- [ ] Basic metadata extraction (timestamps, roles, source)
-- [ ] Chunking long conversations for embedding
+- [x] Basic metadata capture (timestamps, roles, source)
+- [x] Chunking messages for embedding
 
 ### 1.2 Normalization
 
-- [ ] Unified conversation schema
-- [ ] Message role normalization
+- [x] Unified conversation schema
+- [ ] Message role normalization from non-conforming upstream sources
 - [ ] Basic topic tagging (LLM or regex-based)
 
 ### 1.3 Storage
 
-- [ ] Vector store (Chroma or LanceDB)
-- [ ] Metadata DB (SQLite)
-- [ ] Embedding pipeline (OpenAI or Llama Stack)
+- [x] Vector store (LanceDB with in-memory fallback)
+- [x] Metadata DB (SQLite)
+- [x] Embedding pipeline (OpenAI or local deterministic provider)
 
 ### 1.4 Query API
 
-- [ ] `POST /search` — semantic search
-- [ ] `GET /conversation/{id}` — retrieve conversation
-- [ ] `POST /ask` — RAG endpoint
+- [x] `POST /memory/search` — semantic search
+- [x] `POST /memory/retrieve` — retrieve conversation by ID
+- [x] MCP `memory_search` and `memory_retrieve`
+- [ ] `POST /ask` — RAG endpoint (deferred until inference layer hardening)
 
 ### 1.5 CLI (optional)
 
 - [ ] `aimh ingest <file>`
 - [ ] `aimh search "<query>"`
 
-**Milestone:** Ingest ChatGPT exports, search them semantically, and ask questions over your own memory.
+**Milestone:** Ingest via MCP/API, validate against unified schema, store in SQLite+vector DB, and retrieve via HTTP or MCP.
 
 ---
 

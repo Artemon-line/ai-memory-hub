@@ -114,3 +114,38 @@ def test_search_and_retrieve() -> None:
     assert len(search_result["results"]) >= 1
     assert retrieved is not None
     assert retrieved["id"] == "d9fd4c95-9cb3-4fd5-b967-3027f8863210"
+
+
+def test_ingest_messages_enriches_topics() -> None:
+    metadata, _ = _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["messages"] = [
+        {"role": "user", "text": "Build FastAPI endpoint with MCP and SQLite search"},
+        {"role": "assistant", "text": "Use pytest for tests and add docker setup"},
+    ]
+
+    mvp_ingestion.ingest_messages(conversation)
+    stored = metadata.by_id["d9fd4c95-9cb3-4fd5-b967-3027f8863210"]
+    topics = stored["metadata"].get("topics", [])
+
+    assert "mcp" in topics
+    assert "backend" in topics
+    assert "sql" in topics
+    assert "testing" in topics
+    assert "docker" in topics
+
+
+def test_ingest_messages_preserves_existing_topics() -> None:
+    metadata, _ = _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["metadata"]["topics"] = ["custom-topic", "mcp"]
+    conversation["messages"] = [
+        {"role": "user", "text": "MCP API design"},
+    ]
+
+    mvp_ingestion.ingest_messages(conversation)
+    stored = metadata.by_id["d9fd4c95-9cb3-4fd5-b967-3027f8863210"]
+    topics = stored["metadata"]["topics"]
+
+    assert topics[0] == "custom-topic"
+    assert topics.count("mcp") == 1
