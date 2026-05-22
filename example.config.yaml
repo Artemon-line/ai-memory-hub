@@ -1,5 +1,6 @@
 # ai-memory-hub configuration file
-# Phase 1 (MVP): deterministic, schema-first ingestion (no LangGraph).
+# Documented example with common variations.
+# Keep this file committed as a reference template.
 
 # -------------------------
 # STORAGE LAYER
@@ -69,3 +70,55 @@ openai:
 local_llm:
   model_path: ""          # Optional local model path
   context_window: 8192
+
+# ============================================================
+# VARIATIONS (examples)
+# ============================================================
+#
+# 1) Local dev (SQLite metadata + LanceDB vectors)
+#
+# providers:
+#   embeddings: local
+#   metadata_db: sqlite
+#   metadata_dsn: ""
+#   vector_db: lancedb
+#
+# storage:
+#   dry_run: false
+#   metadata_schema_versions: [1]
+#   vector:
+#     allow_fallback: true
+#
+# 2) Postgres metadata (BYOA)
+#
+# providers:
+#   metadata_db: postgres
+#   metadata_dsn: "postgresql://user:password@127.0.0.1:5432/memory"
+#   vector_db: lancedb
+#
+# storage:
+#   metadata_schema_versions: [1]
+#
+# 3) Strict production startup (no vector fallback)
+#
+# storage:
+#   dry_run: false
+#   vector:
+#     allow_fallback: false
+#
+# 4) Dry-run mode for ingestion validation
+#
+# storage:
+#   dry_run: true
+#   vector:
+#     allow_fallback: true
+#
+# 5) In-memory vectors path (current pgvector placeholder mode)
+#
+# providers:
+#   vector_db: pgvector
+#
+# 6) Custom conversation schema
+#
+# schema:
+#   file: "./memory/schema/conversation.schema.json"
