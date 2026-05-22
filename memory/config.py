@@ -26,6 +26,11 @@ class PathsConfig:
 
 
 @dataclass(frozen=True)
+class SchemaConfig:
+    file: str = "./memory/schema/conversation.schema.json"
+
+
+@dataclass(frozen=True)
 class StorageVectorConfig:
     allow_fallback: bool = True
 
@@ -42,6 +47,7 @@ class HubConfig:
     providers: ProvidersConfig
     interfaces: InterfacesConfig
     paths: PathsConfig
+    schema: SchemaConfig
     storage: StorageConfig
 
 
@@ -49,6 +55,7 @@ DEFAULT_CONFIG = HubConfig(
     providers=ProvidersConfig(),
     interfaces=InterfacesConfig(),
     paths=PathsConfig(),
+    schema=SchemaConfig(),
     storage=StorageConfig(),
 )
 
@@ -68,6 +75,7 @@ def parse_config(config: dict[str, Any] | None) -> HubConfig:
     providers = _as_dict(config_dict.get("providers"))
     interfaces = _as_dict(config_dict.get("interfaces"))
     paths = _as_dict(config_dict.get("paths"))
+    schema = _as_dict(config_dict.get("schema"))
     storage = _as_dict(config_dict.get("storage"))
     storage_vector = _as_dict(storage.get("vector"))
 
@@ -94,6 +102,7 @@ def parse_config(config: dict[str, Any] | None) -> HubConfig:
             api=_parse_bool(interfaces.get("api"), DEFAULT_CONFIG.interfaces.api),
         ),
         paths=PathsConfig(data_dir=str(paths.get("data_dir", DEFAULT_CONFIG.paths.data_dir))),
+        schema=SchemaConfig(file=str(schema.get("file", DEFAULT_CONFIG.schema.file))),
         storage=StorageConfig(
             dry_run=_parse_bool(storage.get("dry_run"), DEFAULT_CONFIG.storage.dry_run),
             metadata_schema_versions=tuple(

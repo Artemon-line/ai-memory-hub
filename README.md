@@ -40,6 +40,8 @@ def ingest_messages(conversation_json):
 - Startup checks:
   - metadata schema version compatibility (`storage.metadata_schema_versions`)
   - embedding/vector dimensionality compatibility
+- Validation schema:
+  - loaded from `schema.file` at startup (default: `./memory/schema/conversation.schema.json`)
 - Optional vector fallback:
   - if LanceDB init fails and `storage.vector.allow_fallback: true`, runtime falls back to in-memory vectors
 - Dry-run mode:
@@ -61,6 +63,9 @@ storage:
   metadata_schema_versions: [1]
   vector:
     allow_fallback: true
+
+schema:
+  file: ./memory/schema/conversation.schema.json
 
 interfaces:
   mcp: true

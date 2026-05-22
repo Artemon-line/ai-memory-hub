@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import jsonschema
+import pytest
 
 from memory.ingestion import mvp_ingestion
+from memory.ingestion import validate as ingestion_validate
 
 
 class StubEmbedder:
@@ -150,3 +155,35 @@ def test_ingest_messages_preserves_existing_topics() -> None:
 
     assert topics[0] == "custom-topic"
     assert topics.count("mcp") == 1
+
+
+def test_schema_file_from_config_is_used(tmp_path: Path) -> None:
+    schema_path = tmp_path / "conversation.custom.schema.json"
+    schema = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+            "id": {"type": "string"},
+            "source": {"type": "string"},
+            "timestamp": {"type": "string"},
+            "messages": {"type": "array"},
+            "metadata": {"type": "object"},
+            "must_exist": {"type": "string"},
+        },
+        "required": ["id", "source", "timestamp", "messages", "metadata", "must_exist"],
+        "additionalProperties": True,
+    }
+    schema_path.write_text(json.dumps(schema), encoding="utf-8")
+
+    try:
+        mvp_ingestion.build_runtime(
+            {
+                "providers": {"embeddings": "local", "vector_db": "pgvector"},
+                "paths": {"data_dir": str(tmp_path / "data")},
+                "schema": {"file": str(schema_path)},
+            }
+        )
+        with pytest.raises(jsonschema.ValidationError):
+            mvp_ingestion.validate_json(_valid_conversation())
+    finally:
+        ingestion_validate.set_schema_path(None)

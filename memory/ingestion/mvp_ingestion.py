@@ -15,7 +15,7 @@ from memory.backend.metadata_store import SQLiteMetadataStore
 from memory.backend.postgres_metadata_store import PostgresMetadataStore
 from memory.backend.vector_store import InMemoryVectorStore, LanceDBVectorStore
 from memory.config import HubConfig, load_config, parse_config
-from memory.ingestion.validate import validate_conversation
+from memory.ingestion.validate import set_schema_path, validate_conversation
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +85,7 @@ _TOPIC_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 
 def build_runtime(config: HubConfig | dict[str, Any] | None = None) -> RuntimeDependencies:
     cfg = parse_config(config) if isinstance(config, dict) else (config or load_config())
+    set_schema_path(cfg.schema.file)
     data_dir = Path(cfg.paths.data_dir)
     if cfg.providers.metadata_db == "postgres":
         metadata_store = PostgresMetadataStore(cfg.providers.metadata_dsn)

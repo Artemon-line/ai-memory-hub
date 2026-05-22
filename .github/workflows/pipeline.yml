@@ -46,6 +46,7 @@ jobs:
           - sqlite-default
           - dry-run
           - fallback-disabled
+          - custom-schema
 
     steps:
       - name: Checkout
@@ -76,6 +77,9 @@ jobs:
             uv run pytest -q tests/test_storage_features.py -k \
               "dry_run_write_is_noop or \
               runtime_health_reports_dry_run"
+          elif [ "${{ matrix.case }}" = "custom-schema" ]; then
+            uv run pytest -q tests/test_mvp_ingestion.py -k \
+              "schema_file_from_config_is_used"
           else
             uv run pytest -q tests/test_storage_features.py -k \
               "build_runtime_vector_fallback_disabled_raises"

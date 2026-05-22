@@ -7,12 +7,21 @@ from typing import Any
 import jsonschema  # pyright: ignore[reportMissingModuleSource]
 
 SCHEMA_PATH = Path(__file__).resolve().parents[1] / "schema" / "conversation.schema.json"
+_ACTIVE_SCHEMA_PATH: Path = SCHEMA_PATH
 
 
 def load_schema() -> dict[str, Any]:
     """Load the conversation JSON schema from disk."""
-    with SCHEMA_PATH.open("r", encoding="utf-8") as handle:
+    with _ACTIVE_SCHEMA_PATH.open("r", encoding="utf-8") as handle:
         return json.load(handle)
+
+
+def set_schema_path(path: str | Path | None) -> None:
+    global _ACTIVE_SCHEMA_PATH
+    if path is None:
+        _ACTIVE_SCHEMA_PATH = SCHEMA_PATH
+        return
+    _ACTIVE_SCHEMA_PATH = Path(path)
 
 
 def validate_conversation(payload: dict[str, Any]) -> None:

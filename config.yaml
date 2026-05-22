@@ -41,7 +41,7 @@ paths:
 # SCHEMA
 # -------------------------
 schema:
-  file: "./schema/conversation.schema.json"
+  file: "./memory/schema/conversation.schema.json"
 
 # -------------------------
 # MCP SERVER SETTINGS
