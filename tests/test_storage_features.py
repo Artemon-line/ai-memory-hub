@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -11,6 +13,7 @@ from memory.backend.log_safety import redact_secrets
 from memory.backend.metadata_store import SQLiteMetadataStore
 from memory.backend.postgres_metadata_store import PostgresMetadataStore
 from memory.backend.vector_store import InMemoryVectorStore
+from memory.backend.vector_store import LanceDBVectorStore
 from memory.ingestion import mvp_ingestion
 
 
@@ -399,3 +402,43 @@ def test_postgres_live_integration_when_dsn_provided() -> None:
     assert loaded is not None
     assert loaded["id"] == payload["id"]
     assert store.health()["schema_version"] == 1
+
+
+def test_lancedb_index_is_created_lazily(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    class FakeTable:
+        def __init__(self):
+            self.add_calls = 0
+            self.create_index_calls = 0
+
+        def add(self, rows):
+            _ = rows
+            self.add_calls += 1
+
+        def create_index(self, metric: str = "cosine"):
+            _ = metric
+            self.create_index_calls += 1
+
+    class FakeLanceDBModule:
+        @staticmethod
+        def connect(_path: str):
+            return object()
+
+    fake_table = FakeTable()
+    monkeypatch.setitem(sys.modules, "lancedb", types.SimpleNamespace(connect=FakeLanceDBModule.connect))
+    monkeypatch.setattr(LanceDBVectorStore, "_open_or_create_table", lambda self: fake_table)
+
+    store = LanceDBVectorStore(tmp_path / "lancedb", dimension=3)
+    assert fake_table.create_index_calls == 0
+
+    store.insert(
+        "11111111-1111-1111-1111-111111111111",
+        [{"chunk_index": 0, "role": "user", "text": "hello", "vector": [0.1, 0.2, 0.3]}],
+    )
+    assert fake_table.add_calls == 1
+    assert fake_table.create_index_calls == 1
+
+    store.insert(
+        "11111111-1111-1111-1111-111111111111",
+        [{"chunk_index": 1, "role": "assistant", "text": "world", "vector": [0.4, 0.5, 0.6]}],
+    )
+    assert fake_table.create_index_calls == 1

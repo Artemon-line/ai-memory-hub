@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import math
+import logging
 from pathlib import Path
 from typing import Any
 import pyarrow as pa
 
 from memory.backend.contracts import ProviderCapabilities
 from memory.backend.errors import NotSupportedError, VectorDimensionError
+
+logger = logging.getLogger(__name__)
 
 
 class LanceDBVectorStore:
@@ -25,6 +28,7 @@ class LanceDBVectorStore:
 
         self._db = lancedb.connect(str(self.db_path))
         self._table = self._open_or_create_table()
+        self._index_ready = False
 
     @property
     def expected_dimensionality(self) -> int:
@@ -59,7 +63,6 @@ class LanceDBVectorStore:
         table = self._db.create_table(
             self.table_name, schema=schema, mode="overwrite"
         )
-        table.create_index(metric="cosine")
         return table
 
     def insert(self, metadata_id: str, embeddings: list[dict[str, Any]]) -> None:
@@ -78,6 +81,7 @@ class LanceDBVectorStore:
             )
         if rows:
             self._table.add(rows)
+            self._ensure_index()
 
     def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
         self._validate_dimension(query_vector, operation="search")
@@ -115,6 +119,15 @@ class LanceDBVectorStore:
             raise VectorDimensionError(
                 f"Vector dimensionality mismatch during {operation}: expected {expected}, got {actual}"
             )
+
+    def _ensure_index(self) -> None:
+        if self._index_ready:
+            return
+        try:
+            self._table.create_index(metric="cosine")
+            self._index_ready = True
+        except RuntimeError as exc:
+            logger.warning("LanceDB index creation deferred: %s", exc)
 
 
 class InMemoryVectorStore:
