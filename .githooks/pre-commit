@@ -28,4 +28,4 @@ if [ -n "$MD_FILES" ]; then
 fi
 
 echo "[pre-commit] Running test suite..."
-python -m pytest -q
+uv run pytest -q
