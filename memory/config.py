@@ -10,6 +10,8 @@ from typing import Any
 class ProvidersConfig:
     embeddings: str = "local"
     vector_db: str = "lancedb"
+    metadata_db: str = "sqlite"
+    metadata_dsn: str = ""
 
 
 @dataclass(frozen=True)
@@ -24,16 +26,30 @@ class PathsConfig:
 
 
 @dataclass(frozen=True)
+class StorageVectorConfig:
+    allow_fallback: bool = True
+
+
+@dataclass(frozen=True)
+class StorageConfig:
+    dry_run: bool = False
+    metadata_schema_versions: tuple[int, ...] = (1,)
+    vector: StorageVectorConfig = StorageVectorConfig()
+
+
+@dataclass(frozen=True)
 class HubConfig:
     providers: ProvidersConfig
     interfaces: InterfacesConfig
     paths: PathsConfig
+    storage: StorageConfig
 
 
 DEFAULT_CONFIG = HubConfig(
     providers=ProvidersConfig(),
     interfaces=InterfacesConfig(),
     paths=PathsConfig(),
+    storage=StorageConfig(),
 )
 
 
@@ -52,21 +68,48 @@ def parse_config(config: dict[str, Any] | None) -> HubConfig:
     providers = _as_dict(config_dict.get("providers"))
     interfaces = _as_dict(config_dict.get("interfaces"))
     paths = _as_dict(config_dict.get("paths"))
+    storage = _as_dict(config_dict.get("storage"))
+    storage_vector = _as_dict(storage.get("vector"))
 
     embeddings = str(providers.get("embeddings", DEFAULT_CONFIG.providers.embeddings)).lower()
     vector_db = str(providers.get("vector_db", DEFAULT_CONFIG.providers.vector_db)).lower()
+    metadata_db = str(providers.get("metadata_db", DEFAULT_CONFIG.providers.metadata_db)).lower()
+    metadata_dsn = str(providers.get("metadata_dsn", DEFAULT_CONFIG.providers.metadata_dsn))
     if embeddings not in {"openai", "local"}:
         raise ValueError("providers.embeddings must be one of: openai, local")
     if vector_db not in {"lancedb", "pgvector"}:
         raise ValueError("providers.vector_db must be one of: lancedb, pgvector")
+    if metadata_db not in {"sqlite", "postgres"}:
+        raise ValueError("providers.metadata_db must be one of: sqlite, postgres")
 
     return HubConfig(
-        providers=ProvidersConfig(embeddings=embeddings, vector_db=vector_db),
+        providers=ProvidersConfig(
+            embeddings=embeddings,
+            vector_db=vector_db,
+            metadata_db=metadata_db,
+            metadata_dsn=metadata_dsn,
+        ),
         interfaces=InterfacesConfig(
             mcp=_parse_bool(interfaces.get("mcp"), DEFAULT_CONFIG.interfaces.mcp),
             api=_parse_bool(interfaces.get("api"), DEFAULT_CONFIG.interfaces.api),
         ),
         paths=PathsConfig(data_dir=str(paths.get("data_dir", DEFAULT_CONFIG.paths.data_dir))),
+        storage=StorageConfig(
+            dry_run=_parse_bool(storage.get("dry_run"), DEFAULT_CONFIG.storage.dry_run),
+            metadata_schema_versions=tuple(
+                int(value)
+                for value in storage.get(
+                    "metadata_schema_versions",
+                    list(DEFAULT_CONFIG.storage.metadata_schema_versions),
+                )
+            ),
+            vector=StorageVectorConfig(
+                allow_fallback=_parse_bool(
+                    storage_vector.get("allow_fallback"),
+                    DEFAULT_CONFIG.storage.vector.allow_fallback,
+                )
+            ),
+        ),
     )
 
 

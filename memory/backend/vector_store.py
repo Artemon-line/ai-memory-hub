@@ -5,6 +5,9 @@ from pathlib import Path
 from typing import Any
 import pyarrow as pa
 
+from memory.backend.contracts import ProviderCapabilities
+from memory.backend.errors import NotSupportedError, VectorDimensionError
+
 
 class LanceDBVectorStore:
     def __init__(self, db_path: str | Path, table_name: str = "memory_vectors", dimension: int = 32):
@@ -22,6 +25,10 @@ class LanceDBVectorStore:
 
         self._db = lancedb.connect(str(self.db_path))
         self._table = self._open_or_create_table()
+
+    @property
+    def expected_dimensionality(self) -> int:
+        return self.dimension
 
     def _open_or_create_table(self):
         schema = pa.schema(
@@ -49,7 +56,6 @@ class LanceDBVectorStore:
                 return existing_table
 
         # Create or overwrite table with correct schema
-        print("DB is gone")
         table = self._db.create_table(
             self.table_name, schema=schema, mode="overwrite"
         )
@@ -59,19 +65,22 @@ class LanceDBVectorStore:
     def insert(self, metadata_id: str, embeddings: list[dict[str, Any]]) -> None:
         rows = []
         for item in embeddings:
+            vector = [float(v) for v in item["vector"]]
+            self._validate_dimension(vector, operation="insert")
             rows.append(
                 {
                     "memory_id": metadata_id,
                     "chunk_index": int(item["chunk_index"]),
                     "role": str(item["role"]),
                     "text": str(item["text"]),
-                    "vector": [float(v) for v in item["vector"]],
+                    "vector": vector,
                 }
             )
         if rows:
             self._table.add(rows)
 
     def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
+        self._validate_dimension(query_vector, operation="search")
         result = self._table.search(query_vector).limit(top_k).to_list()
         normalized: list[dict[str, Any]] = []
         for row in result:
@@ -86,26 +95,55 @@ class LanceDBVectorStore:
             )
         return normalized
 
+    def capabilities(self) -> ProviderCapabilities:
+        return ProviderCapabilities(supports_metadata_indexing=True)
+
+    def health(self) -> dict[str, Any]:
+        return {
+            "provider": "lancedb",
+            "expected_dimensionality": self.expected_dimensionality,
+        }
+
+    def set_ttl(self, memory_id: str, ttl_seconds: int) -> None:
+        _ = (memory_id, ttl_seconds)
+        raise NotSupportedError("TTL is not supported by this vector adapter")
+
+    def _validate_dimension(self, vector: list[float], *, operation: str) -> None:
+        actual = len(vector)
+        expected = self.expected_dimensionality
+        if actual != expected:
+            raise VectorDimensionError(
+                f"Vector dimensionality mismatch during {operation}: expected {expected}, got {actual}"
+            )
+
 
 class InMemoryVectorStore:
     """Fallback implementation used for pgvector config and unit tests."""
 
-    def __init__(self):
+    def __init__(self, dimension: int = 32):
+        self.dimension = dimension
         self._rows: list[dict[str, Any]] = []
+
+    @property
+    def expected_dimensionality(self) -> int:
+        return self.dimension
 
     def insert(self, metadata_id: str, embeddings: list[dict[str, Any]]) -> None:
         for item in embeddings:
+            vector = [float(v) for v in item["vector"]]
+            self._validate_dimension(vector, operation="insert")
             self._rows.append(
                 {
                     "memory_id": metadata_id,
                     "chunk_index": int(item["chunk_index"]),
                     "role": str(item["role"]),
                     "text": str(item["text"]),
-                    "vector": [float(v) for v in item["vector"]],
+                    "vector": vector,
                 }
             )
 
     def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
+        self._validate_dimension(query_vector, operation="search")
         scored: list[tuple[float, dict[str, Any]]] = []
         for row in self._rows:
             score = _cosine_distance(query_vector, row["vector"])
@@ -124,6 +162,27 @@ class InMemoryVectorStore:
                 }
             )
         return output
+
+    def capabilities(self) -> ProviderCapabilities:
+        return ProviderCapabilities()
+
+    def health(self) -> dict[str, Any]:
+        return {
+            "provider": "memory",
+            "expected_dimensionality": self.expected_dimensionality,
+        }
+
+    def set_ttl(self, memory_id: str, ttl_seconds: int) -> None:
+        _ = (memory_id, ttl_seconds)
+        raise NotSupportedError("TTL is not supported by this vector adapter")
+
+    def _validate_dimension(self, vector: list[float], *, operation: str) -> None:
+        actual = len(vector)
+        expected = self.expected_dimensionality
+        if actual != expected:
+            raise VectorDimensionError(
+                f"Vector dimensionality mismatch during {operation}: expected {expected}, got {actual}"
+            )
 
 
 def _cosine_distance(a: list[float], b: list[float]) -> float:

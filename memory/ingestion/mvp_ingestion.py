@@ -1,16 +1,23 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
+from memory.backend.dry_run import DryRunMetadataStore, DryRunVectorStore
+from memory.backend.errors import SchemaVersionError, VectorDimensionError
+from memory.backend.log_safety import redact_secrets
 from memory.backend.metadata_store import SQLiteMetadataStore
+from memory.backend.postgres_metadata_store import PostgresMetadataStore
 from memory.backend.vector_store import InMemoryVectorStore, LanceDBVectorStore
 from memory.config import HubConfig, load_config, parse_config
 from memory.ingestion.validate import validate_conversation
+
+logger = logging.getLogger(__name__)
 
 
 class EmbeddingProvider(Protocol):
@@ -58,6 +65,7 @@ class RuntimeDependencies:
     embedding_provider: EmbeddingProvider
     metadata_store: Any
     vector_store: Any
+    health_state: dict[str, Any]
 
 
 _RUNTIME: RuntimeDependencies | None = None
@@ -78,25 +86,61 @@ _TOPIC_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 def build_runtime(config: HubConfig | dict[str, Any] | None = None) -> RuntimeDependencies:
     cfg = parse_config(config) if isinstance(config, dict) else (config or load_config())
     data_dir = Path(cfg.paths.data_dir)
-    metadata_store = SQLiteMetadataStore(data_dir / "metadata.sqlite3")
+    if cfg.providers.metadata_db == "postgres":
+        metadata_store = PostgresMetadataStore(cfg.providers.metadata_dsn)
+    else:
+        metadata_store = SQLiteMetadataStore(data_dir / "metadata.sqlite3")
+    _validate_metadata_schema(metadata_store=metadata_store, supported_versions=cfg.storage.metadata_schema_versions)
 
     if cfg.providers.embeddings == "openai":
         embedding_provider: EmbeddingProvider = OpenAIEmbeddingProvider()
     else:
         embedding_provider = LocalEmbeddingProvider()
 
+    expected_dimension = embedding_provider.dimension
+    vector_fallback_active = False
+    fallback_reasons: list[str] = []
     if cfg.providers.vector_db == "lancedb":
         try:
-            vector_store = LanceDBVectorStore(data_dir / "lancedb", dimension=embedding_provider.dimension)
-        except RuntimeError:
-            vector_store = InMemoryVectorStore()
+            vector_store = LanceDBVectorStore(data_dir / "lancedb", dimension=expected_dimension)
+        except RuntimeError as exc:
+            if not cfg.storage.vector.allow_fallback:
+                raise
+            logger.warning(
+                "Vector store initialization failed (%s); falling back to in-memory provider",
+                redact_secrets(f"{type(exc).__name__}: {exc}"),
+            )
+            vector_store = InMemoryVectorStore(dimension=expected_dimension)
+            vector_fallback_active = True
+            fallback_reasons.append(type(exc).__name__)
     else:
-        vector_store = InMemoryVectorStore()
+        vector_store = InMemoryVectorStore(dimension=expected_dimension)
+
+    _validate_vector_dimension(embedding_dimension=expected_dimension, vector_store=vector_store)
+
+    if cfg.storage.dry_run:
+        logger.warning("DRY-RUN enabled: write operations will be skipped")
+        metadata_store = DryRunMetadataStore(metadata_store)
+        vector_store = DryRunVectorStore(vector_store)
+
+    mode = "ok"
+    if vector_fallback_active:
+        mode = "degraded"
+    if cfg.storage.dry_run:
+        mode = "dry_run"
+    health_state = {
+        "mode": mode,
+        "metadata_provider": cfg.providers.metadata_db,
+        "vector_provider": "memory" if vector_fallback_active or cfg.providers.vector_db != "lancedb" else "lancedb",
+        "vector_fallback_active": vector_fallback_active,
+        "reasons": fallback_reasons,
+    }
 
     return RuntimeDependencies(
         embedding_provider=embedding_provider,
         metadata_store=metadata_store,
         vector_store=vector_store,
+        health_state=health_state,
     )
 
 
@@ -275,6 +319,17 @@ def ask(question: str, top_k: int = 5) -> dict[str, Any]:
     }
 
 
+def runtime_health() -> dict[str, Any]:
+    runtime = _runtime()
+    metadata_health = runtime.metadata_store.health() if hasattr(runtime.metadata_store, "health") else {}
+    vector_health = runtime.vector_store.health() if hasattr(runtime.vector_store, "health") else {}
+    return {
+        **runtime.health_state,
+        "metadata_health": metadata_health,
+        "vector_health": vector_health,
+    }
+
+
 def _hash_to_vector(text: str, dimensions: int) -> list[float]:
     digest = hashlib.sha256(text.encode("utf-8")).digest()
     values = list(digest)
@@ -282,3 +337,20 @@ def _hash_to_vector(text: str, dimensions: int) -> list[float]:
         digest = hashlib.sha256(digest).digest()
         values.extend(list(digest))
     return [(values[index] / 255.0) for index in range(dimensions)]
+
+
+def _validate_metadata_schema(*, metadata_store: Any, supported_versions: tuple[int, ...]) -> None:
+    version = int(getattr(metadata_store, "schema_version", 0))
+    if version not in supported_versions:
+        supported = ",".join(str(item) for item in supported_versions)
+        raise SchemaVersionError(
+            f"Incompatible metadata schema version: {version}. Supported versions: [{supported}]"
+        )
+
+
+def _validate_vector_dimension(*, embedding_dimension: int, vector_store: Any) -> None:
+    expected = int(getattr(vector_store, "expected_dimensionality", 0))
+    if expected != embedding_dimension:
+        raise VectorDimensionError(
+            f"Vector store dimensionality mismatch at startup: expected {embedding_dimension}, got {expected}"
+        )

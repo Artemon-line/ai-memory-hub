@@ -1,229 +1,275 @@
-# Storage-Agnostic BYOA Plan
+# Storage-Agnostic BYOA Plan (Adjusted)
 
-Plan for evolving `ai-memory-hub` from SQLite-first persistence to a storage-agnostic architecture that supports BYOA backends (Postgres, MongoDB, and other modern databases).
+Plan for evolving `ai-memory-hub` from SQLite-first persistence to a storage-agnostic
+architecture with explicit provider capabilities, schema compatibility checks, vector dimensionality guards,
+controlled fallback behavior, and dry-run support.
+
+## Scope and Constraints
+
+- Modify only storage contracts, provider adapters, and factory wiring.
+- Do not modify domain logic semantics.
+- Do not change API/MCP interface or response shapes.
 
 ## Goals
 
-- Decouple core memory logic from concrete storage engines.
-- Support multiple metadata and vector backends via adapters.
-- Enable BYOA deployment where users bring their own DB infra.
-- Preserve API/MCP contracts across storage providers.
+- Keep storage providers pluggable through stable interfaces.
+- Make optional provider features explicit and discoverable.
+- Fail fast on metadata schema incompatibility.
+- Prevent vector dimension mismatch errors at runtime.
+- Keep hub available when vector provider fails to initialize only when explicitly allowed.
+- Support safe dry-run execution for write paths.
 
 ## Non-Goals
 
-- Rewriting API/MCP surface area.
-- Forcing one universal schema across relational and document stores.
-- Immediate support for every backend in one release.
+- Redesigning domain workflows.
+- Changing public API/MCP contracts.
+- Broad provider expansion in this change set.
 
 ## Target Architecture
 
-Use a layered storage contract:
+Layered storage design:
 
-1. domain layer (ingestion/search/ask logic)
-2. storage interface layer (protocols/ABCs)
-3. provider adapters (sqlite/postgres/mongo/etc.)
-4. factory/wiring (config-driven provider selection)
+1. domain layer (unchanged behavior)
+2. storage contracts (`MetadataStore`, `VectorStore`)
+3. provider adapters (SQLite, LanceDB, others)
+4. factory/wiring (startup selection, validation, fallback)
 
 Core rule:
 
-- domain code imports only storage interfaces, never provider-specific clients.
+- Domain code depends on storage interfaces only.
+- Optional capabilities are exposed but never required by domain logic.
 
-## Storage Contracts
+## 1) Provider Capabilities Contract
 
-Define explicit interfaces in `memory/backend/contracts.py`:
+Extend both `MetadataStore` and `VectorStore` with:
 
-- `MetadataStore`
-  - `insert(conversation_json) -> id`
-  - `get(id) -> conversation | None`
-  - `get_many(ids) -> dict[id, conversation]`
-  - optional: `update`, `delete`, `health`, `close`
-- `VectorStore`
-  - `insert(memory_id, embeddings) -> None`
-  - `search(query_vector, top_k=5) -> list[match]`
-  - optional: `delete(memory_id)`, `health`, `close`
+- `capabilities() -> ProviderCapabilities`
 
-Design requirements:
+`ProviderCapabilities` fields:
 
-- deterministic return shapes
-- provider-independent error model
-- clear type contracts for `id`, timestamps, metadata, vectors
-
-## Provider Model
-
-## 1) Metadata providers
-
-Phase order:
-
-1. SQLite (existing, baseline)
-2. Postgres adapter
-3. MongoDB adapter
-
-Notes:
-
-- Postgres is recommended default for production BYOA.
-- MongoDB supports document-native conversation payloads.
-- Keep conversation object canonical in app layer; transform only at adapter boundary.
-
-## 2) Vector providers
-
-Phase order:
-
-1. LanceDB (existing)
-2. pgvector adapter (real Postgres vector path)
-3. optional external vector stores (Qdrant, Weaviate, Milvus)
-
-## Configuration Design
-
-Replace/extend provider config into explicit storage config:
-
-```yaml
-storage:
-  metadata:
-    provider: sqlite   # sqlite | postgres | mongodb
-    dsn: ""            # postgres://... or mongodb://...
-    database: ""       # required for mongodb
-    collection: conversations
-    table: conversations
-  vector:
-    provider: lancedb  # lancedb | pgvector | memory
-    dsn: ""            # used by pgvector
-    table: memory_vectors
-```
+- `supports_batch_insert: bool = False`
+- `supports_transactions: bool = False`
+- `supports_ttl: bool = False`
+- `supports_tags: bool = False`
+- `supports_metadata_indexing: bool = False`
 
 Rules:
 
-- provider-specific required fields validated at startup.
-- fail fast with actionable config errors.
+- Defaults are `False` in the base contract.
+- Each adapter overrides only fields it actually supports.
+- Domain layer must not rely on optional capabilities for correctness.
+- Unsupported optional operations must raise deterministic `NotSupportedError`
+(or equivalent storage-layer error type), never silent no-op.
 
-## Data Model Strategy
+Implementation notes:
 
-Canonical app model:
+- Add a typed capabilities object in contracts (dataclass or TypedDict).
+- Include capabilities in adapter health/debug internals if useful, but do not alter API/MCP payloads.
 
-- keep current unified conversation JSON as source of truth.
+## 2) Metadata Schema Versioning
 
-Adapter mapping:
+Add schema version tracking for metadata providers.
 
-- relational stores:
-  - core columns (`id`, `source`, `timestamp`, `metadata_json`, `messages_json`)
-  - optional indexed/derived columns (`tags`, `topics`, `updated_at`)
-- document stores:
-  - single canonical document with indexed fields (`id`, `source`, `timestamp`, tags/topics)
+Contract additions:
 
-ID strategy:
+- `schema_version: int` property or equivalent accessor on metadata store.
+- `health()` must expose effective schema version.
 
-- application-generated UUID remains canonical.
+Adapter behavior:
 
-## Migration Plan
+- SQLite adapter returns fixed schema version (initial value `1`).
+- Postgres adapter reads schema version from `schema_version` table.
+- On startup/initialization, fail fast if version is missing or incompatible.
 
-## Phase 1: Contract extraction
+Compatibility policy:
 
-- extract `MetadataStore` and `VectorStore` interfaces.
-- refactor current SQLite/LanceDB implementations to conform strictly.
-- add adapter factory (`memory/backend/factory.py`).
+- Define supported version set/range in factory or adapter constants.
+- Raise deterministic configuration/runtime error with actionable message.
 
-## Phase 2: Postgres metadata adapter
+Postgres version table policy:
 
-- implement CRUD + batch retrieval.
-- add schema migration SQL and indexes.
-- add integration tests via ephemeral Postgres service.
+- Enforce single-row schema version invariant.
+- Read version in a transactionally consistent way.
+- Define behavior for rolling deploys with mixed app versions (document supported overlap window or fail-fast policy).
 
-## Phase 3: MongoDB metadata adapter
+## 3) Vector Dimensionality Validation
 
-- implement equivalent metadata contract.
-- add required indexes.
-- add integration tests via ephemeral Mongo service.
+Extend vector contract with expected dimensionality and strict validation.
 
-## Phase 4: pgvector adapter
+Contract additions:
 
-- implement vector contract using pgvector.
-- validate score/order behavior parity with current search semantics.
+- `expected_dimensionality: int`
+- Validation in `insert()` and `search()` against incoming vectors.
 
-## Phase 5: BYOA hardening
+Requirements:
 
-- startup health checks for configured stores.
-- connection pooling/timeouts/retry policy.
-- structured error mapping and observability.
+- Raise deterministic error when embedding size mismatches expected dimension.
+- Error message must include expected and actual dimensions.
+- Add startup check in factory: embedding provider dimension vs vector store `expected_dimensionality`.
+- Dimension mismatch is a hard error and must not trigger vector fallback.
 
-## Compatibility Requirements
+Runtime drift policy:
 
-- API and MCP output shapes must stay stable.
-- No provider-specific fields should leak into client-facing responses.
-- Search behavior differences across providers must be bounded and documented.
+- Re-validate dimensions on every insert/search call.
+- If embedding provider configuration changes at runtime, fail fast on first mismatched request with deterministic error.
 
-## Testing Guidelines
+## 4) Provider Fallback Strategy
 
-## A. Contract tests (required for every provider)
+Implement explicit vector-store fallback only.
 
-Reusable suite against each adapter:
+Behavior:
 
-- insert/get/get_many parity
-- missing id returns `None`
-- duplicate id behavior is consistent
-- timestamp serialization roundtrip
-- metadata/topics/tags preservation
+- If configured vector store initialization fails, fallback to in-memory vector store only when explicitly enabled.
+- Log warning with sanitized failure reason and fallback provider.
+- Hub continues startup only under allowed fallback policy.
 
-## B. Vector behavior tests
+Rules:
 
-- insert/search returns deterministic shape
-- top_k boundaries enforced
-- score ordering consistent
-- chunk metadata (`chunk_index`, `role`, `text`) preserved
+- No silent degradation: fallback event must be clearly logged.
+- Metadata store must not fallback; metadata initialization failure is fatal.
+- Fallback scope is factory/wiring only.
+- Fallback activation must be reflected in health() as degraded state.
+- Fallback vector store must adopt the same `expected_dimensionality` as the failed provider.
 
-## C. Integration matrix (CI)
+Configuration:
 
-Run matrix jobs:
+```yaml
+storage:
+  vector:
+    allow_fallback: true | false
+```
 
-- `metadata=sqlite, vector=lancedb`
-- `metadata=postgres, vector=lancedb`
-- `metadata=mongodb, vector=lancedb`
-- `metadata=postgres, vector=pgvector` (when available)
+Policy:
 
-## D. End-to-end parity tests
+- Recommended default for production: `allow_fallback: false`.
+- `allow_fallback: true` may be used for local/dev or explicitly tolerated degraded environments.
 
-Run same ingestion -> search -> ask flow across matrix and assert:
+## 5) Dry-Run Mode
 
-- status codes/envelopes match
-- citations structure matches
-- topic enrichment persists
-- retrieval by id parity
+Add storage config flag:
 
-## E. Failure-mode tests
+```yaml
+storage:
+  dry_run: true | false
+```
 
-- invalid DSN/config fails fast
-- backend unavailable errors are actionable
-- timeout and reconnect behavior is bounded
+Behavior when `dry_run = true`:
 
-## Operational BYOA Considerations
+- All storage writes are no-ops.
+- Reads continue to operate normally.
+- Vector search continues to operate normally.
+- Insert operations still run validation (including dimensionality checks) but skip persistence.
+- Log `DRY-RUN: write skipped` for write operations.
 
-- secret management via env vars (never commit DSNs).
-- TLS options for managed DBs.
-- migration/version tracking for relational backends.
-- index management for Mongo/Postgres.
-- backup/restore responsibility documented for BYOA operators.
+Rules:
 
-## Observability
+- Must not break ingestion pipeline execution flow.
+- Must not alter API/MCP response shapes.
+- Implement via storage-layer wrappers/decorators to avoid domain changes.
 
-Add provider-aware telemetry fields:
+Return contract in dry-run:
 
-- `metadata_provider`, `vector_provider`
-- query latency buckets
-- connection errors by provider
-- retries/timeouts
+- Write methods must return the same shape/type as non-dry-run paths.
+- For ID-returning inserts, return deterministic IDs using
+  the existing application ID strategy (no storage-generated IDs required).
+- Never return `None` where normal flow returns an ID/object.
 
-Expose health endpoint details (non-sensitive) for active providers.
+## Operational Safety
+
+- Secret-safe logging:
+  - redact DSNs, credentials, tokens, and connection secrets from all storage/fallback errors.
+  - include provider name, error class, and safe diagnostic context only.
+- Explicit degradation signaling:
+  - `health()` exposes machine-readable mode/state: `ok`, `degraded`, or `dry_run`.
+  - include active metadata/vector providers and whether vector fallback is active.
+- Startup policy visibility:
+  - log whether `allow_fallback` and `dry_run` are enabled at startup.
+  - warn on risky combinations (for example `allow_fallback=true` in production profile).
+- Failure semantics:
+  - metadata initialization errors are fatal.
+  - vector initialization errors are fatal unless explicit fallback policy allows continuation.
+  - dimension mismatch and schema incompatibility are always hard errors.
+- Auditability:
+  - emit one structured event for fallback activation and one for dry-run skipped writes.
+
+## 6) Implementation Plan
+
+### Phase 1: Contract Extensions
+
+Status: `IMPLEMENTED`
+
+- [x] Add `ProviderCapabilities` type and `capabilities()` to both contracts.
+- [x] Add metadata schema version surface and vector expected dimensionality surface.
+- [x] Add deterministic storage error types/messages for unsupported operations, schema incompatibility, and dimension mismatches.
+
+### Phase 2: Adapter Updates (SQLite + LanceDB)
+
+Status: `IMPLEMENTED`
+
+- [x] Update SQLite metadata adapter:
+  - [x] implement `capabilities()`
+  - [x] expose fixed `schema_version = 1`
+  - [x] include version in `health()`
+- [x] Update LanceDB vector adapter:
+  - [x] implement `capabilities()`
+  - [x] expose `expected_dimensionality`
+  - [x] validate dimensions in `insert()` and `search()`
+
+### Phase 3: Factory Wiring
+
+Status: `IMPLEMENTED`
+
+- [x] Add startup schema compatibility check for metadata store.
+- [x] Add startup dimension compatibility check (embedding provider vs vector store).
+- [x] Add policy-gated vector init fallback to in-memory store with warning log and preserved dimensionality.
+- [x] Keep metadata init fail-fast behavior.
+- [x] Surface fallback/degraded state via health.
+
+### Phase 4: Dry-Run Wrappers
+
+Status: `IMPLEMENTED`
+
+- [x] Add storage-level wrappers for metadata/vector writes.
+- [x] Preserve read/search behavior.
+- [x] Emit `DRY-RUN: write skipped` logs consistently.
+- [x] Enforce dry-run return shape parity.
+
+### Phase 5: Tests
+
+Unit tests for all five feature groups:
+
+- [x] capabilities defaults and per-adapter overrides
+- [x] unsupported operation deterministic errors
+- [x] schema version exposure and incompatible-version fail-fast
+- [x] dimension validation in vector `insert()` and `search()`
+- [x] dry-run write no-op with validation + unchanged read/search semantics and return-shape parity
+
+Integration tests (required):
+
+Status: `IMPLEMENTED`
+
+- [x] vector provider init failure with `allow_fallback=false` fails startup
+- [x] vector provider init failure with `allow_fallback=true` activates in-memory fallback and degraded health
+- [x] metadata init failure always fails startup
+- [x] Postgres `schema_version` table invariants and incompatibility behavior
+- [x] startup and runtime dimensionality mismatch behavior
+- [x] log redaction checks for DSN/credential leakage
+
+## Deliverables
+
+- Updated storage contracts (`MetadataStore`, `VectorStore`) with capabilities/version/dimensionality surfaces.
+- Updated SQLite and LanceDB adapters.
+- Factory fallback + startup validation wiring.
+- Dry-run wrappers for write paths.
+- Unit + integration tests covering all required adjustments and safety guarantees.
 
 ## Acceptance Criteria
 
-- New storage contracts adopted in domain code (no direct provider imports).
-- SQLite path remains fully compatible.
-- Postgres and Mongo metadata adapters pass contract + integration suites.
-- BYOA config docs and examples available.
-- CI matrix is green for supported providers.
-
-## Suggested Delivery Sequence
-
-1. Contracts + factory extraction (no behavior change).
-2. Postgres metadata adapter + tests.
-3. Mongo metadata adapter + tests.
-4. pgvector adapter + tests.
-5. Docs/examples + production hardening.
+- Domain layer remains provider-agnostic and does not depend on optional capabilities.
+- API/MCP interfaces and response shapes remain unchanged.
+- Metadata store fails fast on schema incompatibility.
+- Vector dimension mismatches fail deterministically with clear errors.
+- Vector provider init failures fallback only when explicitly allowed and are clearly logged.
+- Fallback/degraded mode is machine-visible in health output.
+- Dry-run mode preserves pipeline flow while skipping persistence writes with shape-parity responses.
+- Logs and errors are secret-safe by default.

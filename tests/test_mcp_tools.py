@@ -55,6 +55,7 @@ def _runtime() -> mvp_ingestion.RuntimeDependencies:
         embedding_provider=StubEmbedder(), # type: ignore
         metadata_store=StubMetadataStore(),
         vector_store=StubVectorStore(),
+        health_state={"mode": "ok", "vector_fallback_active": False},
     )
 
 

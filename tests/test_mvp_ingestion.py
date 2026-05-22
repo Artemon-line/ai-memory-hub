@@ -71,6 +71,7 @@ def _configure_stubs() -> tuple[StubMetadataStore, StubVectorStore]:
             embedding_provider=StubEmbedder(), # type: ignore
             metadata_store=metadata,
             vector_store=vectors,
+            health_state={"mode": "ok", "vector_fallback_active": False},
         )
     )
     return metadata, vectors
