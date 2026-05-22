@@ -188,7 +188,7 @@ def test_schema_file_from_config_is_used(tmp_path: Path) -> None:
     try:
         mvp_ingestion.build_runtime(
             {
-                "providers": {"embeddings": "local", "vector_db": "pgvector"},
+                "providers": {"embeddings": "local", "vector_db": "in_memory"},
                 "paths": {"data_dir": str(tmp_path / "data")},
                 "schema": {"file": str(schema_path)},
             }
@@ -216,7 +216,7 @@ def test_schema_missing_code_required_fields_fails_startup(tmp_path: Path) -> No
     with pytest.raises(ValueError, match="incompatible with code expectations"):
         mvp_ingestion.build_runtime(
             {
-                "providers": {"embeddings": "local", "vector_db": "pgvector"},
+                "providers": {"embeddings": "local", "vector_db": "in_memory"},
                 "paths": {"data_dir": str(tmp_path / "data")},
                 "schema": {"file": str(schema_path)},
             }

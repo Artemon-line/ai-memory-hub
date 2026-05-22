@@ -73,7 +73,7 @@ def _conversation() -> dict[str, object]:
 
 def _client() -> TestClient:
     agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}, "interfaces": {"api": 'true'}}, runtime=_runtime())
-    app = create_app(config={"providers": {"embeddings": "local", "vector_db": "pgvector"}}, ingestion_agent=agent)
+    app = create_app(config={"providers": {"embeddings": "local", "vector_db": "in_memory"}}, ingestion_agent=agent)
     return TestClient(app)
 
 

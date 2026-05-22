@@ -124,14 +124,14 @@ class LanceDBVectorStore:
         if self._index_ready:
             return
         try:
-            self._table.create_index(metric="cosine")
+            self._table.create_index(metric="cosine", index_type="IVF_HNSW_SQ")
             self._index_ready = True
         except RuntimeError as exc:
             logger.warning("LanceDB index creation deferred: %s", exc)
 
 
 class InMemoryVectorStore:
-    """Fallback implementation used for pgvector config and unit tests."""
+    """Fallback implementation used for in_memory config and unit tests."""
 
     def __init__(self, dimension: int = 32):
         self.dimension = dimension

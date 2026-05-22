@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -85,8 +84,8 @@ def parse_config(config: dict[str, Any] | None) -> HubConfig:
     metadata_dsn = str(providers.get("metadata_dsn", DEFAULT_CONFIG.providers.metadata_dsn))
     if embeddings not in {"openai", "local"}:
         raise ValueError("providers.embeddings must be one of: openai, local")
-    if vector_db not in {"lancedb", "pgvector"}:
-        raise ValueError("providers.vector_db must be one of: lancedb, pgvector")
+    if vector_db not in {"lancedb", "in_memory"}:
+        raise ValueError("providers.vector_db must be one of: lancedb, in_memory")
     if metadata_db not in {"sqlite", "postgres"}:
         raise ValueError("providers.metadata_db must be one of: sqlite, postgres")
 
@@ -127,7 +126,8 @@ def normalize_config(config: HubConfig | dict[str, Any] | None) -> HubConfig:
         return config
     if isinstance(config, dict):
         return parse_config(config)
-    return load_config()
+    CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.yaml"
+    return load_config(CONFIG_PATH)
 
 
 def _load_yaml_if_available(text: str) -> dict[str, Any]:
@@ -151,9 +151,6 @@ def load_config(path: str | Path | None = None) -> HubConfig:
         raise FileNotFoundError(f"Config file not found: {config_path}")
 
     text = config_path.read_text(encoding="utf-8")
-    if config_path.suffix.lower() == ".json":
-        raw = json.loads(text)
-    else:
-        raw = _load_yaml_if_available(text)
+    raw = _load_yaml_if_available(text)
 
     return parse_config(raw)

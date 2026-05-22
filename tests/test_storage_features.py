@@ -45,7 +45,7 @@ def test_build_runtime_fails_fast_on_schema_version(
 ) -> None:
     monkeypatch.setattr(SQLiteMetadataStore, "schema_version", 99)
     config = {
-        "providers": {"embeddings": "local", "vector_db": "pgvector"},
+        "providers": {"embeddings": "local", "vector_db": "in_memory"},
         "paths": {"data_dir": str(tmp_path)},
         "storage": {"metadata_schema_versions": [1]},
     }
@@ -73,7 +73,7 @@ def test_build_runtime_fails_on_startup_dimensionality_mismatch(
     with pytest.raises(VectorDimensionError, match="dimensionality mismatch at startup"):
         mvp_ingestion.build_runtime(
             {
-                "providers": {"embeddings": "local", "vector_db": "pgvector"},
+                "providers": {"embeddings": "local", "vector_db": "in_memory"},
                 "paths": {"data_dir": str(tmp_path)},
             }
         )
@@ -156,7 +156,7 @@ def test_build_runtime_vector_fallback_disabled_raises(
 def test_dry_run_write_is_noop(tmp_path: Path) -> None:
     runtime = mvp_ingestion.build_runtime(
         {
-            "providers": {"embeddings": "local", "vector_db": "pgvector"},
+            "providers": {"embeddings": "local", "vector_db": "in_memory"},
             "paths": {"data_dir": str(tmp_path)},
             "storage": {"dry_run": True},
         }
@@ -239,7 +239,7 @@ def test_runtime_health_reports_degraded_on_fallback(
 def test_runtime_health_reports_dry_run(tmp_path: Path) -> None:
     mvp_ingestion.configure_runtime(
         config={
-            "providers": {"embeddings": "local", "vector_db": "pgvector"},
+            "providers": {"embeddings": "local", "vector_db": "in_memory"},
             "paths": {"data_dir": str(tmp_path)},
             "storage": {"dry_run": True},
         }
@@ -273,7 +273,7 @@ def test_metadata_init_failure_fails_startup(
     with pytest.raises(RuntimeError, match="metadata init failed"):
         mvp_ingestion.build_runtime(
             {
-                "providers": {"embeddings": "local", "vector_db": "pgvector"},
+                "providers": {"embeddings": "local", "vector_db": "in_memory"},
                 "paths": {"data_dir": str(tmp_path)},
             }
         )
@@ -374,7 +374,7 @@ def test_build_runtime_fails_on_incompatible_postgres_schema(
             {
                 "providers": {
                     "embeddings": "local",
-                    "vector_db": "pgvector",
+                    "vector_db": "in_memory",
                     "metadata_db": "postgres",
                     "metadata_dsn": "postgres://example",
                 },
@@ -414,7 +414,7 @@ def test_lancedb_index_is_created_lazily(monkeypatch: pytest.MonkeyPatch, tmp_pa
             _ = rows
             self.add_calls += 1
 
-        def create_index(self, metric: str = "cosine"):
+        def create_index(self, metric: str = "cosine", index_type: str = "IVF_HNSW_SQ"):
             _ = metric
             self.create_index_calls += 1
 

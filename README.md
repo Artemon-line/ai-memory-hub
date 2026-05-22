@@ -36,7 +36,7 @@ def ingest_messages(conversation_json):
 ## Storage
 
 - Metadata: SQLite or Postgres (`providers.metadata_db`)
-- Vectors: LanceDB (`providers.vector_db: lancedb`) or in-memory (`providers.vector_db: pgvector` in current MVP)
+- Vectors: LanceDB (`providers.vector_db: lancedb`) or in-memory (`providers.vector_db: in_memory` in current MVP)
 - Startup checks:
   - metadata schema version compatibility (`storage.metadata_schema_versions`)
   - embedding/vector dimensionality compatibility
@@ -56,7 +56,7 @@ providers:
   embeddings: local   # openai | local
   metadata_db: sqlite # sqlite | postgres
   metadata_dsn: ""    # required when metadata_db=postgres
-  vector_db: lancedb  # lancedb | pgvector
+  vector_db: lancedb  # lancedb | in_memory
 
 storage:
   dry_run: false

@@ -19,7 +19,7 @@ providers:
   embeddings: local      # Embedding provider used for chunk vectors
   metadata_db: sqlite    # sqlite | postgres
   metadata_dsn: ""       # required when metadata_db=postgres
-  # lancedb | pgvector (pgvector maps to in-memory vector store in MVP)
+  # lancedb | in_memory (in_memory maps to in-memory vector store in MVP)
   vector_db: lancedb
   agent: mvp              # Phase 1 ingestion agent (deterministic pipeline)
 

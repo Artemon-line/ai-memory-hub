@@ -20,7 +20,7 @@ providers:
   embeddings: openai      # Embedding provider used for chunk vectors
   metadata_db: sqlite     # sqlite | postgres
   metadata_dsn: ""        # required when metadata_db=postgres
-  # lancedb | pgvector (pgvector maps to in-memory vector store in MVP)
+  # lancedb | in_memory (in_memory maps to in-memory vector store in MVP)
   vector_db: lancedb
   agent: mvp              # Phase 1 ingestion agent (deterministic pipeline)
 
@@ -113,10 +113,10 @@ local_llm:
 #   vector:
 #     allow_fallback: true
 #
-# 5) In-memory vectors path (current pgvector placeholder mode)
+# 5) In-memory vectors path (current in_memory placeholder mode)
 #
 # providers:
-#   vector_db: pgvector
+#   vector_db: in_memory
 #
 # 6) Custom conversation schema
 #
