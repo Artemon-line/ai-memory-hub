@@ -166,7 +166,17 @@ def test_schema_file_from_config_is_used(tmp_path: Path) -> None:
             "id": {"type": "string"},
             "source": {"type": "string"},
             "timestamp": {"type": "string"},
-            "messages": {"type": "array"},
+            "messages": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "role": {"type": "string"},
+                        "text": {"type": "string"},
+                    },
+                    "required": ["role", "text"],
+                },
+            },
             "metadata": {"type": "object"},
             "must_exist": {"type": "string"},
         },
@@ -187,3 +197,27 @@ def test_schema_file_from_config_is_used(tmp_path: Path) -> None:
             mvp_ingestion.validate_json(_valid_conversation())
     finally:
         ingestion_validate.set_schema_path(None)
+
+
+def test_schema_missing_code_required_fields_fails_startup(tmp_path: Path) -> None:
+    schema_path = tmp_path / "conversation.incompatible.schema.json"
+    schema = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+            "id": {"type": "string"},
+            "source": {"type": "string"},
+        },
+        "required": ["id", "source"],
+        "additionalProperties": True,
+    }
+    schema_path.write_text(json.dumps(schema), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="incompatible with code expectations"):
+        mvp_ingestion.build_runtime(
+            {
+                "providers": {"embeddings": "local", "vector_db": "pgvector"},
+                "paths": {"data_dir": str(tmp_path / "data")},
+                "schema": {"file": str(schema_path)},
+            }
+        )

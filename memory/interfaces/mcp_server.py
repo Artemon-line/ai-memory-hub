@@ -63,14 +63,39 @@ def _utc_now_iso() -> str:
 
 def _normalize_conversation_json(payload: dict[str, Any]) -> dict[str, Any]:
     normalized = dict(payload)
-    normalized.setdefault("id", str(uuid4()))
-    normalized.setdefault("source", "mcp")
-    normalized.setdefault("timestamp", _utc_now_iso())
     metadata = normalized.get("metadata")
     if not isinstance(metadata, dict):
         metadata = {}
+
+    top_level_tags = normalized.pop("tags", None)
+    if top_level_tags is not None and "tags" not in metadata:
+        metadata["tags"] = top_level_tags
+
+    if "messages" not in normalized and isinstance(normalized.get("conversation"), list):
+        normalized["messages"] = normalized["conversation"]
+    normalized.pop("conversation", None)
+
+    messages = normalized.get("messages")
+    if isinstance(messages, list):
+        normalized["messages"] = [_normalize_message(item) for item in messages]
+
+    normalized.setdefault("id", str(uuid4()))
+    normalized.setdefault("source", "mcp")
+    normalized.setdefault("timestamp", _utc_now_iso())
+    if "imported_at" not in metadata and isinstance(metadata.get("saved_at"), str):
+        metadata["imported_at"] = metadata["saved_at"]
     metadata.setdefault("imported_at", _utc_now_iso())
     normalized["metadata"] = metadata
+    return normalized
+
+
+def _normalize_message(message: Any) -> Any:
+    if not isinstance(message, dict):
+        return message
+    normalized = dict(message)
+    if "text" not in normalized and "content" in normalized:
+        normalized["text"] = normalized["content"]
+    normalized.pop("content", None)
     return normalized
 
 
@@ -316,8 +341,9 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 error_message="conversation_json must be an object",
                 valid=False,
             )
+        normalized = _normalize_conversation_json(conversation_json)
         try:
-            validate_conversation(conversation_json)
+            validate_conversation(normalized)
         except jsonschema.ValidationError as exc:
             return _envelope(
                 status="error",

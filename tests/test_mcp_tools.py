@@ -108,6 +108,37 @@ async def test_mcp_tool_handlers_insert_search_retrieve() -> None:
 
 
 @pytest.mark.asyncio
+async def test_mcp_tool_handlers_accept_codex_style_payload() -> None:
+    runtime = _runtime()
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=runtime)
+    handlers = build_tool_handlers(agent)
+    payload = {
+        "source": "codex-cli",
+        "tags": ["mcp-test", "ai-memory-hub"],
+        "conversation": [
+            {"role": "user", "content": "I'm testing mcp right now"},
+            {"role": "assistant", "content": "I can help validate the MCP path."},
+            {"role": "user", "content": "use connected mcp to save this conversation"},
+        ],
+        "metadata": {"saved_at": "2026-05-22T00:00:00Z", "timezone": "Europe/Dublin"},
+    }
+
+    validate_result = await handlers["memory_validate"](payload)
+    insert_result = await handlers["memory_insert"](payload)
+
+    assert validate_result["status"] == "ok"
+    assert validate_result["valid"] is True
+    assert insert_result["status"] == "ok"
+    memory_id = insert_result["id"]
+    assert isinstance(memory_id, str)
+    stored = runtime.metadata_store.get(memory_id)
+    assert stored["metadata"]["tags"] == ["mcp-test", "ai-memory-hub"]
+    assert stored["metadata"]["imported_at"] == "2026-05-22T00:00:00Z"
+    assert stored["messages"][0]["text"] == "I'm testing mcp right now"
+    assert "content" not in stored["messages"][0]
+
+
+@pytest.mark.asyncio
 async def test_mcp_tool_handlers_invalid_inputs_return_consistent_errors() -> None:
     agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
     handlers = build_tool_handlers(agent)
@@ -118,7 +149,7 @@ async def test_mcp_tool_handlers_invalid_inputs_return_consistent_errors() -> No
     assert validate_invalid_type["valid"] is False
 
     invalid_conversation = dict(_conversation())
-    invalid_conversation.pop("id")
+    invalid_conversation.pop("messages")
     validate_invalid_schema = await handlers["memory_validate"](invalid_conversation)
     assert validate_invalid_schema["status"] == "error"
     assert validate_invalid_schema["error_code"] == "invalid_input"
