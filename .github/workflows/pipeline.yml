@@ -34,3 +34,96 @@ jobs:
         env:
           PYTHONHASHSEED: "0"
         run: uv run pytest
+
+  storage-config:
+    name: Storage Config Variations
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        case:
+          - sqlite-default
+          - dry-run
+          - fallback-disabled
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Run targeted storage checks
+        env:
+          PYTHONHASHSEED: "0"
+        run: |
+          if [ "${{ matrix.case }}" = "sqlite-default" ]; then
+            uv run pytest -q tests/test_storage_features.py -k \
+              "sqlite_capabilities_and_health or \
+              build_runtime_fails_fast_on_schema_version"
+          elif [ "${{ matrix.case }}" = "dry-run" ]; then
+            uv run pytest -q tests/test_storage_features.py -k \
+              "dry_run_write_is_noop or \
+              runtime_health_reports_dry_run"
+          else
+            uv run pytest -q tests/test_storage_features.py -k \
+              "build_runtime_vector_fallback_disabled_raises"
+          fi
+
+  storage-postgres:
+    name: Storage Postgres Integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: memory
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U test -d memory"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: |
+          uv sync --dev
+          uv pip install psycopg[binary]
+
+      - name: Run postgres storage checks
+        env:
+          PYTHONHASHSEED: "0"
+          AMH_TEST_POSTGRES_DSN: postgresql://test:test@127.0.0.1:5432/memory
+        run: >
+          uv run pytest -q tests/test_storage_features.py -k
+          "postgres_live_integration_when_dsn_provided or
+          postgres_schema_version"

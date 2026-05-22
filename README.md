@@ -35,8 +35,15 @@ def ingest_messages(conversation_json):
 
 ## Storage
 
-- Metadata: SQLite
-- Vectors: LanceDB (or in-memory fallback path for `pgvector` provider mode in MVP)
+- Metadata: SQLite or Postgres (`providers.metadata_db`)
+- Vectors: LanceDB (`providers.vector_db: lancedb`) or in-memory (`providers.vector_db: pgvector` in current MVP)
+- Startup checks:
+  - metadata schema version compatibility (`storage.metadata_schema_versions`)
+  - embedding/vector dimensionality compatibility
+- Optional vector fallback:
+  - if LanceDB init fails and `storage.vector.allow_fallback: true`, runtime falls back to in-memory vectors
+- Dry-run mode:
+  - `storage.dry_run: true` skips writes while preserving read/search and response shapes
 
 ## Config
 
@@ -45,7 +52,15 @@ Relevant config keys:
 ```yaml
 providers:
   embeddings: local   # openai | local
+  metadata_db: sqlite # sqlite | postgres
+  metadata_dsn: ""    # required when metadata_db=postgres
   vector_db: lancedb  # lancedb | pgvector
+
+storage:
+  dry_run: false
+  metadata_schema_versions: [1]
+  vector:
+    allow_fallback: true
 
 interfaces:
   mcp: true

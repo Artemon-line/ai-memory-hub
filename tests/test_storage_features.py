@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -378,3 +379,23 @@ def test_build_runtime_fails_on_incompatible_postgres_schema(
                 "storage": {"metadata_schema_versions": [1]},
             }
         )
+
+
+def test_postgres_live_integration_when_dsn_provided() -> None:
+    dsn = os.getenv("AMH_TEST_POSTGRES_DSN")
+    if not dsn:
+        pytest.skip("AMH_TEST_POSTGRES_DSN not set")
+
+    store = PostgresMetadataStore(dsn)
+    payload = {
+        "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "source": "ci",
+        "timestamp": "2026-01-01T00:00:00Z",
+        "messages": [{"role": "user", "text": "postgres smoke"}],
+        "metadata": {"imported_at": "2026-01-01T00:00:00Z"},
+    }
+    memory_id = store.insert(payload)
+    loaded = store.get(memory_id)
+    assert loaded is not None
+    assert loaded["id"] == payload["id"]
+    assert store.health()["schema_version"] == 1

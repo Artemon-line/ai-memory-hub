@@ -5,8 +5,11 @@
 # STORAGE LAYER
 # -------------------------
 storage:
-  metadata: sqlite        # SQLite metadata store (default)
-  vectors: lancedb        # LanceDB vector store (default)
+  dry_run: false
+  metadata_schema_versions: [1]
+  vector:
+    # set false in production to fail fast on vector init errors
+    allow_fallback: true
 
 # -------------------------
 # PROVIDERS (BYOS/BYOA)
@@ -14,7 +17,10 @@ storage:
 providers:
   inference: openai       # LLM provider used for schema formatting
   embeddings: openai      # Embedding provider used for chunk vectors
-  vector_db: lancedb      # Must match storage.vectors
+  metadata_db: sqlite     # sqlite | postgres
+  metadata_dsn: ""        # required when metadata_db=postgres
+  # lancedb | pgvector (pgvector maps to in-memory vector store in MVP)
+  vector_db: lancedb
   agent: mvp              # Phase 1 ingestion agent (deterministic pipeline)
 
 # -------------------------
