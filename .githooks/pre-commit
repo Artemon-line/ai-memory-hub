@@ -19,7 +19,7 @@ fi
 
 if [ -n "$YAML_FILES" ]; then
   echo "[pre-commit] Linting YAML files with yamllint..."
-  printf "%s\n" "$YAML_FILES" | xargs uvx yamllint -d '{extends: default, rules: {document-start: disable, truthy: disable}}'
+  printf "%s\n" "$YAML_FILES" | xargs uvx yamllint -c .yamllint
 fi
 
 if [ -n "$MD_FILES" ]; then
