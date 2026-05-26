@@ -19,7 +19,7 @@ providers:
   inference: openai # LLM provider used for schema formatting
   embeddings: openai # Embedding provider used for chunk vectors
   embedding_model: 'text-embedding-3-small' # open_ai embedding_model
-  embedding_dimention: 1536 # text-embedding-3-small embedding dimension
+  embedding_dimension: 1536 # text-embedding-3-small embedding dimension
   metadata_db: sqlite # sqlite | postgres
   metadata_dsn: '' # required when metadata_db=postgres
   # lancedb | in_memory (in_memory maps to in-memory vector store in MVP)

@@ -16,6 +16,11 @@ dependencies = [
     "uvicorn>=0.42.0",
 ]
 
+[project.optional-dependencies]
+postgres = [
+    "psycopg[binary]>=3.2.4",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=8.4.0",

@@ -6,7 +6,7 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, Sequence
 
 from memory.backend.dry_run import DryRunMetadataStore, DryRunVectorStore
 from memory.backend.errors import SchemaVersionError, VectorDimensionError
@@ -112,7 +112,7 @@ def build_runtime(
     cfg = (
         parse_config(config) if isinstance(config, dict) else (config or load_config())
     )
-    set_schema_path(cfg.schema.file)
+    set_schema_path(cfg.schema_config.file)
     validate_schema_compatibility(load_schema())
     data_dir = Path(cfg.paths.data_dir)
     if cfg.providers.metadata_db == "postgres":
@@ -127,7 +127,7 @@ def build_runtime(
     if cfg.providers.embeddings == "openai":
         embedding_provider: EmbeddingProvider = OpenAIEmbeddingProvider(
             cfg.providers.embedding_model,
-            cfg.providers.embedding_dimention,
+            cfg.providers.embedding_dimension,
             cfg.openai.base_url,
             cfg.openai.api_key,
         )
@@ -395,7 +395,7 @@ def _hash_to_vector(text: str, dimensions: int) -> list[float]:
 
 
 def _validate_metadata_schema(
-    *, metadata_store: Any, supported_versions: tuple[int, ...]
+    *, metadata_store: Any, supported_versions: Sequence[int]
 ) -> None:
     version = int(getattr(metadata_store, "schema_version", 0))
     if version not in supported_versions:

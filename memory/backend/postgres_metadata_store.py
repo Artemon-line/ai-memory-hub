@@ -71,7 +71,8 @@ class PostgresMetadataStore:
         if self._connect_fn is not None:
             return self._connect_fn(self._dsn)
         try:
-            import psycopg
+            import importlib
+            psycopg = importlib.import_module("psycopg")
         except ImportError as exc:
             raise RuntimeError("psycopg package is required for providers.metadata_db=postgres") from exc
         return psycopg.connect(self._dsn)
