@@ -6,16 +6,24 @@ import jsonschema
 
 from memory.ingestion.base_agent import BaseIngestionAgent
 from memory.ingestion import mvp_ingestion
+from memory.config import HubConfig
 
 
 class MVPIngestionAgent(BaseIngestionAgent):
     """Deterministic ingestion agent for schema-first MVP pipeline."""
 
-    def __init__(self, config: Dict[str, Any], *, runtime: mvp_ingestion.RuntimeDependencies | None = None):
+    def __init__(
+        self,
+        config: HubConfig | dict[str, Any],
+        *,
+        runtime: mvp_ingestion.RuntimeDependencies | None = None,
+    ):
         super().__init__(config)
         mvp_ingestion.configure_runtime(runtime=runtime, config=config)
 
-    async def ingest_messages(self, conversation_json: Dict[str, Any]) -> Dict[str, Any]:
+    async def ingest_messages(
+        self, conversation_json: Dict[str, Any]
+    ) -> Dict[str, Any]:
         payload = self.preprocess_messages(conversation_json)
         try:
             result = mvp_ingestion.ingest_messages(payload)

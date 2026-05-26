@@ -6,7 +6,7 @@ from typing import Any, Awaitable, Callable
 from uuid import uuid4
 
 import jsonschema
-from memory.config import HubConfig, normalize_config
+from memory.config import HubConfig
 from memory.ingestion.base_agent import BaseIngestionAgent
 from memory.ingestion.validate import validate_conversation
 
@@ -71,7 +71,9 @@ def _normalize_conversation_json(payload: dict[str, Any]) -> dict[str, Any]:
     if top_level_tags is not None and "tags" not in metadata:
         metadata["tags"] = top_level_tags
 
-    if "messages" not in normalized and isinstance(normalized.get("conversation"), list):
+    if "messages" not in normalized and isinstance(
+        normalized.get("conversation"), list
+    ):
         normalized["messages"] = normalized["conversation"]
     normalized.pop("conversation", None)
 
@@ -157,7 +159,9 @@ def _apply_search_filters(
         if dt_to and timestamp > dt_to:
             continue
         metadata = conversation.get("metadata", {})
-        conversation_tags = metadata.get("tags", []) if isinstance(metadata, dict) else []
+        conversation_tags = (
+            metadata.get("tags", []) if isinstance(metadata, dict) else []
+        )
         if not isinstance(conversation_tags, list):
             conversation_tags = []
         tag_set = {tag for tag in conversation_tags if isinstance(tag, str)}
@@ -179,14 +183,16 @@ def _deterministic_sort(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     )
 
 
-def _paginate(rows: list[dict[str, Any]], *, limit: int, cursor: str | None) -> tuple[list[dict[str, Any]], str | None]:
+def _paginate(
+    rows: list[dict[str, Any]], *, limit: int, cursor: str | None
+) -> tuple[list[dict[str, Any]], str | None]:
     if cursor is None:
         offset = 0
     else:
         if not cursor.isdigit():
             raise ValueError("cursor must be a numeric offset string")
         offset = int(cursor)
-    page = rows[offset: offset + limit]
+    page = rows[offset : offset + limit]
     next_offset = offset + len(page)
     next_cursor = str(next_offset) if next_offset < len(rows) else None
     return page, next_cursor
@@ -199,7 +205,12 @@ def _register_resources(mcp: Any, agent: BaseIngestionAgent) -> None:
             "id": "example",
             "source": "example",
             "timestamp": "1970-01-01T00:00:00Z",
-            "messages": [{"role": "system", "text": "Use memory://conversation/{id} to read a stored conversation."}],
+            "messages": [
+                {
+                    "role": "system",
+                    "text": "Use memory://conversation/{id} to read a stored conversation.",
+                }
+            ],
             "metadata": {"tags": ["example"], "updated_at": "1970-01-01T00:00:00Z"},
         }
         return {
@@ -212,7 +223,11 @@ def _register_resources(mcp: Any, agent: BaseIngestionAgent) -> None:
     @mcp.resource("memory://conversation/{id}")
     async def conversation_resource(id: str) -> dict[str, Any]:
         if not id.strip():
-            return {"status": "error", "error_code": "invalid_input", "error_message": "id must be non-empty"}
+            return {
+                "status": "error",
+                "error_code": "invalid_input",
+                "error_message": "id must be non-empty",
+            }
         memory = await agent.retrieve(id)
         if memory is None:
             return {
@@ -229,7 +244,9 @@ def _register_resources(mcp: Any, agent: BaseIngestionAgent) -> None:
         }
 
     @mcp.resource("memory://search/{query}")
-    async def search_resource(query: str, top_k: int = 5, source: str | None = None) -> dict[str, Any]:
+    async def search_resource(
+        query: str, top_k: int = 5, source: str | None = None
+    ) -> dict[str, Any]:
         if not query.strip():
             return {
                 "status": "error",
@@ -240,7 +257,8 @@ def _register_resources(mcp: Any, agent: BaseIngestionAgent) -> None:
         matches = result.get("results", [])
         if source:
             matches = [
-                row for row in matches
+                row
+                for row in matches
                 if isinstance(row, dict)
                 and isinstance(row.get("conversation"), dict)
                 and row["conversation"].get("source") == source
@@ -254,7 +272,9 @@ def _register_resources(mcp: Any, agent: BaseIngestionAgent) -> None:
         }
 
     @mcp.resource("memory://timeline/{day}")
-    async def timeline_resource(day: str, top_k: int = 20, source: str | None = None) -> dict[str, Any]:
+    async def timeline_resource(
+        day: str, top_k: int = 20, source: str | None = None
+    ) -> dict[str, Any]:
         try:
             datetime.strptime(day, "%Y-%m-%d")
         except ValueError:
@@ -327,7 +347,7 @@ def _register_prompts(mcp: Any) -> None:
     def summarize_conversation_prompt(id: str) -> str:
         return (
             "Use ai-memory-hub MCP tools directly.\n"
-            f'Call `memory_retrieve` with `id=\"{id}\"`, then summarize the returned '
+            f'Call `memory_retrieve` with `id="{id}"`, then summarize the returned '
             "`memory.messages` in chronological order."
         )
 
@@ -484,13 +504,8 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
     }
 
 
-def create_mcp_server(
-    *,
-    config: HubConfig | dict[str, Any] | None = None,
-    agent: BaseIngestionAgent
-):
-    cfg = normalize_config(config)
-    if not cfg.interfaces.mcp:
+def create_mcp_server(*, config: HubConfig, agent: BaseIngestionAgent):
+    if not config.interfaces.mcp:
         raise ValueError("config.interfaces.mcp must be enabled to create MCP server")
 
     try:

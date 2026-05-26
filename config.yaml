@@ -15,57 +15,56 @@ storage:
 # PROVIDERS (BYOS/BYOA)
 # -------------------------
 providers:
-  inference: openai       # LLM provider used for schema formatting
-  embeddings: local      # Embedding provider used for chunk vectors
-  metadata_db: sqlite    # sqlite | postgres
-  metadata_dsn: ""       # required when metadata_db=postgres
+  inference: openai # LLM provider used for schema formatting
+  embeddings: openai # Embedding provider used for chunk vectors
+  embedding_model: 'nomic-embed-text'
+  embedding_dimention: 768
+  metadata_db: sqlite # sqlite | postgres
+  metadata_dsn: '' # required when metadata_db=postgres
   # lancedb | in_memory (in_memory maps to in-memory vector store in MVP)
   vector_db: lancedb
-  agent: mvp              # Phase 1 ingestion agent (deterministic pipeline)
+  agent: mvp # Phase 1 ingestion agent (deterministic pipeline)
 
 # -------------------------
 # INTERFACES
 # -------------------------
 interfaces:
-  mcp: true               # Enable MCP tools
-  api: true               # Enable HTTP API (local-only by default)
+  mcp: true # Enable MCP tools
+  api: true # Enable HTTP API (local-only by default)
 
 # -------------------------
 # PATHS
 # -------------------------
 paths:
-  data_dir: "./data"      # SQLite/LanceDB data path
-  logs_dir: "./logs"
+  data_dir: './data' # SQLite/LanceDB data path
+  logs_dir: './logs'
 
 # -------------------------
 # SCHEMA
 # -------------------------
 schema:
-  file: "./memory/schema/conversation.schema.json"
+  file: './memory/schema/conversation.schema.json'
 
 # -------------------------
 # MCP SERVER SETTINGS
 # -------------------------
 mcp:
-  host: "127.0.0.1"
+  host: '127.0.0.1'
   port: 8765
 
 # -------------------------
 # API SERVER SETTINGS
 # -------------------------
 api:
-  host: "127.0.0.1"
+  host: '127.0.0.1'
   port: 8000
-  auth: none              # none | api_key
-  api_key: ""             # only used if auth: api_key
+  auth: none # none | api_key
+  api_key: '' # only used if auth: api_key
 
 # -------------------------
 # PROVIDER SETTINGS
 # -------------------------
 openai:
-  api_key: "${OPENAI_API_KEY}"
-  model: "gpt-4.1"
-
-local_llm:
-  model_path: ""          # Optional local model path
-  context_window: 8192
+  base_url: 'http://localhost:11434/v1' # for Ollama usage
+  api_key: 'dummy_key'
+  model: 'gpt-4.1'

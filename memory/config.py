@@ -8,6 +8,8 @@ from typing import Any
 @dataclass(frozen=True)
 class ProvidersConfig:
     embeddings: str = "local"
+    embedding_model: str = ""
+    embedding_dimention: int = 1536
     vector_db: str = "lancedb"
     metadata_db: str = "sqlite"
     metadata_dsn: str = ""
@@ -42,12 +44,20 @@ class StorageConfig:
 
 
 @dataclass(frozen=True)
+class OpenAIConfig:
+    base_url: str = "https://api.openai.com"
+    api_key: str = "dummy_key"
+    model: str = "gpt-4.1"
+
+
+@dataclass(frozen=True)
 class HubConfig:
     providers: ProvidersConfig
     interfaces: InterfacesConfig
     paths: PathsConfig
     schema: SchemaConfig
     storage: StorageConfig
+    openai: OpenAIConfig
 
 
 DEFAULT_CONFIG = HubConfig(
@@ -56,6 +66,7 @@ DEFAULT_CONFIG = HubConfig(
     paths=PathsConfig(),
     schema=SchemaConfig(),
     storage=StorageConfig(),
+    openai=OpenAIConfig(),
 )
 
 
@@ -77,11 +88,33 @@ def parse_config(config: dict[str, Any] | None) -> HubConfig:
     schema = _as_dict(config_dict.get("schema"))
     storage = _as_dict(config_dict.get("storage"))
     storage_vector = _as_dict(storage.get("vector"))
+    openai = _as_dict(config_dict.get("openai"))
 
-    embeddings = str(providers.get("embeddings", DEFAULT_CONFIG.providers.embeddings)).lower()
-    vector_db = str(providers.get("vector_db", DEFAULT_CONFIG.providers.vector_db)).lower()
-    metadata_db = str(providers.get("metadata_db", DEFAULT_CONFIG.providers.metadata_db)).lower()
-    metadata_dsn = str(providers.get("metadata_dsn", DEFAULT_CONFIG.providers.metadata_dsn))
+    open_ai_base_url = openai.get("base_url", DEFAULT_CONFIG.openai.base_url)
+    open_ai_key = openai.get("api_key", DEFAULT_CONFIG.openai.api_key)
+    open_ai_model = openai.get("model", DEFAULT_CONFIG.openai.model)
+
+    embeddings = str(
+        providers.get("embeddings", DEFAULT_CONFIG.providers.embeddings)
+    ).lower()
+    embedding_model = str(
+        providers.get("embedding_model", DEFAULT_CONFIG.providers.embedding_model)
+    ).lower()
+    embedding_dimention = int(
+        providers.get(
+            "embedding_dimention", DEFAULT_CONFIG.providers.embedding_dimention
+        )
+    )
+
+    vector_db = str(
+        providers.get("vector_db", DEFAULT_CONFIG.providers.vector_db)
+    ).lower()
+    metadata_db = str(
+        providers.get("metadata_db", DEFAULT_CONFIG.providers.metadata_db)
+    ).lower()
+    metadata_dsn = str(
+        providers.get("metadata_dsn", DEFAULT_CONFIG.providers.metadata_dsn)
+    )
     if embeddings not in {"openai", "local"}:
         raise ValueError("providers.embeddings must be one of: openai, local")
     if vector_db not in {"lancedb", "in_memory"}:
@@ -90,8 +123,13 @@ def parse_config(config: dict[str, Any] | None) -> HubConfig:
         raise ValueError("providers.metadata_db must be one of: sqlite, postgres")
 
     return HubConfig(
+        openai=OpenAIConfig(
+            base_url=open_ai_base_url, api_key=open_ai_key, model=open_ai_model
+        ),
         providers=ProvidersConfig(
             embeddings=embeddings,
+            embedding_model=embedding_model,
+            embedding_dimention=embedding_dimention,
             vector_db=vector_db,
             metadata_db=metadata_db,
             metadata_dsn=metadata_dsn,
@@ -100,7 +138,9 @@ def parse_config(config: dict[str, Any] | None) -> HubConfig:
             mcp=_parse_bool(interfaces.get("mcp"), DEFAULT_CONFIG.interfaces.mcp),
             api=_parse_bool(interfaces.get("api"), DEFAULT_CONFIG.interfaces.api),
         ),
-        paths=PathsConfig(data_dir=str(paths.get("data_dir", DEFAULT_CONFIG.paths.data_dir))),
+        paths=PathsConfig(
+            data_dir=str(paths.get("data_dir", DEFAULT_CONFIG.paths.data_dir))
+        ),
         schema=SchemaConfig(file=str(schema.get("file", DEFAULT_CONFIG.schema.file))),
         storage=StorageConfig(
             dry_run=_parse_bool(storage.get("dry_run"), DEFAULT_CONFIG.storage.dry_run),
@@ -124,8 +164,6 @@ def parse_config(config: dict[str, Any] | None) -> HubConfig:
 def normalize_config(config: HubConfig | dict[str, Any] | None) -> HubConfig:
     if isinstance(config, HubConfig):
         return config
-    if isinstance(config, dict):
-        return parse_config(config)
     CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.yaml"
     return load_config(CONFIG_PATH)
 

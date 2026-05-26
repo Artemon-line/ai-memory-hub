@@ -1,0 +1,22 @@
+extends: default
+
+rules:
+  # Allow YAML without '---' at the top
+  document-start: disable
+
+  # Allow "true"/"false"/"yes"/"no" without warnings
+  truthy: disable
+
+  # Enforce LF newlines (fixes "wrong new line character: expected \n")
+  new-lines:
+    type: unix
+
+  # Require exactly 2 spaces before comments (fixes all your warnings)
+  comments:
+    min-spaces-from-content: 1
+
+  # Optional: allow long lines if needed
+  line-length:
+    max: 120
+    allow-non-breakable-words: true
+    allow-non-breakable-inline-mappings: true

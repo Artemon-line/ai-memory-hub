@@ -28,8 +28,7 @@ logger = logging.getLogger(__name__)
 class EmbeddingProvider(Protocol):
     dimension: int
 
-    def embed_texts(self, texts: list[str]) -> list[list[float]]:
-        ...
+    def embed_texts(self, texts: list[str]) -> list[list[float]]: ...
 
 
 class LocalEmbeddingProvider:
@@ -43,25 +42,29 @@ class LocalEmbeddingProvider:
 
 
 class OpenAIEmbeddingProvider:
-    _MODEL_DIMS = {
-        "text-embedding-3-small": 1536,
-        "text-embedding-3-large": 3072,
-        "text-embedding-ada-002": 1536,
-    }
-
-    def __init__(self, model: str = "text-embedding-3-small", api_key: str | None = None):
+    def __init__(
+        self,
+        embedding_model: str = "text-embedding-3-small",
+        dimension: int = 1536,
+        base_url: str = "https://api.openai.com",
+        api_key: str | None = None,
+    ):
         from openai import OpenAI
 
         key = api_key or os.getenv("OPENAI_API_KEY")
         if not key:
-            raise RuntimeError("OPENAI_API_KEY is required when providers.embeddings=openai")
+            logger.warning(
+                "OPENAI_API_KEY is required when providers.embeddings=openai"
+            )
 
-        self.client = OpenAI(api_key=key)
-        self.model = model
-        self.dimension = self._MODEL_DIMS.get(model, 1536)  # default to 1536 if unknown
+        self.client = OpenAI(base_url=base_url, api_key=key)
+        self.embedding_model = embedding_model
+        self.dimension = dimension
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
-        response = self.client.embeddings.create(model=self.model, input=texts)
+        response = self.client.embeddings.create(
+            model=self.embedding_model, input=texts, dimensions=self.dimension
+        )
         return [list(item.embedding) for item in response.data]
 
 
@@ -77,20 +80,38 @@ _RUNTIME: RuntimeDependencies | None = None
 _ASK_MAX_SCORE = 7.5
 _TOPIC_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("python", re.compile(r"\bpython\b", re.IGNORECASE)),
-    ("javascript", re.compile(r"\b(javascript|js|node\.?js|typescript|ts)\b", re.IGNORECASE)),
+    (
+        "javascript",
+        re.compile(r"\b(javascript|js|node\.?js|typescript|ts)\b", re.IGNORECASE),
+    ),
     ("sql", re.compile(r"\b(sql|sqlite|postgres|mysql|database|db)\b", re.IGNORECASE)),
     ("api", re.compile(r"\b(api|rest|endpoint|http|json-rpc)\b", re.IGNORECASE)),
     ("mcp", re.compile(r"\b(mcp|model context protocol)\b", re.IGNORECASE)),
     ("docker", re.compile(r"\b(docker|container|kubernetes|k8s)\b", re.IGNORECASE)),
-    ("testing", re.compile(r"\b(test|tests|pytest|unit test|integration test)\b", re.IGNORECASE)),
-    ("machine-learning", re.compile(r"\b(ai|llm|rag|embedding|vector)\b", re.IGNORECASE)),
-    ("frontend", re.compile(r"\b(frontend|ui|css|html|react|vue|angular)\b", re.IGNORECASE)),
+    (
+        "testing",
+        re.compile(
+            r"\b(test|tests|pytest|unit test|integration test)\b", re.IGNORECASE
+        ),
+    ),
+    (
+        "machine-learning",
+        re.compile(r"\b(ai|llm|rag|embedding|vector)\b", re.IGNORECASE),
+    ),
+    (
+        "frontend",
+        re.compile(r"\b(frontend|ui|css|html|react|vue|angular)\b", re.IGNORECASE),
+    ),
     ("backend", re.compile(r"\b(backend|fastapi|flask|server)\b", re.IGNORECASE)),
 ]
 
 
-def build_runtime(config: HubConfig | dict[str, Any] | None = None) -> RuntimeDependencies:
-    cfg = parse_config(config) if isinstance(config, dict) else (config or load_config())
+def build_runtime(
+    config: HubConfig | dict[str, Any] | None = None,
+) -> RuntimeDependencies:
+    cfg = (
+        parse_config(config) if isinstance(config, dict) else (config or load_config())
+    )
     set_schema_path(cfg.schema.file)
     validate_schema_compatibility(load_schema())
     data_dir = Path(cfg.paths.data_dir)
@@ -98,10 +119,18 @@ def build_runtime(config: HubConfig | dict[str, Any] | None = None) -> RuntimeDe
         metadata_store = PostgresMetadataStore(cfg.providers.metadata_dsn)
     else:
         metadata_store = SQLiteMetadataStore(data_dir / "metadata.sqlite3")
-    _validate_metadata_schema(metadata_store=metadata_store, supported_versions=cfg.storage.metadata_schema_versions)
+    _validate_metadata_schema(
+        metadata_store=metadata_store,
+        supported_versions=cfg.storage.metadata_schema_versions,
+    )
 
     if cfg.providers.embeddings == "openai":
-        embedding_provider: EmbeddingProvider = OpenAIEmbeddingProvider()
+        embedding_provider: EmbeddingProvider = OpenAIEmbeddingProvider(
+            cfg.providers.embedding_model,
+            cfg.providers.embedding_dimention,
+            cfg.openai.base_url,
+            cfg.openai.api_key,
+        )
     else:
         embedding_provider = LocalEmbeddingProvider()
 
@@ -110,7 +139,9 @@ def build_runtime(config: HubConfig | dict[str, Any] | None = None) -> RuntimeDe
     fallback_reasons: list[str] = []
     if cfg.providers.vector_db == "lancedb":
         try:
-            vector_store = LanceDBVectorStore(data_dir / "lancedb", dimension=expected_dimension)
+            vector_store = LanceDBVectorStore(
+                data_dir / "lancedb", dimension=expected_dimension
+            )
         except RuntimeError as exc:
             if not cfg.storage.vector.allow_fallback:
                 raise
@@ -124,7 +155,9 @@ def build_runtime(config: HubConfig | dict[str, Any] | None = None) -> RuntimeDe
     else:
         vector_store = InMemoryVectorStore(dimension=expected_dimension)
 
-    _validate_vector_dimension(embedding_dimension=expected_dimension, vector_store=vector_store)
+    _validate_vector_dimension(
+        embedding_dimension=expected_dimension, vector_store=vector_store
+    )
 
     if cfg.storage.dry_run:
         logger.warning("DRY-RUN enabled: write operations will be skipped")
@@ -139,7 +172,9 @@ def build_runtime(config: HubConfig | dict[str, Any] | None = None) -> RuntimeDe
     health_state = {
         "mode": mode,
         "metadata_provider": cfg.providers.metadata_db,
-        "vector_provider": "memory" if vector_fallback_active or cfg.providers.vector_db != "lancedb" else "lancedb",
+        "vector_provider": "memory"
+        if vector_fallback_active or cfg.providers.vector_db != "lancedb"
+        else "lancedb",
         "vector_fallback_active": vector_fallback_active,
         "reasons": fallback_reasons,
     }
@@ -152,7 +187,11 @@ def build_runtime(config: HubConfig | dict[str, Any] | None = None) -> RuntimeDe
     )
 
 
-def configure_runtime(*, runtime: RuntimeDependencies | None = None, config: HubConfig | dict[str, Any] | None = None) -> RuntimeDependencies:
+def configure_runtime(
+    *,
+    runtime: RuntimeDependencies | None = None,
+    config: HubConfig | dict[str, Any] | None = None,
+) -> RuntimeDependencies:
     global _RUNTIME
     _RUNTIME = runtime or build_runtime(config)
     return _RUNTIME
@@ -189,7 +228,7 @@ def enrich_topics(obj: dict[str, Any]) -> None:
         return
 
     merged: list[str] = []
-    for topic in (existing if isinstance(existing, list) else []):
+    for topic in existing if isinstance(existing, list) else []:
         if isinstance(topic, str) and topic not in merged:
             merged.append(topic)
     for topic in inferred:
@@ -317,7 +356,9 @@ def ask(question: str, top_k: int = 5) -> dict[str, Any]:
             "text": row.get("text", ""),
         }
         citations.append(citation)
-        context_lines.append(f"- [{citation['id']}#{citation['chunk_index']}] {citation['text']}")
+        context_lines.append(
+            f"- [{citation['id']}#{citation['chunk_index']}] {citation['text']}"
+        )
 
     answer = "Based on stored memory:\n" + "\n".join(context_lines[:top_k])
     return {
@@ -329,8 +370,14 @@ def ask(question: str, top_k: int = 5) -> dict[str, Any]:
 
 def runtime_health() -> dict[str, Any]:
     runtime = _runtime()
-    metadata_health = runtime.metadata_store.health() if hasattr(runtime.metadata_store, "health") else {}
-    vector_health = runtime.vector_store.health() if hasattr(runtime.vector_store, "health") else {}
+    metadata_health = (
+        runtime.metadata_store.health()
+        if hasattr(runtime.metadata_store, "health")
+        else {}
+    )
+    vector_health = (
+        runtime.vector_store.health() if hasattr(runtime.vector_store, "health") else {}
+    )
     return {
         **runtime.health_state,
         "metadata_health": metadata_health,
@@ -347,7 +394,9 @@ def _hash_to_vector(text: str, dimensions: int) -> list[float]:
     return [(values[index] / 255.0) for index in range(dimensions)]
 
 
-def _validate_metadata_schema(*, metadata_store: Any, supported_versions: tuple[int, ...]) -> None:
+def _validate_metadata_schema(
+    *, metadata_store: Any, supported_versions: tuple[int, ...]
+) -> None:
     version = int(getattr(metadata_store, "schema_version", 0))
     if version not in supported_versions:
         supported = ",".join(str(item) for item in supported_versions)

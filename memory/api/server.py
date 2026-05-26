@@ -62,15 +62,7 @@ def create_app(
     cfg = normalize_config(config)
     mcp_app = None
     agent = ingestion_agent or MVPIngestionAgent(
-        config={
-            "providers": {
-                "embeddings": cfg.providers.embeddings,
-                "vector_db": cfg.providers.vector_db,
-                "agent": "mvp",
-            },
-            "interfaces": {"mcp": cfg.interfaces.mcp, "api": cfg.interfaces.api},
-            "paths": {"data_dir": cfg.paths.data_dir},
-        }
+        config=cfg
     )
 
     # ⭐ Only enable MCP if config says so
@@ -85,23 +77,25 @@ def create_app(
     )
 
     if mcp_app is not None:
-        app.mount('/mcp', mcp_app)
+        app.mount("/mcp", mcp_app)
 
     # ⭐ Only enable API if config says so
     if cfg.interfaces.api:
         _register_api_routes(app, agent)
 
     print(
-        "\n" +
-        "==============================\n" +
-        "  ai-memory-hub  |  RUNNING  \n" +
-        "==============================\n" +
-        f"  version: {app.version}\n" +
-        f"  embeddings: {cfg.providers.embeddings}\n" +
-        f"  vector_db: {cfg.providers.vector_db}\n" +
-        f"  mcp enabled: {cfg.interfaces.mcp}\n" +
-        f"  api enabled: {cfg.interfaces.api}\n" +
-        f"  data_dir: {cfg.paths.data_dir}\n"
+        "\n"
+        + "==============================\n"
+        + "  ai-memory-hub  |  RUNNING  \n"
+        + "==============================\n"
+        + f"  version: {app.version}\n"
+        + f"  embeddings: {cfg.providers.embeddings}\n"
+        + f"  embedding_model: {cfg.providers.embedding_model}\n"
+        + f"  openai_base_url: {cfg.openai.base_url}\n"
+        + f"  vector_db: {cfg.providers.vector_db}\n"
+        + f"  mcp enabled: {cfg.interfaces.mcp}\n"
+        + f"  api enabled: {cfg.interfaces.api}\n"
+        + f"  data_dir: {cfg.paths.data_dir}\n"
     )
 
     return app
