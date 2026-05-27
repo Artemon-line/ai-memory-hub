@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   test:
-    name: Core Tests
+    name: Unit and Integration Tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -30,10 +30,60 @@ jobs:
       - name: Install dependencies
         run: uv sync --dev
 
-      - name: Run tests
+      - name: Run unit and integration tests
         env:
           PYTHONHASHSEED: "0"
-        run: uv run pytest
+        run: uv run pytest tests/unit tests/integration
+
+  e2e:
+    name: E2E Scenario (Ollama)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Install Ollama
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sudo -E sh
+
+      - name: Start Ollama
+        run: |
+          ollama serve &
+          # Wait for the HTTP port to open
+          for i in {1..10}; do
+            if curl -s http://localhost:11434 > /dev/null; then
+              echo "Ollama is ready!"
+              exit 0
+            fi
+            echo "Waiting for Ollama..."
+            sleep 2
+          done
+          echo "Ollama failed to start"
+          exit 1
+
+      - name: Pull nomic-embed-text
+        run: |
+          ollama pull nomic-embed-text
+
+      - name: Run E2E tests
+        env:
+          PYTHONHASHSEED: "0"
+        run: uv run pytest tests/e2e
 
   storage-config:
     name: Storage Config Variations
@@ -70,18 +120,18 @@ jobs:
           PYTHONHASHSEED: "0"
         run: |
           if [ "${{ matrix.case }}" = "sqlite-default" ]; then
-            uv run pytest -q tests/test_storage_features.py -k \
+            uv run pytest -q tests/integration/test_storage_features.py -k \
               "sqlite_capabilities_and_health or \
               build_runtime_fails_fast_on_schema_version"
           elif [ "${{ matrix.case }}" = "dry-run" ]; then
-            uv run pytest -q tests/test_storage_features.py -k \
+            uv run pytest -q tests/integration/test_storage_features.py -k \
               "dry_run_write_is_noop or \
               runtime_health_reports_dry_run"
           elif [ "${{ matrix.case }}" = "custom-schema" ]; then
-            uv run pytest -q tests/test_mvp_ingestion.py -k \
+            uv run pytest -q tests/unit/test_mvp_ingestion.py -k \
               "schema_file_from_config_is_used"
           else
-            uv run pytest -q tests/test_storage_features.py -k \
+            uv run pytest -q tests/integration/test_storage_features.py -k \
               "build_runtime_vector_fallback_disabled_raises"
           fi
 
@@ -128,6 +178,6 @@ jobs:
           PYTHONHASHSEED: "0"
           AMH_TEST_POSTGRES_DSN: postgresql://test:test@127.0.0.1:5432/memory
         run: >
-          uv run pytest -q tests/test_storage_features.py -k
+          uv run pytest -q tests/integration/test_storage_features.py -k
           "postgres_live_integration_when_dsn_provided or
           postgres_schema_version"

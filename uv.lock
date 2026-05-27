@@ -25,6 +25,7 @@ postgres = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "mcp-pytest" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
 ]
@@ -46,6 +47,7 @@ provides-extras = ["postgres"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "mcp-pytest", specifier = ">=0.1.1" },
     { name = "pytest", specifier = ">=8.4.0" },
     { name = "pytest-asyncio", specifier = ">=0.23.6" },
 ]
@@ -718,6 +720,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/8b/eb/c0cfc62075dc6e1ec1c64d352ae09ac051d9334311ed226f1f425312848a/mcp-1.27.0.tar.gz", hash = "sha256:d3dc35a7eec0d458c1da4976a48f982097ddaab87e278c5511d5a4a56e852b83", size = 607509, upload-time = "2026-04-02T14:48:08.88Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/9c/46/f6b4ad632c67ef35209a66127e4bddc95759649dd595f71f13fba11bdf9a/mcp-1.27.0-py3-none-any.whl", hash = "sha256:5ce1fa81614958e267b21fb2aa34e0aea8e2c6ede60d52aba45fd47246b4d741", size = 215967, upload-time = "2026-04-02T14:48:07.24Z" },
+]
+
+[[package]]
+name = "mcp-pytest"
+version = "0.1.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pytest" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b8/14/f0af0cd0c452614da6e762bcaf5187c3222bd8b0e7f36a7131e61ae91a0b/mcp_pytest-0.1.1.tar.gz", hash = "sha256:d6bba3f58dac5958939a58a28b12d69f119a2f3efac98e3e4d2b30342c63bb80", size = 6631, upload-time = "2026-03-22T02:37:34.21Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0f/16/c47974f0462679174a66633e62301f363f27277fdd984c55547e92a5134f/mcp_pytest-0.1.1-py3-none-any.whl", hash = "sha256:d8e85b704effd34a66c23dc661b1c96934b7cec9063e7fddf2719011249dc614", size = 7382, upload-time = "2026-03-22T02:37:33.138Z" },
 ]
 
 [[package]]

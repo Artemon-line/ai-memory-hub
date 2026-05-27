@@ -23,10 +23,11 @@ postgres = [
 
 [dependency-groups]
 dev = [
+    "mcp-pytest>=0.1.1",
     "pytest>=8.4.0",
     "pytest-asyncio>=0.23.6",
 ]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
-testpaths = ["tests"]
+testpaths = ["tests/unit", "tests/integration", "tests/e2e"]
