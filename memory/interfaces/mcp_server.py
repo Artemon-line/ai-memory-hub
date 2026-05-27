@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 from urllib.parse import unquote
 from typing import Any, Awaitable, Callable
-from uuid import uuid4
 
 import jsonschema
 from memory.config import HubConfig
 from memory.ingestion.base_agent import BaseIngestionAgent
+from memory.ingestion.mvp_ingestion import normalize_conversation_json
 from memory.ingestion.validate import validate_conversation
 
 ToolFn = Callable[..., Awaitable[dict[str, Any]]]
@@ -19,6 +19,8 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
     "memory_search": "Search existing memory by text query.",
     "memory_retrieve": "Retrieve a stored memory item by ID.",
     "memory_ask": "Answer a question using stored memory search results.",
+    "memory_parse_raw": "Parse raw unstructured text into structured conversation JSON using LLM.",
+    "memory_insert_raw": "Parse and insert raw unstructured text into memory using LLM.",
 }
 
 
@@ -55,50 +57,6 @@ def _format_schema_error(exc: jsonschema.ValidationError) -> str:
     if path:
         return f"schema validation failed at `{path}`: {exc.message}"
     return f"schema validation failed: {exc.message}"
-
-
-def _utc_now_iso() -> str:
-    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-
-
-def _normalize_conversation_json(payload: dict[str, Any]) -> dict[str, Any]:
-    normalized = dict(payload)
-    metadata = normalized.get("metadata")
-    if not isinstance(metadata, dict):
-        metadata = {}
-
-    top_level_tags = normalized.pop("tags", None)
-    if top_level_tags is not None and "tags" not in metadata:
-        metadata["tags"] = top_level_tags
-
-    if "messages" not in normalized and isinstance(
-        normalized.get("conversation"), list
-    ):
-        normalized["messages"] = normalized["conversation"]
-    normalized.pop("conversation", None)
-
-    messages = normalized.get("messages")
-    if isinstance(messages, list):
-        normalized["messages"] = [_normalize_message(item) for item in messages]
-
-    normalized.setdefault("id", str(uuid4()))
-    normalized.setdefault("source", "mcp")
-    normalized.setdefault("timestamp", _utc_now_iso())
-    if "imported_at" not in metadata and isinstance(metadata.get("saved_at"), str):
-        metadata["imported_at"] = metadata["saved_at"]
-    metadata.setdefault("imported_at", _utc_now_iso())
-    normalized["metadata"] = metadata
-    return normalized
-
-
-def _normalize_message(message: Any) -> Any:
-    if not isinstance(message, dict):
-        return message
-    normalized = dict(message)
-    if "text" not in normalized and "content" in normalized:
-        normalized["text"] = normalized["content"]
-    normalized.pop("content", None)
-    return normalized
 
 
 def _resource_metadata(conversation: dict[str, Any] | None) -> dict[str, Any]:
@@ -361,7 +319,7 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 error_message="conversation_json must be an object",
                 valid=False,
             )
-        normalized = _normalize_conversation_json(conversation_json)
+        normalized = normalize_conversation_json(conversation_json, source="mcp")
         try:
             validate_conversation(normalized)
         except jsonschema.ValidationError as exc:
@@ -380,7 +338,7 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 error_code="invalid_input",
                 error_message="conversation_json must be an object",
             )
-        normalized = _normalize_conversation_json(conversation_json)
+        normalized = normalize_conversation_json(conversation_json, source="mcp")
         try:
             validate_conversation(normalized)
         except jsonschema.ValidationError as exc:
@@ -495,12 +453,62 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
             )
         return _with_envelope_defaults(result)
 
+    async def memory_parse_raw(text: str) -> dict[str, Any]:
+        if not isinstance(text, str) or not text.strip():
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message="text must be a non-empty string",
+            )
+        try:
+            # We cast to MVPIngestionAgent because we know it implements it
+            # In a larger system we'd check capability or use a more refined interface
+            if hasattr(agent, "parse_raw"):
+                result = await agent.parse_raw(text) # type: ignore
+                return _envelope(status="ok", conversation_json=result)
+            return _envelope(
+                status="error",
+                error_code="not_supported",
+                error_message="Agent does not support raw parsing",
+            )
+        except Exception as exc:
+            return _envelope(
+                status="error",
+                error_code="parse_failed",
+                error_message=str(exc),
+            )
+
+    async def memory_insert_raw(text: str) -> dict[str, Any]:
+        if not isinstance(text, str) or not text.strip():
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message="text must be a non-empty string",
+            )
+        try:
+            if hasattr(agent, "ingest_raw"):
+                result = await agent.ingest_raw(text)
+                return _with_envelope_defaults(result)
+            return _envelope(
+                status="error",
+                error_code="not_supported",
+                error_message="Agent does not support raw ingestion",
+            )
+        except Exception as exc:
+            return _envelope(
+                status="error",
+                error_code="insert_failed",
+                error_message=str(exc),
+            )
+
     return {
         "memory_validate": memory_validate,
         "memory_insert": memory_insert,
         "memory_search": memory_search,
         "memory_retrieve": memory_retrieve,
         "memory_ask": memory_ask,
+        "memory_parse_raw": memory_parse_raw,
+        "memory_insert_raw": memory_insert_raw,
     }
 
 

@@ -17,6 +17,10 @@ class BaseIngestionAgent(ABC):
     ) -> Dict[str, Any]:
         """Ingest a pre-formatted conversation JSON object."""
 
+    @abstractmethod
+    async def ingest_raw(self, text: str) -> Dict[str, Any]:
+        """Parse and ingest raw unstructured text."""
+
     def preprocess_messages(self, conversation_json: Dict[str, Any]) -> Dict[str, Any]:
         return conversation_json
 

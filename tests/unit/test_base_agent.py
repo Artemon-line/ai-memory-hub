@@ -7,6 +7,9 @@ class DummyAgent(BaseIngestionAgent):
     async def ingest_messages(self, conversation_json):
         return {"ok": True, "conversation": conversation_json}
 
+    async def ingest_raw(self, text: str):
+        return {"ok": True, "text": text}
+
     async def search(self, query: str, *, top_k: int = 5):
         return {"query": query, "top_k": top_k}
 

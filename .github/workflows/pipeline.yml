@@ -76,9 +76,10 @@ jobs:
           echo "Ollama failed to start"
           exit 1
 
-      - name: Pull nomic-embed-text
+      - name: Pull models
         run: |
           ollama pull nomic-embed-text
+          ollama pull llama3.2
 
       - name: Run E2E tests
         env:

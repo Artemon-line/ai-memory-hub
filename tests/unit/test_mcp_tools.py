@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from memory.ingestion import mvp_ingestion
+from memory.inference.providers import LocalInferenceProvider
 from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
 from memory.interfaces.mcp_server import build_tool_handlers
 
@@ -53,6 +54,7 @@ class StubVectorStore:
 def _runtime() -> mvp_ingestion.RuntimeDependencies:
     return mvp_ingestion.RuntimeDependencies(
         embedding_provider=StubEmbedder(), # type: ignore
+        inference_provider=LocalInferenceProvider(),
         metadata_store=StubMetadataStore(),
         vector_store=StubVectorStore(),
         health_state={"mode": "ok", "vector_fallback_active": False},

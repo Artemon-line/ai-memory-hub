@@ -32,6 +32,8 @@ def _register_api_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
             return await agent.ingest_messages(conversation_json)
         except jsonschema.ValidationError as exc:
             raise HTTPException(status_code=400, detail=exc.message) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     app.post("/memory/insert")(memory_insert)
 

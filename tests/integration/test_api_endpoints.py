@@ -4,13 +4,14 @@ from fastapi.testclient import TestClient
 
 from memory.api.server import create_app
 from memory.ingestion import mvp_ingestion
+from memory.inference.providers import LocalInferenceProvider
 from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
 
 
 class StubEmbedder(mvp_ingestion.EmbeddingProvider):
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         return [[float(len(text))] for text in texts]
-    dimension: int
+    dimension: int = 32
 
 
 
@@ -55,6 +56,7 @@ class StubVectorStore:
 def _runtime() -> mvp_ingestion.RuntimeDependencies:
     return mvp_ingestion.RuntimeDependencies(
         embedding_provider=StubEmbedder(),
+        inference_provider=LocalInferenceProvider(),
         metadata_store=StubMetadataStore(),
         vector_store=StubVectorStore(),
         health_state={"mode": "ok", "vector_fallback_active": False},
@@ -87,7 +89,7 @@ def test_memory_insert_200() -> None:
 def test_memory_insert_400_on_invalid_schema() -> None:
     client = _client()
     bad_payload = _conversation()
-    bad_payload.pop("id")
+    bad_payload.pop("messages")
 
     response = client.post("/memory/insert", json=bad_payload)
     assert response.status_code == 400

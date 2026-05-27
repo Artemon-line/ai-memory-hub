@@ -7,6 +7,7 @@ import jsonschema
 import pytest
 
 from memory.ingestion import mvp_ingestion
+from memory.inference.providers import LocalInferenceProvider
 from memory.ingestion import validate as ingestion_validate
 
 
@@ -74,6 +75,7 @@ def _configure_stubs() -> tuple[StubMetadataStore, StubVectorStore]:
     mvp_ingestion.configure_runtime(
         runtime=mvp_ingestion.RuntimeDependencies(
             embedding_provider=StubEmbedder(), # type: ignore
+            inference_provider=LocalInferenceProvider(),
             metadata_store=metadata,
             vector_store=vectors,
             health_state={"mode": "ok", "vector_fallback_active": False},
@@ -99,7 +101,7 @@ def test_ingest_messages_success() -> None:
 def test_ingest_messages_invalid_json_raises() -> None:
     _configure_stubs()
     invalid = _valid_conversation()
-    del invalid["id"]
+    del invalid["messages"]
 
     try:
         mvp_ingestion.ingest_messages(invalid)

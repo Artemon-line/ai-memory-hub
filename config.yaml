@@ -16,6 +16,7 @@ storage:
 # -------------------------
 providers:
   inference: openai # LLM provider used for schema formatting
+  inference_model: llama3.2 # Model used for parsing raw text
   embeddings: openai # Embedding provider used for chunk vectors
   embedding_model: 'nomic-embed-text'
   embedding_dimension: 768

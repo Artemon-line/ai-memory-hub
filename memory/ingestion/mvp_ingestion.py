@@ -5,8 +5,10 @@ import logging
 import os
 import re
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol, Sequence
+from uuid import uuid4
 
 from memory.backend.dry_run import DryRunMetadataStore, DryRunVectorStore
 from memory.backend.errors import SchemaVersionError, VectorDimensionError
@@ -15,6 +17,11 @@ from memory.backend.metadata_store import SQLiteMetadataStore
 from memory.backend.postgres_metadata_store import PostgresMetadataStore
 from memory.backend.vector_store import InMemoryVectorStore, LanceDBVectorStore
 from memory.config import HubConfig, load_config, parse_config
+from memory.inference.providers import (
+    InferenceProvider,
+    LocalInferenceProvider,
+    OpenAIInferenceProvider,
+)
 from memory.ingestion.validate import (
     load_schema,
     set_schema_path,
@@ -71,6 +78,7 @@ class OpenAIEmbeddingProvider:
 @dataclass
 class RuntimeDependencies:
     embedding_provider: EmbeddingProvider
+    inference_provider: InferenceProvider
     metadata_store: Any
     vector_store: Any
     health_state: dict[str, Any]
@@ -134,6 +142,15 @@ def build_runtime(
     else:
         embedding_provider = LocalEmbeddingProvider()
 
+    if cfg.providers.inference == "openai":
+        inference_provider: InferenceProvider = OpenAIInferenceProvider(
+            cfg.providers.inference_model,
+            cfg.openai.base_url,
+            cfg.openai.api_key,
+        )
+    else:
+        inference_provider = LocalInferenceProvider()
+
     expected_dimension = embedding_provider.dimension
     vector_fallback_active = False
     fallback_reasons: list[str] = []
@@ -181,6 +198,7 @@ def build_runtime(
 
     return RuntimeDependencies(
         embedding_provider=embedding_provider,
+        inference_provider=inference_provider,
         metadata_store=metadata_store,
         vector_store=vector_store,
         health_state=health_state,
@@ -240,7 +258,10 @@ def enrich_topics(obj: dict[str, Any]) -> None:
 
 def chunk_messages(obj: dict[str, Any]) -> list[dict[str, Any]]:
     chunks: list[dict[str, Any]] = []
-    for index, message in enumerate(obj["messages"]):
+    messages = obj.get("messages")
+    if not isinstance(messages, list):
+        raise ValueError("Missing or invalid 'messages' key in conversation object")
+    for index, message in enumerate(messages):
         chunks.append(
             {
                 "chunk_index": index,
@@ -281,7 +302,84 @@ def store_vectors(metadata_id: str, embeddings: list[dict[str, Any]]) -> None:
     runtime.vector_store.insert(metadata_id, embeddings)
 
 
+def parse_raw_text(text: str) -> dict[str, Any]:
+    """Use LLM to parse raw text into structured JSON."""
+    runtime = _runtime()
+    system_prompt = (
+        "You are an expert at extracting structured conversation data from raw text.\n"
+        "Convert the provided text into a JSON object matching this schema:\n"
+        '{"messages": [{"role": "user"|"assistant", "text": "..."}], "metadata": {"topics": []}}\n'
+        "Rules:\n"
+        "1. Extract chronological messages between user and assistant.\n"
+        "2. If role is unclear, default to 'user' for external input.\n"
+        "3. Infer 2-3 relevant topics for metadata.\n"
+        "4. Return ONLY valid JSON."
+    )
+    
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": text},
+    ]
+    
+    import json
+    raw_json = runtime.inference_provider.chat_complete(messages)
+    try:
+        return json.loads(raw_json)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Failed to parse LLM response as JSON: {raw_json}") from exc
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def normalize_conversation_json(
+    payload: dict[str, Any], *, source: str | None = None
+) -> dict[str, Any]:
+    """Normalize a conversation JSON object with default values."""
+    normalized = dict(payload)
+    metadata = normalized.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+
+    top_level_tags = normalized.pop("tags", None)
+    if top_level_tags is not None and "tags" not in metadata:
+        metadata["tags"] = top_level_tags
+
+    if "messages" not in normalized and isinstance(
+        normalized.get("conversation"), list
+    ):
+        normalized["messages"] = normalized["conversation"]
+    normalized.pop("conversation", None)
+
+    messages = normalized.get("messages")
+    if isinstance(messages, list):
+        normalized["messages"] = [_normalize_message(item) for item in messages]
+
+    normalized.setdefault("id", str(uuid4()))
+    normalized.setdefault("source", source or "unknown")
+    normalized.setdefault("timestamp", _utc_now_iso())
+    if "imported_at" not in metadata and isinstance(metadata.get("saved_at"), str):
+        metadata["imported_at"] = metadata["saved_at"]
+    metadata.setdefault("imported_at", _utc_now_iso())
+    normalized["metadata"] = metadata
+    return normalized
+
+
+def _normalize_message(message: Any) -> Any:
+    if not isinstance(message, dict):
+        return message
+    normalized = dict(message)
+    if "text" not in normalized and "content" in normalized:
+        normalized["text"] = normalized["content"]
+    normalized.pop("content", None)
+    return normalized
+
+
 def ingest_messages(conversation_json: dict[str, Any]) -> dict[str, Any]:
+    # 0. Normalize
+    conversation_json = normalize_conversation_json(conversation_json)
+    
     # 1. Validate JSON against schema
     validate_json(conversation_json)
 

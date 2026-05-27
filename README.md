@@ -9,12 +9,15 @@ ingestion, storage, search, retrieval, and ask-over-memory.
 
 - FastAPI endpoints:
   - `POST /memory/insert`
+  - `POST /memory/insert_raw`
   - `POST /memory/search`
   - `POST /memory/retrieve`
   - `POST /memory/ask`
 - FastMCP HTTP bridge (mounted at `/mcp` when enabled)
 - FastMCP tools:
   - `memory_insert`
+  - `memory_insert_raw`
+  - `memory_parse_raw`
   - `memory_search`
   - `memory_retrieve`
   - `memory_ask`
@@ -22,26 +25,29 @@ ingestion, storage, search, retrieval, and ask-over-memory.
 
 ## Ingestion Flow
 
-```python
-def ingest_messages(conversation_json):
-    validate_json(conversation_json)
-    enrich_topics(conversation_json)
-    chunks = chunk_messages(conversation_json)
-    embeddings = embed_chunks(chunks)
-    metadata_id = metadata_store.insert(conversation_json)
-    vector_store.insert(metadata_id, embeddings)
-    return {"status": "ok", "id": metadata_id, "chunks": len(chunks)}
-```
+The Hub supports two main paths:
+1. **Structured (JSON)**: `ingest_messages(conversation_json)`
+2. **Raw (Text)**: `parse_raw_text(text) -> ingest_messages`
+
+## Multi-Modal Ingestion
+
+`ai-memory-hub` supports multi-modal ingestion to handle unstructured data. 
+By configuring an `inference` provider (e.g., OpenAI or local Ollama), you can send raw text chatter directly to the hub. It will use an LLM to parse and structure the conversation into the required format automatically.
+
+- API: `POST /memory/insert_raw`
+- MCP Tool: `memory_insert_raw(text)`
+- MCP Tool (Validation): `memory_parse_raw(text)`
 
 ## Storage
 
 - Metadata: SQLite or Postgres (`providers.metadata_db`)
-- Vectors: LanceDB (`providers.vector_db: lancedb`) or in-memory (`providers.vector_db: in_memory` in current MVP)
+- Vectors: LanceDB (`providers.vector_db: lancedb`) or in-memory
+- Inference: OpenAI-compatible LLM provider (`providers.inference`) for text parsing
 - Startup checks:
   - metadata schema version compatibility (`storage.metadata_schema_versions`)
   - embedding/vector dimensionality compatibility
 - Validation schema:
-  - loaded from `schema.file` at startup (default: `./memory/schema/conversation.schema.json`)
+  - loaded from `schema.file` at startup
 - Optional vector fallback:
   - if LanceDB init fails and `storage.vector.allow_fallback: true`, runtime falls back to in-memory vectors
 - Dry-run mode:
@@ -54,9 +60,10 @@ Relevant config keys:
 ```yaml
 providers:
   embeddings: local   # openai | local
-  metadata_db: sqlite # sqlite | postgres
-  metadata_dsn: ""    # required when metadata_db=postgres
-  vector_db: lancedb  # lancedb | in_memory
+  inference: openai   # openai (compatible with Ollama)
+  inference_model: llama3
+  metadata_db: sqlite 
+  vector_db: lancedb  
 
 storage:
   dry_run: false
@@ -84,18 +91,23 @@ uv run uvicorn memory.api.server:app --host 127.0.0.1 --port 8000
 
 ## API Usage
 
-Insert:
+Insert (Structured):
 
 ```bash
 curl -X POST http://127.0.0.1:8000/memory/insert \
   -H "Content-Type: application/json" \
   -d '{
-    "id": "d9fd4c95-9cb3-4fd5-b967-3027f8863210",
-    "source": "chatgpt",
-    "timestamp": "2026-01-01T00:00:00Z",
     "messages": [{"role":"user","text":"hello"}],
     "metadata": {"imported_at": "2026-01-01T00:00:00Z"}
   }'
+```
+
+Insert (Raw Text):
+
+```bash
+curl -X POST http://127.0.0.1:8000/memory/insert_raw \
+  -H "Content-Type: application/json" \
+  -d '{"text": "User: hello\nAssistant: world"}'
 ```
 
 Search:

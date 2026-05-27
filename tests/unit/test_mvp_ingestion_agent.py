@@ -4,6 +4,7 @@ import jsonschema
 import pytest
 
 from memory.ingestion import mvp_ingestion
+from memory.inference.providers import LocalInferenceProvider
 from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
 from memory.ingestion.provider_loader import load_ingestion_agent
 
@@ -54,6 +55,7 @@ class StubVectorStore:
 def _runtime() -> mvp_ingestion.RuntimeDependencies:
     return mvp_ingestion.RuntimeDependencies(
         embedding_provider=StubEmbedder(), # type: ignore
+        inference_provider=LocalInferenceProvider(),
         metadata_store=StubMetadataStore(),
         vector_store=StubVectorStore(),
         health_state={"mode": "ok", "vector_fallback_active": False},
@@ -84,9 +86,9 @@ async def test_mvp_ingestion_agent_ingest_messages() -> None:
 async def test_mvp_ingestion_agent_rejects_invalid_json() -> None:
     agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
     invalid = _valid_conversation()
-    del invalid["id"]
+    del invalid["messages"]
 
-    with pytest.raises(jsonschema.ValidationError):
+    with pytest.raises((jsonschema.ValidationError, ValueError)):
         await agent.ingest_messages(invalid)
 
 

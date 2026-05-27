@@ -8,13 +8,18 @@ from pathlib import Path
 import pytest
 
 from memory.backend.contracts import ProviderCapabilities
-from memory.backend.errors import NotSupportedError, SchemaVersionError, VectorDimensionError
+from memory.backend.errors import (
+    NotSupportedError,
+    SchemaVersionError,
+    VectorDimensionError,
+)
 from memory.backend.log_safety import redact_secrets
 from memory.backend.metadata_store import SQLiteMetadataStore
 from memory.backend.postgres_metadata_store import PostgresMetadataStore
 from memory.backend.vector_store import InMemoryVectorStore
 from memory.backend.vector_store import LanceDBVectorStore
 from memory.ingestion import mvp_ingestion
+from typing import Any
 
 
 def test_sqlite_capabilities_and_health(tmp_path: Path) -> None:
@@ -67,10 +72,15 @@ def test_build_runtime_fails_on_startup_dimensionality_mismatch(
             return ProviderCapabilities()
 
         def health(self):
-            return {"provider": "memory", "expected_dimensionality": self.expected_dimensionality}
+            return {
+                "provider": "memory",
+                "expected_dimensionality": self.expected_dimensionality,
+            }
 
     monkeypatch.setattr(mvp_ingestion, "InMemoryVectorStore", MismatchVectorStore)
-    with pytest.raises(VectorDimensionError, match="dimensionality mismatch at startup"):
+    with pytest.raises(
+        VectorDimensionError, match="dimensionality mismatch at startup"
+    ):
         mvp_ingestion.build_runtime(
             {
                 "providers": {"embeddings": "local", "vector_db": "in_memory"},
@@ -95,7 +105,10 @@ def test_build_runtime_vector_fallback_uses_same_dimension(
         }
     )
 
-    assert runtime.vector_store.expected_dimensionality == runtime.embedding_provider.dimension
+    assert (
+        runtime.vector_store.expected_dimensionality
+        == runtime.embedding_provider.dimension
+    )
 
 
 def test_log_redaction_for_dsn_and_keyvalue_secrets() -> None:
@@ -116,7 +129,9 @@ def test_fallback_logging_redacts_exception_secrets(
 ) -> None:
     class BrokenLanceDB:
         def __init__(self, *_args, **_kwargs):
-            raise RuntimeError("connect postgres://u:pw123@db/app password=letmein token=tok123")
+            raise RuntimeError(
+                "connect postgres://u:pw123@db/app password=letmein token=tok123"
+            )
 
     monkeypatch.setattr(mvp_ingestion, "LanceDBVectorStore", BrokenLanceDB)
     with caplog.at_level("WARNING"):
@@ -182,11 +197,18 @@ def test_unsupported_operations_raise_deterministic_errors(tmp_path: Path) -> No
     metadata = SQLiteMetadataStore(tmp_path / "metadata.sqlite3")
     vectors = InMemoryVectorStore(dimension=3)
 
-    with pytest.raises(NotSupportedError, match="Metadata transactions are not exposed by this adapter API"):
+    with pytest.raises(
+        NotSupportedError,
+        match="Metadata transactions are not exposed by this adapter API",
+    ):
         metadata.begin_transaction()
-    with pytest.raises(NotSupportedError, match="TTL is not supported by this metadata adapter"):
+    with pytest.raises(
+        NotSupportedError, match="TTL is not supported by this metadata adapter"
+    ):
         metadata.set_ttl("id-1", 60)
-    with pytest.raises(NotSupportedError, match="TTL is not supported by this vector adapter"):
+    with pytest.raises(
+        NotSupportedError, match="TTL is not supported by this vector adapter"
+    ):
         vectors.set_ttl("id-1", 60)
 
 
@@ -319,7 +341,7 @@ class _FakeConnection:
         return _FakeCursor(self._responses)
 
 
-def _fake_connect_with_responses(responses: dict[str, list[tuple[object, ...]]]):
+def _fake_connect_with_responses(responses: dict[str, list[tuple[Any, ...]]]):
     def _connect(_dsn: str):
         return _FakeConnection(responses)
 
@@ -345,7 +367,9 @@ def test_postgres_schema_version_missing_row_raises() -> None:
         "SELECT version FROM schema_version WHERE id = %s": [],
     }
     with pytest.raises(SchemaVersionError, match="schema_version row missing"):
-        PostgresMetadataStore("postgres://example", connect_fn=_fake_connect_with_responses(responses))
+        PostgresMetadataStore(
+            "postgres://example", connect_fn=_fake_connect_with_responses(responses)
+        )
 
 
 def test_postgres_schema_version_invariant_violation_raises() -> None:
@@ -353,7 +377,9 @@ def test_postgres_schema_version_invariant_violation_raises() -> None:
         "SELECT COUNT(*) FROM schema_version": [(2,)],
     }
     with pytest.raises(SchemaVersionError, match="invariant violated"):
-        PostgresMetadataStore("postgres://example", connect_fn=_fake_connect_with_responses(responses))
+        PostgresMetadataStore(
+            "postgres://example", connect_fn=_fake_connect_with_responses(responses)
+        )
 
 
 def test_build_runtime_fails_on_incompatible_postgres_schema(
@@ -369,7 +395,9 @@ def test_build_runtime_fails_on_incompatible_postgres_schema(
             return {"provider": "postgres", "schema_version": self.schema_version}
 
     monkeypatch.setattr(mvp_ingestion, "PostgresMetadataStore", StubPostgresStore)
-    with pytest.raises(SchemaVersionError, match="Incompatible metadata schema version"):
+    with pytest.raises(
+        SchemaVersionError, match="Incompatible metadata schema version"
+    ):
         mvp_ingestion.build_runtime(
             {
                 "providers": {
@@ -404,7 +432,9 @@ def test_postgres_live_integration_when_dsn_provided() -> None:
     assert store.health()["schema_version"] == 1
 
 
-def test_lancedb_index_is_created_lazily(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_lancedb_index_is_created_lazily(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     class FakeTable:
         def __init__(self):
             self.add_calls = 0
@@ -424,21 +454,39 @@ def test_lancedb_index_is_created_lazily(monkeypatch: pytest.MonkeyPatch, tmp_pa
             return object()
 
     fake_table = FakeTable()
-    monkeypatch.setitem(sys.modules, "lancedb", types.SimpleNamespace(connect=FakeLanceDBModule.connect))
-    monkeypatch.setattr(LanceDBVectorStore, "_open_or_create_table", lambda self: fake_table)
+    monkeypatch.setitem(
+        sys.modules, "lancedb", types.SimpleNamespace(connect=FakeLanceDBModule.connect)
+    )
+    monkeypatch.setattr(
+        LanceDBVectorStore, "_open_or_create_table", lambda self: fake_table
+    )
 
     store = LanceDBVectorStore(tmp_path / "lancedb", dimension=3)
     assert fake_table.create_index_calls == 0
 
     store.insert(
         "11111111-1111-1111-1111-111111111111",
-        [{"chunk_index": 0, "role": "user", "text": "hello", "vector": [0.1, 0.2, 0.3]}],
+        [
+            {
+                "chunk_index": 0,
+                "role": "user",
+                "text": "hello",
+                "vector": [0.1, 0.2, 0.3],
+            }
+        ],
     )
     assert fake_table.add_calls == 1
     assert fake_table.create_index_calls == 1
 
     store.insert(
         "11111111-1111-1111-1111-111111111111",
-        [{"chunk_index": 1, "role": "assistant", "text": "world", "vector": [0.4, 0.5, 0.6]}],
+        [
+            {
+                "chunk_index": 1,
+                "role": "assistant",
+                "text": "world",
+                "vector": [0.4, 0.5, 0.6],
+            }
+        ],
     )
     assert fake_table.create_index_calls == 1
