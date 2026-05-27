@@ -229,3 +229,88 @@ async def test_mcp_tool_handlers_search_pagination_and_filters() -> None:
     filtered_tags = await handlers["memory_search"]("hello", tags=["beta"], top_k=10)
     assert filtered_tags["status"] == "ok"
     assert all("beta" in row["conversation"]["metadata"].get("tags", []) for row in filtered_tags["results"])
+
+
+@pytest.mark.asyncio
+async def test_mcp_tool_handlers_payload_compatibility_gemini_style() -> None:
+    runtime = _runtime()
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=runtime)
+    handlers = build_tool_handlers(agent)
+    
+    # Gemini-style payload often uses 'content' instead of 'text'
+    # and might include extra metadata fields
+    payload = {
+        "source": "gemini",
+        "messages": [
+            {"role": "user", "content": "Explain quantum computing"},
+            {"role": "assistant", "content": "Quantum computing is..."},
+        ],
+        "metadata": {
+            "model": "gemini-1.5-pro",
+            "usage": {"prompt_tokens": 10, "candidates_tokens": 50}
+        }
+    }
+    
+    result = await handlers["memory_insert"](payload)
+    assert result["status"] == "ok"
+    
+    stored = runtime.metadata_store.get(result["id"])
+    assert stored["messages"][0]["text"] == "Explain quantum computing"
+    assert "content" not in stored["messages"][0]
+    assert stored["source"] == "gemini"
+
+
+@pytest.mark.asyncio
+async def test_mcp_tool_handlers_payload_compatibility_copilot_style() -> None:
+    runtime = _runtime()
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=runtime)
+    handlers = build_tool_handlers(agent)
+    
+    # Copilot-style payload might use top-level 'tags' (which we normalize)
+    # and deep metadata
+    payload = {
+        "source": "copilot",
+        "tags": ["vscode", "python"],
+        "messages": [
+            {"role": "user", "text": "Fix this bug"},
+            {"role": "assistant", "text": "I found the issue in line 42."},
+        ],
+        "metadata": {
+            "session_id": "session-123",
+            "workspace": "ai-memory-hub"
+        }
+    }
+    
+    result = await handlers["memory_insert"](payload)
+    assert result["status"] == "ok"
+    
+    stored = runtime.metadata_store.get(result["id"])
+    assert "vscode" in stored["metadata"]["tags"]
+    assert stored["metadata"]["session_id"] == "session-123"
+
+
+@pytest.mark.asyncio
+async def test_mcp_tool_handlers_payload_compatibility_chatgpt_style() -> None:
+    runtime = _runtime()
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=runtime)
+    handlers = build_tool_handlers(agent)
+    
+    # ChatGPT-style might use 'conversation' as a key for the message list
+    # and 'saved_at' in metadata
+    payload = {
+        "source": "chatgpt",
+        "conversation": [
+            {"role": "user", "text": "What is the capital of France?"},
+            {"role": "assistant", "text": "The capital of France is Paris."},
+        ],
+        "metadata": {
+            "saved_at": "2026-05-27T10:00:00Z"
+        }
+    }
+    
+    result = await handlers["memory_insert"](payload)
+    assert result["status"] == "ok"
+    
+    stored = runtime.metadata_store.get(result["id"])
+    assert len(stored["messages"]) == 2
+    assert stored["metadata"]["imported_at"] == "2026-05-27T10:00:00Z"
