@@ -17,11 +17,6 @@ from memory.backend.metadata_store import SQLiteMetadataStore
 from memory.backend.postgres_metadata_store import PostgresMetadataStore
 from memory.backend.vector_store import InMemoryVectorStore, LanceDBVectorStore
 from memory.config import HubConfig, load_config, parse_config
-from memory.inference.providers import (
-    InferenceProvider,
-    LocalInferenceProvider,
-    OpenAIInferenceProvider,
-)
 from memory.ingestion.validate import (
     load_schema,
     set_schema_path,
@@ -78,7 +73,6 @@ class OpenAIEmbeddingProvider:
 @dataclass
 class RuntimeDependencies:
     embedding_provider: EmbeddingProvider
-    inference_provider: InferenceProvider
     metadata_store: Any
     vector_store: Any
     health_state: dict[str, Any]
@@ -142,15 +136,6 @@ def build_runtime(
     else:
         embedding_provider = LocalEmbeddingProvider()
 
-    if cfg.providers.inference == "openai":
-        inference_provider: InferenceProvider = OpenAIInferenceProvider(
-            cfg.providers.inference_model,
-            cfg.openai.base_url,
-            cfg.openai.api_key,
-        )
-    else:
-        inference_provider = LocalInferenceProvider()
-
     expected_dimension = embedding_provider.dimension
     vector_fallback_active = False
     fallback_reasons: list[str] = []
@@ -198,7 +183,6 @@ def build_runtime(
 
     return RuntimeDependencies(
         embedding_provider=embedding_provider,
-        inference_provider=inference_provider,
         metadata_store=metadata_store,
         vector_store=vector_store,
         health_state=health_state,
@@ -300,33 +284,6 @@ def store_metadata(obj: dict[str, Any]) -> str:
 def store_vectors(metadata_id: str, embeddings: list[dict[str, Any]]) -> None:
     runtime = _runtime()
     runtime.vector_store.insert(metadata_id, embeddings)
-
-
-def parse_raw_text(text: str) -> dict[str, Any]:
-    """Use LLM to parse raw text into structured JSON."""
-    runtime = _runtime()
-    system_prompt = (
-        "You are an expert at extracting structured conversation data from raw text.\n"
-        "Convert the provided text into a JSON object matching this schema:\n"
-        '{"messages": [{"role": "user"|"assistant", "text": "..."}], "metadata": {"topics": []}}\n'
-        "Rules:\n"
-        "1. Extract chronological messages between user and assistant.\n"
-        "2. If role is unclear, default to 'user' for external input.\n"
-        "3. Infer 2-3 relevant topics for metadata.\n"
-        "4. Return ONLY valid JSON."
-    )
-    
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": text},
-    ]
-    
-    import json
-    raw_json = runtime.inference_provider.chat_complete(messages)
-    try:
-        return json.loads(raw_json)
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"Failed to parse LLM response as JSON: {raw_json}") from exc
 
 
 def _utc_now_iso() -> str:

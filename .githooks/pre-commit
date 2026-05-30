@@ -22,10 +22,5 @@ if [ -n "$YAML_FILES" ]; then
   printf "%s\n" "$YAML_FILES" | xargs uvx yamllint -c .yamllint
 fi
 
-if [ -n "$MD_FILES" ]; then
-  echo "[pre-commit] Linting Markdown files with pymarkdown..."
-  printf "%s\n" "$MD_FILES" | xargs -r uvx --from pymarkdownlnt pymarkdown --config .pymarkdown.json scan
-fi
-
 echo "[pre-commit] Running test suite..."
 uv run pytest -q

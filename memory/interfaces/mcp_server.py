@@ -19,8 +19,6 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
     "memory_search": "Search existing memory by text query.",
     "memory_retrieve": "Retrieve a stored memory item by ID.",
     "memory_ask": "Answer a question using stored memory search results.",
-    "memory_parse_raw": "Parse raw unstructured text into structured conversation JSON using LLM.",
-    "memory_insert_raw": "Parse and insert raw unstructured text into memory using LLM.",
 }
 
 
@@ -453,62 +451,12 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
             )
         return _with_envelope_defaults(result)
 
-    async def memory_parse_raw(text: str) -> dict[str, Any]:
-        if not isinstance(text, str) or not text.strip():
-            return _envelope(
-                status="error",
-                error_code="invalid_input",
-                error_message="text must be a non-empty string",
-            )
-        try:
-            # We cast to MVPIngestionAgent because we know it implements it
-            # In a larger system we'd check capability or use a more refined interface
-            if hasattr(agent, "parse_raw"):
-                result = await agent.parse_raw(text) # type: ignore
-                return _envelope(status="ok", conversation_json=result)
-            return _envelope(
-                status="error",
-                error_code="not_supported",
-                error_message="Agent does not support raw parsing",
-            )
-        except Exception as exc:
-            return _envelope(
-                status="error",
-                error_code="parse_failed",
-                error_message=str(exc),
-            )
-
-    async def memory_insert_raw(text: str) -> dict[str, Any]:
-        if not isinstance(text, str) or not text.strip():
-            return _envelope(
-                status="error",
-                error_code="invalid_input",
-                error_message="text must be a non-empty string",
-            )
-        try:
-            if hasattr(agent, "ingest_raw"):
-                result = await agent.ingest_raw(text)
-                return _with_envelope_defaults(result)
-            return _envelope(
-                status="error",
-                error_code="not_supported",
-                error_message="Agent does not support raw ingestion",
-            )
-        except Exception as exc:
-            return _envelope(
-                status="error",
-                error_code="insert_failed",
-                error_message=str(exc),
-            )
-
     return {
         "memory_validate": memory_validate,
         "memory_insert": memory_insert,
         "memory_search": memory_search,
         "memory_retrieve": memory_retrieve,
         "memory_ask": memory_ask,
-        "memory_parse_raw": memory_parse_raw,
-        "memory_insert_raw": memory_insert_raw,
     }
 
 

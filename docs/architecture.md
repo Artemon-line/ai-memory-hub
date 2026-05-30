@@ -1,10 +1,11 @@
 # Architecture
 
-ai-memory-hub is a local-first memory engine built around a unified JSON schema and a config-driven provider system. It exposes interfaces for ingestion and retrieval, while letting you bring your own inference, embeddings, storage, and agent framework.
+ai-memory-hub is a local-first memory engine built around a unified JSON schema and a config-driven provider system.
+It exposes interfaces for ingestion and retrieval, while letting you bring your own embedding modes, storage, and agent framework.
 
 Related docs:
-- Project overview: `../README.md`
-- Agent integration: `agents.md`
+ - Project overview: `../README.md`
+ - Agent integration: `agents.md`
 
 ## High-Level System Diagram
 
@@ -52,25 +53,6 @@ Defaults:
 - Metadata store: SQLite
 - Vector store: LanceDB
 
-You can replace either with your own providers via config.
-
-## Inference Layer (Search + RAG)
-
-The inference layer is provider-driven. It consumes stored chunks and produces search results or RAG answers.
-
-Core flows:
-
-- Search: embed query -> vector search -> return chunks
-- RAG: search -> build context -> generate response
-
-The hub does not ship an inference engine. You configure one.
-
-## Interface Layer (API + MCP)
-
-ai-memory-hub exposes interfaces rather than implementations:
-
-- MCP tools for agent workflows
-- HTTP API for direct clients
 
 Core MCP tools:
 
@@ -80,7 +62,7 @@ Core MCP tools:
 
 ## Bring Your Own Stack (BYOS) Model
 
-Bring Your Own Stack (BYOS) means you supply inference, embeddings, and storage via config.
+Bring Your Own Stack (BYOS) means you supply embedding models, and storage via config.
 
 You can replace any provider through config.
 
@@ -98,8 +80,8 @@ You can replace any provider through config.
   Vector DB (yours)
        |
        v
-[Inference]
-  Search / RAG (yours)
+[Client]
+  Search (yours)
 ```
 
 ## Config-Driven Provider System
@@ -114,7 +96,6 @@ storage:
   vectors: lancedb
 
 providers:
-  inference: openai
   embeddings: openai
   vector_db: lancedb
 

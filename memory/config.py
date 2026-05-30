@@ -16,8 +16,6 @@ class ProvidersConfig(BaseModel):
     embeddings: str = "openai"
     embedding_model: str = "nomic-embed-text"
     embedding_dimension: int = 768
-    inference: str = "openai"
-    inference_model: str = "llama3"
     vector_db: str = "lancedb"
     metadata_db: str = "sqlite"
     metadata_dsn: str = ""

@@ -3,7 +3,6 @@ from __future__ import annotations
 import pytest
 
 from memory.ingestion import mvp_ingestion
-from memory.inference.providers import LocalInferenceProvider
 from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
 from memory.interfaces.mcp_server import build_tool_handlers
 
@@ -53,8 +52,7 @@ class StubVectorStore:
 
 def _runtime() -> mvp_ingestion.RuntimeDependencies:
     return mvp_ingestion.RuntimeDependencies(
-        embedding_provider=StubEmbedder(), # type: ignore
-        inference_provider=LocalInferenceProvider(),
+        embedding_provider=StubEmbedder(),  # type: ignore
         metadata_store=StubMetadataStore(),
         vector_store=StubVectorStore(),
         health_state={"mode": "ok", "vector_fallback_active": False},
@@ -70,6 +68,7 @@ def _conversation() -> dict[str, object]:
         "metadata": {"imported_at": "2026-01-01T00:00:00Z"},
     }
 
+
 def _conversation_two() -> dict[str, object]:
     return {
         "id": "2f39f5cc-6256-4ca9-a9b2-6211bc6e3702",
@@ -82,7 +81,9 @@ def _conversation_two() -> dict[str, object]:
 
 @pytest.mark.asyncio
 async def test_mcp_tool_handlers_insert_search_retrieve() -> None:
-    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
+    agent = MVPIngestionAgent(
+        config={"providers": {"agent": "mvp"}}, runtime=_runtime()
+    )
     handlers = build_tool_handlers(agent)
 
     validate_result = await handlers["memory_validate"](_conversation())
@@ -95,7 +96,9 @@ async def test_mcp_tool_handlers_insert_search_retrieve() -> None:
     search_result = await handlers["memory_search"]("hello", 5)
     assert search_result["status"] == "ok"
 
-    retrieve_result = await handlers["memory_retrieve"]("d9fd4c95-9cb3-4fd5-b967-3027f8863210")
+    retrieve_result = await handlers["memory_retrieve"](
+        "d9fd4c95-9cb3-4fd5-b967-3027f8863210"
+    )
     assert retrieve_result["status"] == "ok"
     assert retrieve_result["memory"]["id"] == "d9fd4c95-9cb3-4fd5-b967-3027f8863210"
     assert "results" in retrieve_result
@@ -142,7 +145,9 @@ async def test_mcp_tool_handlers_accept_codex_style_payload() -> None:
 
 @pytest.mark.asyncio
 async def test_mcp_tool_handlers_invalid_inputs_return_consistent_errors() -> None:
-    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
+    agent = MVPIngestionAgent(
+        config={"providers": {"agent": "mvp"}}, runtime=_runtime()
+    )
     handlers = build_tool_handlers(agent)
 
     validate_invalid_type = await handlers["memory_validate"]("invalid")  # type: ignore[arg-type]
@@ -196,7 +201,9 @@ async def test_mcp_tool_handlers_invalid_inputs_return_consistent_errors() -> No
 
 @pytest.mark.asyncio
 async def test_mcp_tool_handlers_search_pagination_and_filters() -> None:
-    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
+    agent = MVPIngestionAgent(
+        config={"providers": {"agent": "mvp"}}, runtime=_runtime()
+    )
     handlers = build_tool_handlers(agent)
 
     await handlers["memory_insert"](_conversation())
@@ -207,7 +214,9 @@ async def test_mcp_tool_handlers_search_pagination_and_filters() -> None:
     assert len(page_one["results"]) == 1
     assert page_one["cursor"] is not None
 
-    page_two = await handlers["memory_search"]("hello", limit=1, top_k=10, cursor=page_one["cursor"])
+    page_two = await handlers["memory_search"](
+        "hello", limit=1, top_k=10, cursor=page_one["cursor"]
+    )
     assert page_two["status"] == "ok"
     assert len(page_two["results"]) == 1
     assert page_two["cursor"] is None
@@ -215,9 +224,13 @@ async def test_mcp_tool_handlers_search_pagination_and_filters() -> None:
     second_id = page_two["results"][0]["id"]
     assert first_id != second_id
 
-    filtered_source = await handlers["memory_search"]("hello", source="chatgpt", top_k=10)
+    filtered_source = await handlers["memory_search"](
+        "hello", source="chatgpt", top_k=10
+    )
     assert filtered_source["status"] == "ok"
-    assert all(row["conversation"]["source"] == "chatgpt" for row in filtered_source["results"])
+    assert all(
+        row["conversation"]["source"] == "chatgpt" for row in filtered_source["results"]
+    )
 
     filtered_date = await handlers["memory_search"](
         "hello",
@@ -226,11 +239,17 @@ async def test_mcp_tool_handlers_search_pagination_and_filters() -> None:
         top_k=10,
     )
     assert filtered_date["status"] == "ok"
-    assert all(row["conversation"]["timestamp"].startswith("2026-01-02") for row in filtered_date["results"])
+    assert all(
+        row["conversation"]["timestamp"].startswith("2026-01-02")
+        for row in filtered_date["results"]
+    )
 
     filtered_tags = await handlers["memory_search"]("hello", tags=["beta"], top_k=10)
     assert filtered_tags["status"] == "ok"
-    assert all("beta" in row["conversation"]["metadata"].get("tags", []) for row in filtered_tags["results"])
+    assert all(
+        "beta" in row["conversation"]["metadata"].get("tags", [])
+        for row in filtered_tags["results"]
+    )
 
 
 @pytest.mark.asyncio
@@ -238,7 +257,7 @@ async def test_mcp_tool_handlers_payload_compatibility_gemini_style() -> None:
     runtime = _runtime()
     agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=runtime)
     handlers = build_tool_handlers(agent)
-    
+
     # Gemini-style payload often uses 'content' instead of 'text'
     # and might include extra metadata fields
     payload = {
@@ -249,13 +268,13 @@ async def test_mcp_tool_handlers_payload_compatibility_gemini_style() -> None:
         ],
         "metadata": {
             "model": "gemini-1.5-pro",
-            "usage": {"prompt_tokens": 10, "candidates_tokens": 50}
-        }
+            "usage": {"prompt_tokens": 10, "candidates_tokens": 50},
+        },
     }
-    
+
     result = await handlers["memory_insert"](payload)
     assert result["status"] == "ok"
-    
+
     stored = runtime.metadata_store.get(result["id"])
     assert stored["messages"][0]["text"] == "Explain quantum computing"
     assert "content" not in stored["messages"][0]
@@ -267,7 +286,7 @@ async def test_mcp_tool_handlers_payload_compatibility_copilot_style() -> None:
     runtime = _runtime()
     agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=runtime)
     handlers = build_tool_handlers(agent)
-    
+
     # Copilot-style payload might use top-level 'tags' (which we normalize)
     # and deep metadata
     payload = {
@@ -277,15 +296,12 @@ async def test_mcp_tool_handlers_payload_compatibility_copilot_style() -> None:
             {"role": "user", "text": "Fix this bug"},
             {"role": "assistant", "text": "I found the issue in line 42."},
         ],
-        "metadata": {
-            "session_id": "session-123",
-            "workspace": "ai-memory-hub"
-        }
+        "metadata": {"session_id": "session-123", "workspace": "ai-memory-hub"},
     }
-    
+
     result = await handlers["memory_insert"](payload)
     assert result["status"] == "ok"
-    
+
     stored = runtime.metadata_store.get(result["id"])
     assert "vscode" in stored["metadata"]["tags"]
     assert stored["metadata"]["session_id"] == "session-123"
@@ -296,7 +312,7 @@ async def test_mcp_tool_handlers_payload_compatibility_chatgpt_style() -> None:
     runtime = _runtime()
     agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=runtime)
     handlers = build_tool_handlers(agent)
-    
+
     # ChatGPT-style might use 'conversation' as a key for the message list
     # and 'saved_at' in metadata
     payload = {
@@ -305,14 +321,12 @@ async def test_mcp_tool_handlers_payload_compatibility_chatgpt_style() -> None:
             {"role": "user", "text": "What is the capital of France?"},
             {"role": "assistant", "text": "The capital of France is Paris."},
         ],
-        "metadata": {
-            "saved_at": "2026-05-27T10:00:00Z"
-        }
+        "metadata": {"saved_at": "2026-05-27T10:00:00Z"},
     }
-    
+
     result = await handlers["memory_insert"](payload)
     assert result["status"] == "ok"
-    
+
     stored = runtime.metadata_store.get(result["id"])
     assert len(stored["messages"]) == 2
     assert stored["metadata"]["imported_at"] == "2026-05-27T10:00:00Z"

@@ -31,13 +31,6 @@ class MVPIngestionAgent(BaseIngestionAgent):
             raise
         return self.postprocess_result(result)
 
-    async def ingest_raw(self, text: str) -> Dict[str, Any]:
-        conversation_json = mvp_ingestion.parse_raw_text(text)
-        return await self.ingest_messages(conversation_json)
-
-    async def parse_raw(self, text: str) -> Dict[str, Any]:
-        return mvp_ingestion.parse_raw_text(text)
-
     async def search(self, query: str, *, top_k: int = 5) -> Dict[str, Any]:
         return mvp_ingestion.search(query=query, top_k=top_k)
 

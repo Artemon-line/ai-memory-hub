@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import jsonschema
 import pytest
 
 from memory.ingestion import mvp_ingestion
-from memory.inference.providers import LocalInferenceProvider
 from memory.ingestion import validate as ingestion_validate
 
 
@@ -18,9 +18,9 @@ class StubEmbedder:
 
 class StubMetadataStore:
     def __init__(self):
-        self.by_id: dict[str, dict[str, object]] = {}
+        self.by_id: dict[str, dict[str, Any]] = {}
 
-    def insert(self, conversation_json: dict[str, object]) -> str:
+    def insert(self, conversation_json: dict[str, Any]) -> str:
         memory_id = str(conversation_json["id"])
         self.by_id[memory_id] = conversation_json
         return memory_id
@@ -34,9 +34,9 @@ class StubMetadataStore:
 
 class StubVectorStore:
     def __init__(self):
-        self.rows: list[dict[str, object]] = []
+        self.rows: list[dict[str, Any]] = []
 
-    def insert(self, metadata_id: str, embeddings: list[dict[str, object]]) -> None:
+    def insert(self, metadata_id: str, embeddings: list[dict[str, Any]]) -> None:
         for item in embeddings:
             self.rows.append({"memory_id": metadata_id, **item})
 
@@ -54,7 +54,7 @@ class StubVectorStore:
         ]
 
 
-def _valid_conversation() -> dict[str, object]:
+def _valid_conversation() -> dict[str, Any]:
     return {
         "id": "d9fd4c95-9cb3-4fd5-b967-3027f8863210",
         "source": "manual",
@@ -74,8 +74,7 @@ def _configure_stubs() -> tuple[StubMetadataStore, StubVectorStore]:
     vectors = StubVectorStore()
     mvp_ingestion.configure_runtime(
         runtime=mvp_ingestion.RuntimeDependencies(
-            embedding_provider=StubEmbedder(), # type: ignore
-            inference_provider=LocalInferenceProvider(),
+            embedding_provider=StubEmbedder(),  # type: ignore
             metadata_store=metadata,
             vector_store=vectors,
             health_state={"mode": "ok", "vector_fallback_active": False},

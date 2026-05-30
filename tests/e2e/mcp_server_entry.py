@@ -13,8 +13,6 @@ def main():
     # and use the requested embedding model.
     config = HubConfig()
     
-    config.providers.inference = "openai"
-    config.providers.inference_model = "llama3.2"
     config.openai.base_url = "http://localhost:11434/v1"
     config.openai.api_key = "ollama" # dummy key
     

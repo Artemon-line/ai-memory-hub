@@ -1,10 +1,16 @@
 # ai-memory-hub — roadmap
 
-Structured plan for a **local-first** memory engine that unifies AI conversations into one searchable, RAG-ready knowledge hub.
+Structured plan for a **local-first** memory engine that unifies AI conversations into one searchable, 
+RAG-ready knowledge hub.
 
-**How to use this doc:** work **phases in order** or parallelize **within** a phase when tasks are independent. Each phase ends with a **milestone** you can demo or ship.
+**How to use this doc:** work **phases in order** or parallelize **within** a phase when tasks are independent. 
+Each phase ends with a **milestone** you can demo or ship.
 
-**Related docs:** [Architecture](architecture.md) · [Agent integration](agents.md) · [Storage-agnostic BYOA plan](storage_agnostic_byoa_plan.md) · [Project overview](../README.md)
+**Related docs:** 
+[Architecture](architecture.md) 
+[Agent integration](agents.md) 
+[Storage-agnostic BYOA plan](storage_agnostic_byoa_plan.md) 
+[Project overview](../README.md)
 
 ---
 
@@ -26,9 +32,11 @@ Structured plan for a **local-first** memory engine that unifies AI conversation
 
 When planning or estimating work, treat phases as **ordered capability layers**:
 
-- **Phase 1** defines the minimum **pipeline**: **ChatGPT-only** ingestion (official ZIP export) → **unified schema** → **vector + SQLite** → **HTTP** `/search`, `/conversation/{id}`, `/ask`.
-- **Phase 1** defines the minimum **pipeline**: **schema-first ingestion** (MCP/API payloads) → **unified schema** → **vector + SQLite** → **HTTP** `/memory/search`, `/memory/retrieve` + MCP `memory_*` tools/resources.
-- **Phase 2** adds **platform-specific ingestion** (Gemini Takeout, Copilot workarounds, Claude HTML, local LLM logs); **schema and storage stay stable** if normalization boundaries are respected.
+- **Phase 1** defines the minimum **pipeline**: **ChatGPT-only** ingestion (official ZIP export) → **unified schema** → **vector ** → **HTTP** `/search`, `/conversation/{id}`, `/ask`.
+- **Phase 1** defines the minimum **pipeline**: **schema-first ingestion** (MCP/API payloads) → **unified schema** → **vector ** → **HTTP** `/memory/search`, 
+`/memory/retrieve` + MCP `memory_*` tools/resources.
+- **Phase 2** adds **platform-specific ingestion** (Gemini Takeout, Copilot workarounds, Claude HTML, local LLM logs);
+**schema and storage stay stable** if normalization boundaries are respected.
 - **Phase 3** is **offline/batch intelligence** on top of stored chunks (summaries, clustering, timelines).
 - **Phase 4** is **presentation and distribution** (UI, SDKs, OpenAPI, pip).
 - **Phase 5** aligns with [agents.md](agents.md): external agent frameworks consume the same memory API/MCP backend.
@@ -66,7 +74,6 @@ When planning or estimating work, treat phases as **ordered capability layers**:
 - [x] `POST /memory/search` — semantic search
 - [x] `POST /memory/retrieve` — retrieve conversation by ID
 - [x] MCP `memory_search` and `memory_retrieve`
-- [ ] `POST /ask` — RAG endpoint (deferred until inference layer hardening)
 
 ### 1.5 CLI (optional)
 

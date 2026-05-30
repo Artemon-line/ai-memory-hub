@@ -20,7 +20,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.14"
+          python-version: '3.14'
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v4
@@ -32,7 +32,7 @@ jobs:
 
       - name: Run unit and integration tests
         env:
-          PYTHONHASHSEED: "0"
+          PYTHONHASHSEED: '0'
         run: uv run pytest tests/unit tests/integration
 
   e2e:
@@ -47,7 +47,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.14"
+          python-version: '3.14'
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v4
@@ -79,11 +79,10 @@ jobs:
       - name: Pull models
         run: |
           ollama pull nomic-embed-text
-          ollama pull llama3.2
 
       - name: Run E2E tests
         env:
-          PYTHONHASHSEED: "0"
+          PYTHONHASHSEED: '0'
         run: uv run pytest tests/e2e
 
   storage-config:
@@ -106,7 +105,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.14"
+          python-version: '3.14'
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v4
@@ -118,7 +117,7 @@ jobs:
 
       - name: Run targeted storage checks
         env:
-          PYTHONHASHSEED: "0"
+          PYTHONHASHSEED: '0'
         run: |
           if [ "${{ matrix.case }}" = "sqlite-default" ]; then
             uv run pytest -q tests/integration/test_storage_features.py -k \
@@ -162,7 +161,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.14"
+          python-version: '3.14'
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v4
@@ -176,7 +175,7 @@ jobs:
 
       - name: Run postgres storage checks
         env:
-          PYTHONHASHSEED: "0"
+          PYTHONHASHSEED: '0'
           AMH_TEST_POSTGRES_DSN: postgresql://test:test@127.0.0.1:5432/memory
         run: >
           uv run pytest -q tests/integration/test_storage_features.py -k

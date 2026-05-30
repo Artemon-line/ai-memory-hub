@@ -15,8 +15,6 @@ storage:
 # PROVIDERS (BYOS/BYOA)
 # -------------------------
 providers:
-  inference: openai # LLM provider used for schema formatting
-  inference_model: llama3.2 # Model used for parsing raw text
   embeddings: openai # Embedding provider used for chunk vectors
   embedding_model: 'nomic-embed-text'
   embedding_dimension: 768
@@ -68,4 +66,3 @@ api:
 openai:
   base_url: 'http://localhost:11434/v1' # for Ollama usage
   api_key: 'dummy_key'
-  model: 'gpt-4.1'

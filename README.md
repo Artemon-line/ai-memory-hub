@@ -25,24 +25,13 @@ ingestion, storage, search, retrieval, and ask-over-memory.
 
 ## Ingestion Flow
 
-The Hub supports two main paths:
-1. **Structured (JSON)**: `ingest_messages(conversation_json)`
-2. **Raw (Text)**: `parse_raw_text(text) -> ingest_messages`
-
-## Multi-Modal Ingestion
-
-`ai-memory-hub` supports multi-modal ingestion to handle unstructured data. 
-By configuring an `inference` provider (e.g., OpenAI or local Ollama), you can send raw text chatter directly to the hub. It will use an LLM to parse and structure the conversation into the required format automatically.
-
-- API: `POST /memory/insert_raw`
-- MCP Tool: `memory_insert_raw(text)`
-- MCP Tool (Validation): `memory_parse_raw(text)`
+The Hub supports main paths:
+**Structured (JSON)**: `ingest_messages(conversation_json)`
 
 ## Storage
 
 - Metadata: SQLite or Postgres (`providers.metadata_db`)
 - Vectors: LanceDB (`providers.vector_db: lancedb`) or in-memory
-- Inference: OpenAI-compatible LLM provider (`providers.inference`) for text parsing
 - Startup checks:
   - metadata schema version compatibility (`storage.metadata_schema_versions`)
   - embedding/vector dimensionality compatibility
@@ -60,8 +49,6 @@ Relevant config keys:
 ```yaml
 providers:
   embeddings: local   # openai | local
-  inference: openai   # openai (compatible with Ollama)
-  inference_model: llama3
   metadata_db: sqlite 
   vector_db: lancedb  
 
@@ -100,14 +87,6 @@ curl -X POST http://127.0.0.1:8000/memory/insert \
     "messages": [{"role":"user","text":"hello"}],
     "metadata": {"imported_at": "2026-01-01T00:00:00Z"}
   }'
-```
-
-Insert (Raw Text):
-
-```bash
-curl -X POST http://127.0.0.1:8000/memory/insert_raw \
-  -H "Content-Type: application/json" \
-  -d '{"text": "User: hello\nAssistant: world"}'
 ```
 
 Search:
