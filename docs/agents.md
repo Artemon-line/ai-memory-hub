@@ -82,14 +82,6 @@ Example intent:
 - Agent calls `memory_insert`
 - Hub stores and confirms
 
-## Manual Ingestion Fallback
-
-When MCP context is unavailable:
-
-1. User copies raw text
-2. LLM formats JSON schema
-3. User or agent calls `memory_insert`
-
 ## Example Agent Workflow
 
 ```text

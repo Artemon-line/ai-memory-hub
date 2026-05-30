@@ -5,146 +5,142 @@
 
 ## Goal
 
-Make `ai-memory-hub` feel native to MCP clients (including Codex) by exposing first-class MCP resources/prompts, tightening schemas, and improving discoverability and reliability.
+Make `ai-memory-hub` feel native to MCP clients (including Codex) by tightening the current MCP contract, fixing the insert ID flow, and improving discoverability and reliability without breaking existing clients.
 
 ## Scope
 
-- Keep existing tools (`memory_insert`, `memory_search`, `memory_retrieve`) working.
-- Add MCP resources and resource templates for memory browsing/reading.
-- Add MCP prompts for common user flows.
-- Improve tool I/O schemas and structured outputs.
-- Add MCP protocol compliance and regression tests.
+- Keep the current MCP tool set working:
+  - `memory_validate`
+  - `memory_insert`
+  - `memory_search`
+  - `memory_retrieve`
+  - `memory_ask`
+- Keep current resources and prompts working:
+  - `memory://conversation/example`
+  - `memory://conversation/{id}`
+  - `memory://search/{query}`
+  - `memory://timeline/{day}`
+  - `save_conversation`
+  - `search_memory`
+  - `ask_memory`
+  - `summarize_conversation`
+- Tighten tool I/O schemas and structured outputs.
+- Fix the insert ID contract so Codex can omit `memory_id` when the backend generates IDs.
+- Add protocol and regression coverage for the current MCP surface.
 
 ## Non-Goals
 
-- Replacing current FastAPI REST endpoints.
-- Breaking changes to existing external REST consumers.
+- Replacing the existing FastAPI REST endpoints.
+- Removing current MCP tools or changing their names.
+- Introducing a new UI or new ingestion source in this doc.
 
 ## Workstreams
 
-### 1) Resource Model
+### 1) Insert ID Contract
 
-- Define URI scheme:
-  - `memory://conversation/{id}`
-  - `memory://search/{query}?top_k=...&source=...`
-  - `memory://timeline/{yyyy-mm-dd}`
-- Implement `resources/list` with pagination and basic filters.
-- Implement `resources/read` for conversation and search URIs.
-- Add stable metadata fields (`id`, `source`, `timestamp`, `tags`, `updated_at`).
+_Status: implemented_
 
-Acceptance criteria:
-- Client can list and read at least one conversation resource.
-- Resource payloads are stable and machine-readable.
+- Make the insert path tolerant of omitted `id`/`memory_id` when the backend is allowed to assign the identifier.
+- Preserve UUID validation when an ID is provided explicitly.
+- Make the returned inserted ID the canonical ID used by metadata and vector storage.
+- Update prompt text and docs so Codex does not fabricate an ID.
 
-### 2) Resource Templates
-
-- Add templates for common patterns:
-  - Conversation by ID
-  - Search by query/top_k
-  - Date/source filtered search
-- Include clear parameter schema and examples.
+Current code to align with:
+- `memory.ingestion.mvp_ingestion.normalize_conversation_json()` already assigns a UUID when `id` is absent.
+- `memory.backend.metadata_store.SQLiteMetadataStore` and `PostgresMetadataStore` still require valid UUIDs on write.
+- MCP `memory_insert` currently normalizes then validates before insert.
 
 Acceptance criteria:
-- `list_mcp_resource_templates` returns non-empty templates.
-- Template expansion works for valid parameters and returns predictable errors for invalid inputs.
+- Codex can call `memory_insert` without supplying an ID and still succeed.
+- Explicit non-UUID IDs still fail fast with a clear validation error.
+- Retrieval/search continue to return the same canonical ID that was stored.
 
-### 3) Prompt Catalog
+### 2) MCP Tool Contract
 
-- Add MCP prompts:
-  - `save_conversation`
-  - `search_memory`
-  - `summarize_conversation`
-- Each prompt should produce deterministic tool-call-oriented content.
-
-Acceptance criteria:
-- `prompts/list` advertises prompt names and argument schemas.
-- Each prompt can be invoked with minimal required args.
-
-### 4) Tool Contract Hardening
+_Status: implemented_
 
 - Keep existing tool names for compatibility.
-- Tighten input schemas:
-  - explicit required fields
-  - enums/defaults where appropriate
-  - validation error codes/messages
-- Standardize output envelope in `structuredContent`:
+- Keep the current structured envelope:
   - `status`, `id`, `results`, `cursor`, `error_code`, `error_message`
-
-Acceptance criteria:
-- Tool responses always include valid `structuredContent`.
-- Invalid inputs return consistent error shape.
-
-### 5) Search Ergonomics
-
-- Extend `memory_search` args:
+- Keep `memory_validate` as the preflight path for malformed conversations.
+- Keep `memory_search` pagination/filtering semantics:
   - `limit`, `cursor`, `source`, `date_from`, `date_to`, `tags`
-- Add deterministic sort semantics and cursor pagination.
 
 Acceptance criteria:
-- Repeated paginated calls return complete, non-overlapping result sets.
-- Filters behave consistently and are covered by tests.
+- Tool responses preserve the envelope shape already used in tests.
+- Validation and runtime errors remain machine-readable and consistent.
 
-### 6) Protocol and Transport Reliability
+### 3) Resources and Prompts
 
-- Preserve strict MCP JSON-RPC behavior.
-- Document required headers and session handling for streamable HTTP:
+_Status: implemented_
+
+- Keep the current resource set and prompt set stable.
+- Verify prompt content still guides MCP clients through `memory_validate` before `memory_insert`.
+- Keep search and timeline resources returning predictable metadata and filtered result sets.
+
+Acceptance criteria:
+- `resources/list`, `resources/read`, `prompts/list`, and prompt invocation continue to work as implemented.
+- Prompt text does not regress into direct REST or config-file workflows.
+
+### 4) Protocol Reliability
+
+_Status: implemented_
+
+- Preserve strict MCP JSON-RPC behavior on the streamable HTTP endpoint.
+- Keep required headers and session handling documented:
   - `Accept: application/json, text/event-stream`
   - `Mcp-Session-Id` after `initialize`
-- Improve server-side error text for common misuses (missing headers, invalid method, session not found).
+- Keep transport error handling actionable for invalid envelopes and session misuse.
 
 Acceptance criteria:
-- Misformatted requests return actionable errors.
-- Session lifecycle is stable across initialize/list/call/read flows.
+- Initialize, tools, resources, and prompts work end-to-end over the MCP transport.
+- Common protocol errors remain deterministic and test-covered.
 
-### 7) Test and Verification
+### 5) Test and Verification
 
-- Add MCP E2E tests covering:
-  - `initialize`
-  - `tools/list`
-  - `tools/call` (`memory_insert/search/retrieve`)
-  - `resources/list`
-  - `resources/read`
-  - `prompts/list` and prompt invocation
-- Add negative tests:
-  - missing Accept header
-  - invalid JSON-RPC envelope
-  - invalid session id
-  - schema validation failures
+_Status: implemented_
+
+- Extend existing tests around the insert-ID flow first.
+- Keep MCP tool/resource/prompt tests aligned with the actual server surface.
+- Add regression coverage for:
+  - omitted ID on insert
+  - explicit invalid UUID
+  - insert result ID round-tripping through retrieve/search
 
 Acceptance criteria:
-- CI runs MCP test suite with deterministic pass/fail.
-- Regressions in protocol compatibility are caught before merge.
+- CI covers the UUID-less insert path as the primary regression target.
+- The docs and tests agree with the implementation.
 
 ## Suggested File-Level Changes
 
 - `memory/interfaces/mcp_server.py`
-  - add resources/templates/prompts registration
-  - centralize schema/response helpers
-- `memory/api/server.py`
-  - optional improvements for MCP endpoint diagnostics/logging
-- `tests/test_mcp_tools.py`
-  - keep backward compatibility checks
-- `tests/test_mcp_protocol.py` (new)
-  - JSON-RPC/session/headers/protocol behavior
-- `tests/test_mcp_resources.py` (new)
-  - list/read/template coverage
-- `tests/test_mcp_prompts.py` (new)
-  - prompt listing and invocation
+  - keep tool envelopes and update prompt text for UUID-less inserts
+  - align resource/prompt docs with current behavior
+- `memory/ingestion/mvp_ingestion.py`
+  - make insert ID generation and normalization explicit in code paths
+- `memory/backend/metadata_store.py`
+  - clarify UUID validation boundaries and error messages
+- `memory/backend/postgres_metadata_store.py`
+  - keep behavior consistent with SQLite metadata storage
+- `tests/unit/test_mcp_tools.py`
+  - add omitted-ID and explicit-invalid-ID coverage
+- `tests/integration/test_storage_features.py`
+  - keep UUID validation coverage for storage adapters
 - `README.md`
-  - add MCP-native usage section (JSON-RPC examples + resource/template/prompt discovery)
+  - document that Codex should omit the ID by default when backend-generated IDs are enabled
 
 ## Delivery Plan (Phased)
 
-1. Phase 1: Contract hardening + test baseline (Implemented on May 17, 2026)
-2. Phase 2: Resources + templates (Implemented on May 17, 2026)
-3. Phase 3: Prompts + search pagination/filtering (Implemented on May 17, 2026)
-4. Phase 4: Docs polish + CI reliability gates (Implemented on May 17, 2026)
+1. Phase 1: Fix insert ID contract and add regression coverage
+2. Phase 2: Align docs and prompt text with the implemented MCP surface
+3. Phase 3: Tighten protocol/docs where tests reveal drift
+4. Phase 4: Only add new MCP resources/prompts if the current surface needs them
 
 ## Rollout/Risk Controls
 
 - Keep current tool names and payload compatibility.
-- Use additive changes first; defer removals/deprecations.
-- Gate non-trivial behavior with targeted tests before release.
-- Add changelog notes for client-facing MCP contract updates.
+- Prefer additive changes and doc updates over breaking schema changes.
+- Gate insert-ID changes with targeted tests before release.
+- Treat Codex insert behavior as the highest-priority regression surface.
 
 </details>

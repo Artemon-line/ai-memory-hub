@@ -9,15 +9,12 @@ ingestion, storage, search, retrieval, and ask-over-memory.
 
 - FastAPI endpoints:
   - `POST /memory/insert`
-  - `POST /memory/insert_raw`
   - `POST /memory/search`
   - `POST /memory/retrieve`
   - `POST /memory/ask`
 - FastMCP HTTP bridge (mounted at `/mcp` when enabled)
 - FastMCP tools:
   - `memory_insert`
-  - `memory_insert_raw`
-  - `memory_parse_raw`
   - `memory_search`
   - `memory_retrieve`
   - `memory_ask`
@@ -180,7 +177,7 @@ curl -X POST http://127.0.0.1:8000/mcp/ \
   }'
 ```
 
-Minimal valid insert payload:
+Minimal valid insert payload when the backend requires the caller to supply the ID:
 
 ```json
 {
@@ -196,6 +193,8 @@ Minimal valid insert payload:
   }
 }
 ```
+
+If backend-generated IDs are enabled, omit `id` entirely and let the server assign the canonical UUID.
 
 ## MCP Resources and Templates
 

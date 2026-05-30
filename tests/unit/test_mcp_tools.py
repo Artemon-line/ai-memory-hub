@@ -144,6 +144,44 @@ async def test_mcp_tool_handlers_accept_codex_style_payload() -> None:
 
 
 @pytest.mark.asyncio
+async def test_mcp_tool_handlers_generate_id_when_missing() -> None:
+    runtime = _runtime()
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=runtime)
+    handlers = build_tool_handlers(agent)
+    payload = {
+        "source": "codex-cli",
+        "messages": [{"role": "user", "text": "auto id test"}],
+        "metadata": {"imported_at": "2026-05-22T00:00:00Z"},
+    }
+
+    insert_result = await handlers["memory_insert"](payload)
+
+    assert insert_result["status"] == "ok"
+    memory_id = insert_result["id"]
+    assert isinstance(memory_id, str)
+    assert memory_id == runtime.metadata_store.get(memory_id)["id"]
+
+
+@pytest.mark.asyncio
+async def test_mcp_tool_handlers_reject_invalid_explicit_id() -> None:
+    runtime = _runtime()
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=runtime)
+    handlers = build_tool_handlers(agent)
+    payload = {
+        "id": "not-a-uuid",
+        "source": "codex-cli",
+        "messages": [{"role": "user", "text": "bad id test"}],
+        "metadata": {"imported_at": "2026-05-22T00:00:00Z"},
+    }
+
+    insert_result = await handlers["memory_insert"](payload)
+
+    assert insert_result["status"] == "error"
+    assert insert_result["error_code"] == "invalid_input"
+    assert "id must be a valid UUID" in insert_result["error_message"]
+
+
+@pytest.mark.asyncio
 async def test_mcp_tool_handlers_invalid_inputs_return_consistent_errors() -> None:
     agent = MVPIngestionAgent(
         config={"providers": {"agent": "mvp"}}, runtime=_runtime()
@@ -250,6 +288,13 @@ async def test_mcp_tool_handlers_search_pagination_and_filters() -> None:
         "beta" in row["conversation"]["metadata"].get("tags", [])
         for row in filtered_tags["results"]
     )
+
+    invalid_cursor = await handlers["memory_search"](
+        "hello", cursor="not-a-number", limit=1, top_k=10
+    )
+    assert invalid_cursor["status"] == "error"
+    assert invalid_cursor["error_code"] == "invalid_input"
+    assert "cursor" in invalid_cursor["error_message"]
 
 
 @pytest.mark.asyncio

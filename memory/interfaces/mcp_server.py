@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from urllib.parse import unquote
 from typing import Any, Awaitable, Callable
+from uuid import UUID
 
 import jsonschema
 from memory.config import HubConfig
@@ -86,6 +87,19 @@ def _coerce_tags(tags: Any) -> list[str]:
     if isinstance(tags, list) and all(isinstance(tag, str) for tag in tags):
         return tags
     raise ValueError("tags must be a list of strings")
+
+
+def _validate_optional_uuid(value: Any, *, field_name: str = "id") -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        UUID(text)
+    except (ValueError, TypeError) as exc:
+        raise ValueError(f"{field_name} must be a valid UUID") from exc
+    return text
 
 
 def _apply_search_filters(
@@ -276,8 +290,9 @@ def _register_prompts(mcp: Any) -> None:
             "Filter out: MCP/tool instructions, operational planning text, raw JSON tool outputs, and command-like test prompts.\n"
             "If needed, summarize excluded operational content in `metadata.notes` instead of `messages`.\n"
             "Construct `conversation_json` to conform to `memory/schema/conversation.schema.json`.\n"
+            "Default behavior: omit `id` unless the backend requires a caller-supplied identifier; when IDs are backend-generated, let the server assign the canonical UUID.\n"
             "If validation fails, fix payload first and re-validate before insert; do not call insert with invalid payload.\n"
-            'Required shape: {"id":"...","source":"...","timestamp":"...","messages":[{"role":"user","text":"..."}],"metadata":{"imported_at":"..."}}.\n'
+            'Required shape when caller-supplied IDs are required: {"id":"...","source":"...","timestamp":"...","messages":[{"role":"user","text":"..."}],"metadata":{"imported_at":"..."}}.\n'
             "Example: if the user asked about Europe and the assistant answered, those turns must be in `messages`.\n"
             "After insert succeeds, call `memory_retrieve` with the inserted id and confirm it was stored."
         )
@@ -317,6 +332,15 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 error_message="conversation_json must be an object",
                 valid=False,
             )
+        try:
+            _validate_optional_uuid(conversation_json.get("id"))
+        except ValueError as exc:
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message=str(exc),
+                valid=False,
+            )
         normalized = normalize_conversation_json(conversation_json, source="mcp")
         try:
             validate_conversation(normalized)
@@ -335,6 +359,14 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 status="error",
                 error_code="invalid_input",
                 error_message="conversation_json must be an object",
+            )
+        try:
+            _validate_optional_uuid(conversation_json.get("id"))
+        except ValueError as exc:
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message=str(exc),
             )
         normalized = normalize_conversation_json(conversation_json, source="mcp")
         try:
@@ -399,7 +431,16 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 tags=tags,
             )
             sorted_rows = _deterministic_sort(filtered)
-            paged_rows, next_cursor = _paginate(sorted_rows, limit=limit, cursor=cursor)
+            try:
+                paged_rows, next_cursor = _paginate(
+                    sorted_rows, limit=limit, cursor=cursor
+                )
+            except ValueError as exc:
+                return _envelope(
+                    status="error",
+                    error_code="invalid_input",
+                    error_message=str(exc),
+                )
             result["results"] = paged_rows
             result["cursor"] = next_cursor
         except Exception as exc:
