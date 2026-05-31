@@ -123,6 +123,44 @@ def test_search_and_retrieve() -> None:
     assert retrieved["id"] == "d9fd4c95-9cb3-4fd5-b967-3027f8863210"
 
 
+def test_group_conversation_results_keeps_nearby_chunks_together() -> None:
+    rows = [
+        {"id": "conversation-a", "score": 0.01, "chunk_index": 0, "text": "a0"},
+        {"id": "conversation-b", "score": 0.05, "chunk_index": 0, "text": "b0"},
+        {"id": "conversation-a", "score": 0.20, "chunk_index": 1, "text": "a1"},
+    ]
+
+    grouped = mvp_ingestion.group_conversation_results(rows)
+
+    assert [row["id"] for row in grouped] == [
+        "conversation-a",
+        "conversation-a",
+        "conversation-b",
+    ]
+    assert grouped[0]["conversation_score"] == 0.01
+    assert grouped[1]["conversation_score"] == 0.01
+    assert grouped[0]["conversation_match_count"] == 2
+    assert grouped[1]["conversation_match_count"] == 2
+
+
+def test_group_conversation_results_keeps_distant_chunks_in_score_order() -> None:
+    rows = [
+        {"id": "conversation-a", "score": 0.01, "chunk_index": 0, "text": "a0"},
+        {"id": "conversation-b", "score": 0.05, "chunk_index": 0, "text": "b0"},
+        {"id": "conversation-a", "score": 0.50, "chunk_index": 1, "text": "a1"},
+    ]
+
+    grouped = mvp_ingestion.group_conversation_results(rows)
+
+    assert [row["id"] for row in grouped] == [
+        "conversation-a",
+        "conversation-b",
+        "conversation-a",
+    ]
+    assert grouped[2]["conversation_score"] == 0.01
+    assert grouped[2]["conversation_match_count"] == 2
+
+
 def test_ingest_messages_enriches_topics() -> None:
     metadata, _ = _configure_stubs()
     conversation = _valid_conversation()

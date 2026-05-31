@@ -80,6 +80,8 @@ class RuntimeDependencies:
 
 _RUNTIME: RuntimeDependencies | None = None
 _ASK_MAX_SCORE = 7.5
+_SEARCH_CANDIDATE_MULTIPLIER = 3
+_CONVERSATION_GROUP_SCORE_WINDOW = 0.25
 _TOPIC_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("python", re.compile(r"\bpython\b", re.IGNORECASE)),
     (
@@ -115,7 +117,11 @@ def build_runtime(
         parse_config(config) if isinstance(config, dict) else (config or load_config())
     )
     set_schema_path(cfg.schema_config.file)
-    validate_schema_compatibility(load_schema())
+    try:
+        validate_schema_compatibility(load_schema())
+    except Exception:
+        set_schema_path(None)
+        raise
     data_dir = Path(cfg.paths.data_dir)
     if cfg.providers.metadata_db == "postgres":
         metadata_store = PostgresMetadataStore(cfg.providers.metadata_dsn)
@@ -364,7 +370,8 @@ def ingest_messages(conversation_json: dict[str, Any]) -> dict[str, Any]:
 def search(query: str, top_k: int = 5) -> dict[str, Any]:
     runtime = _runtime()
     query_vector = runtime.embedding_provider.embed_texts([query])[0]
-    matches = runtime.vector_store.search(query_vector, top_k=top_k)
+    candidate_k = max(top_k, min(top_k * _SEARCH_CANDIDATE_MULTIPLIER, 100))
+    matches = runtime.vector_store.search(query_vector, top_k=candidate_k)
 
     ids = [str(match["memory_id"]) for match in matches]
     conversations = runtime.metadata_store.get_many(ids)
@@ -383,7 +390,49 @@ def search(query: str, top_k: int = 5) -> dict[str, Any]:
             }
         )
 
-    return {"status": "ok", "results": results}
+    return {"status": "ok", "results": group_conversation_results(results)[:top_k]}
+
+
+def group_conversation_results(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    group_scores: dict[str, float] = {}
+    group_counts: dict[str, int] = {}
+    for row in rows:
+        memory_id = str(row.get("id", ""))
+        if not memory_id:
+            continue
+        score = float(row.get("score", 0.0))
+        group_scores[memory_id] = min(score, group_scores.get(memory_id, score))
+        group_counts[memory_id] = group_counts.get(memory_id, 0) + 1
+
+    enriched: list[dict[str, Any]] = []
+    for index, row in enumerate(rows):
+        memory_id = str(row.get("id", ""))
+        row_score = float(row.get("score", 0.0))
+        conversation_score = group_scores.get(memory_id, row_score)
+        grouped_score = row_score
+        if row_score - conversation_score <= _CONVERSATION_GROUP_SCORE_WINDOW:
+            grouped_score = conversation_score
+        enriched_row = dict(row)
+        enriched_row["conversation_score"] = conversation_score
+        enriched_row["conversation_match_count"] = group_counts.get(memory_id, 1)
+        enriched_row["_original_rank"] = index
+        enriched_row["_grouped_score"] = grouped_score
+        enriched.append(enriched_row)
+
+    grouped = sorted(
+        enriched,
+        key=lambda row: (
+            float(row["_grouped_score"]),
+            str(row.get("id", "")),
+            float(row.get("score", 0.0)),
+            int(row.get("chunk_index", 0)),
+            int(row["_original_rank"]),
+        ),
+    )
+    for row in grouped:
+        row.pop("_grouped_score", None)
+        row.pop("_original_rank", None)
+    return grouped
 
 
 def retrieve(memory_id: str) -> dict[str, Any] | None:

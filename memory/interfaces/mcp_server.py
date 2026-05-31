@@ -145,8 +145,9 @@ def _deterministic_sort(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted(
         rows,
         key=lambda row: (
-            float(row.get("score", 0.0)),
+            float(row.get("conversation_score", row.get("score", 0.0))),
             str(row.get("id", "")),
+            float(row.get("score", 0.0)),
             int(row.get("chunk_index", 0)),
             str(row.get("text", "")),
         ),

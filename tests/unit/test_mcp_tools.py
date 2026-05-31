@@ -4,7 +4,7 @@ import pytest
 
 from memory.ingestion import mvp_ingestion
 from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
-from memory.interfaces.mcp_server import build_tool_handlers
+from memory.interfaces.mcp_server import _deterministic_sort, build_tool_handlers
 
 
 class StubEmbedder:
@@ -77,6 +77,34 @@ def _conversation_two() -> dict[str, object]:
         "messages": [{"role": "user", "text": "hello again"}],
         "metadata": {"imported_at": "2026-01-02T00:00:00Z", "tags": ["beta"]},
     }
+
+
+def test_mcp_search_sort_preserves_conversation_group_score() -> None:
+    rows = [
+        {"id": "conversation-a", "score": 0.01, "chunk_index": 0, "text": "a0"},
+        {
+            "id": "conversation-b",
+            "score": 0.05,
+            "chunk_index": 0,
+            "text": "b0",
+            "conversation_score": 0.05,
+        },
+        {
+            "id": "conversation-a",
+            "score": 0.20,
+            "chunk_index": 1,
+            "text": "a1",
+            "conversation_score": 0.01,
+        },
+    ]
+
+    sorted_rows = _deterministic_sort(rows)
+
+    assert [row["id"] for row in sorted_rows] == [
+        "conversation-a",
+        "conversation-a",
+        "conversation-b",
+    ]
 
 
 @pytest.mark.asyncio

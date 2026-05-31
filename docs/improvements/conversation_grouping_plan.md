@@ -2,6 +2,8 @@
 
 Source date: `28-05-2026`
 
+Status: implemented
+
 ## Goal
 
 Improve how related chunks from the same conversation are surfaced so grouped context is easier to consume.

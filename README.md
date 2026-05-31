@@ -110,6 +110,31 @@ curl -X POST http://127.0.0.1:8000/memory/ask \
   -d '{"question":"what did we store about MCP?","top_k":5}'
 ```
 
+### Search and Ask Result Shape
+
+`/memory/search` returns ranked chunk matches in `results`.
+
+Each result includes:
+
+- `id`: canonical conversation ID
+- `score`: vector distance, where lower is better
+- `chunk_index`, `role`, and `text`: the matched chunk
+- `conversation`: the stored conversation payload
+- `conversation_score`: best score for the conversation among retrieved candidates
+- `conversation_match_count`: number of retrieved candidate chunks from that conversation
+
+Search applies conservative conversation grouping before trimming to `top_k`, so closely
+matched chunks from the same conversation are surfaced together without suppressing
+strong unrelated matches.
+
+`/memory/ask` returns the same structured matches in `results`, plus:
+
+- `answer`: human-readable answer built from the selected matches
+- `citations`: compact provenance for the chunks used by the answer
+
+This means clients can consume `memory_ask` either as a direct answer (`answer`) or as
+structured retrieval output (`results`) with provenance (`citations`).
+
 MCP streamable HTTP endpoint:
 
 `http://127.0.0.1:8000/mcp/`
@@ -150,6 +175,11 @@ curl -X POST http://127.0.0.1:8000/mcp/ \
 - `memory_search(query, top_k=5, limit, cursor, source, date_from, date_to, tags)`
 - `memory_retrieve(id)`
 - `memory_ask(question, top_k=5)`
+
+`memory_search` and `memory_ask` expose conversation-aware ranking metadata in each
+result: `conversation_score` and `conversation_match_count`. `memory_ask` also returns
+the useful matches in `results`, not only in `citations`, so MCP clients can reliably
+inspect structured hits while still using `answer` for human-facing output.
 
 Example `tools/call`:
 
