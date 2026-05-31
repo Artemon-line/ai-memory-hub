@@ -117,4 +117,9 @@ def test_memory_ask() -> None:
     body = ask.json()
     assert body["status"] == "ok"
     assert "answer" in body
+    assert len(body["results"]) == 1
+    assert body["results"][0]["id"] == payload["id"]
+    assert body["results"][0]["text"] == "hello"
     assert isinstance(body["citations"], list)
+    assert body["citations"][0]["id"] == body["results"][0]["id"]
+    assert body["citations"][0]["text"] == body["results"][0]["text"]

@@ -1,16 +1,15 @@
-28-05-2026
-🔧 1. Add a similarity threshold
-So irrelevant matches (like “great skill to have”) don’t appear.
+# Improvement Plans
 
-🔧 2. Add hybrid search (keyword + vector)
-Improves precision dramatically.
+Source date: `28-05-2026`
 
-🔧 3. Add metadata‑aware reranking
-So “GPU” queries prefer GPU‑tagged memories.
+## Plan Index
 
-🔧 4. Add token‑budgeted context building
-So memory_ask returns a clean, concise answer.
+1. [Top Priority: Improve MCP Result Shape for `memory_ask`](./improvements/top_priority_mcp_result_shape.md)
+2. [Retrieval Precision Plan](./improvements/retrieval_precision_plan.md)
+3. [Context Building Plan](./improvements/context_building_plan.md)
+4. [Conversation Grouping Plan](./improvements/conversation_grouping_plan.md)
 
-🔧 5. Add conversation‑level scoring
-So chunks from the same conversation are grouped.
+## Notes
 
+- Items 2, 3, and 4 are separated by implementation area, but some phases are intentionally shared where they touch the same retrieval pipeline.
+- Each plan includes phases and acceptance criteria so they can be tracked independently.

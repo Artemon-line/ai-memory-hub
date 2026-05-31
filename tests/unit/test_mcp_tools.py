@@ -109,7 +109,12 @@ async def test_mcp_tool_handlers_insert_search_retrieve() -> None:
     ask_result = await handlers["memory_ask"]("what was stored?", 3)
     assert ask_result["status"] == "ok"
     assert "answer" in ask_result
+    assert len(ask_result["results"]) == 1
+    assert ask_result["results"][0]["id"] == "d9fd4c95-9cb3-4fd5-b967-3027f8863210"
+    assert ask_result["results"][0]["text"] == "hello mcp"
     assert isinstance(ask_result["citations"], list)
+    assert ask_result["citations"][0]["id"] == ask_result["results"][0]["id"]
+    assert ask_result["citations"][0]["text"] == ask_result["results"][0]["text"]
 
 
 @pytest.mark.asyncio

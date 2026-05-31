@@ -397,6 +397,7 @@ def ask(question: str, top_k: int = 5) -> dict[str, Any]:
     if not matches:
         return {
             "status": "ok",
+            "results": [],
             "answer": "I could not find relevant memory for that question.",
             "citations": [],
         }
@@ -418,6 +419,7 @@ def ask(question: str, top_k: int = 5) -> dict[str, Any]:
     answer = "Based on stored memory:\n" + "\n".join(context_lines[:top_k])
     return {
         "status": "ok",
+        "results": matches[:top_k],
         "answer": answer,
         "citations": citations[:top_k],
     }
