@@ -6,6 +6,7 @@ import jsonschema
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
+from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig, normalize_config
 from memory.ingestion.base_agent import BaseIngestionAgent
 from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
@@ -29,7 +30,7 @@ class AskRequest(BaseModel):
 def _register_api_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
     async def memory_insert(conversation_json: dict[str, Any]) -> dict[str, Any]:
         try:
-            return await agent.ingest_messages(conversation_json)
+            return redact_content_hashes(await agent.ingest_messages(conversation_json))
         except jsonschema.ValidationError as exc:
             raise HTTPException(status_code=400, detail=exc.message) from exc
         except ValueError as exc:
@@ -38,7 +39,7 @@ def _register_api_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
     app.post("/memory/insert")(memory_insert)
 
     async def memory_search(request: SearchRequest) -> dict[str, Any]:
-        return await agent.search(request.query, top_k=request.top_k)
+        return redact_content_hashes(await agent.search(request.query, top_k=request.top_k))
 
     app.post("/memory/search")(memory_search)
 
@@ -46,12 +47,14 @@ def _register_api_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
         conversation = await agent.retrieve(request.id)
         if conversation is None:
             raise HTTPException(status_code=404, detail="memory not found")
-        return {"status": "ok", "memory": conversation}
+        return {"status": "ok", "memory": redact_content_hashes(conversation)}
 
     app.post("/memory/retrieve")(memory_retrieve)
 
     async def memory_ask(request: AskRequest) -> dict[str, Any]:
-        return await agent.ask(request.question, top_k=request.top_k)
+        return redact_content_hashes(
+            await agent.ask(request.question, top_k=request.top_k)
+        )
 
     app.post("/memory/ask")(memory_ask)
 

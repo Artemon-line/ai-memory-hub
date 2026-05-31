@@ -6,6 +6,7 @@ It exposes interfaces for ingestion and retrieval, while letting you bring your 
 Related docs:
  - Project overview: `../README.md`
  - Agent integration: `agents.md`
+ - Deterministic ingestion plan: `deterministic_ingestion_plan.md`
 
 ## High-Level System Diagram
 

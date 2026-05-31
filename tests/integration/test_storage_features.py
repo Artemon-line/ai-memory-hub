@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 import sys
 import types
 from pathlib import Path
@@ -235,6 +236,41 @@ def test_metadata_store_get_many_caps_batch_size(tmp_path: Path) -> None:
     ids = [f"00000000-0000-0000-0000-{i:012d}" for i in range(501)]
     with pytest.raises(ValueError, match="Too many ids requested"):
         store.get_many(ids)
+
+
+def test_sqlite_insert_does_not_replace_on_conversation_hash_conflict(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteMetadataStore(tmp_path / "metadata.sqlite3")
+    first = {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "source": "manual",
+        "timestamp": "2026-01-01T00:00:00Z",
+        "messages": [{"role": "user", "text": "first", "hash": "sha256:" + ("1" * 64)}],
+        "metadata": {
+            "imported_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-01T00:00:00Z",
+            "conversation_hash": "sha256:" + ("a" * 64),
+        },
+    }
+    second = {
+        "id": "22222222-2222-4222-8222-222222222222",
+        "source": "manual",
+        "timestamp": "2026-01-02T00:00:00Z",
+        "messages": [{"role": "user", "text": "second", "hash": "sha256:" + ("2" * 64)}],
+        "metadata": {
+            "imported_at": "2026-01-02T00:00:00Z",
+            "updated_at": "2026-01-02T00:00:00Z",
+            "conversation_hash": "sha256:" + ("a" * 64),
+        },
+    }
+
+    store.insert(first)
+    with pytest.raises(sqlite3.IntegrityError):
+        store.insert(second)
+
+    assert store.get(first["id"]) == first
+    assert store.get(second["id"]) is None
 
 
 def test_runtime_health_reports_degraded_on_fallback(

@@ -105,6 +105,8 @@ def test_memory_search_and_retrieve() -> None:
     retrieve = client.post("/memory/retrieve", json={"id": payload["id"]})
     assert retrieve.status_code == 200
     assert retrieve.json()["memory"]["id"] == payload["id"]
+    assert "hash" not in retrieve.json()["memory"]["messages"][0]
+    assert "conversation_hash" not in retrieve.json()["memory"]["metadata"]
 
 
 def test_memory_ask() -> None:
@@ -120,6 +122,7 @@ def test_memory_ask() -> None:
     assert len(body["results"]) == 1
     assert body["results"][0]["id"] == payload["id"]
     assert body["results"][0]["text"] == "hello"
+    assert "hash" not in body["results"][0]["conversation"]["messages"][0]
     assert isinstance(body["citations"], list)
     assert body["citations"][0]["id"] == body["results"][0]["id"]
     assert body["citations"][0]["text"] == body["results"][0]["text"]

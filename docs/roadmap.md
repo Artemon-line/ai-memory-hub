@@ -9,6 +9,7 @@ Each phase ends with a **milestone** you can demo or ship.
 **Related docs:** 
 [Architecture](architecture.md) 
 [Agent integration](agents.md) 
+[Deterministic ingestion plan](deterministic_ingestion_plan.md) 
 [Storage-agnostic BYOA plan](storage_agnostic_byoa_plan.md) 
 [Project overview](../README.md)
 

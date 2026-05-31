@@ -16,6 +16,10 @@ class SQLiteMetadataStore:
     _MAX_SOURCE_LEN = 128
     _MAX_TIMESTAMP_LEN = 128
     _MAX_TITLE_LEN = 1024
+    _MIGRATION_COLUMNS = {
+        ("conversations", "conversation_hash"): "TEXT",
+        ("conversations", "upstream_thread_id"): "TEXT",
+    }
 
     def __init__(self, db_path: str | Path):
         self.db_path = Path(db_path)
@@ -36,11 +40,66 @@ class SQLiteMetadataStore:
                     source TEXT NOT NULL,
                     timestamp TEXT NOT NULL,
                     title TEXT,
+                    conversation_hash TEXT,
+                    upstream_thread_id TEXT,
                     payload TEXT NOT NULL,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP
                 )
                 """
             )
+            self._ensure_column(conn, "conversations", "conversation_hash", "TEXT")
+            self._ensure_column(conn, "conversations", "upstream_thread_id", "TEXT")
+            conn.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_conversations_conversation_hash
+                ON conversations(conversation_hash)
+                WHERE conversation_hash IS NOT NULL
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_conversations_upstream_thread
+                ON conversations(source, upstream_thread_id)
+                WHERE upstream_thread_id IS NOT NULL
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS messages (
+                    conversation_id TEXT NOT NULL,
+                    message_index INTEGER NOT NULL,
+                    role TEXT NOT NULL,
+                    text TEXT NOT NULL,
+                    message_hash TEXT NOT NULL,
+                    PRIMARY KEY (conversation_id, message_index),
+                    UNIQUE (conversation_id, message_hash)
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS chunks (
+                    chunk_id TEXT PRIMARY KEY,
+                    conversation_id TEXT NOT NULL,
+                    chunk_index INTEGER NOT NULL,
+                    message_hash TEXT NOT NULL,
+                    role TEXT NOT NULL,
+                    text TEXT NOT NULL,
+                    index_state TEXT NOT NULL CHECK(index_state IN ('pending_index', 'indexed', 'indexing_failed')),
+                    UNIQUE (conversation_id, chunk_index)
+                )
+                """
+            )
+
+    def _ensure_column(
+        self, conn: sqlite3.Connection, table: str, column: str, declaration: str
+    ) -> None:
+        expected = self._MIGRATION_COLUMNS.get((table, column))
+        if expected != declaration:
+            raise ValueError("unsupported schema migration column")
+        rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+        if column not in {str(row["name"]) for row in rows}:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {declaration}")
 
     def insert(self, conversation_json: dict[str, Any]) -> str:
         memory_id = self._validate_memory_id(conversation_json["id"])
@@ -48,22 +107,124 @@ class SQLiteMetadataStore:
         timestamp = str(conversation_json.get("timestamp", ""))
         title = conversation_json.get("title")
         self._validate_field_lengths(source=source, timestamp=timestamp, title=title)
+        conversation_hash = self._conversation_hash(conversation_json)
+        upstream_thread_id = self._upstream_thread_id(conversation_json)
         payload = json.dumps(conversation_json, separators=(",", ":"), ensure_ascii=False)
         with self._connect() as conn:
             conn.execute(
                 """
-                INSERT OR REPLACE INTO conversations (id, source, timestamp, title, payload)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO conversations (id, source, timestamp, title, conversation_hash, upstream_thread_id, payload)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    source = excluded.source,
+                    timestamp = excluded.timestamp,
+                    title = excluded.title,
+                    conversation_hash = excluded.conversation_hash,
+                    upstream_thread_id = excluded.upstream_thread_id,
+                    payload = excluded.payload
                 """,
                 (
                     memory_id,
                     source,
                     timestamp,
                     title,
+                    conversation_hash,
+                    upstream_thread_id,
                     payload,
                 ),
             )
+            self._replace_child_rows(conn, conversation_json)
         return memory_id
+
+    def insert_new(self, conversation_json: dict[str, Any]) -> tuple[str, bool]:
+        memory_id = self._validate_memory_id(conversation_json["id"])
+        source = str(conversation_json.get("source", ""))
+        timestamp = str(conversation_json.get("timestamp", ""))
+        title = conversation_json.get("title")
+        self._validate_field_lengths(source=source, timestamp=timestamp, title=title)
+        conversation_hash = self._conversation_hash(conversation_json)
+        upstream_thread_id = self._upstream_thread_id(conversation_json)
+        payload = json.dumps(conversation_json, separators=(",", ":"), ensure_ascii=False)
+        try:
+            with self._connect() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO conversations (id, source, timestamp, title, conversation_hash, upstream_thread_id, payload)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        memory_id,
+                        source,
+                        timestamp,
+                        title,
+                        conversation_hash,
+                        upstream_thread_id,
+                        payload,
+                    ),
+                )
+                self._replace_child_rows(conn, conversation_json)
+        except sqlite3.IntegrityError:
+            existing = self.get_by_conversation_hash(conversation_hash)
+            if existing is None:
+                raise
+            return str(existing["id"]), False
+        return memory_id, True
+
+    def append_messages(
+        self, conversation_json: dict[str, Any], new_messages: list[dict[str, Any]]
+    ) -> str:
+        _ = new_messages
+        return self.insert(conversation_json)
+
+    def get_by_conversation_hash(self, conversation_hash: str | None) -> dict[str, Any] | None:
+        if not conversation_hash:
+            return None
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT payload FROM conversations WHERE conversation_hash = ?",
+                (conversation_hash,),
+            ).fetchone()
+        if row is None:
+            return None
+        return json.loads(str(row["payload"]))
+
+    def get_by_upstream_thread(
+        self, source: str, upstream_thread_id: str
+    ) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT payload FROM conversations
+                WHERE source = ? AND upstream_thread_id = ?
+                ORDER BY created_at ASC
+                LIMIT 1
+                """,
+                (source, upstream_thread_id),
+            ).fetchone()
+        if row is None:
+            return None
+        return json.loads(str(row["payload"]))
+
+    def mark_chunks_indexed(self, memory_id: str, chunk_ids: list[str]) -> None:
+        self._mark_chunks_state(memory_id, chunk_ids, "indexed")
+
+    def mark_chunks_indexing_failed(self, memory_id: str, chunk_ids: list[str]) -> None:
+        self._mark_chunks_state(memory_id, chunk_ids, "indexing_failed")
+
+    def _mark_chunks_state(
+        self, memory_id: str, chunk_ids: list[str], state: str
+    ) -> None:
+        validated_id = self._validate_memory_id(memory_id)
+        with self._connect() as conn:
+            for chunk_id in chunk_ids:
+                conn.execute(
+                    """
+                    UPDATE chunks
+                    SET index_state = ?
+                    WHERE conversation_id = ? AND chunk_id = ?
+                    """,
+                    (state, validated_id, chunk_id),
+                )
 
     def get(self, memory_id: str) -> dict[str, Any] | None:
         validated_id = self._validate_memory_id(memory_id)
@@ -117,17 +278,27 @@ class SQLiteMetadataStore:
                 payload = json.dumps(conversation_json, separators=(",", ":"), ensure_ascii=False)
                 conn.execute(
                     """
-                    INSERT OR REPLACE INTO conversations (id, source, timestamp, title, payload)
-                    VALUES (?, ?, ?, ?, ?)
+                    INSERT INTO conversations (id, source, timestamp, title, conversation_hash, upstream_thread_id, payload)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(id) DO UPDATE SET
+                        source = excluded.source,
+                        timestamp = excluded.timestamp,
+                        title = excluded.title,
+                        conversation_hash = excluded.conversation_hash,
+                        upstream_thread_id = excluded.upstream_thread_id,
+                        payload = excluded.payload
                     """,
                     (
                         memory_id,
                         source,
                         timestamp,
                         title,
+                        self._conversation_hash(conversation_json),
+                        self._upstream_thread_id(conversation_json),
                         payload,
                     ),
                 )
+                self._replace_child_rows(conn, conversation_json)
                 ids.append(memory_id)
         return ids
 
@@ -153,3 +324,53 @@ class SQLiteMetadataStore:
             raise ValueError(f"timestamp exceeds max length {self._MAX_TIMESTAMP_LEN}")
         if title is not None and len(str(title)) > self._MAX_TITLE_LEN:
             raise ValueError(f"title exceeds max length {self._MAX_TITLE_LEN}")
+
+    def _conversation_hash(self, conversation_json: dict[str, Any]) -> str | None:
+        metadata = conversation_json.get("metadata", {})
+        if isinstance(metadata, dict):
+            value = metadata.get("conversation_hash")
+            return str(value) if value is not None else None
+        return None
+
+    def _upstream_thread_id(self, conversation_json: dict[str, Any]) -> str | None:
+        metadata = conversation_json.get("metadata", {})
+        if isinstance(metadata, dict):
+            value = metadata.get("upstream_thread_id")
+            return str(value) if value is not None else None
+        return None
+
+    def _replace_child_rows(
+        self, conn: sqlite3.Connection, conversation_json: dict[str, Any]
+    ) -> None:
+        conversation_id = self._validate_memory_id(conversation_json["id"])
+        conn.execute("DELETE FROM messages WHERE conversation_id = ?", (conversation_id,))
+        conn.execute("DELETE FROM chunks WHERE conversation_id = ?", (conversation_id,))
+        messages = conversation_json.get("messages", [])
+        for index, message in enumerate(messages if isinstance(messages, list) else []):
+            message_hash = str(message["hash"])
+            role = str(message["role"])
+            text = str(message["text"])
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO messages
+                    (conversation_id, message_index, role, text, message_hash)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (conversation_id, index, role, text, message_hash),
+            )
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO chunks
+                    (chunk_id, conversation_id, chunk_index, message_hash, role, text, index_state)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    f"{conversation_id}:{index}:{message_hash}",
+                    conversation_id,
+                    index,
+                    message_hash,
+                    role,
+                    text,
+                    "pending_index",
+                ),
+            )

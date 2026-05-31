@@ -65,6 +65,7 @@ class StorageVectorConfig(BaseModel):
 
 class StorageConfig(BaseModel):
     dry_run: bool = False
+    allow_trusted_appends: bool = False
     metadata_schema_versions: tuple[int, ...] = (1,)
     vector: StorageVectorConfig = Field(default_factory=StorageVectorConfig)
 

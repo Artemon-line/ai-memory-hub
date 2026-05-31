@@ -9,7 +9,8 @@ import jsonschema  # pyright: ignore[reportMissingModuleSource]
 SCHEMA_PATH = Path(__file__).resolve().parents[1] / "schema" / "conversation.schema.json"
 _ACTIVE_SCHEMA_PATH: Path = SCHEMA_PATH
 _REQUIRED_SCHEMA_FIELDS = ("id", "source", "timestamp", "messages", "metadata")
-_REQUIRED_MESSAGE_FIELDS = ("role", "text")
+_REQUIRED_MESSAGE_FIELDS = ("role", "text", "hash")
+_REQUIRED_METADATA_FIELDS = ("imported_at", "updated_at", "conversation_hash")
 
 
 def load_schema() -> dict[str, Any]:
@@ -51,6 +52,23 @@ def validate_schema_compatibility(schema: dict[str, Any]) -> None:
         raise ValueError(
             "Conversation schema is incompatible with code expectations; "
             f"missing message fields: {', '.join(missing_message_fields)}"
+        )
+
+    metadata = properties.get("metadata", {})
+    if not isinstance(metadata, dict):
+        raise ValueError("Conversation schema is incompatible: metadata property must be defined")
+
+    metadata_required = metadata.get("required", [])
+    if not isinstance(metadata_required, list):
+        raise ValueError("Conversation schema is incompatible: metadata.required must be an array")
+
+    missing_metadata_fields = [
+        field for field in _REQUIRED_METADATA_FIELDS if field not in metadata_required
+    ]
+    if missing_metadata_fields:
+        raise ValueError(
+            "Conversation schema is incompatible with code expectations; "
+            f"missing metadata fields: {', '.join(missing_metadata_fields)}"
         )
 
 

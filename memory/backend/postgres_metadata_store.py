@@ -14,9 +14,17 @@ CREATE TABLE IF NOT EXISTS conversations (
     source TEXT NOT NULL,
     timestamp TEXT NOT NULL,
     title TEXT NULL,
+    conversation_hash TEXT NULL UNIQUE,
+    upstream_thread_id TEXT NULL,
     payload JSONB NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 )
+"""
+
+CREATE_UPSTREAM_THREAD_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_conversations_upstream_thread
+ON conversations(source, upstream_thread_id)
+WHERE upstream_thread_id IS NOT NULL
 """
 
 CREATE_SCHEMA_VERSION_TABLE_SQL = """
@@ -34,17 +42,31 @@ ON CONFLICT (id) DO NOTHING
 """
 
 INSERT_CONVERSATION_SQL = """
-INSERT INTO conversations (id, source, timestamp, title, payload)
-VALUES (%s, %s, %s, %s, %s::jsonb)
+INSERT INTO conversations (id, source, timestamp, title, conversation_hash, upstream_thread_id, payload)
+VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb)
 ON CONFLICT (id) DO UPDATE
 SET source = EXCLUDED.source,
     timestamp = EXCLUDED.timestamp,
     title = EXCLUDED.title,
+    conversation_hash = EXCLUDED.conversation_hash,
+    upstream_thread_id = EXCLUDED.upstream_thread_id,
     payload = EXCLUDED.payload
+"""
+
+INSERT_NEW_CONVERSATION_SQL = """
+INSERT INTO conversations (id, source, timestamp, title, conversation_hash, upstream_thread_id, payload)
+VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb)
 """
 
 GET_CONVERSATION_SQL = "SELECT payload::text FROM conversations WHERE id = %s"
 GET_MANY_CONVERSATIONS_SQL = "SELECT id, payload::text FROM conversations WHERE id = ANY(%s)"
+GET_CONVERSATION_BY_HASH_SQL = "SELECT payload::text FROM conversations WHERE conversation_hash = %s"
+GET_CONVERSATION_BY_UPSTREAM_THREAD_SQL = """
+SELECT payload::text FROM conversations
+WHERE source = %s AND upstream_thread_id = %s
+ORDER BY created_at ASC
+LIMIT 1
+"""
 COUNT_SCHEMA_ROWS_SQL = "SELECT COUNT(*) FROM schema_version"
 READ_SCHEMA_VERSION_SQL = "SELECT version FROM schema_version WHERE id = %s"
 
@@ -81,6 +103,9 @@ class PostgresMetadataStore:
         with self._connect() as conn:
             with conn.cursor() as cur:
                 cur.execute(CREATE_CONVERSATIONS_TABLE_SQL)
+                cur.execute("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS conversation_hash TEXT UNIQUE")
+                cur.execute("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS upstream_thread_id TEXT NULL")
+                cur.execute(CREATE_UPSTREAM_THREAD_INDEX_SQL)
                 cur.execute(CREATE_SCHEMA_VERSION_TABLE_SQL)
                 cur.execute(SEED_SCHEMA_VERSION_SQL, (1, self._schema_version_seed))
 
@@ -112,10 +137,46 @@ class PostgresMetadataStore:
                         str(conversation_json.get("source", "")),
                         str(conversation_json.get("timestamp", "")),
                         conversation_json.get("title"),
+                        self._conversation_hash(conversation_json),
+                        self._upstream_thread_id(conversation_json),
                         payload,
                     ),
                 )
         return memory_id
+
+    def insert_new(self, conversation_json: dict[str, Any]) -> tuple[str, bool]:
+        memory_id = self._validate_memory_id(conversation_json["id"])
+        payload = json.dumps(conversation_json, separators=(",", ":"), ensure_ascii=False)
+        conversation_hash = self._conversation_hash(conversation_json)
+        try:
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        INSERT_NEW_CONVERSATION_SQL,
+                        (
+                            memory_id,
+                            str(conversation_json.get("source", "")),
+                            str(conversation_json.get("timestamp", "")),
+                            conversation_json.get("title"),
+                            conversation_hash,
+                            self._upstream_thread_id(conversation_json),
+                            payload,
+                        ),
+                    )
+        except Exception as exc:
+            if not self._is_unique_violation(exc):
+                raise
+            existing = self.get_by_conversation_hash(conversation_hash)
+            if existing is None:
+                raise
+            return str(existing["id"]), False
+        return memory_id, True
+
+    def append_messages(
+        self, conversation_json: dict[str, Any], new_messages: list[dict[str, Any]]
+    ) -> str:
+        _ = new_messages
+        return self.insert(conversation_json)
 
     def get(self, memory_id: str) -> dict[str, Any] | None:
         validated = self._validate_memory_id(memory_id)
@@ -142,6 +203,34 @@ class PostgresMetadataStore:
             result[str(row[0])] = json.loads(str(row[1]))
         return result
 
+    def get_by_conversation_hash(self, conversation_hash: str | None) -> dict[str, Any] | None:
+        if not conversation_hash:
+            return None
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(GET_CONVERSATION_BY_HASH_SQL, (conversation_hash,))
+                row = cur.fetchone()
+        if row is None:
+            return None
+        return json.loads(str(row[0]))
+
+    def get_by_upstream_thread(
+        self, source: str, upstream_thread_id: str
+    ) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(GET_CONVERSATION_BY_UPSTREAM_THREAD_SQL, (source, upstream_thread_id))
+                row = cur.fetchone()
+        if row is None:
+            return None
+        return json.loads(str(row[0]))
+
+    def mark_chunks_indexed(self, memory_id: str, chunk_ids: list[str]) -> None:
+        _ = (memory_id, chunk_ids)
+
+    def mark_chunks_indexing_failed(self, memory_id: str, chunk_ids: list[str]) -> None:
+        _ = (memory_id, chunk_ids)
+
     def capabilities(self) -> ProviderCapabilities:
         return ProviderCapabilities(
             supports_batch_insert=True,
@@ -164,3 +253,23 @@ class PostgresMetadataStore:
             raise ValueError("memory_id must be a valid UUID") from exc
         return value
 
+    def _conversation_hash(self, conversation_json: dict[str, Any]) -> str | None:
+        metadata = conversation_json.get("metadata", {})
+        if isinstance(metadata, dict):
+            value = metadata.get("conversation_hash")
+            return str(value) if value is not None else None
+        return None
+
+    def _upstream_thread_id(self, conversation_json: dict[str, Any]) -> str | None:
+        metadata = conversation_json.get("metadata", {})
+        if isinstance(metadata, dict):
+            value = metadata.get("upstream_thread_id")
+            return str(value) if value is not None else None
+        return None
+
+    def _is_unique_violation(self, exc: Exception) -> bool:
+        if getattr(exc, "sqlstate", None) == "23505":
+            return True
+        if getattr(exc, "pgcode", None) == "23505":
+            return True
+        return exc.__class__.__name__ == "UniqueViolation"

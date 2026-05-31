@@ -129,6 +129,9 @@ async def test_mcp_tool_handlers_insert_search_retrieve() -> None:
     )
     assert retrieve_result["status"] == "ok"
     assert retrieve_result["memory"]["id"] == "d9fd4c95-9cb3-4fd5-b967-3027f8863210"
+    assert "hash" not in retrieve_result["memory"]["messages"][0]
+    assert "conversation_hash" not in retrieve_result["memory"]["metadata"]
+    assert "message_hashes" not in retrieve_result["memory"]["metadata"]
     assert "results" in retrieve_result
     assert "cursor" in retrieve_result
     assert "error_code" in retrieve_result
@@ -140,6 +143,7 @@ async def test_mcp_tool_handlers_insert_search_retrieve() -> None:
     assert len(ask_result["results"]) == 1
     assert ask_result["results"][0]["id"] == "d9fd4c95-9cb3-4fd5-b967-3027f8863210"
     assert ask_result["results"][0]["text"] == "hello mcp"
+    assert "hash" not in ask_result["results"][0]["conversation"]["messages"][0]
     assert isinstance(ask_result["citations"], list)
     assert ask_result["citations"][0]["id"] == ask_result["results"][0]["id"]
     assert ask_result["citations"][0]["text"] == ask_result["results"][0]["text"]
@@ -232,7 +236,7 @@ async def test_mcp_tool_handlers_invalid_inputs_return_consistent_errors() -> No
     assert validate_invalid_schema["status"] == "error"
     assert validate_invalid_schema["error_code"] == "invalid_input"
     assert validate_invalid_schema["valid"] is False
-    assert "schema validation failed" in validate_invalid_schema["error_message"]
+    assert "messages" in validate_invalid_schema["error_message"]
 
     auto_defaults_payload = {
         "messages": [{"role": "user", "text": "auto defaults test"}],
@@ -299,6 +303,10 @@ async def test_mcp_tool_handlers_search_pagination_and_filters() -> None:
         "hello", source="chatgpt", top_k=10
     )
     assert filtered_source["status"] == "ok"
+    assert all(
+        "hash" not in row["conversation"]["messages"][0]
+        for row in filtered_source["results"]
+    )
     assert all(
         row["conversation"]["source"] == "chatgpt" for row in filtered_source["results"]
     )

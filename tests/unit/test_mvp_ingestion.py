@@ -69,7 +69,9 @@ def _valid_conversation() -> dict[str, Any]:
     }
 
 
-def _configure_stubs() -> tuple[StubMetadataStore, StubVectorStore]:
+def _configure_stubs(
+    *, allow_trusted_appends: bool = False
+) -> tuple[StubMetadataStore, StubVectorStore]:
     metadata = StubMetadataStore()
     vectors = StubVectorStore()
     mvp_ingestion.configure_runtime(
@@ -78,6 +80,7 @@ def _configure_stubs() -> tuple[StubMetadataStore, StubVectorStore]:
             metadata_store=metadata,
             vector_store=vectors,
             health_state={"mode": "ok", "vector_fallback_active": False},
+            allow_trusted_appends=allow_trusted_appends,
         )
     )
     return metadata, vectors
@@ -91,9 +94,122 @@ def test_ingest_messages_success() -> None:
     assert result == {
         "status": "ok",
         "id": "d9fd4c95-9cb3-4fd5-b967-3027f8863210",
+        "deduplicated": False,
+        "appended_messages": 0,
+        "embedded_chunks": 2,
         "chunks": 2,
     }
     assert "d9fd4c95-9cb3-4fd5-b967-3027f8863210" in metadata.by_id
+    assert len(vectors.rows) == 2
+    stored = metadata.by_id["d9fd4c95-9cb3-4fd5-b967-3027f8863210"]
+    assert stored["messages"][0]["hash"].startswith("sha256:")
+    assert stored["metadata"]["conversation_hash"].startswith("sha256:")
+    assert stored["metadata"]["updated_at"].startswith("2026-")
+
+
+def test_ingest_messages_deduplicates_exact_content_before_embedding() -> None:
+    metadata, vectors = _configure_stubs()
+
+    first = mvp_ingestion.ingest_messages(_valid_conversation())
+    duplicate = _valid_conversation()
+    duplicate["id"] = "a2ea9782-cb05-4b93-9ce7-2edcfa3c6461"
+    second = mvp_ingestion.ingest_messages(duplicate)
+
+    assert second == {
+        "status": "ok",
+        "id": first["id"],
+        "deduplicated": True,
+        "appended_messages": 0,
+        "embedded_chunks": 0,
+        "chunks": 0,
+    }
+    assert len(metadata.by_id) == 1
+    assert len(vectors.rows) == 2
+
+
+def test_ingest_messages_appends_only_new_same_id_messages() -> None:
+    metadata, vectors = _configure_stubs(allow_trusted_appends=True)
+    base = _valid_conversation()
+    mvp_ingestion.ingest_messages(base)
+    longer = _valid_conversation()
+    longer["messages"] = [
+        {"role": "user", "text": "hello"},
+        {"role": "assistant", "text": "world"},
+        {"role": "user", "text": "next"},
+    ]
+
+    result = mvp_ingestion.ingest_messages(longer)
+
+    assert result["deduplicated"] is False
+    assert result["appended_messages"] == 1
+    assert result["embedded_chunks"] == 1
+    assert len(metadata.by_id["d9fd4c95-9cb3-4fd5-b967-3027f8863210"]["messages"]) == 3
+    assert [row["chunk_index"] for row in vectors.rows] == [0, 1, 2]
+
+
+def test_ingest_messages_rejects_same_id_append_without_trust() -> None:
+    _configure_stubs()
+    mvp_ingestion.ingest_messages(_valid_conversation())
+    longer = _valid_conversation()
+    longer["messages"] = [
+        {"role": "user", "text": "hello"},
+        {"role": "assistant", "text": "world"},
+        {"role": "user", "text": "next"},
+    ]
+
+    with pytest.raises(ValueError, match="unauthorized_update"):
+        mvp_ingestion.ingest_messages(longer)
+
+
+def test_ingest_messages_rejects_conflicting_same_id_history() -> None:
+    _configure_stubs(allow_trusted_appends=True)
+    mvp_ingestion.ingest_messages(_valid_conversation())
+    conflict = _valid_conversation()
+    conflict["messages"][0]["text"] = "edited"
+
+    with pytest.raises(ValueError, match="duplicate_conflict"):
+        mvp_ingestion.ingest_messages(conflict)
+
+
+def test_normalize_rejects_bad_client_hash() -> None:
+    _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["messages"][0]["hash"] = "sha256:" + ("0" * 64)
+
+    with pytest.raises(ValueError, match="hash does not match"):
+        mvp_ingestion.ingest_messages(conversation)
+
+
+def test_ingest_messages_rejects_invalid_timestamp_before_storage() -> None:
+    _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["timestamp"] = "not-a-date"
+
+    with pytest.raises(ValueError, match="timestamp must be an ISO-8601 datetime"):
+        mvp_ingestion.ingest_messages(conversation)
+
+
+def test_ingest_messages_rejects_non_string_source() -> None:
+    _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["source"] = {"bad": "source"}
+
+    with pytest.raises(ValueError, match="source must be a string"):
+        mvp_ingestion.ingest_messages(conversation)
+
+
+def test_strict_raw_transcript_ingestion() -> None:
+    metadata, vectors = _configure_stubs()
+
+    result = mvp_ingestion.ingest_messages(
+        "User: Remember the GPU plan.\nAssistant: Stored.",
+        strict_transcript=True,
+    )
+
+    assert result["status"] == "ok"
+    assert result["embedded_chunks"] == 2
+    stored = metadata.by_id[result["id"]]
+    assert stored["messages"][0]["role"] == "user"
     assert len(vectors.rows) == 2
 
 
@@ -105,7 +221,7 @@ def test_ingest_messages_invalid_json_raises() -> None:
     try:
         mvp_ingestion.ingest_messages(invalid)
         assert False, "Expected validation error"
-    except jsonschema.ValidationError:
+    except (jsonschema.ValidationError, ValueError):
         assert True
 
 
@@ -212,11 +328,15 @@ def test_schema_file_from_config_is_used(tmp_path: Path) -> None:
                     "properties": {
                         "role": {"type": "string"},
                         "text": {"type": "string"},
+                        "hash": {"type": "string"},
                     },
-                    "required": ["role", "text"],
+                    "required": ["role", "text", "hash"],
                 },
             },
-            "metadata": {"type": "object"},
+            "metadata": {
+                "type": "object",
+                "required": ["imported_at", "updated_at", "conversation_hash"],
+            },
             "must_exist": {"type": "string"},
         },
         "required": ["id", "source", "timestamp", "messages", "metadata", "must_exist"],

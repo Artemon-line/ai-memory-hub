@@ -76,12 +76,26 @@ class RuntimeDependencies:
     metadata_store: Any
     vector_store: Any
     health_state: dict[str, Any]
+    allow_trusted_appends: bool = False
 
 
 _RUNTIME: RuntimeDependencies | None = None
 _ASK_MAX_SCORE = 7.5
 _SEARCH_CANDIDATE_MULTIPLIER = 3
 _CONVERSATION_GROUP_SCORE_WINDOW = 0.25
+_MAX_MESSAGES = 10_000
+_MAX_MESSAGE_BYTES = 1_000_000
+_MAX_PAYLOAD_BYTES = 25_000_000
+_MAX_RAW_TRANSCRIPT_BYTES = 5_000_000
+_MAX_METADATA_BYTES = 1_000_000
+_ROLE_ALIASES = {
+    "human": "user",
+    "user_message": "user",
+    "ai": "assistant",
+    "bot": "assistant",
+    "assistant_message": "assistant",
+}
+_TRANSCRIPT_LINE_RE = re.compile(r"^(User|Assistant):\s?(.*)$", re.IGNORECASE)
 _TOPIC_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("python", re.compile(r"\bpython\b", re.IGNORECASE)),
     (
@@ -192,6 +206,7 @@ def build_runtime(
         metadata_store=metadata_store,
         vector_store=vector_store,
         health_state=health_state,
+        allow_trusted_appends=cfg.storage.allow_trusted_appends,
     )
 
 
@@ -247,16 +262,27 @@ def enrich_topics(obj: dict[str, Any]) -> None:
 
 
 def chunk_messages(obj: dict[str, Any]) -> list[dict[str, Any]]:
+    return chunk_selected_messages(obj, obj.get("messages", []), start_index=0)
+
+
+def chunk_selected_messages(
+    obj: dict[str, Any], messages: list[dict[str, Any]], *, start_index: int
+) -> list[dict[str, Any]]:
     chunks: list[dict[str, Any]] = []
-    messages = obj.get("messages")
     if not isinstance(messages, list):
         raise ValueError("Missing or invalid 'messages' key in conversation object")
-    for index, message in enumerate(messages):
+    conversation_id = str(obj["id"])
+    for offset, message in enumerate(messages):
+        chunk_index = start_index + offset
         chunks.append(
             {
-                "chunk_index": index,
+                "chunk_id": f"{conversation_id}:{chunk_index}:{message['hash']}",
+                "chunk_index": chunk_index,
+                "conversation_id": conversation_id,
+                "message_hash": str(message["hash"]),
                 "role": str(message["role"]),
                 "text": str(message["text"]),
+                "index_state": "pending_index",
             }
         )
     return chunks
@@ -273,7 +299,11 @@ def embed_chunks(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for chunk, vector in zip(chunks, vectors):
         embeddings.append(
             {
+                "chunk_id": chunk.get("chunk_id"),
                 "chunk_index": chunk["chunk_index"],
+                "conversation_id": chunk.get("conversation_id"),
+                "message_hash": chunk.get("message_hash"),
+                "index_state": "indexed",
                 "role": chunk["role"],
                 "text": chunk["text"],
                 "vector": [float(v) for v in vector],
@@ -292,14 +322,140 @@ def store_vectors(metadata_id: str, embeddings: list[dict[str, Any]]) -> None:
     runtime.vector_store.insert(metadata_id, embeddings)
 
 
+def _lookup_by_conversation_hash(conversation_hash: str) -> dict[str, Any] | None:
+    store = _runtime().metadata_store
+    if hasattr(store, "get_by_conversation_hash"):
+        return store.get_by_conversation_hash(conversation_hash)
+    for attr in ("by_id", "rows"):
+        rows = getattr(store, attr, None)
+        if isinstance(rows, dict):
+            for conversation in rows.values():
+                if _conversation_hash(conversation) == conversation_hash:
+                    return conversation
+    return None
+
+
+def _lookup_same_thread(incoming: dict[str, Any]) -> dict[str, Any] | None:
+    if not _runtime().allow_trusted_appends:
+        return None
+    store = _runtime().metadata_store
+    memory_id = str(incoming.get("id", ""))
+    if memory_id:
+        existing = store.get(memory_id) if hasattr(store, "get") else None
+        if isinstance(existing, dict):
+            return existing
+
+    metadata = incoming.get("metadata", {})
+    upstream_thread_id = (
+        metadata.get("upstream_thread_id") if isinstance(metadata, dict) else None
+    )
+    if isinstance(upstream_thread_id, str) and upstream_thread_id:
+        source = str(incoming.get("source", ""))
+        if hasattr(store, "get_by_upstream_thread"):
+            return store.get_by_upstream_thread(source, upstream_thread_id)
+        for attr in ("by_id", "rows"):
+            rows = getattr(store, attr, None)
+            if isinstance(rows, dict):
+                for conversation in rows.values():
+                    conversation_metadata = conversation.get("metadata", {})
+                    if (
+                        isinstance(conversation_metadata, dict)
+                        and conversation.get("source") == source
+                        and conversation_metadata.get("upstream_thread_id")
+                        == upstream_thread_id
+                    ):
+                        return conversation
+    return None
+
+
+def _insert_new_conversation(obj: dict[str, Any]) -> tuple[str, bool]:
+    store = _runtime().metadata_store
+    if hasattr(store, "insert_new"):
+        return store.insert_new(obj)
+    duplicate = _lookup_by_conversation_hash(_conversation_hash(obj))
+    if duplicate is not None:
+        return str(duplicate["id"]), False
+    if hasattr(store, "get"):
+        existing = store.get(str(obj.get("id", "")))
+        if isinstance(existing, dict):
+            raise ValueError("unauthorized_update: conversation id already exists")
+    return store.insert(obj), True
+
+
+def _append_conversation(
+    existing: dict[str, Any], incoming: dict[str, Any], new_messages: list[dict[str, Any]]
+) -> dict[str, Any]:
+    updated = dict(existing)
+    metadata = dict(updated.get("metadata", {}))
+    messages = list(updated.get("messages", [])) + new_messages
+    metadata["updated_at"] = incoming["metadata"]["updated_at"]
+    metadata["message_hashes"] = [str(message["hash"]) for message in messages]
+    metadata["conversation_hash"] = hash_ordered_messages(messages)
+    updated["messages"] = messages
+    updated["metadata"] = metadata
+    store = _runtime().metadata_store
+    if hasattr(store, "append_messages"):
+        store.append_messages(updated, new_messages)
+    else:
+        store.insert(updated)
+    return updated
+
+
+def _conversation_hash(conversation: dict[str, Any]) -> str | None:
+    metadata = conversation.get("metadata", {})
+    if isinstance(metadata, dict):
+        value = metadata.get("conversation_hash")
+        if isinstance(value, str):
+            return value
+    return None
+
+
+def _detect_new_messages(
+    existing: dict[str, Any], incoming: dict[str, Any]
+) -> list[dict[str, Any]]:
+    existing_messages = existing.get("messages", [])
+    incoming_messages = incoming.get("messages", [])
+    if not isinstance(existing_messages, list) or not isinstance(incoming_messages, list):
+        raise ValueError("duplicate_conflict: stored or incoming messages are invalid")
+    existing_hashes = [str(message.get("hash", "")) for message in existing_messages]
+    incoming_hashes = [str(message.get("hash", "")) for message in incoming_messages]
+    common_prefix_len = min(len(existing_hashes), len(incoming_hashes))
+    if incoming_hashes[:common_prefix_len] != existing_hashes[:common_prefix_len]:
+        raise ValueError("duplicate_conflict: same thread has conflicting message history")
+    if len(incoming_hashes) <= len(existing_hashes):
+        return []
+    seen = set(existing_hashes)
+    new_messages: list[dict[str, Any]] = []
+    for message in incoming_messages[len(existing_hashes) :]:
+        message_hash = str(message["hash"])
+        if message_hash not in seen:
+            new_messages.append(message)
+            seen.add(message_hash)
+    return new_messages
+
+
 def _utc_now_iso() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def sha256_message(role: str, text: str) -> str:
+    digest = hashlib.sha256(f"{role}\n{text}".encode("utf-8")).hexdigest()
+    return f"sha256:{digest}"
+
+
+def hash_ordered_messages(messages: list[dict[str, Any]]) -> str:
+    joined = "\n".join(str(message["hash"]) for message in messages)
+    digest = hashlib.sha256(joined.encode("utf-8")).hexdigest()
+    return f"sha256:{digest}"
+
+
 def normalize_conversation_json(
-    payload: dict[str, Any], *, source: str | None = None
+    payload: Any, *, source: str | None = None, strict_transcript: bool = False
 ) -> dict[str, Any]:
     """Normalize a conversation JSON object with default values."""
+    now = _utc_now_iso()
+    payload = _coerce_payload(payload, strict_transcript=strict_transcript)
+    _enforce_payload_limits(payload)
     normalized = dict(payload)
     metadata = normalized.get("metadata")
     if not isinstance(metadata, dict):
@@ -317,54 +473,279 @@ def normalize_conversation_json(
 
     messages = normalized.get("messages")
     if isinstance(messages, list):
-        normalized["messages"] = [_normalize_message(item) for item in messages]
+        normalized["messages"] = _normalize_messages(messages)
 
     normalized.setdefault("id", str(uuid4()))
     normalized.setdefault("source", source or "unknown")
-    normalized.setdefault("timestamp", _utc_now_iso())
+    normalized["source"] = _normalize_source(normalized.get("source"))
+    normalized.setdefault("timestamp", now)
+    normalized["timestamp"] = _validate_datetime_string(
+        normalized["timestamp"], field_name="timestamp"
+    )
     if "imported_at" not in metadata and isinstance(metadata.get("saved_at"), str):
         metadata["imported_at"] = metadata["saved_at"]
-    metadata.setdefault("imported_at", _utc_now_iso())
+    metadata.setdefault("imported_at", now)
+    metadata["imported_at"] = _validate_datetime_string(
+        metadata["imported_at"], field_name="metadata.imported_at"
+    )
+    metadata["updated_at"] = now
+    if not isinstance(normalized.get("messages"), list):
+        raise ValueError("ambiguous input: messages must be an array")
+    metadata["message_hashes"] = [
+        str(message["hash"]) for message in normalized["messages"]
+    ]
+    metadata["conversation_hash"] = hash_ordered_messages(normalized["messages"])
     normalized["metadata"] = metadata
+    _enforce_payload_limits(normalized)
     return normalized
 
 
-def _normalize_message(message: Any) -> Any:
+def _coerce_payload(payload: Any, *, strict_transcript: bool) -> dict[str, Any]:
+    if isinstance(payload, dict):
+        if any(key in payload for key in ("messages", "conversation", "content", "tags")):
+            if "content" in payload and "messages" not in payload and "conversation" not in payload:
+                content = payload["content"]
+                if isinstance(content, list):
+                    normalized = dict(payload)
+                    normalized["messages"] = content
+                    normalized.pop("content", None)
+                    return normalized
+            return payload
+        raise ValueError("ambiguous input: object must include messages, conversation, content, or tags")
+    if isinstance(payload, str):
+        if not strict_transcript:
+            raise ValueError("raw transcript input requires strict_transcript=True")
+        return {"messages": _parse_strict_transcript(payload)}
+    raise ValueError("ambiguous input: expected object or strict raw transcript string")
+
+
+def _parse_strict_transcript(text: str) -> list[dict[str, str]]:
+    if len(text.encode("utf-8")) > _MAX_RAW_TRANSCRIPT_BYTES:
+        raise ValueError("raw transcript exceeds max_raw_transcript_bytes")
+    messages: list[dict[str, str]] = []
+    current: dict[str, str] | None = None
+    lines = text.splitlines()
+    for line in lines:
+        match = _TRANSCRIPT_LINE_RE.match(line)
+        if match:
+            role = _normalize_role(match.group(1))
+            current = {"role": role, "text": match.group(2)}
+            messages.append(current)
+            continue
+        if current is None:
+            if line.strip():
+                raise ValueError("ambiguous raw transcript before first speaker boundary")
+            continue
+        current["text"] += "\n" + line
+    if not messages:
+        raise ValueError("raw transcript did not contain any speaker boundaries")
+    return messages
+
+
+def _normalize_messages(messages: list[Any]) -> list[dict[str, Any]]:
+    normalized_messages: list[dict[str, Any]] = []
+    seen_hashes: set[str] = set()
+    for index, item in enumerate(messages):
+        message = _normalize_message(item, index=index)
+        if message["hash"] in seen_hashes:
+            continue
+        seen_hashes.add(message["hash"])
+        normalized_messages.append(message)
+    if not normalized_messages:
+        raise ValueError("messages must contain at least one non-empty message")
+    return normalized_messages
+
+
+def _normalize_message(message: Any, *, index: int) -> dict[str, Any]:
     if not isinstance(message, dict):
-        return message
+        raise ValueError(f"messages[{index}] must be an object")
     normalized = dict(message)
     if "text" not in normalized and "content" in normalized:
         normalized["text"] = normalized["content"]
     normalized.pop("content", None)
+    role = _normalize_role(normalized.get("role"))
+    text = _normalize_text(normalized.get("text"), index=index)
+    computed_hash = sha256_message(role, text)
+    supplied_hash = normalized.get("hash")
+    if supplied_hash is not None and supplied_hash != computed_hash:
+        raise ValueError(f"messages[{index}].hash does not match server-computed hash")
+    normalized["role"] = role
+    normalized["text"] = text
+    normalized["hash"] = computed_hash
     return normalized
 
 
-def ingest_messages(conversation_json: dict[str, Any]) -> dict[str, Any]:
+def _normalize_role(role: Any) -> str:
+    value = str(role).strip().lower()
+    value = _ROLE_ALIASES.get(value, value)
+    if value not in {"user", "assistant"}:
+        raise ValueError(f"unknown message role: {role}")
+    return value
+
+
+def _normalize_source(source: Any) -> str:
+    if not isinstance(source, str):
+        raise ValueError("source must be a string")
+    value = source.strip()
+    if not value:
+        raise ValueError("source must be non-empty")
+    if len(value) > 128:
+        raise ValueError("source exceeds max length 128")
+    return value
+
+
+def _validate_datetime_string(value: Any, *, field_name: str) -> str:
+    if not isinstance(value, str):
+        raise ValueError(f"{field_name} must be an ISO-8601 datetime string")
+    try:
+        datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError(f"{field_name} must be an ISO-8601 datetime") from exc
+    return value
+
+
+def _normalize_text(text: Any, *, index: int) -> str:
+    if not isinstance(text, str):
+        raise ValueError(f"messages[{index}].text must be a string")
+    value = text.strip("\ufeff\r\n")
+    if not value.strip():
+        raise ValueError(f"messages[{index}].text must be non-empty")
+    if len(value.encode("utf-8")) > _MAX_MESSAGE_BYTES:
+        raise ValueError("message exceeds max_message_bytes")
+    return value
+
+
+def _enforce_payload_limits(payload: dict[str, Any]) -> None:
+    payload_bytes = len(json_dumps(payload).encode("utf-8"))
+    if payload_bytes > _MAX_PAYLOAD_BYTES:
+        raise ValueError("payload exceeds max_payload_bytes")
+    messages = payload.get("messages")
+    if isinstance(messages, list) and len(messages) > _MAX_MESSAGES:
+        raise ValueError("payload exceeds max_messages")
+    metadata = payload.get("metadata")
+    if isinstance(metadata, dict):
+        metadata_bytes = len(json_dumps(metadata).encode("utf-8"))
+        if metadata_bytes > _MAX_METADATA_BYTES:
+            raise ValueError("metadata exceeds max_metadata_bytes")
+
+
+def json_dumps(value: Any) -> str:
+    import json
+
+    return json.dumps(value, separators=(",", ":"), ensure_ascii=False)
+
+
+def ingest_messages(
+    conversation_json: Any, *, strict_transcript: bool = False
+) -> dict[str, Any]:
     # 0. Normalize
-    conversation_json = normalize_conversation_json(conversation_json)
-    
+    conversation_json = normalize_conversation_json(
+        conversation_json, strict_transcript=strict_transcript
+    )
+
     # 1. Validate JSON against schema
     validate_json(conversation_json)
 
     # 2. Enrich metadata topics from message text
     enrich_topics(conversation_json)
 
+    conversation_hash = conversation_json["metadata"]["conversation_hash"]
+    duplicate = _lookup_by_conversation_hash(conversation_hash)
+    if duplicate is not None:
+        return {
+            "status": "ok",
+            "id": str(duplicate["id"]),
+            "deduplicated": True,
+            "appended_messages": 0,
+            "embedded_chunks": 0,
+            "chunks": 0,
+        }
+
+    existing_by_id = None
+    store = _runtime().metadata_store
+    if hasattr(store, "get"):
+        existing_by_id = store.get(str(conversation_json.get("id", "")))
+    if existing_by_id is not None and not _runtime().allow_trusted_appends:
+        raise ValueError("unauthorized_update: conversation id already exists")
+
+    same_thread = _lookup_same_thread(conversation_json)
+    if same_thread is not None:
+        new_messages = _detect_new_messages(same_thread, conversation_json)
+        if not new_messages:
+            return {
+                "status": "ok",
+                "id": str(same_thread["id"]),
+                "deduplicated": True,
+                "appended_messages": 0,
+                "embedded_chunks": 0,
+                "chunks": 0,
+            }
+        start_index = len(same_thread.get("messages", []))
+        updated = _append_conversation(same_thread, conversation_json, new_messages)
+        chunks = chunk_selected_messages(updated, new_messages, start_index=start_index)
+        try:
+            embeddings = embed_chunks(chunks)
+            store_vectors(str(updated["id"]), embeddings)
+            _mark_chunks_indexed(str(updated["id"]), chunks)
+        except Exception:
+            _mark_chunks_indexing_failed(str(updated["id"]), chunks)
+            raise
+        return {
+            "status": "ok",
+            "id": str(updated["id"]),
+            "deduplicated": False,
+            "appended_messages": len(new_messages),
+            "embedded_chunks": len(chunks),
+            "chunks": len(chunks),
+        }
+
     # 3. Chunk messages
     chunks = chunk_messages(conversation_json)
 
-    # 4. Embed chunks
-    embeddings = embed_chunks(chunks)
+    # 4. Store metadata with pending chunks before embedding
+    metadata_id, inserted = _insert_new_conversation(conversation_json)
+    if not inserted:
+        return {
+            "status": "ok",
+            "id": metadata_id,
+            "deduplicated": True,
+            "appended_messages": 0,
+            "embedded_chunks": 0,
+            "chunks": 0,
+        }
 
-    # 5. Store metadata + vectors
-    metadata_id = store_metadata(conversation_json)
-    store_vectors(metadata_id, embeddings)
+    # 5. Embed and write vectors
+    try:
+        embeddings = embed_chunks(chunks)
+        store_vectors(metadata_id, embeddings)
+        _mark_chunks_indexed(metadata_id, chunks)
+    except Exception:
+        _mark_chunks_indexing_failed(metadata_id, chunks)
+        raise
 
     # 6. Return stored object
     return {
         "status": "ok",
         "id": metadata_id,
+        "deduplicated": False,
+        "appended_messages": 0,
+        "embedded_chunks": len(chunks),
         "chunks": len(chunks),
     }
+
+
+def _mark_chunks_indexed(metadata_id: str, chunks: list[dict[str, Any]]) -> None:
+    store = _runtime().metadata_store
+    if hasattr(store, "mark_chunks_indexed"):
+        store.mark_chunks_indexed(metadata_id, [str(chunk["chunk_id"]) for chunk in chunks])
+
+
+def _mark_chunks_indexing_failed(metadata_id: str, chunks: list[dict[str, Any]]) -> None:
+    store = _runtime().metadata_store
+    if hasattr(store, "mark_chunks_indexing_failed"):
+        store.mark_chunks_indexing_failed(
+            metadata_id, [str(chunk["chunk_id"]) for chunk in chunks]
+        )
 
 
 def search(query: str, top_k: int = 5) -> dict[str, Any]:

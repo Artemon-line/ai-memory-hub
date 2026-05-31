@@ -38,9 +38,14 @@
           "text": {
             "type": "string",
             "description": "Raw message text. Must preserve emojis, code blocks, and formatting."
+          },
+          "hash": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "description": "Server-generated SHA-256 hash of role and text."
           }
         },
-        "required": ["role", "text"],
+        "required": ["role", "text", "hash"],
         "additionalProperties": false
       },
       "minItems": 1
@@ -53,6 +58,29 @@
           "type": "string",
           "format": "date-time",
           "description": "Timestamp when this entry was imported into the hub."
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when this entry was last updated in the hub."
+        },
+        "conversation_hash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "Server-generated SHA-256 hash of ordered message hashes."
+        },
+        "upstream_thread_id": {
+          "type": "string",
+          "description": "Trusted upstream platform thread identifier when available.",
+          "minLength": 1
+        },
+        "message_hashes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "description": "Ordered server-generated message hashes for duplicate checks."
         },
         "timezone": {
           "type": "string",
@@ -89,7 +117,7 @@
           "description": "Whether the conversation contains code blocks."
         }
       },
-      "required": ["imported_at"],
+      "required": ["imported_at", "updated_at", "conversation_hash"],
       "additionalProperties": true
     }
   },

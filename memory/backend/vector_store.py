@@ -38,7 +38,9 @@ class LanceDBVectorStore:
         schema = pa.schema(
             [
                 pa.field("memory_id", pa.string()),
+                pa.field("chunk_id", pa.string()),
                 pa.field("chunk_index", pa.int64()),
+                pa.field("message_hash", pa.string()),
                 pa.field("role", pa.string()),
                 pa.field("text", pa.string()),
                 pa.field("vector", pa.list_(pa.float32(), self.dimension)),
@@ -56,7 +58,13 @@ class LanceDBVectorStore:
             # Check if vector field is FixedSizeList with correct dimension
             vector_field = existing_schema.field("vector")
             vector_type = vector_field.type
-            if isinstance(vector_type, pa.FixedSizeListType) and vector_type.list_size == self.dimension:
+            field_names = set(existing_schema.names)
+            required_fields = {"memory_id", "chunk_id", "chunk_index", "message_hash", "role", "text", "vector"}
+            if (
+                required_fields.issubset(field_names)
+                and isinstance(vector_type, pa.FixedSizeListType)
+                and vector_type.list_size == self.dimension
+            ):
                 return existing_table
 
         # Create or overwrite table with correct schema
@@ -73,7 +81,9 @@ class LanceDBVectorStore:
             rows.append(
                 {
                     "memory_id": metadata_id,
+                    "chunk_id": str(item.get("chunk_id") or f"{metadata_id}:{int(item['chunk_index'])}"),
                     "chunk_index": int(item["chunk_index"]),
+                    "message_hash": str(item.get("message_hash", "")),
                     "role": str(item["role"]),
                     "text": str(item["text"]),
                     "vector": vector,
@@ -91,7 +101,9 @@ class LanceDBVectorStore:
             normalized.append(
                 {
                     "memory_id": str(row.get("memory_id", "")),
+                    "chunk_id": str(row.get("chunk_id", "")),
                     "chunk_index": int(row.get("chunk_index", 0)),
+                    "message_hash": str(row.get("message_hash", "")),
                     "role": str(row.get("role", "")),
                     "text": str(row.get("text", "")),
                     "score": float(row.get("_distance", 0.0)),
@@ -148,7 +160,9 @@ class InMemoryVectorStore:
             self._rows.append(
                 {
                     "memory_id": metadata_id,
+                    "chunk_id": str(item.get("chunk_id") or f"{metadata_id}:{int(item['chunk_index'])}"),
                     "chunk_index": int(item["chunk_index"]),
+                    "message_hash": str(item.get("message_hash", "")),
                     "role": str(item["role"]),
                     "text": str(item["text"]),
                     "vector": vector,
@@ -168,7 +182,9 @@ class InMemoryVectorStore:
             output.append(
                 {
                     "memory_id": str(row["memory_id"]),
+                    "chunk_id": str(row.get("chunk_id", "")),
                     "chunk_index": int(row["chunk_index"]),
+                    "message_hash": str(row.get("message_hash", "")),
                     "role": str(row["role"]),
                     "text": str(row["text"]),
                     "score": float(score),

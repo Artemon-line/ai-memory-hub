@@ -6,6 +6,7 @@ from typing import Any, Awaitable, Callable
 from uuid import UUID
 
 import jsonschema
+from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig
 from memory.ingestion.base_agent import BaseIngestionAgent
 from memory.ingestion.mvp_ingestion import normalize_conversation_json
@@ -47,7 +48,7 @@ def _envelope(
 
 def _with_envelope_defaults(data: dict[str, Any]) -> dict[str, Any]:
     payload = _envelope(status=str(data.get("status", "ok")))
-    payload.update(data)
+    payload.update(redact_content_hashes(data))
     return payload
 
 
@@ -187,7 +188,7 @@ def _register_resources(mcp: Any, agent: BaseIngestionAgent) -> None:
         return {
             "status": "ok",
             "id": "example",
-            "memory": memory,
+            "memory": redact_content_hashes(memory),
             "metadata": _resource_metadata(memory),
         }
 
@@ -210,7 +211,7 @@ def _register_resources(mcp: Any, agent: BaseIngestionAgent) -> None:
         return {
             "status": "ok",
             "id": id,
-            "memory": memory,
+            "memory": redact_content_hashes(memory),
             "metadata": _resource_metadata(memory),
         }
 
@@ -237,7 +238,7 @@ def _register_resources(mcp: Any, agent: BaseIngestionAgent) -> None:
         return {
             "status": "ok",
             "id": f"search:{query}",
-            "results": matches,
+            "results": redact_content_hashes(matches),
             "cursor": None,
             "metadata": {"query": query, "top_k": top_k, "source": source},
         }
@@ -272,7 +273,7 @@ def _register_resources(mcp: Any, agent: BaseIngestionAgent) -> None:
         return {
             "status": "ok",
             "id": f"timeline:{day}",
-            "results": filtered,
+            "results": redact_content_hashes(filtered),
             "cursor": None,
             "metadata": {"day": day, "top_k": top_k, "source": source},
         }
@@ -342,7 +343,15 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 error_message=str(exc),
                 valid=False,
             )
-        normalized = normalize_conversation_json(conversation_json, source="mcp")
+        try:
+            normalized = normalize_conversation_json(conversation_json, source="mcp")
+        except ValueError as exc:
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message=str(exc),
+                valid=False,
+            )
         try:
             validate_conversation(normalized)
         except jsonschema.ValidationError as exc:
@@ -369,7 +378,14 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 error_code="invalid_input",
                 error_message=str(exc),
             )
-        normalized = normalize_conversation_json(conversation_json, source="mcp")
+        try:
+            normalized = normalize_conversation_json(conversation_json, source="mcp")
+        except ValueError as exc:
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message=str(exc),
+            )
         try:
             validate_conversation(normalized)
         except jsonschema.ValidationError as exc:
@@ -468,7 +484,7 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 error_code="not_found",
                 error_message="memory not found",
             )
-        return _envelope(status="ok", id=id, memory=memory)
+        return _envelope(status="ok", id=id, memory=redact_content_hashes(memory))
 
     async def memory_ask(question: str, top_k: int = 5) -> dict[str, Any]:
         if not isinstance(question, str) or not question.strip():
