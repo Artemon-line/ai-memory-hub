@@ -48,7 +48,22 @@ def _envelope(
 
 def _with_envelope_defaults(data: dict[str, Any]) -> dict[str, Any]:
     payload = _envelope(status=str(data.get("status", "ok")))
-    payload.update(redact_content_hashes(data))
+
+    # Copy safe top-level fields
+    for key, value in data.items():
+        if key not in ("conversation", "memory"):
+            payload[key] = value
+
+    # Redact memory/conversation
+    if "memory" in data:
+        payload["memory"] = redact_content_hashes(data["memory"])
+    if "conversation" in data:
+        payload["conversation"] = redact_content_hashes(data["conversation"])
+
+    # NOW redact results (after merge)
+    if "results" in payload:
+        payload["results"] = redact_content_hashes(payload["results"])
+
     return payload
 
 
@@ -90,6 +105,12 @@ def _coerce_tags(tags: Any) -> list[str]:
     raise ValueError("tags must be a list of strings")
 
 
+def unwrap_array(value):
+    if isinstance(value, dict) and "item" in value:
+        return value["item"]
+    return value
+
+
 def _validate_optional_uuid(value: Any, *, field_name: str = "id") -> str | None:
     if value is None:
         return None
@@ -115,6 +136,8 @@ def _apply_search_filters(
     dt_to = _parse_date(date_to or "", field_name="date_to")
     required_tags = set(_coerce_tags(tags))
     filtered: list[dict[str, Any]] = []
+    tags = unwrap_array(tags)
+    source = unwrap_array(source)
     for row in rows:
         conversation = row.get("conversation")
         if not isinstance(conversation, dict):
@@ -243,6 +266,10 @@ def _register_resources(mcp: Any, agent: BaseIngestionAgent) -> None:
             "metadata": {"query": query, "top_k": top_k, "source": source},
         }
 
+    @mcp.resource("memory://health")
+    async def health():
+        return {"status": "ok"}
+
     @mcp.resource("memory://timeline/{day}")
     async def timeline_resource(
         day: str, top_k: int = 20, source: str | None = None
@@ -286,6 +313,9 @@ def _register_prompts(mcp: Any) -> None:
             "Save this chat to ai-memory-hub using MCP tools directly.\n"
             "Before insert, call `memory_validate` with argument `conversation_json`.\n"
             "Only call `memory_insert` after validation passes (do not use curl or config-file reads).\n"
+            "Never include the save command itself in messages.\n"
+            "Never include MCP instructions in messages.\n"
+            "Never include tool output in messages.\n"
             "Build `conversation_json.messages` from the full prior dialog turns in this chat (include both user and assistant turns).\n"
             "Do not store only the save command; exclude meta instructions like 'save this conversation' unless explicitly requested.\n"
             "Apply filters before insert: include semantic conversation content, exclude tool/debug chatter.\n"
@@ -304,7 +334,12 @@ def _register_prompts(mcp: Any) -> None:
         return (
             "Use ai-memory-hub MCP tools directly.\n"
             f'Call `memory_search` with `query="{query}"` and optional '
-            "`limit`, `cursor`, `source`, `date_from`, `date_to`, `tags`.\n"
+            """`limit`, `cursor`, `source`, `date_from`, `date_to`, `tags`.\n
+            You MUST NOT pass null or None for any argument.
+            Always pass limit=5 unless the user specifies otherwise.
+            Always pass top_k=5 unless the user specifies otherwise.
+            Never omit these fields.
+            """
             "Return results and the next `cursor` when present."
         )
 
@@ -312,8 +347,11 @@ def _register_prompts(mcp: Any) -> None:
     def ask_memory_prompt(question: str, top_k: str = "5") -> str:
         return (
             "Use ai-memory-hub MCP tools directly.\n"
-            f'Call `memory_ask` with `question="{question}"` and optional `top_k={top_k}`.\n'
-            "Return `answer` and `citations`."
+            "You MUST always pass a valid integer for `top_k`.\n"
+            "If the user does not specify a value, ALWAYS use top_k=5.\n"
+            "Never pass null, None, omit the field, or pass a string.\n"
+            f'Call `memory_ask` with `question="{question}"` and `top_k={top_k}`.\n'
+            "Return only the answer and citations."
         )
 
     @mcp.prompt(name="summarize_conversation")
@@ -343,16 +381,25 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 error_message=str(exc),
                 valid=False,
             )
+
+        # Support ChatGPT-style payloads using "conversation"
+        if "messages" not in conversation_json:
+            if "conversation" in conversation_json:
+                conversation_json["messages"] = conversation_json.pop("conversation")
+            else:
+                return _envelope(
+                    status="error",
+                    error_code="invalid_input",
+                    error_message="messages must be an array",
+                    valid=False,
+                )
+
+        msgs = conversation_json.get("messages")
+        if msgs is not None:
+            conversation_json["messages"] = unwrap_array(msgs)
+
         try:
             normalized = normalize_conversation_json(conversation_json, source="mcp")
-        except ValueError as exc:
-            return _envelope(
-                status="error",
-                error_code="invalid_input",
-                error_message=str(exc),
-                valid=False,
-            )
-        try:
             validate_conversation(normalized)
         except jsonschema.ValidationError as exc:
             return _envelope(
@@ -378,14 +425,22 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 error_code="invalid_input",
                 error_message=str(exc),
             )
-        try:
-            normalized = normalize_conversation_json(conversation_json, source="mcp")
-        except ValueError as exc:
-            return _envelope(
-                status="error",
-                error_code="invalid_input",
-                error_message=str(exc),
-            )
+
+        # Support ChatGPT-style payloads using "conversation"
+        if "messages" not in conversation_json:
+            if "conversation" in conversation_json:
+                conversation_json["messages"] = conversation_json.pop("conversation")
+            else:
+                return _envelope(
+                    status="error",
+                    error_code="invalid_input",
+                    error_message="messages must be an array",
+                )
+        msgs = conversation_json.get("messages")
+        if msgs is not None:
+            conversation_json["messages"] = unwrap_array(msgs)
+
+        normalized = normalize_conversation_json(conversation_json, source="mcp")
         try:
             validate_conversation(normalized)
         except jsonschema.ValidationError as exc:
@@ -435,6 +490,7 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 error_code="invalid_input",
                 error_message="limit must be an integer between 1 and 100",
             )
+
         try:
             result = await agent.search(query=query, top_k=100)
             matches = result.get("results", [])
@@ -445,7 +501,7 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 source=source,
                 date_from=date_from,
                 date_to=date_to,
-                tags=tags,
+                tags=unwrap_array(tags),
             )
             sorted_rows = _deterministic_sort(filtered)
             try:
@@ -459,6 +515,7 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                     error_message=str(exc),
                 )
             result["results"] = paged_rows
+            result["results"] = redact_content_hashes(result["results"])
             result["cursor"] = next_cursor
         except Exception as exc:
             return _envelope(
@@ -477,6 +534,7 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 error_message="id must be a non-empty string",
             )
         memory = await agent.retrieve(id)
+
         if memory is None:
             return _envelope(
                 status="not_found",
@@ -493,12 +551,29 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 error_code="invalid_input",
                 error_message="question must be a non-empty string",
             )
+
+        question = unwrap_array(question)
+
+        if top_k is None:
+            top_k = 5
+
+        if isinstance(top_k, str):
+            try:
+                top_k = int(top_k)
+            except ValueError:
+                return _envelope(
+                    status="error",
+                    error_code="invalid_input",
+                    error_message="top_k must be an integer",
+                )
+
         if not isinstance(top_k, int) or top_k < 1 or top_k > 100:
             return _envelope(
                 status="error",
                 error_code="invalid_input",
                 error_message="top_k must be an integer between 1 and 100",
             )
+
         try:
             result = await agent.ask(question=question, top_k=top_k)
         except Exception as exc:
