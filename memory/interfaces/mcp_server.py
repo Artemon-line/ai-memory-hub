@@ -311,6 +311,7 @@ def _register_prompts(mcp: Any) -> None:
     def save_conversation_prompt() -> str:
         return (
             "Save this chat to ai-memory-hub using MCP tools directly.\n"
+            "You MUST include ALL user and assistant messages, including code blocks, SQL, Python, multi-line text, and long responses. Do NOT filter or summarize any messages.\n"
             "Before insert, call `memory_validate` with argument `conversation_json`.\n"
             "Only call `memory_insert` after validation passes (do not use curl or config-file reads).\n"
             "Never include the save command itself in messages.\n"

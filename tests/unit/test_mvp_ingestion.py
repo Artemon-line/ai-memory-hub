@@ -25,6 +25,10 @@ class StubMetadataStore:
         self.by_id[memory_id] = conversation_json
         return memory_id
 
+    def is_fully_indexed(self, conversation_id: str) -> bool:
+        # For tests, if it's in by_id, consider it indexed
+        return conversation_id in self.by_id
+
     def get(self, memory_id: str):
         return self.by_id.get(memory_id)
 
@@ -36,7 +40,10 @@ class StubVectorStore:
     def __init__(self):
         self.rows: list[dict[str, Any]] = []
 
-    def insert(self, metadata_id: str, embeddings: list[dict[str, Any]]) -> None:
+    def insert(self, metadata_id: str, embeddings: list[dict[str, Any]], replace: bool = False) -> None:
+        if replace:
+            # Avoid duplicates if re-indexing
+            self.rows = [row for row in self.rows if row["memory_id"] != metadata_id]
         for item in embeddings:
             self.rows.append({"memory_id": metadata_id, **item})
 
@@ -120,8 +127,8 @@ def test_ingest_messages_deduplicates_exact_content_before_embedding() -> None:
         "id": first["id"],
         "deduplicated": True,
         "appended_messages": 0,
-        "embedded_chunks": 0,
-        "chunks": 0,
+        "embedded_chunks": 2,
+        "chunks": 2,
     }
     assert len(metadata.by_id) == 1
     assert len(vectors.rows) == 2

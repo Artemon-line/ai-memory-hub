@@ -317,9 +317,9 @@ def store_metadata(obj: dict[str, Any]) -> str:
     return runtime.metadata_store.insert(obj)
 
 
-def store_vectors(metadata_id: str, embeddings: list[dict[str, Any]]) -> None:
+def store_vectors(metadata_id: str, embeddings: list[dict[str, Any]], replace: bool = False) -> None:
     runtime = _runtime()
-    runtime.vector_store.insert(metadata_id, embeddings)
+    runtime.vector_store.insert(metadata_id, embeddings, replace=replace)
 
 
 def _lookup_by_conversation_hash(conversation_hash: str) -> dict[str, Any] | None:
@@ -652,40 +652,40 @@ def ingest_messages(
     conversation_hash = conversation_json["metadata"]["conversation_hash"]
     duplicate = _lookup_by_conversation_hash(conversation_hash)
     if duplicate is not None:
-        return {
-            "status": "ok",
-            "id": str(duplicate["id"]),
-            "deduplicated": True,
-            "appended_messages": 0,
-            "embedded_chunks": 0,
-            "chunks": 0,
-        }
+        metadata_id = str(duplicate["id"])
+        # We proceed to re-index even if it's a duplicate by hash,
+        # to ensure the vector store is in sync with the metadata.
+        conversation_json["id"] = metadata_id
 
     existing_by_id = None
     store = _runtime().metadata_store
     if hasattr(store, "get"):
         existing_by_id = store.get(str(conversation_json.get("id", "")))
     if existing_by_id is not None and not _runtime().allow_trusted_appends:
-        raise ValueError("unauthorized_update: conversation id already exists")
+        # If it's a duplicate by ID but not by hash, it's an unauthorized update.
+        # But if it's the SAME hash (we already checked), it's fine.
+        if _conversation_hash(existing_by_id) != conversation_hash:
+            raise ValueError("unauthorized_update: conversation id already exists")
 
     same_thread = _lookup_same_thread(conversation_json)
     if same_thread is not None:
         new_messages = _detect_new_messages(same_thread, conversation_json)
         if not new_messages:
-            return {
-                "status": "ok",
-                "id": str(same_thread["id"]),
-                "deduplicated": True,
-                "appended_messages": 0,
-                "embedded_chunks": 0,
-                "chunks": 0,
-            }
-        start_index = len(same_thread.get("messages", []))
-        updated = _append_conversation(same_thread, conversation_json, new_messages)
-        chunks = chunk_selected_messages(updated, new_messages, start_index=start_index)
+            # Re-index check for same_thread
+            # If it's already fully indexed, we COULD skip, 
+            # but for consistency we fall through to ensure vectors are there.
+            start_index = 0
+            updated = same_thread
+        else:
+            start_index = len(same_thread.get("messages", []))
+            updated = _append_conversation(same_thread, conversation_json, new_messages)
+        
+        # If we are here, we either have new messages or we are re-indexing existing
+        indexing_messages = new_messages if new_messages else updated.get("messages", [])
+        chunks = chunk_selected_messages(updated, indexing_messages, start_index=start_index)
         try:
             embeddings = embed_chunks(chunks)
-            store_vectors(str(updated["id"]), embeddings)
+            store_vectors(str(updated["id"]), embeddings, replace=(start_index == 0))
             _mark_chunks_indexed(str(updated["id"]), chunks)
         except Exception:
             _mark_chunks_indexing_failed(str(updated["id"]), chunks)
@@ -693,7 +693,7 @@ def ingest_messages(
         return {
             "status": "ok",
             "id": str(updated["id"]),
-            "deduplicated": False,
+            "deduplicated": not bool(new_messages),
             "appended_messages": len(new_messages),
             "embedded_chunks": len(chunks),
             "chunks": len(chunks),
@@ -704,20 +704,11 @@ def ingest_messages(
 
     # 4. Store metadata with pending chunks before embedding
     metadata_id, inserted = _insert_new_conversation(conversation_json)
-    if not inserted:
-        return {
-            "status": "ok",
-            "id": metadata_id,
-            "deduplicated": True,
-            "appended_messages": 0,
-            "embedded_chunks": 0,
-            "chunks": 0,
-        }
 
     # 5. Embed and write vectors
     try:
         embeddings = embed_chunks(chunks)
-        store_vectors(metadata_id, embeddings)
+        store_vectors(metadata_id, embeddings, replace=not inserted)
         _mark_chunks_indexed(metadata_id, chunks)
     except Exception:
         _mark_chunks_indexing_failed(metadata_id, chunks)
@@ -727,11 +718,24 @@ def ingest_messages(
     return {
         "status": "ok",
         "id": metadata_id,
-        "deduplicated": False,
+        "deduplicated": not inserted,
         "appended_messages": 0,
         "embedded_chunks": len(chunks),
         "chunks": len(chunks),
     }
+
+
+def _is_fully_indexed(metadata_id: str) -> bool:
+    runtime = _runtime()
+    # Always re-index for in-memory store to ensure consistency after restart
+    if runtime.health_state.get("vector_provider") == "memory":
+        return False
+
+    store = runtime.metadata_store
+    if hasattr(store, "is_fully_indexed"):
+        return store.is_fully_indexed(metadata_id)
+    # Default to False to ensure indexing if we can't check
+    return False
 
 
 def _mark_chunks_indexed(metadata_id: str, chunks: list[dict[str, Any]]) -> None:

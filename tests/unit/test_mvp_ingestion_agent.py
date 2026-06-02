@@ -22,6 +22,9 @@ class StubMetadataStore:
         self.rows[memory_id] = conversation_json
         return memory_id
 
+    def is_fully_indexed(self, conversation_id: str) -> bool:
+        return conversation_id in self.rows
+
     def get(self, memory_id: str):
         return self.rows.get(memory_id)
 
@@ -33,7 +36,9 @@ class StubVectorStore:
     def __init__(self):
         self.rows: list[dict[str, object]] = []
 
-    def insert(self, metadata_id: str, embeddings: list[dict[str, object]]) -> None:
+    def insert(self, metadata_id: str, embeddings: list[dict[str, object]], replace: bool = False) -> None:
+        if replace:
+            self.rows = [row for row in self.rows if row["memory_id"] != metadata_id]
         for item in embeddings:
             self.rows.append({"memory_id": metadata_id, **item})
 

@@ -73,7 +73,7 @@ class LanceDBVectorStore:
         )
         return table
 
-    def insert(self, metadata_id: str, embeddings: list[dict[str, Any]]) -> None:
+    def insert(self, metadata_id: str, embeddings: list[dict[str, Any]], replace: bool = False) -> None:
         rows = []
         for item in embeddings:
             vector = [float(v) for v in item["vector"]]
@@ -90,6 +90,9 @@ class LanceDBVectorStore:
                 }
             )
         if rows:
+            if replace:
+                # Avoid duplicates if re-indexing
+                self._table.delete(f"memory_id = '{metadata_id}'")
             self._table.add(rows)
             self._ensure_index()
 
@@ -153,7 +156,10 @@ class InMemoryVectorStore:
     def expected_dimensionality(self) -> int:
         return self.dimension
 
-    def insert(self, metadata_id: str, embeddings: list[dict[str, Any]]) -> None:
+    def insert(self, metadata_id: str, embeddings: list[dict[str, Any]], replace: bool = False) -> None:
+        if replace:
+            # Avoid duplicates if re-indexing
+            self._rows = [row for row in self._rows if row["memory_id"] != metadata_id]
         for item in embeddings:
             vector = [float(v) for v in item["vector"]]
             self._validate_dimension(vector, operation="insert")

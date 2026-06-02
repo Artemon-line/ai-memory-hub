@@ -205,6 +205,24 @@ class SQLiteMetadataStore:
             return None
         return json.loads(str(row["payload"]))
 
+    def is_fully_indexed(self, conversation_id: str) -> bool:
+        validated_id = self._validate_memory_id(conversation_id)
+        with self._connect() as conn:
+            # Check if there are any chunks at all, and if any are NOT indexed
+            row = conn.execute(
+                """
+                SELECT 
+                    COUNT(*) as total,
+                    SUM(CASE WHEN index_state = 'indexed' THEN 1 ELSE 0 END) as indexed
+                FROM chunks 
+                WHERE conversation_id = ?
+                """,
+                (validated_id,),
+            ).fetchone()
+        if not row or row["total"] == 0:
+            return False
+        return row["total"] == row["indexed"]
+
     def mark_chunks_indexed(self, memory_id: str, chunk_ids: list[str]) -> None:
         self._mark_chunks_state(memory_id, chunk_ids, "indexed")
 
