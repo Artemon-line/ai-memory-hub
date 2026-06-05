@@ -32,8 +32,10 @@ class ProvidersConfig(BaseModel):
     @classmethod
     def validate_vector_db(cls, v: str) -> str:
         v = v.lower()
-        if v not in {"lancedb", "in_memory"}:
-            raise ValueError("providers.vector_db must be one of: lancedb, in_memory")
+        if v == "in_memory":
+            v = "memory"
+        if v not in {"lancedb", "pgvector", "memory"}:
+            raise ValueError("providers.vector_db must be one of: lancedb, pgvector, memory")
         return v
 
     @field_validator("metadata_db")
@@ -61,6 +63,15 @@ class SchemaConfig(BaseModel):
 
 class StorageVectorConfig(BaseModel):
     allow_fallback: bool = True
+    distance: str = "cosine"
+
+    @field_validator("distance")
+    @classmethod
+    def validate_distance(cls, v: str) -> str:
+        v = v.lower()
+        if v not in {"cosine", "l2", "inner_product"}:
+            raise ValueError("storage.vector.distance must be one of: cosine, l2, inner_product")
+        return v
 
 
 class StorageConfig(BaseModel):

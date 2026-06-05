@@ -28,14 +28,14 @@ The Hub supports main paths:
 ## Storage
 
 - Metadata: SQLite or Postgres (`providers.metadata_db`)
-- Vectors: LanceDB (`providers.vector_db: lancedb`) or in-memory
+- Vectors: LanceDB, PGVector, or in-memory (`providers.vector_db`)
 - Startup checks:
   - metadata schema version compatibility (`storage.metadata_schema_versions`)
   - embedding/vector dimensionality compatibility
 - Validation schema:
   - loaded from `schema.file` at startup
 - Optional vector fallback:
-  - if LanceDB init fails and `storage.vector.allow_fallback: true`, runtime falls back to in-memory vectors
+  - if LanceDB or PGVector init fails and `storage.vector.allow_fallback: true`, runtime falls back to in-memory vectors
 - Dry-run mode:
   - `storage.dry_run: true` skips writes while preserving read/search and response shapes
 
@@ -46,14 +46,16 @@ Relevant config keys:
 ```yaml
 providers:
   embeddings: local   # openai | local
-  metadata_db: sqlite 
-  vector_db: lancedb  
+  metadata_db: sqlite # sqlite | postgres
+  metadata_dsn: ""    # required for metadata_db=postgres or vector_db=pgvector
+  vector_db: lancedb  # lancedb | pgvector | memory
 
 storage:
   dry_run: false
   metadata_schema_versions: [1]
   vector:
     allow_fallback: true
+    distance: cosine  # cosine | l2 | inner_product
 
 schema:
   file: ./memory/schema/conversation.schema.json
@@ -64,6 +66,47 @@ interfaces:
 
 paths:
   data_dir: ./data
+```
+
+## Local Storage Tests
+
+Default local runs do not require Postgres or PGVector. Live Postgres/PGVector tests are skipped unless `AMH_TEST_POSTGRES_DSN` is set.
+
+Run the full local suite:
+
+```bash
+uv sync --dev
+uv run pytest
+```
+
+Run storage tests only:
+
+```bash
+uv run pytest tests/integration/test_storage_features.py
+```
+
+To run live Postgres + PGVector tests locally, start a PGVector-enabled Postgres container:
+
+```bash
+docker run --name aimh-pgvector-test \
+  -e POSTGRES_USER=test \
+  -e POSTGRES_PASSWORD=test \
+  -e POSTGRES_DB=memory \
+  -p 5432:5432 \
+  -d pgvector/pgvector:pg16
+```
+
+Then run the same checks CI runs:
+
+```bash
+export AMH_TEST_POSTGRES_DSN="postgresql://test:test@127.0.0.1:5432/memory"
+uv run pytest -q tests/integration/test_storage_features.py -k "postgres_live_integration_when_dsn_provided or postgres_schema_version or pgvector_live_integration_when_dsn_provided or runtime_postgres_pgvector_live_integration_when_dsn_provided"
+```
+
+Clean up the local container when finished:
+
+```bash
+docker rm -f aimh-pgvector-test
 ```
 
 Run server:

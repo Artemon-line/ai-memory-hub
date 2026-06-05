@@ -141,7 +141,7 @@ jobs:
     timeout-minutes: 20
     services:
       postgres:
-        image: postgres:16
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: test
           POSTGRES_PASSWORD: test
@@ -173,11 +173,13 @@ jobs:
           uv sync --dev
           uv pip install psycopg[binary]
 
-      - name: Run postgres storage checks
+      - name: Run postgres + pgvector storage checks
         env:
           PYTHONHASHSEED: '0'
           AMH_TEST_POSTGRES_DSN: postgresql://test:test@127.0.0.1:5432/memory
         run: >
           uv run pytest -q tests/integration/test_storage_features.py -k
           "postgres_live_integration_when_dsn_provided or
-          postgres_schema_version"
+          postgres_schema_version or
+          pgvector_live_integration_when_dsn_provided or
+          runtime_postgres_pgvector_live_integration_when_dsn_provided"

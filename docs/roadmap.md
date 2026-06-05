@@ -1,7 +1,7 @@
 # ai-memory-hub — roadmap
 
-Structured plan for a **local-first** memory engine that unifies AI conversations into one searchable, 
-RAG-ready knowledge hub.
+Structured plan for a **local-first**, **deterministic**, **MCP-native** memory engine that unifies AI conversations into one searchable, 
+RAG-ready knowledge hub with **pluggable storage backends**.
 
 **How to use this doc:** work **phases in order** or parallelize **within** a phase when tasks are independent. 
 Each phase ends with a **milestone** you can demo or ship.
@@ -19,7 +19,8 @@ Each phase ends with a **milestone** you can demo or ship.
 
 | Phase | Focus | Milestone (one line) |
 |-------|--------|----------------------|
-| 1 | MVP: MCP-native ingestion, normalize, store, search, retrieve | MCP tools/resources + HTTP `/memory/*` over your memory |
+| 1 | Core MVP: MCP-native ingestion, normalize, store, search, retrieve | MCP tools/resources + HTTP `/memory/*` over SQLite + LanceDB |
+| 1.5 | Storage abstraction | PGVector provider + unified storage interface |
 | 2 | Multi-source ingestion | One hub across platforms, including those without official exports (e.g. Copilot) |
 | 3 | Intelligence: summaries, topics, timelines, consolidation | Knowledge engine, not just storage |
 | 4 | UI & DX | Dashboard + SDKs + packaging |
@@ -33,14 +34,14 @@ Each phase ends with a **milestone** you can demo or ship.
 
 When planning or estimating work, treat phases as **ordered capability layers**:
 
-- **Phase 1** defines the minimum **pipeline**: **ChatGPT-only** ingestion (official ZIP export) → **unified schema** → **vector ** → **HTTP** `/search`, `/conversation/{id}`, `/ask`.
-- **Phase 1** defines the minimum **pipeline**: **schema-first ingestion** (MCP/API payloads) → **unified schema** → **vector ** → **HTTP** `/memory/search`, 
+- **Phase 1** defines the minimum **pipeline**: **schema-first ingestion** (MCP/API payloads) → **unified schema** → **embeddings** → **vector search** → **HTTP** `/memory/search`, 
 `/memory/retrieve` + MCP `memory_*` tools/resources.
+- **Phase 1.5** promotes storage to a **first-class subsystem**: `VectorStore` interface → LanceDB/PGVector/in-memory providers → deterministic startup checks → fallback behavior.
 - **Phase 2** adds **platform-specific ingestion** (Gemini Takeout, Copilot workarounds, Claude HTML, local LLM logs);
 **schema and storage stay stable** if normalization boundaries are respected.
 - **Phase 3** is **offline/batch intelligence** on top of stored chunks (summaries, clustering, timelines).
 - **Phase 4** is **presentation and distribution** (UI, SDKs, OpenAPI, pip).
-- **Phase 5** aligns with [agents.md](agents.md): external agent frameworks consume the same memory API/MCP backend.
+- **Phase 5** aligns with [agents.md](agents.md): external agent frameworks consume the same memory API/MCP backend with their choice of LanceDB, PGVector, or ephemeral in-memory vectors.
 - **Phases 6–7** are **extensions**; **local-first** remains default until Phase 7 is explicitly enabled.
 
 ---
@@ -62,7 +63,7 @@ When planning or estimating work, treat phases as **ordered capability layers**:
 
 - [x] Unified conversation schema
 - [ ] Message role normalization from non-conforming upstream sources
-- [ ] Basic topic tagging (LLM or regex-based)
+- [ ] Basic topic tagging
 
 ### 1.3 Storage
 
@@ -76,7 +77,7 @@ When planning or estimating work, treat phases as **ordered capability layers**:
 - [x] `POST /memory/retrieve` — retrieve conversation by ID
 - [x] MCP `memory_search` and `memory_retrieve`
 
-### 1.5 CLI (optional)
+### 1.6 CLI (optional)
 
 - [ ] `aimh ingest <file>`
 - [ ] `aimh search "<query>"`
@@ -85,9 +86,61 @@ When planning or estimating work, treat phases as **ordered capability layers**:
 
 ---
 
+## Phase 1.5 — Storage abstraction and PGVector provider
+
+**Goal:** Make storage pluggable and introduce PGVector as a first-class vector backend.
+
+### 1.5.1 Storage abstraction layer
+
+- [x] Define `VectorStore` interface:
+  - `insert(chunks)`
+  - `search(query_embedding, top_k)`
+  - `delete(ids)`
+  - `get_stats()`
+- [x] Move LanceDB implementation behind the interface
+- [x] Formalize in-memory implementation as a supported provider
+- [x] Keep metadata and vector storage boundaries explicit
+
+### 1.5.2 PGVector provider
+
+- [x] Reuse existing Postgres metadata DSN when available
+- [x] Create vector table (for example, `memory_vectors`)
+- [x] Support cosine, L2, and inner product distance modes
+- [x] Add HNSW index creation
+- [x] Add deterministic startup checks:
+  - vector extension installed or installable (`CREATE EXTENSION vector`)
+  - embedding dimension matches configured provider
+  - schema version is compatible
+  - selected distance mode is supported
+- [x] Add fallback logic:
+  - if PGVector init fails, fallback to in-memory vectors when enabled
+  - if LanceDB init fails, fallback to in-memory vectors when enabled
+  - emit clear diagnostics when fallback changes runtime behavior
+
+### 1.5.3 Config changes
+
+- [x] `providers.vector_db: lancedb | pgvector | memory`
+- [x] `providers.metadata_db: sqlite | postgres`
+- [x] `storage.vector.allow_fallback: true`
+- [x] `storage.vector.distance: cosine | l2 | inner_product`
+
+### 1.5.4 Tests
+
+- [x] PGVector integration tests
+- [x] LanceDB parity tests
+- [x] In-memory parity tests
+- [x] Fallback tests
+- [x] Dry-run/startup validation tests
+
+**Milestone:** ai-memory-hub supports **LanceDB**, **PGVector**, and **in-memory** vector storage with identical search behavior at the API/MCP boundary.
+
+---
+
 ## Phase 2 — Multi-source ingestion
 
 **Goal:** Support multiple AI platforms with different ingestion requirements.
+
+PGVector makes large ingestion sets more practical, but ingestion code should stay storage-agnostic. Each parser emits normalized records; the configured storage backend handles persistence.
 
 ### 2.1 Gemini
 
@@ -122,6 +175,8 @@ Copilot does not provide a structured export comparable to ChatGPT. Ingestion mu
 ## Phase 3 — Intelligence layer
 
 **Goal:** Higher-level reasoning and memory organization.
+
+PGVector unlocks larger local memory sets, faster clustering workflows, and SQL-friendly analysis when Postgres is selected.
 
 ### 3.1 Summaries
 
@@ -162,6 +217,9 @@ Copilot does not provide a structured export comparable to ChatGPT. Ingestion mu
 - [ ] Search interface
 - [ ] Conversation viewer
 - [ ] RAG query console
+- [ ] Vector backend diagnostics
+- [ ] Storage health panel
+- [ ] Embedding dimension inspector
 
 ### 4.2 Developer tools
 
@@ -181,6 +239,8 @@ Copilot does not provide a structured export comparable to ChatGPT. Ingestion mu
 ## Phase 5 — Agent integration
 
 **Goal:** Make ai-memory-hub the **memory provider** for agents.
+
+Agents should be able to choose local LanceDB, Postgres+PGVector, or ephemeral in-memory storage without changing their MCP/API integration.
 
 ### 5.1 LangGraph
 
@@ -211,6 +271,8 @@ Copilot does not provide a structured export comparable to ChatGPT. Ingestion mu
 ## Phase 6 — Advanced features
 
 **Goal:** Long-term, richer memory behavior.
+
+PGVector and Postgres enable future hybrid search, SQL-based memory analytics, and graph-adjacent workflows without requiring a separate hosted vector service.
 
 ### 6.1 Memory graph
 
@@ -246,6 +308,9 @@ Copilot does not provide a structured export comparable to ChatGPT. Ingestion mu
 - [ ] Encrypted cloud sync
 - [ ] Multi-device support
 - [ ] Backup/restore
+- [ ] SQLite metadata sync
+- [ ] PGVector table sync
+- [ ] LanceDB bundle sync
 
 ---
 
@@ -254,11 +319,16 @@ Copilot does not provide a structured export comparable to ChatGPT. Ingestion mu
 Evolution path:
 
 1. **MVP** — ingest, store, search, RAG
-2. **Multi-source ingestion**
-3. **Intelligence layer**
-4. **UI and developer experience**
-5. **Agent integration**
-6. **Advanced memory features**
-7. **Optional sync**
+2. **Storage abstraction** — LanceDB, PGVector, and in-memory providers behind one interface
+3. **Multi-source ingestion**
+4. **Intelligence layer**
+5. **UI and developer experience**
+6. **Agent integration**
+7. **Advanced memory features**
+8. **Optional sync**
 
 Phases stack modularly so scope stays focused and components remain swappable (see [architecture.md](architecture.md)).
+
+Positioning:
+
+> ai-memory-hub is the SQLite of agent memory: deterministic, local-first, pluggable, and MCP-native.

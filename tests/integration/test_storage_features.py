@@ -4,7 +4,9 @@ import os
 import sqlite3
 import sys
 import types
+from collections.abc import Callable
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 
@@ -19,8 +21,12 @@ from memory.backend.metadata_store import SQLiteMetadataStore
 from memory.backend.postgres_metadata_store import PostgresMetadataStore
 from memory.backend.vector_store import InMemoryVectorStore
 from memory.backend.vector_store import LanceDBVectorStore
+from memory.backend.vector_store import PGVectorStore
 from memory.ingestion import mvp_ingestion
 from typing import Any
+
+
+VectorStoreFactory = Callable[[Path], Any]
 
 
 def test_sqlite_capabilities_and_health(tmp_path: Path) -> None:
@@ -44,6 +50,107 @@ def test_inmemory_vector_dimension_validation_insert_and_search() -> None:
 
     with pytest.raises(VectorDimensionError):
         store.search([1.0, 2.0], top_k=5)
+
+
+def _assert_vector_store_contract(store: Any) -> None:
+    first_id = str(uuid4())
+    second_id = str(uuid4())
+    replacement_id = str(uuid4())
+
+    store.insert(
+        first_id,
+        [
+            {
+                "chunk_id": f"{first_id}:0",
+                "chunk_index": 0,
+                "message_hash": "sha256:" + ("a" * 64),
+                "role": "user",
+                "text": "alpha memory",
+                "vector": [1.0, 0.0, 0.0],
+            }
+        ],
+    )
+    store.insert(
+        second_id,
+        [
+            {
+                "chunk_id": f"{second_id}:0",
+                "chunk_index": 0,
+                "message_hash": "sha256:" + ("b" * 64),
+                "role": "assistant",
+                "text": "beta memory",
+                "vector": [0.0, 1.0, 0.0],
+            }
+        ],
+    )
+
+    matches = store.search([1.0, 0.0, 0.0], top_k=2)
+    assert matches[0]["memory_id"] == first_id
+    assert matches[0]["chunk_index"] == 0
+    assert matches[0]["role"] == "user"
+    assert matches[0]["text"] == "alpha memory"
+    assert len(matches) == 2
+
+    store.insert(
+        replacement_id,
+        [
+            {
+                "chunk_id": f"{replacement_id}:0",
+                "chunk_index": 0,
+                "message_hash": "sha256:" + ("c" * 64),
+                "role": "user",
+                "text": "old replacement",
+                "vector": [0.0, 0.0, 1.0],
+            }
+        ],
+    )
+    store.insert(
+        replacement_id,
+        [
+            {
+                "chunk_id": f"{replacement_id}:1",
+                "chunk_index": 1,
+                "message_hash": "sha256:" + ("d" * 64),
+                "role": "assistant",
+                "text": "new replacement",
+                "vector": [1.0, 0.0, 0.0],
+            }
+        ],
+        replace=True,
+    )
+    replacement_matches = [
+        row
+        for row in store.search([1.0, 0.0, 0.0], top_k=10)
+        if row["memory_id"] == replacement_id
+    ]
+    assert len(replacement_matches) == 1
+    assert replacement_matches[0]["chunk_index"] == 1
+    assert replacement_matches[0]["text"] == "new replacement"
+
+    stats = store.get_stats()
+    assert stats["expected_dimensionality"] == 3
+    assert stats["provider"] in {"memory", "lancedb", "pgvector"}
+    assert stats["rows"] is None or stats["rows"] >= 3
+
+    store.delete([first_id])
+    deleted_matches = [
+        row for row in store.search([1.0, 0.0, 0.0], top_k=10) if row["memory_id"] == first_id
+    ]
+    assert deleted_matches == []
+
+
+@pytest.mark.parametrize(
+    ("provider", "factory"),
+    [
+        ("memory", lambda tmp_path: InMemoryVectorStore(dimension=3)),
+        ("lancedb", lambda tmp_path: LanceDBVectorStore(tmp_path / "lancedb", dimension=3)),
+    ],
+)
+def test_vector_store_contract_for_local_backends(
+    provider: str, factory: VectorStoreFactory, tmp_path: Path
+) -> None:
+    _ = provider
+    _assert_vector_store_contract(factory(tmp_path))
 
 
 def test_build_runtime_fails_fast_on_schema_version(
@@ -163,6 +270,55 @@ def test_build_runtime_vector_fallback_disabled_raises(
         mvp_ingestion.build_runtime(
             {
                 "providers": {"embeddings": "local", "vector_db": "lancedb"},
+                "paths": {"data_dir": str(tmp_path)},
+                "storage": {"vector": {"allow_fallback": False}},
+            }
+        )
+
+
+def test_build_runtime_pgvector_fallback_uses_memory_provider(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    class BrokenPGVector:
+        def __init__(self, *_args, **_kwargs):
+            raise RuntimeError("pgvector unavailable")
+
+    monkeypatch.setattr(mvp_ingestion, "PGVectorStore", BrokenPGVector)
+    runtime = mvp_ingestion.build_runtime(
+        {
+            "providers": {
+                "embeddings": "local",
+                "vector_db": "pgvector",
+                "metadata_dsn": "postgres://example",
+            },
+            "paths": {"data_dir": str(tmp_path)},
+            "storage": {"vector": {"allow_fallback": True}},
+        }
+    )
+
+    assert runtime.health_state["mode"] == "degraded"
+    assert runtime.health_state["vector_provider"] == "memory"
+    assert runtime.health_state["requested_vector_provider"] == "pgvector"
+    assert runtime.vector_store.expected_dimensionality == runtime.embedding_provider.dimension
+
+
+def test_build_runtime_pgvector_fallback_disabled_raises(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    class BrokenPGVector:
+        def __init__(self, *_args, **_kwargs):
+            raise RuntimeError("pgvector unavailable")
+
+    monkeypatch.setattr(mvp_ingestion, "PGVectorStore", BrokenPGVector)
+
+    with pytest.raises(RuntimeError, match="pgvector unavailable"):
+        mvp_ingestion.build_runtime(
+            {
+                "providers": {
+                    "embeddings": "local",
+                    "vector_db": "pgvector",
+                    "metadata_dsn": "postgres://example",
+                },
                 "paths": {"data_dir": str(tmp_path)},
                 "storage": {"vector": {"allow_fallback": False}},
             }
@@ -384,6 +540,82 @@ def _fake_connect_with_responses(responses: dict[str, list[tuple[Any, ...]]]):
     return _connect
 
 
+class _RecordingCursor:
+    def __init__(self, state: dict[str, Any]):
+        self.state = state
+        self._current: list[tuple[Any, ...]] = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def execute(self, query: str, params: object | None = None) -> None:
+        normalized = " ".join(query.split())
+        self.state["queries"].append(normalized)
+        self.state["params"].append(params)
+        if normalized.startswith("SELECT version FROM memory_vector_schema_version"):
+            self._current = [(1,)]
+        elif normalized.startswith("SELECT COUNT(*) FROM memory_vectors"):
+            self._current = [(len(self.state["rows"]),)]
+        elif normalized.startswith("SELECT memory_id, chunk_id"):
+            self._current = [
+                (
+                    "11111111-1111-1111-1111-111111111111",
+                    "chunk-1",
+                    0,
+                    "sha256:abc",
+                    "user",
+                    "hello",
+                    0.1,
+                )
+            ]
+        elif normalized.startswith("DELETE FROM memory_vectors WHERE memory_id = %s"):
+            memory_id = params[0] if isinstance(params, tuple) else None
+            self.state["rows"] = [
+                row for row in self.state["rows"] if row[0] != memory_id
+            ]
+            self._current = []
+        elif normalized.startswith("INSERT INTO memory_vectors"):
+            if isinstance(params, tuple):
+                self.state["rows"].append(params)
+            self._current = []
+        else:
+            self._current = []
+
+    def fetchone(self):
+        if not self._current:
+            return None
+        return self._current.pop(0)
+
+    def fetchall(self):
+        rows = list(self._current)
+        self._current = []
+        return rows
+
+
+class _RecordingConnection:
+    def __init__(self, state: dict[str, Any]):
+        self.state = state
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def cursor(self):
+        return _RecordingCursor(self.state)
+
+
+def _recording_connect(state: dict[str, Any]):
+    def _connect(_dsn: str):
+        return _RecordingConnection(state)
+
+    return _connect
+
+
 def test_postgres_schema_version_invariant_and_health() -> None:
     responses = {
         "SELECT COUNT(*) FROM schema_version": [(1,)],
@@ -466,6 +698,104 @@ def test_postgres_live_integration_when_dsn_provided() -> None:
     assert loaded is not None
     assert loaded["id"] == payload["id"]
     assert store.health()["schema_version"] == 1
+
+
+def test_pgvector_startup_insert_search_and_health() -> None:
+    state: dict[str, Any] = {"queries": [], "params": [], "rows": []}
+    store = PGVectorStore(
+        "postgres://example",
+        dimension=3,
+        distance="l2",
+        connect_fn=_recording_connect(state),
+    )
+
+    assert any("CREATE EXTENSION IF NOT EXISTS vector" in query for query in state["queries"])
+    assert any("USING hnsw (vector vector_l2_ops)" in query for query in state["queries"])
+
+    store.insert(
+        "11111111-1111-1111-1111-111111111111",
+        [
+            {
+                "chunk_id": "chunk-1",
+                "chunk_index": 0,
+                "message_hash": "sha256:abc",
+                "role": "user",
+                "text": "hello",
+                "vector": [0.1, 0.2, 0.3],
+            }
+        ],
+        replace=True,
+    )
+    matches = store.search([0.1, 0.2, 0.3], top_k=1)
+    health = store.health()
+
+    assert matches == [
+        {
+            "memory_id": "11111111-1111-1111-1111-111111111111",
+            "chunk_id": "chunk-1",
+            "chunk_index": 0,
+            "message_hash": "sha256:abc",
+            "role": "user",
+            "text": "hello",
+            "score": 0.1,
+        }
+    ]
+    assert health["provider"] == "pgvector"
+    assert health["distance"] == "l2"
+    assert health["stats"]["rows"] == 1
+
+
+def test_pgvector_live_integration_when_dsn_provided() -> None:
+    dsn = os.getenv("AMH_TEST_POSTGRES_DSN")
+    if not dsn:
+        pytest.skip("AMH_TEST_POSTGRES_DSN not set")
+
+    table_name = f"memory_vectors_contract_{uuid4().hex}"
+    store = PGVectorStore(
+        dsn,
+        table_name=table_name,
+        dimension=3,
+        distance="cosine",
+    )
+    _assert_vector_store_contract(store)
+
+
+def test_runtime_postgres_pgvector_live_integration_when_dsn_provided(
+    tmp_path: Path,
+) -> None:
+    dsn = os.getenv("AMH_TEST_POSTGRES_DSN")
+    if not dsn:
+        pytest.skip("AMH_TEST_POSTGRES_DSN not set")
+
+    runtime = mvp_ingestion.configure_runtime(
+        config={
+            "providers": {
+                "embeddings": "local",
+                "metadata_db": "postgres",
+                "metadata_dsn": dsn,
+                "vector_db": "pgvector",
+            },
+            "paths": {"data_dir": str(tmp_path)},
+            "storage": {"vector": {"allow_fallback": False}},
+        }
+    )
+    unique_text = f"postgres pgvector contract {uuid4().hex}"
+    memory_id = str(uuid4())
+    result = mvp_ingestion.ingest_messages(
+        {
+            "id": memory_id,
+            "source": "ci",
+            "timestamp": "2026-01-01T00:00:00Z",
+            "messages": [{"role": "user", "text": unique_text}],
+            "metadata": {"imported_at": "2026-01-01T00:00:00Z"},
+        }
+    )
+    search_result = mvp_ingestion.search(unique_text, top_k=5)
+
+    assert result["id"] == memory_id
+    assert runtime.health_state["metadata_provider"] == "postgres"
+    assert runtime.health_state["vector_provider"] == "pgvector"
+    assert any(row["id"] == memory_id for row in search_result["results"])
 
 
 def test_lancedb_index_is_created_lazily(

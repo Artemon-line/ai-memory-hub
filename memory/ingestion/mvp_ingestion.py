@@ -15,7 +15,7 @@ from memory.backend.errors import SchemaVersionError, VectorDimensionError
 from memory.backend.log_safety import redact_secrets
 from memory.backend.metadata_store import SQLiteMetadataStore
 from memory.backend.postgres_metadata_store import PostgresMetadataStore
-from memory.backend.vector_store import InMemoryVectorStore, LanceDBVectorStore
+from memory.backend.vector_store import InMemoryVectorStore, LanceDBVectorStore, PGVectorStore
 from memory.config import HubConfig, load_config, parse_config
 from memory.ingestion.validate import (
     load_schema,
@@ -157,14 +157,22 @@ def build_runtime(
         embedding_provider = LocalEmbeddingProvider()
 
     expected_dimension = embedding_provider.dimension
+    requested_vector_provider = (
+        "memory" if cfg.providers.vector_db == "in_memory" else cfg.providers.vector_db
+    )
     vector_fallback_active = False
     fallback_reasons: list[str] = []
-    if cfg.providers.vector_db == "lancedb":
+    if requested_vector_provider == "memory":
+        vector_store = InMemoryVectorStore(dimension=expected_dimension)
+    else:
         try:
-            vector_store = LanceDBVectorStore(
-                data_dir / "lancedb", dimension=expected_dimension
+            vector_store = _build_vector_store(
+                provider=requested_vector_provider,
+                cfg=cfg,
+                data_dir=data_dir,
+                expected_dimension=expected_dimension,
             )
-        except RuntimeError as exc:
+        except Exception as exc:
             if not cfg.storage.vector.allow_fallback:
                 raise
             logger.warning(
@@ -174,8 +182,6 @@ def build_runtime(
             vector_store = InMemoryVectorStore(dimension=expected_dimension)
             vector_fallback_active = True
             fallback_reasons.append(type(exc).__name__)
-    else:
-        vector_store = InMemoryVectorStore(dimension=expected_dimension)
 
     _validate_vector_dimension(
         embedding_dimension=expected_dimension, vector_store=vector_store
@@ -194,9 +200,8 @@ def build_runtime(
     health_state = {
         "mode": mode,
         "metadata_provider": cfg.providers.metadata_db,
-        "vector_provider": "memory"
-        if vector_fallback_active or cfg.providers.vector_db != "lancedb"
-        else "lancedb",
+        "vector_provider": "memory" if vector_fallback_active else requested_vector_provider,
+        "requested_vector_provider": requested_vector_provider,
         "vector_fallback_active": vector_fallback_active,
         "reasons": fallback_reasons,
     }
@@ -208,6 +213,27 @@ def build_runtime(
         health_state=health_state,
         allow_trusted_appends=cfg.storage.allow_trusted_appends,
     )
+
+
+def _build_vector_store(
+    *,
+    provider: str,
+    cfg: HubConfig,
+    data_dir: Path,
+    expected_dimension: int,
+) -> Any:
+    if provider == "lancedb":
+        return LanceDBVectorStore(
+            data_dir / "lancedb", dimension=expected_dimension
+        )
+    if provider == "pgvector":
+        dsn = cfg.providers.metadata_dsn
+        return PGVectorStore(
+            dsn,
+            dimension=expected_dimension,
+            distance=cfg.storage.vector.distance,
+        )
+    raise ValueError(f"Unsupported vector provider: {provider}")
 
 
 def configure_runtime(

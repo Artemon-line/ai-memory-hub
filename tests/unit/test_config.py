@@ -1,6 +1,8 @@
-import pytest
 from pathlib import Path
-from memory.config import load_config, HubConfig
+
+import pytest
+
+from memory.config import HubConfig, parse_config, load_config
 
 def test_load_config_default():
     # Now this should load config.yaml if it exists
@@ -29,3 +31,22 @@ def test_load_config_from_file():
 def test_load_config_non_existent():
     with pytest.raises(FileNotFoundError):
         load_config("non_existent_config.yaml")
+
+
+def test_vector_provider_config_accepts_pgvector_and_memory_alias():
+    pg_config = parse_config(
+        {
+            "providers": {"vector_db": "pgvector"},
+            "storage": {"vector": {"distance": "inner_product"}},
+        }
+    )
+    assert pg_config.providers.vector_db == "pgvector"
+    assert pg_config.storage.vector.distance == "inner_product"
+
+    memory_config = parse_config({"providers": {"vector_db": "in_memory"}})
+    assert memory_config.providers.vector_db == "memory"
+
+
+def test_vector_provider_config_rejects_unknown_distance():
+    with pytest.raises(ValueError, match="storage.vector.distance"):
+        parse_config({"storage": {"vector": {"distance": "manhattan"}}})
