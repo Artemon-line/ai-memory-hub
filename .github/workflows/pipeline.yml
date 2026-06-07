@@ -79,10 +79,12 @@ jobs:
       - name: Pull models
         run: |
           ollama pull nomic-embed-text
+          ollama pull qwen2.5:0.5b
 
       - name: Run E2E tests
         env:
           PYTHONHASHSEED: '0'
+          AMH_OLLAMA_CHAT_MODEL: qwen2.5:0.5b
         run: uv run pytest tests/e2e
 
   storage-config:
