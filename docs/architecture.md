@@ -21,18 +21,18 @@ Implemented and verified in the codebase:
 - MCP client smoke profiles for Codex, Gemini, VS Code Copilot, and opencode over the streamable HTTP transport.
 - Omitted-ID insertion: normalization assigns a UUID when clients omit `id`.
 - Deterministic ingestion with message hashes, conversation hashes, duplicate detection, same-thread append handling, append-only chunking, and indexing state updates.
-- Message-level chunking: one stable chunk per normalized message.
+- Message-level chunking by default, plus opt-in token-window chunking for long messages.
 - Embedding providers: OpenAI and local deterministic embeddings.
 - Metadata stores: SQLite and Postgres.
 - Vector stores: LanceDB, PGVector, and in-memory.
 - Provider capabilities, schema-version checks, vector dimensionality checks, fallback policy, degraded health state, and dry-run wrappers.
 - Search result grouping by conversation score.
 - `memory_ask` returns structured `results`, human-readable `answer`, and `citations`.
+- Token-budgeted `memory_ask` is available through config or per-request `max_context_tokens`, with optional diagnostics.
 - Basic deterministic topic enrichment from message text.
 
 Planned or partial:
 
-- Token-budgeted `memory_ask` and token-aware chunking are planned in `token_budget_plan.md` and `improvements/context_building_plan.md`.
 - Retrieval precision improvements, including similarity thresholds, hybrid keyword/vector search, and metadata-aware reranking, are planned in `improvements/retrieval_precision_plan.md`.
 - Claude MCP smoke profile, negative client payload cases, explicit E2E retrieve checks, platform-specific importers, CLI commands, summaries, UI, SDKs, framework-specific agent examples, graph memory, shared memory, plugins, and optional cloud sync remain roadmap work.
 
@@ -44,7 +44,7 @@ Source Messages or Client Payloads
   -> Schema Validation
   -> Deterministic Hashing + Duplicate/Append Detection
   -> Metadata Store Write
-  -> Message-Level Chunking
+  -> Message-Level or Token-Window Chunking
   -> Embed Chunks
   -> Vector Store Write
   -> Search / Retrieve / Ask via MCP or HTTP API
@@ -78,7 +78,7 @@ Responsibilities:
 - Normalize message `role`, `text`, and common `content` aliases.
 - Normalize timestamps and metadata defaults.
 - Attach stable message hashes, conversation hashes, import timestamps, and topic metadata.
-- Produce deterministic message-level chunks with stable chunk IDs.
+- Produce deterministic message-level or token-window chunks with stable chunk IDs.
 
 Role normalization from arbitrary upstream exports is not yet a full platform-importer layer. Platform-specific parsers remain planned work.
 
@@ -157,7 +157,9 @@ Implemented retrieval flow:
 - `answer`: human-readable summary text.
 - `citations`: provenance for included chunks.
 
-Token budgeting, hybrid keyword/vector scoring, similarity thresholds, and metadata-aware reranking are not yet implemented.
+When budgeting is enabled, `memory_ask` selects, truncates, or drops context chunks within the configured budget and may return `context_tokens_used`, `chunks_selected`, `chunks_dropped`, and `tokenizer_used`.
+
+Hybrid keyword/vector scoring, similarity thresholds, and metadata-aware reranking are not yet implemented.
 
 ## Bring Your Own Stack Model
 

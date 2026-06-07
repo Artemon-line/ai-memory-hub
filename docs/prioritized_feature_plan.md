@@ -6,7 +6,7 @@ This plan captures unimplemented or partial features found while reconciling `do
 
 | Priority | Feature | Status | Existing plan |
 |----------|---------|--------|---------------|
-| P0 | Token-budgeted `memory_ask` | Planned | `token_budget_plan.md`, `improvements/context_building_plan.md` |
+| P0 | Token-budgeted `memory_ask` and token-aware ingestion chunking | Implemented | `token_budget_plan.md`, `improvements/context_building_plan.md` |
 | P0 | Retrieval precision: threshold, hybrid search, metadata rerank | Planned | `improvements/retrieval_precision_plan.md` |
 | P0 | MCP client smoke coverage for Codex, Gemini, Copilot, Claude, opencode | Partial | `mcp_client_smoke_plan.md` |
 | P1 | CLI ingest/search commands | Planned here | This doc |
@@ -17,20 +17,21 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P4 | Graph memory, decay, shared memory, plugins | Planned here | This doc and `roadmap.md` |
 | P5 | Optional encrypted cloud sync | Planned here | This doc and `roadmap.md` |
 
-## P0: Token-Budgeted Ask
+## P0: Token-Budgeted Ask And Token Chunking
 
 Use the existing token plans as the source of truth:
 
 - `token_budget_plan.md`
 - `improvements/context_building_plan.md`
 
-Implementation sequence:
+Implemented:
 
 1. Add tokenizer config defaults and lazy tokenizer adapter with deterministic fallback.
 2. Add optional `max_context_tokens` to API and MCP `memory_ask`.
 3. Select, skip, or truncate retrieved chunks inside the budget.
 4. Return non-breaking diagnostics such as selected/dropped chunks.
-5. Add unit, API, MCP, and regression tests.
+5. Add opt-in `chunking.strategy: token` ingestion windows with overlap.
+6. Add unit, API, MCP, and regression tests.
 
 ## P0: Retrieval Precision
 

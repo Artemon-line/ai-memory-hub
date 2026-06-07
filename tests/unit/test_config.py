@@ -50,3 +50,35 @@ def test_vector_provider_config_accepts_pgvector_and_memory_alias():
 def test_vector_provider_config_rejects_unknown_distance():
     with pytest.raises(ValueError, match="storage.vector.distance"):
         parse_config({"storage": {"vector": {"distance": "manhattan"}}})
+
+
+def test_tokenizer_and_ask_config_defaults():
+    config = parse_config({})
+
+    assert config.tokenizer.enabled is False
+    assert config.tokenizer.encoding == "cl100k_base"
+    assert config.ask.max_context_tokens == 2000
+
+
+def test_ask_config_rejects_invalid_context_budget():
+    with pytest.raises(ValueError, match="ask.max_context_tokens"):
+        parse_config({"ask": {"max_context_tokens": 0}})
+
+
+def test_chunking_config_defaults_and_validation():
+    config = parse_config({})
+
+    assert config.chunking.strategy == "message"
+    assert config.chunking.max_tokens == 800
+    assert config.chunking.overlap_tokens == 80
+
+    token_config = parse_config(
+        {"chunking": {"strategy": "token", "max_tokens": 128, "overlap_tokens": 16}}
+    )
+    assert token_config.chunking.strategy == "token"
+
+    with pytest.raises(ValueError, match="chunking.strategy"):
+        parse_config({"chunking": {"strategy": "paragraph"}})
+
+    with pytest.raises(ValueError, match="chunking.overlap_tokens"):
+        parse_config({"chunking": {"max_tokens": 8, "overlap_tokens": 8}})

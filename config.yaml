@@ -11,6 +11,18 @@ storage:
     # set false in production to fail fast on vector init errors
     allow_fallback: true
 
+tokenizer:
+  enabled: false
+  encoding: cl100k_base
+
+ask:
+  max_context_tokens: 2000
+
+chunking:
+  strategy: message
+  max_tokens: 800
+  overlap_tokens: 80
+
 # -------------------------
 # PROVIDERS (BYOS/BYOA)
 # -------------------------

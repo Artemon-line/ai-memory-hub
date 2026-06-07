@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +81,35 @@ class StorageConfig(BaseModel):
     vector: StorageVectorConfig = Field(default_factory=StorageVectorConfig)
 
 
+class TokenizerConfig(BaseModel):
+    enabled: bool = False
+    encoding: str = "cl100k_base"
+
+
+class AskConfig(BaseModel):
+    max_context_tokens: int = Field(default=2000, ge=1)
+
+
+class ChunkingConfig(BaseModel):
+    strategy: str = "message"
+    max_tokens: int = Field(default=800, ge=1)
+    overlap_tokens: int = Field(default=80, ge=0)
+
+    @field_validator("strategy")
+    @classmethod
+    def validate_strategy(cls, v: str) -> str:
+        value = v.lower()
+        if value not in {"message", "token"}:
+            raise ValueError("chunking.strategy must be one of: message, token")
+        return value
+
+    @model_validator(mode="after")
+    def validate_overlap(self) -> "ChunkingConfig":
+        if self.overlap_tokens >= self.max_tokens:
+            raise ValueError("chunking.overlap_tokens must be less than chunking.max_tokens")
+        return self
+
+
 class OpenAIConfig(BaseModel):
     base_url: str = "http://localhost:11434/v1"
     api_key: str = "dummy_key"
@@ -108,6 +137,9 @@ class HubConfig(BaseModel):
     # Use schema_config as the internal name to avoid collision with BaseModel.schema
     schema_config: SchemaConfig = Field(default_factory=SchemaConfig, alias="schema")
     storage: StorageConfig = Field(default_factory=StorageConfig)
+    tokenizer: TokenizerConfig = Field(default_factory=TokenizerConfig)
+    ask: AskConfig = Field(default_factory=AskConfig)
+    chunking: ChunkingConfig = Field(default_factory=ChunkingConfig)
     openai: OpenAIConfig = Field(default_factory=OpenAIConfig)
     mcp: MCPConfig = Field(default_factory=MCPConfig)
     api: APIConfig = Field(default_factory=APIConfig)

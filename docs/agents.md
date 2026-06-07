@@ -6,6 +6,10 @@ Related docs:
 - Architecture: `architecture.md`
 - Project overview: `../README.md`
 
+## Agent Working Instructions
+
+- After implementing any new feature, update `README.md` in the same change so the public project overview and usage guidance stay current.
+
 ## How Agents Interact With The Hub
 
 Agents act as ingestion and retrieval clients.

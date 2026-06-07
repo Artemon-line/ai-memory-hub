@@ -153,6 +153,13 @@ async def test_mcp_tool_handlers_insert_search_retrieve() -> None:
     assert ask_result["citations"][0]["id"] == ask_result["results"][0]["id"]
     assert ask_result["citations"][0]["text"] == ask_result["results"][0]["text"]
 
+    budgeted_ask_result = await handlers["memory_ask"](
+        "what was stored?", 3, max_context_tokens=100
+    )
+    assert budgeted_ask_result["status"] == "ok"
+    assert budgeted_ask_result["context_tokens_used"] <= 100
+    assert budgeted_ask_result["chunks_selected"] == 1
+
 
 @pytest.mark.asyncio
 async def test_mcp_tool_handlers_accept_codex_style_payload() -> None:
@@ -277,6 +284,11 @@ async def test_mcp_tool_handlers_invalid_inputs_return_consistent_errors() -> No
     assert ask_result["status"] == "error"
     assert ask_result["error_code"] == "invalid_input"
     assert "question" in ask_result["error_message"]
+
+    ask_budget_result = await handlers["memory_ask"]("hello", 5, max_context_tokens=0)
+    assert ask_budget_result["status"] == "error"
+    assert ask_budget_result["error_code"] == "invalid_input"
+    assert "max_context_tokens" in ask_budget_result["error_message"]
 
 
 @pytest.mark.asyncio

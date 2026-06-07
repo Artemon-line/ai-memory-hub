@@ -20,6 +20,7 @@ persistent memory without depending on one hosted memory platform.
 - FastAPI endpoints for direct HTTP ingestion, search, retrieval, and ask flows
 - Semantic retrieval over embedded conversation chunks
 - Conversation-aware result grouping with provenance metadata
+- Optional token-budgeted ask responses and token-aware ingestion chunking
 - Configurable embeddings provider: local OpenAI-compatible endpoint or OpenAI
 - Pluggable storage choices: SQLite or Postgres metadata, LanceDB, PGVector, or
   in-memory vectors
@@ -94,7 +95,7 @@ curl -X POST http://127.0.0.1:8000/memory/ask \
 ```text
 Conversation JSON
   -> Schema Validation
-  -> Chunk Messages
+  -> Chunk Messages or Token Windows
   -> Embed Chunks
   -> Store Metadata + Vectors
   -> Search / Retrieve / Ask
@@ -159,6 +160,11 @@ hiding strong unrelated matches.
 Clients can consume `memory_ask` either as a direct answer or as structured
 retrieval output with provenance.
 
+Pass `max_context_tokens` to `/memory/ask` to build the answer from only the
+chunks that fit the requested context budget. When budgeting is active, the
+response can include diagnostics such as `context_tokens_used`,
+`chunks_selected`, `chunks_dropped`, and `tokenizer_used`.
+
 ## MCP Interface
 
 When `interfaces.mcp` is enabled, the streamable HTTP MCP endpoint is mounted at:
@@ -172,7 +178,7 @@ http://127.0.0.1:8000/mcp/
 - `memory_insert(conversation_json)`
 - `memory_search(query, top_k=5, limit, cursor, source, date_from, date_to, tags)`
 - `memory_retrieve(id)`
-- `memory_ask(question, top_k=5)`
+- `memory_ask(question, top_k=5, max_context_tokens=None)`
 
 Example `tools/call` after MCP initialization:
 
@@ -317,6 +323,18 @@ storage:
     allow_fallback: true
     distance: cosine
 
+tokenizer:
+  enabled: false
+  encoding: cl100k_base
+
+ask:
+  max_context_tokens: 2000
+
+chunking:
+  strategy: message  # message | token
+  max_tokens: 800
+  overlap_tokens: 80
+
 schema:
   file: ./memory/schema/conversation.schema.json
 
@@ -333,6 +351,11 @@ openai:
   api_key: dummy_key
   model: gpt-4.1
 ```
+
+The default `chunking.strategy: message` keeps one chunk per normalized message.
+Set `chunking.strategy: token` to split long messages into token windows with
+`chunking.max_tokens` and `chunking.overlap_tokens`. Token chunking is opt-in and
+uses `tiktoken` when available, with a deterministic local heuristic fallback.
 
 ## Native Clients
 

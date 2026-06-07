@@ -29,5 +29,7 @@ class BaseIngestionAgent(ABC):
     async def retrieve(self, memory_id: str) -> Optional[Dict[str, Any]]:
         raise NotImplementedError("retrieve is not implemented")
 
-    async def ask(self, question: str, *, top_k: int = 5) -> Dict[str, Any]:
+    async def ask(
+        self, question: str, *, top_k: int = 5, max_context_tokens: int | None = None
+    ) -> Dict[str, Any]:
         raise NotImplementedError("ask is not implemented")

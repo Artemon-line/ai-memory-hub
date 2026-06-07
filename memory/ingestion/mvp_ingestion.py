@@ -23,6 +23,12 @@ from memory.ingestion.validate import (
     validate_conversation,
     validate_schema_compatibility,
 )
+from memory.ingestion.tokenizer import (
+    count_tokens,
+    split_token_windows,
+    tokenizer_used,
+    truncate_to_tokens,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +83,12 @@ class RuntimeDependencies:
     vector_store: Any
     health_state: dict[str, Any]
     allow_trusted_appends: bool = False
+    tokenizer_enabled: bool = False
+    tokenizer_encoding: str = "cl100k_base"
+    ask_max_context_tokens: int = 2000
+    chunking_strategy: str = "message"
+    chunking_max_tokens: int = 800
+    chunking_overlap_tokens: int = 80
 
 
 _RUNTIME: RuntimeDependencies | None = None
@@ -212,6 +224,12 @@ def build_runtime(
         vector_store=vector_store,
         health_state=health_state,
         allow_trusted_appends=cfg.storage.allow_trusted_appends,
+        tokenizer_enabled=cfg.tokenizer.enabled,
+        tokenizer_encoding=cfg.tokenizer.encoding,
+        ask_max_context_tokens=cfg.ask.max_context_tokens,
+        chunking_strategy=cfg.chunking.strategy,
+        chunking_max_tokens=cfg.chunking.max_tokens,
+        chunking_overlap_tokens=cfg.chunking.overlap_tokens,
     )
 
 
@@ -297,21 +315,73 @@ def chunk_selected_messages(
     chunks: list[dict[str, Any]] = []
     if not isinstance(messages, list):
         raise ValueError("Missing or invalid 'messages' key in conversation object")
+    runtime = _runtime()
     conversation_id = str(obj["id"])
     for offset, message in enumerate(messages):
-        chunk_index = start_index + offset
-        chunks.append(
-            {
-                "chunk_id": f"{conversation_id}:{chunk_index}:{message['hash']}",
-                "chunk_index": chunk_index,
-                "conversation_id": conversation_id,
-                "message_hash": str(message["hash"]),
-                "role": str(message["role"]),
-                "text": str(message["text"]),
-                "index_state": "pending_index",
-            }
+        message_hash = str(message["hash"])
+        role = str(message["role"])
+        text = str(message["text"])
+        token_windows = _message_token_windows(
+            text,
+            strategy=runtime.chunking_strategy,
+            max_tokens=runtime.chunking_max_tokens,
+            overlap_tokens=runtime.chunking_overlap_tokens,
+            encoding=runtime.tokenizer_encoding,
         )
+        for token_window_index, chunk_text in enumerate(token_windows):
+            chunk_index = start_index + len(chunks)
+            chunks.append(
+                {
+                    "chunk_id": f"{conversation_id}:{chunk_index}:{message_hash}",
+                    "chunk_index": chunk_index,
+                    "conversation_id": conversation_id,
+                    "message_hash": message_hash,
+                    "message_index": start_index + offset,
+                    "token_window_index": token_window_index,
+                    "role": role,
+                    "text": chunk_text,
+                    "index_state": "pending_index",
+                }
+            )
     return chunks
+
+
+def _message_token_windows(
+    text: str,
+    *,
+    strategy: str,
+    max_tokens: int,
+    overlap_tokens: int,
+    encoding: str,
+) -> list[str]:
+    if strategy == "message":
+        return [text]
+    if overlap_tokens >= max_tokens:
+        raise ValueError("chunking.overlap_tokens must be less than chunking.max_tokens")
+    return split_token_windows(
+        text,
+        max_tokens=max_tokens,
+        overlap_tokens=overlap_tokens,
+        encoding=encoding,
+    )
+
+
+def _attach_index_chunks(obj: dict[str, Any], chunks: list[dict[str, Any]]) -> None:
+    metadata = obj.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+        obj["metadata"] = metadata
+    metadata["index_chunks"] = [
+        {
+            "chunk_id": str(chunk["chunk_id"]),
+            "chunk_index": int(chunk["chunk_index"]),
+            "message_hash": str(chunk["message_hash"]),
+            "role": str(chunk["role"]),
+            "text": str(chunk["text"]),
+            "index_state": str(chunk.get("index_state", "pending_index")),
+        }
+        for chunk in chunks
+    ]
 
 
 def embed_chunks(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -708,7 +778,20 @@ def ingest_messages(
         
         # If we are here, we either have new messages or we are re-indexing existing
         indexing_messages = new_messages if new_messages else updated.get("messages", [])
-        chunks = chunk_selected_messages(updated, indexing_messages, start_index=start_index)
+        chunk_start_index = (
+            _next_chunk_index(updated, fallback_start_index=start_index)
+            if new_messages
+            else 0
+        )
+        chunks = chunk_selected_messages(
+            updated, indexing_messages, start_index=chunk_start_index
+        )
+        if new_messages:
+            _extend_index_chunks(updated, chunks)
+        else:
+            _attach_index_chunks(updated, chunks)
+        if new_messages or chunks:
+            store.insert(updated)
         try:
             embeddings = embed_chunks(chunks)
             store_vectors(str(updated["id"]), embeddings, replace=(start_index == 0))
@@ -727,6 +810,7 @@ def ingest_messages(
 
     # 3. Chunk messages
     chunks = chunk_messages(conversation_json)
+    _attach_index_chunks(conversation_json, chunks)
 
     # 4. Store metadata with pending chunks before embedding
     metadata_id, inserted = _insert_new_conversation(conversation_json)
@@ -851,7 +935,9 @@ def retrieve(memory_id: str) -> dict[str, Any] | None:
     return runtime.metadata_store.get(memory_id)
 
 
-def ask(question: str, top_k: int = 5) -> dict[str, Any]:
+def ask(
+    question: str, top_k: int = 5, max_context_tokens: int | None = None
+) -> dict[str, Any]:
     search_result = search(query=question, top_k=top_k)
     matches = search_result.get("results", [])
     if not matches:
@@ -862,6 +948,78 @@ def ask(question: str, top_k: int = 5) -> dict[str, Any]:
             "citations": [],
         }
 
+    runtime = _runtime()
+    budget_enabled = runtime.tokenizer_enabled or max_context_tokens is not None
+    if not budget_enabled:
+        return _ask_from_matches(matches, top_k=top_k)
+
+    token_budget = (
+        max_context_tokens
+        if max_context_tokens is not None
+        else runtime.ask_max_context_tokens
+    )
+    selected_matches, citations, context_lines, tokens_used, chunks_dropped = (
+        _select_ask_context(
+            matches=matches[:top_k],
+            max_context_tokens=token_budget,
+            encoding=runtime.tokenizer_encoding,
+        )
+    )
+    answer = (
+        "Based on stored memory:\n" + "\n".join(context_lines)
+        if context_lines
+        else "I could not fit relevant memory within the context budget."
+    )
+    return {
+        "status": "ok",
+        "results": selected_matches,
+        "answer": answer,
+        "citations": citations,
+        "context_tokens_used": tokens_used,
+        "chunks_selected": len(selected_matches),
+        "chunks_dropped": chunks_dropped,
+        "tokenizer_used": tokenizer_used(runtime.tokenizer_encoding),
+    }
+
+
+def _next_chunk_index(
+    conversation: dict[str, Any], *, fallback_start_index: int
+) -> int:
+    metadata = conversation.get("metadata", {})
+    index_chunks = metadata.get("index_chunks") if isinstance(metadata, dict) else None
+    if isinstance(index_chunks, list):
+        indexes = [
+            int(chunk.get("chunk_index", -1))
+            for chunk in index_chunks
+            if isinstance(chunk, dict)
+        ]
+        if indexes:
+            return max(indexes) + 1
+    return fallback_start_index
+
+
+def _extend_index_chunks(obj: dict[str, Any], chunks: list[dict[str, Any]]) -> None:
+    metadata = obj.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+        obj["metadata"] = metadata
+    existing = metadata.get("index_chunks")
+    if not isinstance(existing, list):
+        existing = []
+    metadata["index_chunks"] = existing + [
+        {
+            "chunk_id": str(chunk["chunk_id"]),
+            "chunk_index": int(chunk["chunk_index"]),
+            "message_hash": str(chunk["message_hash"]),
+            "role": str(chunk["role"]),
+            "text": str(chunk["text"]),
+            "index_state": str(chunk.get("index_state", "pending_index")),
+        }
+        for chunk in chunks
+    ]
+
+
+def _ask_from_matches(matches: list[dict[str, Any]], *, top_k: int) -> dict[str, Any]:
     citations: list[dict[str, Any]] = []
     context_lines: list[str] = []
     for row in matches:
@@ -883,6 +1041,56 @@ def ask(question: str, top_k: int = 5) -> dict[str, Any]:
         "answer": answer,
         "citations": citations[:top_k],
     }
+
+
+def _select_ask_context(
+    *,
+    matches: list[dict[str, Any]],
+    max_context_tokens: int,
+    encoding: str,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str], int, int]:
+    selected_matches: list[dict[str, Any]] = []
+    citations: list[dict[str, Any]] = []
+    context_lines: list[str] = []
+    tokens_used = 0
+    chunks_dropped = 0
+
+    for row in matches:
+        citation_id = row.get("id")
+        chunk_index = int(row.get("chunk_index", 0))
+        prefix = f"- [{citation_id}#{chunk_index}] "
+        prefix_tokens = count_tokens(prefix, encoding)
+        remaining = max_context_tokens - tokens_used - prefix_tokens
+        if remaining <= 0:
+            chunks_dropped += 1
+            continue
+
+        text = str(row.get("text", ""))
+        text_tokens = count_tokens(text, encoding)
+        selected_text = text
+        if text_tokens > remaining:
+            selected_text = truncate_to_tokens(text, remaining, encoding)
+            text_tokens = count_tokens(selected_text, encoding)
+        if not selected_text:
+            chunks_dropped += 1
+            continue
+
+        line = prefix + selected_text
+        line_tokens = prefix_tokens + text_tokens
+        selected_row = dict(row)
+        selected_row["text"] = selected_text
+        citation = {
+            "id": citation_id,
+            "chunk_index": chunk_index,
+            "score": float(row.get("score", 0.0)),
+            "text": selected_text,
+        }
+        selected_matches.append(selected_row)
+        citations.append(citation)
+        context_lines.append(line)
+        tokens_used += line_tokens
+
+    return selected_matches, citations, context_lines, tokens_used, chunks_dropped
 
 
 def runtime_health() -> dict[str, Any]:

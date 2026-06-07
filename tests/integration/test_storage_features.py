@@ -39,6 +39,49 @@ def test_sqlite_capabilities_and_health(tmp_path: Path) -> None:
     assert health["schema_version"] == 1
 
 
+def test_sqlite_metadata_store_tracks_index_chunk_manifest(tmp_path: Path) -> None:
+    store = SQLiteMetadataStore(tmp_path / "metadata.sqlite3")
+    conversation = {
+        "id": "d9fd4c95-9cb3-4fd5-b967-3027f8863210",
+        "source": "manual",
+        "timestamp": "2026-01-01T00:00:00Z",
+        "messages": [
+            {"role": "user", "text": "alpha beta gamma", "hash": "sha256:" + "a" * 64}
+        ],
+        "metadata": {
+            "imported_at": "2026-01-01T00:00:00Z",
+            "index_chunks": [
+                {
+                    "chunk_id": "d9fd4c95-9cb3-4fd5-b967-3027f8863210:0:sha256:" + "a" * 64,
+                    "chunk_index": 0,
+                    "message_hash": "sha256:" + "a" * 64,
+                    "role": "user",
+                    "text": "alpha beta",
+                    "index_state": "pending_index",
+                },
+                {
+                    "chunk_id": "d9fd4c95-9cb3-4fd5-b967-3027f8863210:1:sha256:" + "a" * 64,
+                    "chunk_index": 1,
+                    "message_hash": "sha256:" + "a" * 64,
+                    "role": "user",
+                    "text": "beta gamma",
+                    "index_state": "pending_index",
+                },
+            ],
+        },
+    }
+
+    memory_id = store.insert(conversation)
+    assert store.is_fully_indexed(memory_id) is False
+
+    store.mark_chunks_indexed(
+        memory_id,
+        [chunk["chunk_id"] for chunk in conversation["metadata"]["index_chunks"]],
+    )
+
+    assert store.is_fully_indexed(memory_id) is True
+
+
 def test_inmemory_vector_dimension_validation_insert_and_search() -> None:
     store = InMemoryVectorStore(dimension=3)
 

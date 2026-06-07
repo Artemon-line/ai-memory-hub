@@ -376,6 +376,7 @@ class SQLiteMetadataStore:
                 """,
                 (conversation_id, index, role, text, message_hash),
             )
+        for chunk in self._index_chunks(conversation_json):
             conn.execute(
                 """
                 INSERT OR REPLACE INTO chunks
@@ -383,12 +384,33 @@ class SQLiteMetadataStore:
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    f"{conversation_id}:{index}:{message_hash}",
+                    str(chunk["chunk_id"]),
                     conversation_id,
-                    index,
-                    message_hash,
-                    role,
-                    text,
-                    "pending_index",
+                    int(chunk["chunk_index"]),
+                    str(chunk["message_hash"]),
+                    str(chunk["role"]),
+                    str(chunk["text"]),
+                    str(chunk.get("index_state", "pending_index")),
                 ),
             )
+
+    def _index_chunks(self, conversation_json: dict[str, Any]) -> list[dict[str, Any]]:
+        metadata = conversation_json.get("metadata", {})
+        chunks = metadata.get("index_chunks") if isinstance(metadata, dict) else None
+        if isinstance(chunks, list) and all(isinstance(chunk, dict) for chunk in chunks):
+            return chunks
+        fallback_chunks: list[dict[str, Any]] = []
+        messages = conversation_json.get("messages", [])
+        for index, message in enumerate(messages if isinstance(messages, list) else []):
+            message_hash = str(message["hash"])
+            fallback_chunks.append(
+                {
+                    "chunk_id": f"{conversation_json['id']}:{index}:{message_hash}",
+                    "chunk_index": index,
+                    "message_hash": message_hash,
+                    "role": str(message["role"]),
+                    "text": str(message["text"]),
+                    "index_state": "pending_index",
+                }
+            )
+        return fallback_chunks

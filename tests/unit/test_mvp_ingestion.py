@@ -77,7 +77,11 @@ def _valid_conversation() -> dict[str, Any]:
 
 
 def _configure_stubs(
-    *, allow_trusted_appends: bool = False
+    *,
+    allow_trusted_appends: bool = False,
+    chunking_strategy: str = "message",
+    chunking_max_tokens: int = 800,
+    chunking_overlap_tokens: int = 80,
 ) -> tuple[StubMetadataStore, StubVectorStore]:
     metadata = StubMetadataStore()
     vectors = StubVectorStore()
@@ -88,6 +92,9 @@ def _configure_stubs(
             vector_store=vectors,
             health_state={"mode": "ok", "vector_fallback_active": False},
             allow_trusted_appends=allow_trusted_appends,
+            chunking_strategy=chunking_strategy,
+            chunking_max_tokens=chunking_max_tokens,
+            chunking_overlap_tokens=chunking_overlap_tokens,
         )
     )
     return metadata, vectors
@@ -218,6 +225,64 @@ def test_strict_raw_transcript_ingestion() -> None:
     stored = metadata.by_id[result["id"]]
     assert stored["messages"][0]["role"] == "user"
     assert len(vectors.rows) == 2
+
+
+def test_token_chunking_splits_long_messages_with_overlap() -> None:
+    metadata, vectors = _configure_stubs(
+        chunking_strategy="token",
+        chunking_max_tokens=3,
+        chunking_overlap_tokens=1,
+    )
+    conversation = _valid_conversation()
+    conversation["messages"] = [
+        {"role": "user", "text": "alpha beta gamma delta epsilon"},
+    ]
+
+    result = mvp_ingestion.ingest_messages(conversation)
+
+    assert result["embedded_chunks"] == 2
+    assert result["chunks"] == 2
+    assert [row["chunk_index"] for row in vectors.rows] == [0, 1]
+    assert [row["text"] for row in vectors.rows] == [
+        "alpha beta gamma",
+        "gamma delta epsilon",
+    ]
+    stored = metadata.by_id["d9fd4c95-9cb3-4fd5-b967-3027f8863210"]
+    assert [chunk["chunk_index"] for chunk in stored["metadata"]["index_chunks"]] == [
+        0,
+        1,
+    ]
+
+
+def test_token_chunking_append_continues_chunk_indexes() -> None:
+    metadata, vectors = _configure_stubs(
+        allow_trusted_appends=True,
+        chunking_strategy="token",
+        chunking_max_tokens=3,
+        chunking_overlap_tokens=1,
+    )
+    base = _valid_conversation()
+    base["messages"] = [
+        {"role": "user", "text": "alpha beta gamma delta epsilon"},
+    ]
+    mvp_ingestion.ingest_messages(base)
+
+    longer = _valid_conversation()
+    longer["messages"] = [
+        {"role": "user", "text": "alpha beta gamma delta epsilon"},
+        {"role": "assistant", "text": "zeta eta theta iota kappa"},
+    ]
+    result = mvp_ingestion.ingest_messages(longer)
+
+    assert result["embedded_chunks"] == 2
+    assert [row["chunk_index"] for row in vectors.rows] == [0, 1, 2, 3]
+    stored = metadata.by_id["d9fd4c95-9cb3-4fd5-b967-3027f8863210"]
+    assert [chunk["chunk_index"] for chunk in stored["metadata"]["index_chunks"]] == [
+        0,
+        1,
+        2,
+        3,
+    ]
 
 
 def test_ingest_messages_invalid_json_raises() -> None:

@@ -75,6 +75,8 @@ Defaults:
 
 ### 5) Token-based chunk strategy
 
+Status: implemented.
+
 Add optional chunker in ingestion:
 
 - Split long message text by token window (with overlap).

@@ -25,6 +25,7 @@ class RetrieveRequest(BaseModel):
 class AskRequest(BaseModel):
     question: str
     top_k: int = Field(default=5, ge=1, le=100)
+    max_context_tokens: int | None = Field(default=None, ge=1)
 
 
 def _register_api_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
@@ -53,7 +54,11 @@ def _register_api_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
 
     async def memory_ask(request: AskRequest) -> dict[str, Any]:
         return redact_content_hashes(
-            await agent.ask(request.question, top_k=request.top_k)
+            await agent.ask(
+                request.question,
+                top_k=request.top_k,
+                max_context_tokens=request.max_context_tokens,
+            )
         )
 
     app.post("/memory/ask")(memory_ask)

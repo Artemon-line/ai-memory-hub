@@ -131,3 +131,22 @@ def test_memory_ask() -> None:
     assert isinstance(body["citations"], list)
     assert body["citations"][0]["id"] == body["results"][0]["id"]
     assert body["citations"][0]["text"] == body["results"][0]["text"]
+
+
+def test_memory_ask_accepts_context_budget() -> None:
+    client = _client()
+    payload = _conversation()
+    client.post("/memory/insert", json=payload)
+
+    ask = client.post(
+        "/memory/ask",
+        json={"question": "what did I say?", "top_k": 3, "max_context_tokens": 100},
+    )
+
+    assert ask.status_code == 200
+    body = ask.json()
+    assert body["status"] == "ok"
+    assert body["context_tokens_used"] <= 100
+    assert body["chunks_selected"] == 1
+    assert body["chunks_dropped"] == 0
+    assert body["tokenizer_used"] in {"heuristic", "tiktoken:cl100k_base"}

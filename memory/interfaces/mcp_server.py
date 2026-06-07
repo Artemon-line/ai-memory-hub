@@ -545,7 +545,9 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
             )
         return _envelope(status="ok", id=id, memory=redact_content_hashes(memory))
 
-    async def memory_ask(question: str, top_k: int = 5) -> dict[str, Any]:
+    async def memory_ask(
+        question: str, top_k: int = 5, max_context_tokens: int | None = None
+    ) -> dict[str, Any]:
         if not isinstance(question, str) or not question.strip():
             return _envelope(
                 status="error",
@@ -575,8 +577,32 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 error_message="top_k must be an integer between 1 and 100",
             )
 
+        if max_context_tokens is not None:
+            if isinstance(max_context_tokens, str):
+                try:
+                    max_context_tokens = int(max_context_tokens)
+                except ValueError:
+                    return _envelope(
+                        status="error",
+                        error_code="invalid_input",
+                        error_message="max_context_tokens must be an integer",
+                    )
+            if (
+                not isinstance(max_context_tokens, int)
+                or max_context_tokens < 1
+            ):
+                return _envelope(
+                    status="error",
+                    error_code="invalid_input",
+                    error_message="max_context_tokens must be a positive integer",
+                )
+
         try:
-            result = await agent.ask(question=question, top_k=top_k)
+            result = await agent.ask(
+                question=question,
+                top_k=top_k,
+                max_context_tokens=max_context_tokens,
+            )
         except Exception as exc:
             return _envelope(
                 status="error",
