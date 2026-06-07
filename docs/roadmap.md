@@ -79,8 +79,8 @@ When planning or estimating work, treat phases as **ordered capability layers**:
 
 ### 1.6 CLI (optional)
 
-- [ ] `aimh ingest <file>`
-- [ ] `aimh search "<query>"`
+- [ ] `aim ingest <file>`
+- [ ] `aim search "<query>"`
 
 **Milestone:** Ingest via MCP/API, validate against unified schema, store in SQLite+vector DB, and retrieve via HTTP or MCP.
 

@@ -14,146 +14,213 @@ Implementation plan for adding token-aware context budgeting and optional token-
 - Making `tiktoken` a hard runtime dependency for all modes.
 - Changing external contracts in a breaking way.
 
-## Phase 1: `ask` Token Budgeting (recommended first)
+## Current Status
+
+Implemented:
+
+- [x] Config defaults for `tokenizer.enabled`, `tokenizer.encoding`, and `ask.max_context_tokens`.
+- [x] Lazy tokenizer adapter in `memory/ingestion/tokenizer.py`.
+- [x] Deterministic fallback tokenizer when `tiktoken` is missing or an encoding cannot load.
+- [x] Token-budgeted `ask` context selection in `memory/ingestion/mvp_ingestion.py`.
+- [x] Optional diagnostics for budgeted ask responses: `context_tokens_used`, `chunks_selected`, `chunks_dropped`, and `tokenizer_used`.
+- [x] Optional `max_context_tokens` on HTTP `POST /memory/ask`.
+- [x] Optional `max_context_tokens` on MCP `memory_ask`.
+- [x] Config defaults for `chunking.strategy`, `chunking.max_tokens`, and `chunking.overlap_tokens`.
+- [x] Opt-in token-window ingestion chunking with overlap.
+- [x] SQLite chunk-state tracking for token chunk manifests through `metadata.index_chunks`.
+- [x] README and core docs updated for token-budgeted ask and token-aware chunking.
+- [x] Unit, API, MCP, integration, and regression tests for implemented behavior.
+- [x] Dedicated fixed-corpus performance benchmark for ask latency and selected-context size distribution.
+- [x] Dedicated default-mode slowdown benchmark for `tokenizer.enabled=false`.
+
+Not implemented yet:
+
+- None.
+
+## Phase 1: `ask` Token Budgeting
 
 ### 1) Config and defaults
 
-Add config keys (safe defaults):
+- [x] Add `tokenizer.enabled: false`.
+- [x] Add `tokenizer.encoding: cl100k_base`.
+- [x] Add `ask.max_context_tokens: 2000`.
+- [x] Keep budgeting inactive by default.
+- [x] Preserve existing request behavior when no new fields are sent.
+- [x] Allow request-level `max_context_tokens` to activate budgeting even when `tokenizer.enabled` is `false`.
 
-- `tokenizer.enabled: false`
-- `tokenizer.encoding: cl100k_base`
-- `ask.max_context_tokens: 2000`
+Implemented details:
 
-Behavior:
-
-- If tokenizer is disabled or unavailable, keep current behavior.
-- Existing requests without new fields behave exactly as today.
+- Config models are in `memory/config.py`.
+- Defaults are present in `config.yaml`.
+- Existing unbudgeted ask behavior remains unchanged unless budgeting is enabled by config or request.
 
 ### 2) Tokenizer adapter module
 
-Create a small wrapper (for example `memory/ingestion/tokenizer.py`) with:
+- [x] Add `count_tokens(text: str, encoding: str) -> int`.
+- [x] Add `truncate_to_tokens(text: str, max_tokens: int, encoding: str) -> str`.
+- [x] Add `split_token_windows(text: str, *, max_tokens: int, overlap_tokens: int, encoding: str) -> list[str]`.
+- [x] Add `tokenizer_used(encoding: str) -> str`.
+- [x] Lazy import `tiktoken`.
+- [x] Cache encoding lookup in-process.
+- [x] Fall back to a deterministic heuristic if import or encoding load fails.
+- [x] Log one warning when the fallback path is used.
 
-- `count_tokens(text: str, encoding: str) -> int`
-- `truncate_to_tokens(text: str, max_tokens: int, encoding: str) -> str`
+Implemented details:
 
-Requirements:
-
-- Lazy import `tiktoken`.
-- If import/encoding fails, fall back to deterministic heuristic (word/char-based) and log warning.
+- Adapter lives at `memory/ingestion/tokenizer.py`.
+- `tiktoken` remains optional and is not a hard runtime dependency.
 
 ### 3) Token-budgeted context builder in `ask`
 
-Update `memory/ingestion/mvp_ingestion.py`:
+- [x] Keep current search ranking.
+- [x] Accumulate retrieved chunks until `max_context_tokens` is reached.
+- [x] Truncate chunks that exceed the remaining budget.
+- [x] Drop chunks that cannot fit.
+- [x] Build answers from included chunks only.
+- [x] Return citations only for included chunks.
+- [x] Return selected `results` only when budgeting is active.
+- [x] Return optional diagnostics only when budgeting is active.
+- [x] Cover config-enabled budgeting with tests.
 
-- Keep current search ranking.
-- Accumulate retrieved chunks until `max_context_tokens` is reached.
-- Skip or truncate chunks that exceed remaining budget.
-- Build answer from included chunks only.
+Implemented details:
 
-Response additions (non-breaking):
-
-- `citations` remain as-is (only selected chunks).
-- Optional diagnostics fields:
-  - `context_tokens_used`
-  - `chunks_selected`
-  - `chunks_dropped`
-  - `tokenizer_used`
+- Implemented in `memory/ingestion/mvp_ingestion.py`.
+- Budgeted ask preserves ranked order and uses deterministic overflow handling.
+- Diagnostics are `context_tokens_used`, `chunks_selected`, `chunks_dropped`, and `tokenizer_used`.
 
 ### 4) API and MCP wiring
 
-Add optional `max_context_tokens` to:
+- [x] Add optional `max_context_tokens` to `POST /memory/ask`.
+- [x] Add optional `max_context_tokens` to MCP tool `memory_ask`.
+- [x] Use config default when omitted and tokenizer budgeting is enabled.
+- [x] Reject invalid MCP values with the stable `invalid_input` envelope.
+- [x] Use existing FastAPI/Pydantic request validation for invalid HTTP request fields.
 
-- `POST /memory/ask`
-- MCP tool `memory_ask`
+Implemented details:
 
-Defaults:
-
-- If omitted, use config default.
-- If invalid, return existing-style `invalid_input` errors.
+- HTTP wiring is in `memory/api/server.py`.
+- MCP wiring is in `memory/interfaces/mcp_server.py`.
+- Agent interface propagation is in `memory/ingestion/base_agent.py` and `memory/ingestion/mvp_ingestion_agent.py`.
 
 ## Phase 2: Optional token-aware ingestion chunking
 
 ### 5) Token-based chunk strategy
 
-Status: implemented.
+- [x] Add optional token-window chunker in ingestion.
+- [x] Split long message text by token window.
+- [x] Support window overlap.
+- [x] Preserve `chunk_index`, `role`, `message_hash`, stable `chunk_id`, and chunk text.
+- [x] Gate behavior behind `chunking.strategy: message|token`.
+- [x] Add `chunking.max_tokens`.
+- [x] Add `chunking.overlap_tokens`.
+- [x] Validate `chunking.overlap_tokens < chunking.max_tokens`.
+- [x] Track token chunk manifests for SQLite chunk index state.
 
-Add optional chunker in ingestion:
+Implemented details:
 
-- Split long message text by token window (with overlap).
-- Preserve metadata (`chunk_index`, `role`, maybe `token_count`).
-
-Gate behind config:
-
-- `chunking.strategy: message|token`
-- `chunking.max_tokens`
-- `chunking.overlap_tokens`
+- Config models and validation are in `memory/config.py`.
+- Defaults are present in `config.yaml`:
+  - `chunking.strategy: message`
+  - `chunking.max_tokens: 800`
+  - `chunking.overlap_tokens: 80`
+- `chunking.strategy: token` splits each long message into overlapping token windows.
+- Token windows use `tiktoken` when available and the deterministic fallback otherwise.
+- SQLite metadata indexing uses `metadata.index_chunks` when present so chunk state tracks token windows rather than only message-level chunks.
+- Public conversation `messages` remain unchanged; token chunking affects indexing chunks only.
 
 ### 6) Compatibility
 
-- Default remains current message-level chunking.
-- Token-based chunking is opt-in only.
+- [x] Keep default message-level chunking.
+- [x] Keep token-based chunking opt-in only.
+- [x] Preserve existing API and MCP client contracts.
+- [x] Preserve existing ingestion/search/retrieve/ask behavior under the default `message` strategy.
+- [x] Continue append-only chunk indexes correctly when token chunking is enabled.
 
-## Testing Guidelines
+## Testing
 
-## A. Unit tests
+### A. Unit tests
 
-Tokenizer adapter tests:
+- [x] Tokenizer fallback counts and truncates deterministically.
+- [x] Tokenizer fallback splits overlapping windows.
+- [x] Ask budgeting includes ranked chunks first within budget.
+- [x] Ask budgeting truncates or drops overflow chunks predictably.
+- [x] Ask budgeting returns citations only for included chunks.
+- [x] Config-enabled ask budgeting is covered.
+- [x] Token chunking splits long messages with overlap.
+- [x] Token chunking append flow continues chunk indexes.
+- [x] Config validation covers defaults, invalid strategies, invalid budgets, and invalid overlap.
 
-- Counts tokens deterministically for fixture strings.
-- Truncates text to budget and never exceeds budget.
-- Fallback path works when `tiktoken` is unavailable.
-- Invalid encoding returns controlled fallback/error behavior.
+Implemented details:
 
-Context budgeting tests (`ask`):
+- Tokenizer tests are in `tests/unit/test_tokenizer.py`.
+- Ask context budgeting tests are in `tests/unit/test_mvp_ask_budget.py`.
+- Token chunking and append behavior tests are in `tests/unit/test_mvp_ingestion.py`.
+- Config validation tests are in `tests/unit/test_config.py`.
 
-- Includes highest-ranked chunks first within budget.
-- Drops or truncates overflow chunks predictably.
-- Returns citations only for included chunks.
-- Empty search results return graceful answer with empty citations.
+### B. API tests
 
-## B. API tests
+- [x] `POST /memory/ask` works without `max_context_tokens`.
+- [x] `POST /memory/ask` honors provided `max_context_tokens`.
+- [x] Response shape remains stable with `status`, `answer`, and `citations`.
+- [x] Invalid HTTP request fields use the existing FastAPI/Pydantic validation path.
 
-For `POST /memory/ask`:
+Implemented details:
 
-- Works without `max_context_tokens` (backward compatible).
-- Honors provided `max_context_tokens`.
-- Rejects invalid values (0, negative, non-integer).
-- Response shape remains stable (`status`, `answer`, `citations`).
+- API budgeted ask coverage is in `tests/integration/test_api_endpoints.py`.
 
-## C. MCP tool tests
+### C. MCP tool tests
 
-For `memory_ask`:
+- [x] `memory_ask` works with existing args: `question`, `top_k`.
+- [x] `memory_ask` accepts optional `max_context_tokens`.
+- [x] Invalid `max_context_tokens` returns `status=error`.
+- [x] Invalid `max_context_tokens` returns `error_code=invalid_input`.
+- [x] Invalid `max_context_tokens` returns `error_message`.
 
-- Works with existing args (`question`, `top_k`).
-- Accepts optional `max_context_tokens`.
-- Invalid inputs return consistent envelope:
-  - `status=error`
-  - `error_code=invalid_input`
-  - `error_message` present.
+Implemented details:
 
-## D. Regression/compatibility tests
+- MCP coverage is in `tests/unit/test_mcp_tools.py`.
 
-- Existing ingestion/search/retrieve tests must still pass unchanged.
-- Existing MCP prompt/tool/resource tests must still pass.
-- Deterministic ordering in search and citations is preserved.
+### D. Regression/compatibility tests
 
-## E. Performance checks (lightweight)
+- [x] Existing ingestion/search/retrieve tests pass unchanged.
+- [x] Existing MCP prompt/tool/resource tests pass.
+- [x] Deterministic ordering in search and citations is preserved.
+- [x] SQLite metadata chunk manifest tracking is covered.
+- [x] Full test suite passes after implementation.
 
-On fixed test corpus:
+Implemented details:
 
-- Compare average `ask` latency before/after.
-- Compare selected-context size distribution.
-- Ensure no significant slowdown in default mode (`tokenizer.enabled=false`).
+- SQLite metadata chunk manifest coverage is in `tests/integration/test_storage_features.py`.
+- Latest full run after these changes: `92 passed, 5 skipped`.
+
+### E. Performance checks
+
+- [x] Compare average `ask` latency before and after on a fixed test corpus.
+- [x] Compare selected-context size distribution on a fixed test corpus.
+- [x] Verify no significant slowdown in default mode with `tokenizer.enabled=false`.
+
+Additional details:
+
+- Benchmark module is `memory/benchmarks/token_budget.py`.
+- Run it with `python -m memory.benchmarks.token_budget --iterations 200`.
+- The benchmark uses a fixed in-memory retrieval corpus to avoid storage, embedding, and network variance.
+- The JSON report includes default unbudgeted ask latency, request-budgeted ask latency, config-enabled ask latency, selected context size, dropped chunk counts, and token chunking output.
+- Optional CLI thresholds `--max-budgeted-ratio` and `--max-config-enabled-ratio` can fail the benchmark when budgeted paths exceed a local slowdown limit.
+- Unit coverage for benchmark structure and threshold failures is in `tests/unit/test_token_budget_benchmark.py`.
 
 ## Rollout
 
-1. PR1: tokenizer adapter + ask budgeting + API/MCP optional arg + tests.
-2. PR2: optional token-based ingestion chunking + tests.
-3. PR3: docs/examples polish (`README`, roadmap references, config docs).
+- [x] PR1-equivalent: tokenizer adapter, ask budgeting, API/MCP optional arg, and tests.
+- [x] PR2-equivalent: optional token-based ingestion chunking and tests.
+- [x] PR3-equivalent: README, roadmap references, config docs, and plan status updates.
+- [x] Optional follow-up: lightweight performance benchmark.
 
 ## Acceptance Criteria
 
-- `ask` respects context token budget when enabled.
-- No breaking changes for current API/MCP consumers.
-- Full test suite passes, including new token-budget tests.
-- Clear fallback behavior exists when `tiktoken` is not installed.
+- [x] `ask` respects request-level context token budgets.
+- [x] `ask` respects config-enabled context token budgets.
+- [x] No breaking changes for current API/MCP consumers.
+- [x] Full test suite passes, including token-budget and token-chunking tests.
+- [x] Clear fallback behavior exists when `tiktoken` is not installed.
+- [x] Token chunking is opt-in and default message chunking remains unchanged.
+- [x] Dedicated lightweight performance benchmark exists.

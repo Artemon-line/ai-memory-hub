@@ -383,6 +383,18 @@ Run storage tests only:
 uv run pytest tests/integration/test_storage_features.py
 ```
 
+Run the lightweight token-budget benchmark:
+
+```bash
+uv run python -m memory.benchmarks.token_budget --iterations 200
+```
+
+The benchmark uses a fixed in-memory corpus and reports JSON metrics for default
+ask latency, request-budgeted ask latency, config-enabled ask latency, selected
+context size, and token chunking output. Add `--max-budgeted-ratio` or
+`--max-config-enabled-ratio` when you want the command to fail on a local
+slowdown threshold.
+
 Default local runs do not require Postgres or PGVector. Live Postgres/PGVector
 tests are skipped unless `AMH_TEST_POSTGRES_DSN` is set.
 
@@ -390,7 +402,7 @@ To run live Postgres and PGVector tests locally, start a PGVector-enabled
 Postgres container:
 
 ```bash
-docker run --name aimh-pgvector-test \
+docker run --name aim-pgvector-test \
   -e POSTGRES_USER=test \
   -e POSTGRES_PASSWORD=test \
   -e POSTGRES_DB=memory \
@@ -408,7 +420,7 @@ uv run pytest -q tests/integration/test_storage_features.py -k "postgres_live_in
 Clean up the container:
 
 ```bash
-docker rm -f aimh-pgvector-test
+docker rm -f aim-pgvector-test
 ```
 
 ## Project Structure

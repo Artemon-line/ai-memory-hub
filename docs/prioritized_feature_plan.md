@@ -64,13 +64,13 @@ Implementation sequence:
 
 ## P1: CLI Commands
 
-Current roadmap items `aimh ingest <file>` and `aimh search "<query>"` are not implemented.
+Current roadmap items `aim ingest <file>` and `aim search "<query>"` are not implemented.
 
 Implementation sequence:
 
 1. Add CLI argument parsing in `memory/cli.py`.
-2. Implement `aimh ingest <file>` using the same normalization and validation path as API/MCP.
-3. Implement `aimh search "<query>"` using the existing runtime search function.
+2. Implement `aim ingest <file>` using the same normalization and validation path as API/MCP.
+3. Implement `aim search "<query>"` using the existing runtime search function.
 4. Add `--config`, `--top-k`, and machine-readable JSON output options.
 5. Add smoke tests for success and invalid-input behavior.
 
