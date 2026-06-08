@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 from functools import lru_cache
 from typing import Any
@@ -78,6 +79,26 @@ def tokenizer_used(encoding: str) -> str:
     if _get_encoding(encoding) is not None:
         return f"tiktoken:{encoding}"
     return "heuristic"
+
+
+def tokenizer_diagnostics(encoding: str) -> dict[str, Any]:
+    tokenizer = _get_encoding(encoding)
+    cache_env = None
+    cache_dir = None
+    if "TIKTOKEN_CACHE_DIR" in os.environ:
+        cache_env = "TIKTOKEN_CACHE_DIR"
+        cache_dir = os.environ["TIKTOKEN_CACHE_DIR"]
+    elif "DATA_GYM_CACHE_DIR" in os.environ:
+        cache_env = "DATA_GYM_CACHE_DIR"
+        cache_dir = os.environ["DATA_GYM_CACHE_DIR"]
+
+    return {
+        "encoding": encoding,
+        "available": tokenizer is not None,
+        "tokenizer_used": f"tiktoken:{encoding}" if tokenizer is not None else "heuristic",
+        "cache_env": cache_env,
+        "cache_dir": cache_dir,
+    }
 
 
 @lru_cache(maxsize=8)

@@ -12,6 +12,7 @@ Implementation plan for adding token-aware context budgeting and optional token-
 
 - Replacing current search/ranking logic.
 - Making `tiktoken` a hard runtime dependency for all modes.
+- Adding an ai-memory-hub-specific downloader for tokenizer encoding files.
 - Changing external contracts in a breaking way.
 
 ## Current Status
@@ -32,6 +33,10 @@ Implemented:
 - [x] Unit, API, MCP, integration, and regression tests for implemented behavior.
 - [x] Dedicated fixed-corpus performance benchmark for ask latency and selected-context size distribution.
 - [x] Dedicated default-mode slowdown benchmark for `tokenizer.enabled=false`.
+- [x] Decision recorded: `cl100k_base` is an encoding name, not a model path; rely on `tiktoken` cache/prewarm behavior instead of a custom downloader.
+- [x] Optional `tiktoken` package extra.
+- [x] README/config guidance for `TIKTOKEN_CACHE_DIR` and one-time cache prewarm.
+- [x] Tokenizer preflight check that reports whether the configured encoding resolves through `tiktoken` or the heuristic fallback.
 
 Not implemented yet:
 
@@ -64,11 +69,18 @@ Implemented details:
 - [x] Cache encoding lookup in-process.
 - [x] Fall back to a deterministic heuristic if import or encoding load fails.
 - [x] Log one warning when the fallback path is used.
+- [x] Add optional install extra for precise `tiktoken` token counts.
+- [x] Document `TIKTOKEN_CACHE_DIR` for persistent/offline tokenizer cache.
+- [x] Document one-time cache prewarm for `tokenizer.encoding`, such as `cl100k_base`.
+- [x] Add an optional preflight/diagnostic command for tokenizer availability.
 
 Implemented details:
 
 - Adapter lives at `memory/ingestion/tokenizer.py`.
 - `tiktoken` remains optional and is not a hard runtime dependency.
+- `cl100k_base` is loaded through `tiktoken.get_encoding("cl100k_base")` when `tiktoken` is installed.
+- `tiktoken` handles encoding file download/cache lookup internally; ai-memory-hub should not download tokenizer files itself.
+- Offline deployments should provide a persistent `TIKTOKEN_CACHE_DIR` that has been prewarmed during build or setup.
 
 ### 3) Token-budgeted context builder in `ask`
 
@@ -214,6 +226,7 @@ Additional details:
 - [x] PR2-equivalent: optional token-based ingestion chunking and tests.
 - [x] PR3-equivalent: README, roadmap references, config docs, and plan status updates.
 - [x] Optional follow-up: lightweight performance benchmark.
+- [x] Follow-up: optional `tiktoken` extra, cache/prewarm docs, and tokenizer preflight diagnostics.
 
 ## Acceptance Criteria
 
@@ -222,5 +235,7 @@ Additional details:
 - [x] No breaking changes for current API/MCP consumers.
 - [x] Full test suite passes, including token-budget and token-chunking tests.
 - [x] Clear fallback behavior exists when `tiktoken` is not installed.
+- [x] Precise tokenizer setup is documented without adding hidden runtime downloads.
+- [x] Offline tokenizer cache setup is documented for `TIKTOKEN_CACHE_DIR`.
 - [x] Token chunking is opt-in and default message chunking remains unchanged.
 - [x] Dedicated lightweight performance benchmark exists.

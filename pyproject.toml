@@ -20,6 +20,9 @@ dependencies = [
 postgres = [
     "psycopg[binary]>=3.2.4",
 ]
+tokenizer = [
+    "tiktoken>=0.13.0",
+]
 
 [dependency-groups]
 dev = [

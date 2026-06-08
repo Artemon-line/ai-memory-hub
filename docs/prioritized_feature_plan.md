@@ -9,7 +9,7 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P0 | Token-budgeted `memory_ask` and token-aware ingestion chunking | Implemented | `token_budget_plan.md`, `improvements/context_building_plan.md` |
 | P0 | Retrieval precision: threshold, hybrid search, metadata rerank | Planned | `improvements/retrieval_precision_plan.md` |
 | P0 | MCP client smoke coverage for Codex, Gemini, Copilot, Claude, opencode | Partial | `mcp_client_smoke_plan.md` |
-| P1 | CLI ingest/search commands | Planned here | This doc |
+| P1 | CLI commands | Partial | `cli_implementation_plan.md` |
 | P1 | Platform-specific importers | Planned here | This doc and `roadmap.md` |
 | P2 | Summaries, digests, consolidation | Planned here | This doc and `roadmap.md` |
 | P2 | UI and developer experience | Planned here | This doc and `roadmap.md` |
@@ -64,15 +64,24 @@ Implementation sequence:
 
 ## P1: CLI Commands
 
-Current roadmap items `aim ingest <file>` and `aim search "<query>"` are not implemented.
+Use `cli_implementation_plan.md` as the source of truth.
+
+Current status:
+
+- A basic `memory.cli` argparse entrypoint exists.
+- `python -m memory.cli tokenizer-check` is implemented for tokenizer diagnostics.
+- Roadmap items `aim ingest <file>` and `aim search "<query>"` are not implemented.
+- The distributable console script name is not finalized.
 
 Implementation sequence:
 
-1. Add CLI argument parsing in `memory/cli.py`.
-2. Implement `aim ingest <file>` using the same normalization and validation path as API/MCP.
-3. Implement `aim search "<query>"` using the existing runtime search function.
-4. Add `--config`, `--top-k`, and machine-readable JSON output options.
-5. Add smoke tests for success and invalid-input behavior.
+1. Stabilize the command namespace, console script name, global flags, and JSON/text output contract.
+2. Keep `tokenizer-check` as the first diagnostics command and align future diagnostics with the same output shape.
+3. Implement `ingest <file>` using the same normalization, validation, hashing, dedupe, and storage path as API/MCP.
+4. Implement `search "<query>"` using the existing runtime search function and deterministic result shape.
+5. Add `retrieve <id>` and `ask "<question>"` only after ingest/search behavior is stable.
+6. Add `--config`, `--json`, `--top-k`, and clear exit-code behavior across commands.
+7. Add unit tests for parser/output behavior and smoke tests for success, invalid input, and storage round trips.
 
 ## P1: Platform-Specific Importers
 

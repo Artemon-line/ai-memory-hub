@@ -98,3 +98,62 @@ def test_ask_uses_config_budget_when_tokenizer_enabled(monkeypatch) -> None:
     assert result["context_tokens_used"] <= 5
     assert result["chunks_selected"] == 1
     assert result["citations"][0]["text"] == "alpha beta gamma"
+
+
+def test_ask_handles_empty_results_with_request_budget(monkeypatch) -> None:
+    monkeypatch.setattr(
+        mvp_ingestion,
+        "search",
+        lambda query, top_k: {"status": "ok", "results": []},
+    )
+
+    result = mvp_ingestion.ask("question", top_k=3, max_context_tokens=1)
+
+    assert result == {
+        "status": "ok",
+        "results": [],
+        "answer": "I could not find relevant memory for that question.",
+        "citations": [],
+    }
+
+
+def test_ask_handles_tight_budget_without_selected_context(monkeypatch) -> None:
+    monkeypatch.setattr(
+        mvp_ingestion,
+        "search",
+        lambda query, top_k: {
+            "status": "ok",
+            "results": [
+                {
+                    "id": "memory-a",
+                    "chunk_index": 0,
+                    "score": 0.1,
+                    "text": "alpha beta",
+                }
+            ],
+        },
+    )
+    monkeypatch.setattr(mvp_ingestion, "count_tokens", lambda text, encoding: len(text.split()))
+    monkeypatch.setattr(
+        mvp_ingestion,
+        "truncate_to_tokens",
+        lambda text, max_tokens, encoding: " ".join(text.split()[:max_tokens]),
+    )
+    mvp_ingestion.configure_runtime(
+        runtime=mvp_ingestion.RuntimeDependencies(
+            embedding_provider=_Embedder(),
+            metadata_store=object(),
+            vector_store=object(),
+            health_state={"mode": "ok"},
+        )
+    )
+
+    result = mvp_ingestion.ask("question", top_k=1, max_context_tokens=1)
+
+    assert result["status"] == "ok"
+    assert result["results"] == []
+    assert result["answer"] == "I could not fit relevant memory within the context budget."
+    assert result["citations"] == []
+    assert result["context_tokens_used"] == 0
+    assert result["chunks_selected"] == 0
+    assert result["chunks_dropped"] == 1

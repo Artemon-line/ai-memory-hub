@@ -47,6 +47,13 @@ For Postgres metadata support, install the optional extra:
 uv sync --dev --extra postgres
 ```
 
+For exact OpenAI-compatible token counting with `tiktoken`, install the tokenizer
+extra:
+
+```bash
+uv sync --dev --extra tokenizer
+```
+
 ## Quick Start
 
 Start the API and MCP server:
@@ -356,6 +363,25 @@ The default `chunking.strategy: message` keeps one chunk per normalized message.
 Set `chunking.strategy: token` to split long messages into token windows with
 `chunking.max_tokens` and `chunking.overlap_tokens`. Token chunking is opt-in and
 uses `tiktoken` when available, with a deterministic local heuristic fallback.
+
+`tokenizer.encoding` is an encoding name such as `cl100k_base`, not a model file
+path. ai-memory-hub does not download tokenizer files itself. When the optional
+`tiktoken` extra is installed, `tiktoken` resolves and caches the encoding data.
+For persistent or offline deployments, set `TIKTOKEN_CACHE_DIR` to a writable
+directory and prewarm the cache during setup:
+
+```bash
+TIKTOKEN_CACHE_DIR=./data/tiktoken-cache uv run python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"
+```
+
+Check which tokenizer path will be used:
+
+```bash
+uv run python -m memory.cli tokenizer-check --json
+```
+
+The diagnostic reports `tokenizer_used` as either `tiktoken:<encoding>` or
+`heuristic`, along with the active cache environment when one is configured.
 
 ## Native Clients
 

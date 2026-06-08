@@ -25,3 +25,26 @@ def test_tokenizer_fallback_splits_overlapping_windows(monkeypatch) -> None:
     )
 
     assert windows == ["alpha beta gamma", "gamma delta epsilon"]
+
+
+def test_tokenizer_diagnostics_reports_tiktoken(monkeypatch) -> None:
+    monkeypatch.setattr(tokenizer, "_get_encoding", lambda encoding: object())
+
+    diagnostics = tokenizer.tokenizer_diagnostics("cl100k_base")
+
+    assert diagnostics["encoding"] == "cl100k_base"
+    assert diagnostics["available"] is True
+    assert diagnostics["tokenizer_used"] == "tiktoken:cl100k_base"
+
+
+def test_tokenizer_diagnostics_reports_heuristic_and_cache(monkeypatch) -> None:
+    monkeypatch.setattr(tokenizer, "_get_encoding", lambda encoding: None)
+    monkeypatch.setenv("TIKTOKEN_CACHE_DIR", "D:\\tmp\\tiktoken-cache")
+
+    diagnostics = tokenizer.tokenizer_diagnostics("missing")
+
+    assert diagnostics["encoding"] == "missing"
+    assert diagnostics["available"] is False
+    assert diagnostics["tokenizer_used"] == "heuristic"
+    assert diagnostics["cache_env"] == "TIKTOKEN_CACHE_DIR"
+    assert diagnostics["cache_dir"] == "D:\\tmp\\tiktoken-cache"
