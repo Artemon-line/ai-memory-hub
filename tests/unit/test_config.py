@@ -65,6 +65,37 @@ def test_ask_config_rejects_invalid_context_budget():
         parse_config({"ask": {"max_context_tokens": 0}})
 
 
+def test_retrieval_config_defaults_and_validation():
+    config = parse_config({})
+
+    assert config.retrieval.vector_score_threshold == 7.5
+    assert config.retrieval.keyword_enabled is True
+    assert config.retrieval.keyword_candidate_limit == 50
+    assert config.retrieval.candidate_multiplier == 3
+
+    tuned = parse_config(
+        {
+            "retrieval": {
+                "vector_score_threshold": 1.2,
+                "keyword_enabled": False,
+                "keyword_candidate_limit": 25,
+                "keyword_weight": 0.5,
+                "metadata_weight": 0.25,
+                "candidate_multiplier": 5,
+            }
+        }
+    )
+    assert tuned.retrieval.vector_score_threshold == 1.2
+    assert tuned.retrieval.keyword_enabled is False
+    assert tuned.retrieval.keyword_candidate_limit == 25
+    assert tuned.retrieval.keyword_weight == 0.5
+    assert tuned.retrieval.metadata_weight == 0.25
+    assert tuned.retrieval.candidate_multiplier == 5
+
+    with pytest.raises(ValueError, match="retrieval.vector_score_threshold"):
+        parse_config({"retrieval": {"vector_score_threshold": -1}})
+
+
 def test_chunking_config_defaults_and_validation():
     config = parse_config({})
 

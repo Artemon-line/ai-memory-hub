@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import uuid
 from pathlib import Path
@@ -270,6 +271,25 @@ class SQLiteMetadataStore:
             result[str(row["id"])] = json.loads(str(row["payload"]))
         return result
 
+    def search_text(self, query: str, limit: int = 50) -> list[dict[str, Any]]:
+        tokens = _keyword_tokens(query)
+        if not tokens:
+            return []
+        clauses = " AND ".join(["lower(payload) LIKE ?"] * len(tokens))
+        params = [f"%{token}%" for token in tokens]
+        params.append(int(limit))
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT payload FROM conversations
+                WHERE {clauses}
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                params,
+            ).fetchall()
+        return [json.loads(str(row["payload"])) for row in rows]
+
     def capabilities(self) -> ProviderCapabilities:
         return ProviderCapabilities(
             supports_transactions=True,
@@ -414,3 +434,11 @@ class SQLiteMetadataStore:
                 }
             )
         return fallback_chunks
+
+
+def _keyword_tokens(query: str) -> list[str]:
+    return [
+        token.lower()
+        for token in re.findall(r"[A-Za-z0-9][A-Za-z0-9_-]*", query)
+        if len(token) >= 2
+    ][:8]

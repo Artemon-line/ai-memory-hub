@@ -1,109 +1,285 @@
 # Agent Integration
 
-ai-memory-hub exposes a small MCP and API surface so agents can write and read memory without owning storage or ingestion logic.
+ai-memory-hub gives agents a local-first memory backend over MCP and HTTP. Agents send
+conversation payloads to the hub, and the hub owns normalization, validation, ID generation,
+hashing, deduplication, embedding, storage, retrieval, and ask-over-memory behavior.
 
 Related docs:
+
 - Architecture: `architecture.md`
+- MCP contract details: `mcp_plan.md`
+- MCP client smoke testing: `mcp_client_smoke_plan.md`
+- Deterministic ingestion details: `deterministic_ingestion_plan.md`
+- Storage/provider details: `storage_agnostic_byoa_plan.md`
+- CLI plan: `cli_implementation_plan.md`
 - Project overview: `../README.md`
 
-## Agent Working Instructions
+## Current Status
 
-- After implementing any new feature, update `README.md` in the same change so the public project overview and usage guidance stay current.
+Implemented:
 
-## How Agents Interact With The Hub
+- MCP tools: `memory_validate`, `memory_insert`, `memory_search`, `memory_retrieve`, `memory_ask`.
+- MCP resources: `memory://conversation/example`, `memory://conversation/{id}`,
+  `memory://search/{query}`, `memory://timeline/{day}`, `memory://health`.
+- MCP prompts: `save_conversation`, `search_memory`, `ask_memory`, `summarize_conversation`.
+- HTTP endpoints: `POST /memory/insert`, `/memory/search`, `/memory/retrieve`, `/memory/ask`.
+- Omitted-ID insertion: agents should omit `id` by default and use the returned canonical ID.
+- Deterministic normalization, schema validation, message hashes, conversation hashes, duplicate
+  detection, and trusted same-thread append support.
+- Message chunking by default, with optional token-window chunking.
+- Token-budgeted `memory_ask` through config or request `max_context_tokens`.
+- Storage providers: SQLite/Postgres metadata, LanceDB/PGVector/in-memory vectors.
+- Storage safety: provider capabilities, schema-version checks, vector dimensionality checks,
+  policy-gated fallback, degraded health, dry-run wrappers, and secret-safe fallback logging.
+- MCP smoke profiles for Codex, Gemini, VS Code Copilot, and opencode.
 
-Agents act as ingestion and retrieval clients.
+Planned or partial:
 
-- Ingest: format JSON -> call `memory_insert`
-- Search: call `memory_search` with a query
-- Retrieve: call `memory_retrieve` by ID
+- CLI agent workflows are partial. `python -m memory.cli tokenizer-check` exists; ingest/search/retrieve/ask/serve commands are planned.
+- Claude MCP smoke profile and negative client payload cases are planned.
+- Platform-specific importers, summaries, timeline intelligence, graph memory, shared memory, plugins, and cloud sync are planned.
 
-## MCP Tools
+## Agent Rules
 
-Tool names and schemas are implementation-specific, but the intended core surface is:
+- Prefer MCP tools when running inside an MCP-capable client.
+- Use HTTP endpoints only when MCP is unavailable.
+- Do not write directly to SQLite, Postgres, LanceDB, PGVector, or data files.
+- Omit `id` unless the user or upstream system requires a specific UUID.
+- Treat the returned `id` as canonical for retrieve/search citations.
+- Call `memory_validate` before `memory_insert` when using MCP.
+- Include full user and assistant turns that should be remembered; do not summarize before insert unless the user asked to store a summary.
+- Do not include tool output, debug logs, or operational planning text as conversation messages unless the user explicitly wants that stored.
+- Do not supply client-side embeddings, message hashes, or conversation hashes. The hub computes them.
+- Never expose raw stored secrets in messages or metadata.
 
-### `memory_insert`
+After implementing any new agent-facing feature, update `README.md` and this document in the same change.
+
+## MCP Tool Surface
+
+MCP tool responses use a stable envelope:
+
+- `status`
+- `id`
+- `results`
+- `cursor`
+- `error_code`
+- `error_message`
+
+Tool-specific fields can also appear, such as `answer`, `citations`, `memory`, `valid`,
+`deduplicated`, `appended_messages`, `embedded_chunks`, and token-budget diagnostics.
+
+### `memory_validate`
+
+Use this before insert to check payload shape.
 
 ```json
 {
-  "conversation": {
-    "id": "uuid",
-    "source": "copilot",
-    "timestamp": "YYYY-MM-DDTHH:MM:SSZ",
+  "conversation_json": {
+    "source": "codex",
+    "timestamp": "2026-06-08T12:00:00Z",
     "messages": [
-      { "role": "user", "text": "..." },
-      { "role": "assistant", "text": "..." }
+      {"role": "user", "text": "Remember that I prefer local-first tools."},
+      {"role": "assistant", "text": "Stored."}
     ],
-    "metadata": { "tags": [], "topics": [], "imported_at": "YYYY-MM-DDTHH:MM:SSZ" }
+    "metadata": {
+      "imported_at": "2026-06-08T12:00:00Z",
+      "tags": ["preferences"]
+    }
   }
 }
 ```
 
-Return should include a status and the stored conversation id.
+Expected success:
+
+```json
+{
+  "status": "ok",
+  "valid": true,
+  "results": []
+}
+```
+
+### `memory_insert`
+
+Insert the same payload after validation. Omit `id` by default; the hub assigns a UUID.
+
+```json
+{
+  "conversation_json": {
+    "source": "codex",
+    "timestamp": "2026-06-08T12:00:00Z",
+    "messages": [
+      {"role": "user", "text": "Remember that I prefer local-first tools."},
+      {"role": "assistant", "text": "Stored."}
+    ],
+    "metadata": {
+      "imported_at": "2026-06-08T12:00:00Z",
+      "tags": ["preferences"]
+    }
+  }
+}
+```
+
+Expected success includes:
+
+- `status: "ok"`
+- `id`: canonical stored memory ID
+- `deduplicated`
+- `appended_messages`
+- `embedded_chunks`
+- `chunks`
 
 ### `memory_search`
 
+Search stored memory by semantic query.
+
 ```json
 {
-  "query": "gpu upgrade",
-  "top_k": 5
+  "query": "local-first tools",
+  "top_k": 5,
+  "limit": 5,
+  "cursor": "0",
+  "source": "codex",
+  "date_from": "2026-01-01T00:00:00Z",
+  "date_to": "2026-12-31T23:59:59Z",
+  "tags": ["preferences"]
 }
 ```
+
+Notes:
+
+- `top_k` controls retrieval breadth.
+- `limit` and `cursor` support paginated MCP output.
+- `source`, `date_from`, `date_to`, and `tags` are optional filters.
+- Do not pass `null` for optional fields; omit them instead.
 
 ### `memory_retrieve`
 
+Retrieve one stored conversation by canonical ID.
+
 ```json
 {
-  "id": "uuid"
+  "id": "11111111-2222-4333-8444-555555555555"
 }
 ```
 
-## LangGraph Ingestion Loop (Agentic)
+The returned `memory` object redacts internal content hashes from external responses.
 
-This loop is LangGraph-friendly and works for both MCP and manual ingestion.
+### `memory_ask`
 
-```text
-fetch -> format_json -> validate -> insert -> embed -> store -> confirm
+Ask a question over retrieved memory.
+
+```json
+{
+  "question": "What tool preference did the user mention?",
+  "top_k": 5,
+  "max_context_tokens": 1200
+}
 ```
 
-Step details:
+Expected success includes:
 
-1. Fetch messages (MCP context or manual input)
-2. Format into JSON schema (LLM)
-3. Validate schema (Python)
-4. Insert via `memory_insert`
-5. Embed chunks
-6. Store vectors
-7. Confirm success
+- `answer`
+- `results`
+- `citations`
+- optional `context_tokens_used`
+- optional `chunks_selected`
+- optional `chunks_dropped`
+- optional `tokenizer_used`
 
-## MCP Automatic Ingestion ("Save last N messages")
+## MCP Resources And Prompts
 
-Example intent:
+Resources are useful for clients that can browse MCP state:
 
-- User: "Save last 20 messages"
-- Agent fetches last 20 turns
-- Agent formats JSON
-- Agent calls `memory_insert`
-- Hub stores and confirms
+- `memory://conversation/example`
+- `memory://conversation/{id}`
+- `memory://search/{query}`
+- `memory://timeline/{day}`
+- `memory://health`
 
-## Example Agent Workflow
+Prompts provide client guidance:
+
+- `save_conversation`: validate, insert, retrieve, and confirm a conversation.
+- `search_memory`: call `memory_search` with stable defaults.
+- `ask_memory`: call `memory_ask` with a valid integer `top_k`.
+- `summarize_conversation`: retrieve then summarize a stored conversation.
+
+## HTTP Agent Surface
+
+Use HTTP when MCP is not available:
+
+- `POST /memory/insert`
+- `POST /memory/search`
+- `POST /memory/retrieve`
+- `POST /memory/ask`
+
+The HTTP API exposes the same core workflows as MCP, but MCP has richer prompt/resource
+discoverability and tool envelopes.
+
+## Recommended Agent Workflows
+
+Save current conversation:
 
 ```text
-User -> Agent
-  "Save last 10 messages"
-Agent -> Fetch context
-Agent -> Format JSON
-Agent -> memory_insert
-Hub -> Validate, embed, store
-Agent -> "Memory saved"
+collect relevant user/assistant turns
+-> build conversation_json
+-> memory_validate
+-> fix payload if needed
+-> memory_insert
+-> memory_retrieve with returned id
+-> confirm saved id to user
 ```
+
+Search memory:
+
+```text
+user asks for remembered context
+-> memory_search(query, top_k=5, limit=5)
+-> inspect results
+-> answer with cited memory ids when useful
+```
+
+Ask over memory:
+
+```text
+user asks a question over prior memory
+-> memory_ask(question, top_k=5)
+-> return answer and citations
+```
+
+## Client Payload Notes
+
+The MCP layer tolerates common client-shaped payloads:
+
+- `conversation` arrays can be normalized into `messages`.
+- message `content` aliases are normalized to `text`.
+- omitted `id` is filled with a generated UUID.
+- supported roles normalize to `user` and `assistant`.
+
+Invalid explicit IDs still fail fast. If an agent supplies `id`, it must be a valid UUID.
+
+## Storage Awareness For Agents
+
+Agents should not branch behavior based on the active storage backend. The configured providers
+are selected at startup:
+
+- Metadata: `sqlite` or `postgres`
+- Vectors: `lancedb`, `pgvector`, or `memory`
+- Embeddings: `openai` or `local`
+
+Agents can inspect `memory://health` or API health behavior when available, but storage provider
+details should only inform diagnostics, not payload shape.
+
+Dry-run mode may skip writes while preserving response shape. Degraded mode can indicate vector
+fallback to in-memory storage when explicitly allowed by config.
 
 ## Future Agent Features
 
-- Memory consolidation
-- Topic clustering
-- Timeline extraction
-- Long-term memory distillation
-- Multi-agent shared memory
-
-
+- Full CLI ingest/search/retrieve/ask/serve commands.
+- Real-client smoke tests for more agent CLIs.
+- Platform-specific importers.
+- Memory consolidation and long-term distillation.
+- Topic clustering and timeline extraction.
+- Graph memory.
+- Multi-agent shared memory.
+- Plugin-defined ingestion and storage providers.

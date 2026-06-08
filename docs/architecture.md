@@ -33,7 +33,7 @@ Implemented and verified in the codebase:
 
 Planned or partial:
 
-- Retrieval precision improvements, including similarity thresholds, hybrid keyword/vector search, and metadata-aware reranking, are planned in `improvements/retrieval_precision_plan.md`.
+- Retrieval precision improvements, including similarity thresholds, hybrid keyword/vector search, and metadata-aware reranking, are partially implemented. Representative-data tuning remains planned in `improvements/retrieval_precision_plan.md`.
 - Claude MCP smoke profile, negative client payload cases, explicit E2E retrieve checks, platform-specific importers, CLI commands, summaries, UI, SDKs, framework-specific agent examples, graph memory, shared memory, plugins, and optional cloud sync remain roadmap work.
 
 ## High-Level System Diagram

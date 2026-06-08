@@ -19,11 +19,15 @@ controlled fallback behavior, and dry-run support.
 - Keep hub available when vector provider fails to initialize only when explicitly allowed.
 - Support safe dry-run execution for write paths.
 
-## Non-Goals
+## Non-Goals For Implemented Baseline
 
 - Redesigning domain workflows.
 - Changing public API/MCP contracts.
-- Broad provider expansion in this change set.
+- Broad provider expansion beyond SQLite, Postgres, LanceDB, pgvector, and in-memory fallback.
+
+Provider expansion is now tracked as follow-up work in Phase 6. Those adapters must preserve
+the same storage contracts, API/MCP response shapes, fallback policy, health semantics, and
+dry-run behavior.
 
 ## Target Architecture
 
@@ -31,7 +35,7 @@ Layered storage design:
 
 1. domain layer (unchanged behavior)
 2. storage contracts (`MetadataStore`, `VectorStore`)
-3. provider adapters (SQLite, LanceDB, others)
+3. provider adapters (SQLite, Postgres, LanceDB, pgvector, in-memory fallback, others)
 4. factory/wiring (startup selection, validation, fallback)
 
 Core rule:
@@ -215,6 +219,26 @@ Status: `IMPLEMENTED`
   - [x] expose `expected_dimensionality`
   - [x] validate dimensions in `insert()` and `search()`
 
+### Phase 2b: Adapter Updates (Postgres + pgvector)
+
+Status: `IMPLEMENTED`
+
+- [x] Add Postgres metadata adapter:
+  - [x] implement config selection via `providers.metadata_db: postgres`
+  - [x] implement `capabilities()`
+  - [x] read `schema_version` from `schema_version` table
+  - [x] enforce single-row schema version invariant
+  - [x] include version in `health()`
+  - [x] support insert, insert-new/deduplication, append, get, get-many, conversation-hash lookup, and upstream-thread lookup
+- [x] Add pgvector vector adapter:
+  - [x] implement config selection via `providers.vector_db: pgvector`
+  - [x] implement `capabilities()`
+  - [x] expose `expected_dimensionality`
+  - [x] validate dimensions in `insert()` and `search()`
+  - [x] support configurable distance metric: `cosine`, `l2`, `inner_product`
+  - [x] include version/dimension/provider details in `health()`
+- [x] Add in-memory vector adapter as explicit local/test/fallback provider.
+
 ### Phase 3: Factory Wiring
 
 Status: `IMPLEMENTED`
@@ -254,11 +278,437 @@ Status: `IMPLEMENTED`
 - [x] Postgres `schema_version` table invariants and incompatibility behavior
 - [x] startup and runtime dimensionality mismatch behavior
 - [x] log redaction checks for DSN/credential leakage
+- [x] pgvector startup, insert/search, health, fallback, and optional live integration coverage
+- [x] Postgres metadata startup, schema-version invariant, incompatibility, and optional live integration coverage
+
+### Phase 6: Provider Coverage Backlog
+
+Status: `NOT IMPLEMENTED`
+
+Current implemented provider matrix:
+
+- [x] Metadata: SQLite
+- [x] Metadata: Postgres
+- [x] Vectors: LanceDB
+- [x] Vectors: pgvector
+- [x] Vectors: in-memory
+
+Expansion principles:
+
+- Add one provider at a time behind existing contracts.
+- Prefer provider-native SDKs only inside adapter modules.
+- Keep domain logic unchanged.
+- Treat local/dev providers before hosted/cloud-only providers.
+- Every vector provider must support `insert()`, `search()`, `delete()`, `get_stats()`, `health()`,
+  `capabilities()`, and `expected_dimensionality`.
+- Every metadata provider must support current deduplication semantics before being advertised as
+  a replacement for SQLite/Postgres.
+- Provider-specific config must be explicit, validated, and secret-safe.
+
+Recommended implementation order:
+
+1. ChromaDB: simplest local-first vector expansion after LanceDB.
+2. Qdrant: strong local Docker and cloud story with explicit collection dimensions.
+3. MongoDB Atlas: useful metadata option plus Atlas Vector Search for users already on Mongo.
+4. Elasticsearch/OpenSearch: useful for hybrid search and existing ops stacks.
+5. Milvus/Zilliz: useful for larger vector deployments, more operationally complex.
+6. Weaviate: useful for schema-rich vector deployments, cloud/auth behavior needs careful testing.
+
+### Phase 6a: Provider Config Model
+
+Status: `NOT IMPLEMENTED`
+
+- [ ] Extend `providers.vector_db` accepted values:
+  - [ ] `chromadb`
+  - [ ] `qdrant`
+  - [ ] `milvus`
+  - [ ] `weaviate`
+  - [ ] `mongodb_atlas`
+  - [ ] `elasticsearch`
+  - [ ] `opensearch`
+- [ ] Extend `providers.metadata_db` accepted values:
+  - [ ] `mongodb`
+  - [ ] optional future `elasticsearch`/`opensearch` only if metadata semantics are fully mapped
+- [ ] Add provider-specific config sections without changing API/MCP payloads:
+
+```yaml
+storage:
+  vector:
+    allow_fallback: false
+    distance: cosine
+    chromadb:
+      path: ./data/chromadb
+      collection: memory_vectors
+      mode: persistent # persistent | http
+      host: 127.0.0.1
+      port: 8000
+    qdrant:
+      url: http://127.0.0.1:6333
+      api_key: ""
+      collection: memory_vectors
+    milvus:
+      uri: http://127.0.0.1:19530
+      token: ""
+      collection: memory_vectors
+    weaviate:
+      url: http://127.0.0.1:8080
+      api_key: ""
+      class_name: MemoryVector
+    mongodb_atlas:
+      uri: ""
+      database: ai_memory_hub
+      metadata_collection: conversations
+      vector_collection: memory_vectors
+      vector_index: memory_vector_index
+    elasticsearch:
+      url: http://127.0.0.1:9200
+      api_key: ""
+      index: memory_vectors
+    opensearch:
+      url: http://127.0.0.1:9200
+      username: ""
+      password: ""
+      index: memory_vectors
+```
+
+- [ ] Validate provider-specific config at startup.
+- [ ] Redact provider URLs, API keys, tokens, usernames, passwords, and connection strings.
+- [ ] Document environment variable names for live tests:
+  - [ ] `AMH_TEST_CHROMADB_URL`
+  - [ ] `AMH_TEST_QDRANT_URL`
+  - [ ] `AMH_TEST_QDRANT_API_KEY`
+  - [ ] `AMH_TEST_MILVUS_URI`
+  - [ ] `AMH_TEST_MILVUS_TOKEN`
+  - [ ] `AMH_TEST_WEAVIATE_URL`
+  - [ ] `AMH_TEST_WEAVIATE_API_KEY`
+  - [ ] `AMH_TEST_MONGODB_URI`
+  - [ ] `AMH_TEST_ELASTICSEARCH_URL`
+  - [ ] `AMH_TEST_ELASTICSEARCH_API_KEY`
+  - [ ] `AMH_TEST_OPENSEARCH_URL`
+  - [ ] `AMH_TEST_OPENSEARCH_USERNAME`
+  - [ ] `AMH_TEST_OPENSEARCH_PASSWORD`
+
+### Phase 6b: Shared Provider Contract Tests
+
+Status: `NOT IMPLEMENTED`
+
+- [ ] Create reusable metadata-store contract tests:
+  - [ ] insert returns deterministic ID
+  - [ ] insert updates same ID without changing response shape
+  - [ ] insert-new detects duplicate `conversation_hash`
+  - [ ] get/get-many preserve payload shape
+  - [ ] upstream-thread lookup works
+  - [ ] schema version appears in `health()`
+  - [ ] incompatible schema version fails startup
+  - [ ] unsupported optional operations raise `NotSupportedError`
+- [ ] Create reusable vector-store contract tests:
+  - [ ] insert/search/delete behavior parity
+  - [ ] replace removes previous chunks for the same memory ID
+  - [ ] search output fields match current contract
+  - [ ] `expected_dimensionality` is exposed
+  - [ ] insert/search dimension mismatches raise `VectorDimensionError`
+  - [ ] health exposes provider, dimensions, and provider-specific readiness
+  - [ ] unsupported optional operations raise `NotSupportedError`
+- [ ] Add provider fixtures with fake SDK/client objects for unit-level tests.
+- [ ] Add live integration tests gated by environment variables.
+- [ ] Add fallback tests for each vector provider:
+  - [ ] unavailable provider fails startup when `allow_fallback=false`
+  - [ ] unavailable provider activates in-memory fallback when `allow_fallback=true`
+  - [ ] fallback health reports `mode=degraded`
+  - [ ] fallback log redacts provider secrets
+
+### Phase 6c: ChromaDB Vector Adapter
+
+Status: `NOT IMPLEMENTED`
+
+Target: local-first vector provider with optional HTTP client mode.
+
+- [ ] Add dependency strategy:
+  - [ ] optional extra: `chromadb`
+  - [ ] deterministic import error when package is missing
+- [ ] Add `ChromaDBVectorStore` adapter.
+- [ ] Support persistent local mode using configured path.
+- [ ] Support HTTP client mode using configured host/port or URL.
+- [ ] Use configured collection name.
+- [ ] Store chunk payload fields:
+  - [ ] `memory_id`
+  - [ ] `chunk_id`
+  - [ ] `chunk_index`
+  - [ ] `message_hash`
+  - [ ] `role`
+  - [ ] `text`
+  - [ ] `vector`
+- [ ] Persist collection metadata:
+  - [ ] schema version
+  - [ ] expected dimensionality
+  - [ ] distance metric, if supported by selected Chroma configuration
+- [ ] Validate existing collection metadata at startup.
+- [ ] Validate dimensions on every insert/search.
+- [ ] Implement replace by deleting rows for `memory_id` before adding new chunks.
+- [ ] Normalize Chroma search distances into current `score` field.
+- [ ] Implement delete by `memory_id`.
+- [ ] Implement `get_stats()` and `health()`.
+- [ ] Tests:
+  - [ ] fake-client contract tests
+  - [ ] persistent local integration test
+  - [ ] HTTP-mode smoke test when `AMH_TEST_CHROMADB_URL` is set
+  - [ ] collection dimension mismatch startup failure
+  - [ ] fallback and redaction tests
+
+### Phase 6d: Qdrant Vector Adapter
+
+Status: `NOT IMPLEMENTED`
+
+Target: local Docker or Qdrant Cloud vector provider.
+
+- [ ] Add dependency strategy:
+  - [ ] optional extra: `qdrant-client`
+  - [ ] deterministic import error when package is missing
+- [ ] Add `QdrantVectorStore` adapter.
+- [ ] Support URL and API key configuration.
+- [ ] Map hub distance config to Qdrant distance:
+  - [ ] `cosine`
+  - [ ] `l2`
+  - [ ] `inner_product`
+- [ ] Create collection when missing with configured vector size/distance.
+- [ ] Validate existing collection vector size and distance at startup.
+- [ ] Store chunk payload fields in Qdrant payload.
+- [ ] Use stable point IDs derived from `chunk_id` or deterministic UUID namespace.
+- [ ] Implement upsert for insert.
+- [ ] Implement replace by deleting points filtered by `memory_id`.
+- [ ] Implement search result normalization.
+- [ ] Implement delete by `memory_id` filter.
+- [ ] Implement `get_stats()` and `health()`.
+- [ ] Tests:
+  - [ ] fake-client contract tests
+  - [ ] local/cloud live smoke when `AMH_TEST_QDRANT_URL` is set
+  - [ ] collection distance/dimension mismatch failures
+  - [ ] API key redaction checks
+  - [ ] fallback behavior tests
+
+### Phase 6e: MongoDB Metadata And Atlas Vector Search
+
+Status: `NOT IMPLEMENTED`
+
+Target: MongoDB as a metadata provider, with optional Atlas Vector Search as a vector provider.
+
+Decision points:
+
+- [ ] Decide whether first implementation is:
+  - [ ] metadata-only MongoDB provider
+  - [ ] Atlas Vector Search only
+  - [ ] combined metadata + vector provider
+- [ ] Recommended sequence:
+  - [ ] implement MongoDB metadata first
+  - [ ] add Atlas Vector Search after metadata semantics are stable
+
+MongoDB metadata adapter:
+
+- [ ] Add dependency strategy:
+  - [ ] optional extra: `pymongo`
+  - [ ] deterministic import error when package is missing
+- [ ] Add `MongoDBMetadataStore`.
+- [ ] Store conversations in configured database/collection.
+- [ ] Add schema version document with single active version invariant.
+- [ ] Create unique indexes:
+  - [ ] `id`
+  - [ ] `metadata.conversation_hash`
+  - [ ] `(source, metadata.upstream_thread_id)` where upstream thread exists
+- [ ] Preserve insert, insert-new, append, get, get-many, conversation-hash lookup, and upstream-thread lookup semantics.
+- [ ] Ensure duplicate-key errors map to deterministic behavior.
+- [ ] Implement `capabilities()` and `health()`.
+- [ ] Tests:
+  - [ ] fake-client metadata contract tests
+  - [ ] optional live smoke when `AMH_TEST_MONGODB_URI` is set
+  - [ ] schema version invariant tests
+  - [ ] duplicate/deduplication parity tests
+  - [ ] URI credential redaction tests
+
+Atlas Vector Search adapter:
+
+- [ ] Add `MongoDBAtlasVectorStore`.
+- [ ] Validate configured vector search index exists and is queryable.
+- [ ] Validate index dimensions and similarity mode where Atlas exposes them.
+- [ ] Store vector documents with chunk payload fields.
+- [ ] Implement insert/upsert, replace, search, delete, stats, health.
+- [ ] Define readiness behavior while Atlas search indexes are still building.
+- [ ] Tests:
+  - [ ] fake-client vector contract tests
+  - [ ] optional Atlas live smoke when `AMH_TEST_MONGODB_URI` is set
+  - [ ] index missing/not-ready startup failures
+  - [ ] dimension mismatch tests
+  - [ ] fallback behavior tests
+
+### Phase 6f: Elasticsearch And OpenSearch Vector Adapters
+
+Status: `NOT IMPLEMENTED`
+
+Target: vector search for users already running Elastic/OpenSearch, with a path toward hybrid retrieval.
+
+Shared adapter requirements:
+
+- [ ] Add dependency strategy:
+  - [ ] optional extra: `elasticsearch`
+  - [ ] optional extra: `opensearch-py`
+  - [ ] deterministic import error when package is missing
+- [ ] Add `ElasticsearchVectorStore`.
+- [ ] Add `OpenSearchVectorStore`.
+- [ ] Support URL plus API key or username/password auth.
+- [ ] Create index when missing.
+- [ ] Store mapping metadata:
+  - [ ] schema version
+  - [ ] dense-vector field dimensions
+  - [ ] similarity/distance mode
+- [ ] Validate existing mapping at startup.
+- [ ] Store chunk payload fields as document fields.
+- [ ] Use stable document IDs derived from `chunk_id`.
+- [ ] Implement replace by deleting documents filtered by `memory_id`.
+- [ ] Implement vector search:
+  - [ ] Elasticsearch `knn` or script-score path based on supported version
+  - [ ] OpenSearch k-NN query path based on installed plugin/version
+- [ ] Normalize provider scores/distances into current `score` field.
+- [ ] Explicitly document refresh/read-after-write behavior.
+- [ ] Implement `get_stats()` and `health()`.
+- [ ] Tests:
+  - [ ] fake-client contract tests for both providers
+  - [ ] optional live smoke for Elasticsearch
+  - [ ] optional live smoke for OpenSearch
+  - [ ] mapping mismatch startup failures
+  - [ ] auth redaction checks
+  - [ ] fallback behavior tests
+
+Hybrid-search follow-up:
+
+- [ ] Add provider capability for keyword/hybrid search only after API semantics are designed.
+- [ ] Keep initial adapter vector-only to preserve existing API/MCP behavior.
+
+### Phase 6g: Milvus/Zilliz Vector Adapter
+
+Status: `NOT IMPLEMENTED`
+
+Target: larger vector deployments via self-hosted Milvus or managed Zilliz.
+
+- [ ] Add dependency strategy:
+  - [ ] optional extra: `pymilvus`
+  - [ ] deterministic import error when package is missing
+- [ ] Add `MilvusVectorStore`.
+- [ ] Support URI and token configuration.
+- [ ] Map hub distance config to Milvus metric type.
+- [ ] Create collection when missing.
+- [ ] Define collection schema:
+  - [ ] primary key
+  - [ ] `memory_id`
+  - [ ] `chunk_id`
+  - [ ] `chunk_index`
+  - [ ] `message_hash`
+  - [ ] `role`
+  - [ ] `text`
+  - [ ] vector field with configured dimension
+- [ ] Validate existing collection schema/dimension/metric at startup.
+- [ ] Create or validate vector index.
+- [ ] Ensure collection load/readiness before search.
+- [ ] Implement insert/upsert behavior.
+- [ ] Implement replace by deleting rows filtered by `memory_id`.
+- [ ] Implement search result normalization.
+- [ ] Implement delete by `memory_id`.
+- [ ] Implement `get_stats()` and `health()`.
+- [ ] Tests:
+  - [ ] fake-client contract tests
+  - [ ] optional Milvus/Zilliz live smoke when `AMH_TEST_MILVUS_URI` is set
+  - [ ] collection not-loaded readiness tests
+  - [ ] metric/dimension mismatch startup failures
+  - [ ] token redaction checks
+  - [ ] fallback behavior tests
+
+### Phase 6h: Weaviate Vector Adapter
+
+Status: `NOT IMPLEMENTED`
+
+Target: schema-rich vector deployments with self-hosted or cloud Weaviate.
+
+- [ ] Add dependency strategy:
+  - [ ] optional extra: `weaviate-client`
+  - [ ] deterministic import error when package is missing
+- [ ] Add `WeaviateVectorStore`.
+- [ ] Support URL and API key configuration.
+- [ ] Use externally supplied vectors from the hub embedding provider.
+- [ ] Disable or avoid provider-side vectorization for stored chunks unless explicitly configured later.
+- [ ] Create class/collection when missing.
+- [ ] Validate existing class schema:
+  - [ ] vector dimensions where available
+  - [ ] distance metric
+  - [ ] required properties
+  - [ ] schema version marker
+- [ ] Store chunk payload properties.
+- [ ] Use stable object UUIDs derived from `chunk_id`.
+- [ ] Implement replace by deleting objects filtered by `memory_id`.
+- [ ] Implement near-vector search.
+- [ ] Normalize Weaviate distances/scores into current `score` field.
+- [ ] Implement delete, stats, and health.
+- [ ] Tests:
+  - [ ] fake-client contract tests
+  - [ ] optional live smoke when `AMH_TEST_WEAVIATE_URL` is set
+  - [ ] schema mismatch startup failures
+  - [ ] API key/header redaction checks
+  - [ ] fallback behavior tests
+
+### Phase 6i: Documentation And Examples
+
+Status: `NOT IMPLEMENTED`
+
+- [ ] Update architecture supported-provider matrix after each provider lands.
+- [ ] Add config examples for each provider.
+- [ ] Add local Docker Compose snippets for:
+  - [ ] Qdrant
+  - [ ] ChromaDB HTTP server
+  - [ ] Milvus
+  - [ ] Weaviate
+  - [ ] Elasticsearch
+  - [ ] OpenSearch
+- [ ] Add cloud setup notes for:
+  - [ ] Qdrant Cloud
+  - [ ] Zilliz
+  - [ ] MongoDB Atlas Vector Search
+  - [ ] Weaviate Cloud
+  - [ ] Elastic Cloud
+- [ ] Document provider-specific limitations:
+  - [ ] consistency/read-after-write
+  - [ ] index build readiness
+  - [ ] score interpretation
+  - [ ] supported distance metrics
+  - [ ] local vs hosted feature differences
+
+### Phase 6 Acceptance Criteria
+
+- [ ] `providers.vector_db` can select every implemented vector provider from config.
+- [ ] `providers.metadata_db` can select every implemented metadata provider from config.
+- [ ] API and MCP response shapes are unchanged for all providers.
+- [ ] Domain ingestion/search code remains provider-agnostic.
+- [ ] Each provider passes shared contract tests.
+- [ ] Each provider has fallback, health, dimensionality, and redaction tests.
+- [ ] Live tests are optional and skipped unless provider-specific environment variables are set.
+- [ ] Missing optional provider dependencies produce actionable startup errors.
+- [ ] Provider docs include a minimal config example and known limitations.
+
+### Phase 7: Operational Hardening Backlog
+
+Status: `PARTIAL`
+
+- [x] Redact DSNs, passwords, tokens, and API keys in fallback logs.
+- [x] Expose machine-readable runtime mode: `ok`, `degraded`, or `dry_run`.
+- [x] Expose active/requested vector provider and fallback state in runtime health.
+- [x] Treat metadata initialization errors as fatal.
+- [x] Treat vector initialization errors as fatal unless `storage.vector.allow_fallback=true`.
+- [x] Treat schema incompatibility and vector dimension mismatch as hard errors.
+- [ ] Log `allow_fallback` and `dry_run` startup policy consistently even when disabled.
+- [ ] Warn when `allow_fallback=true` is used under a production profile.
+- [ ] Emit structured audit events for fallback activation and dry-run skipped writes, not only warning strings.
+- [ ] Consider changing the default `storage.vector.allow_fallback` to `false` for production-oriented configs.
 
 ## Deliverables
 
 - Updated storage contracts (`MetadataStore`, `VectorStore`) with capabilities/version/dimensionality surfaces.
-- Updated SQLite and LanceDB adapters.
+- Updated SQLite, Postgres, LanceDB, pgvector, and in-memory adapters.
 - Factory fallback + startup validation wiring.
 - Dry-run wrappers for write paths.
 - Unit + integration tests covering all required adjustments and safety guarantees.

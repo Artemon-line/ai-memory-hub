@@ -18,6 +18,14 @@ tokenizer:
 ask:
   max_context_tokens: 2000
 
+retrieval:
+  vector_score_threshold: 7.5
+  keyword_enabled: true
+  keyword_candidate_limit: 50
+  keyword_weight: 0.25
+  metadata_weight: 0.15
+  candidate_multiplier: 3
+
 chunking:
   strategy: message
   max_tokens: 800

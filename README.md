@@ -337,6 +337,14 @@ tokenizer:
 ask:
   max_context_tokens: 2000
 
+retrieval:
+  vector_score_threshold: 7.5
+  keyword_enabled: true
+  keyword_candidate_limit: 50
+  keyword_weight: 0.25
+  metadata_weight: 0.15
+  candidate_multiplier: 3
+
 chunking:
   strategy: message  # message | token
   max_tokens: 800
@@ -363,6 +371,12 @@ The default `chunking.strategy: message` keeps one chunk per normalized message.
 Set `chunking.strategy: token` to split long messages into token windows with
 `chunking.max_tokens` and `chunking.overlap_tokens`. Token chunking is opt-in and
 uses `tiktoken` when available, with a deterministic local heuristic fallback.
+
+Retrieval first gathers vector candidates, filters low-confidence vector matches
+with `retrieval.vector_score_threshold`, then applies deterministic keyword and
+metadata reranking. `retrieval.keyword_enabled` also allows exact keyword matches
+from metadata storage to supplement vector candidates when the active metadata
+store supports text lookup.
 
 `tokenizer.encoding` is an encoding name such as `cl100k_base`, not a model file
 path. ai-memory-hub does not download tokenizer files itself. When the optional
@@ -475,6 +489,7 @@ tests/          unit, integration, and end-to-end tests
 - [Architecture](docs/architecture.md)
 - [Agent integration](docs/agents.md)
 - [MCP plan](docs/mcp_plan.md)
+- [Release, container, and docs publishing plan](docs/release_container_docs_plan.md)
 - [Roadmap](docs/roadmap.md)
 - [Improvements](docs/improvements.md)
 

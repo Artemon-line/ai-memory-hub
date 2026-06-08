@@ -90,6 +90,15 @@ class AskConfig(BaseModel):
     max_context_tokens: int = Field(default=2000, ge=1)
 
 
+class RetrievalConfig(BaseModel):
+    vector_score_threshold: float = Field(default=7.5, ge=0)
+    keyword_enabled: bool = True
+    keyword_candidate_limit: int = Field(default=50, ge=1, le=500)
+    keyword_weight: float = Field(default=0.25, ge=0)
+    metadata_weight: float = Field(default=0.15, ge=0)
+    candidate_multiplier: int = Field(default=3, ge=1, le=20)
+
+
 class ChunkingConfig(BaseModel):
     strategy: str = "message"
     max_tokens: int = Field(default=800, ge=1)
@@ -139,6 +148,7 @@ class HubConfig(BaseModel):
     storage: StorageConfig = Field(default_factory=StorageConfig)
     tokenizer: TokenizerConfig = Field(default_factory=TokenizerConfig)
     ask: AskConfig = Field(default_factory=AskConfig)
+    retrieval: RetrievalConfig = Field(default_factory=RetrievalConfig)
     chunking: ChunkingConfig = Field(default_factory=ChunkingConfig)
     openai: OpenAIConfig = Field(default_factory=OpenAIConfig)
     mcp: MCPConfig = Field(default_factory=MCPConfig)

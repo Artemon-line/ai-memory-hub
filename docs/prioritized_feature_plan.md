@@ -7,13 +7,26 @@ This plan captures unimplemented or partial features found while reconciling `do
 | Priority | Feature | Status | Existing plan |
 |----------|---------|--------|---------------|
 | P0 | Token-budgeted `memory_ask` and token-aware ingestion chunking | Implemented | `token_budget_plan.md`, `improvements/context_building_plan.md` |
-| P0 | Retrieval precision: threshold, hybrid search, metadata rerank | Planned | `improvements/retrieval_precision_plan.md` |
+| P0 | Storage abstraction baseline: capabilities, schema checks, dimensions, fallback, dry-run, Postgres/PGVector | Implemented | `storage_agnostic_byoa_plan.md` |
+| P0 | Retrieval precision: threshold, hybrid search, metadata rerank | Partial | `improvements/retrieval_precision_plan.md` |
 | P0 | MCP client smoke coverage for Codex, Gemini, Copilot, Claude, opencode | Partial | `mcp_client_smoke_plan.md` |
-| P1 | CLI commands | Partial | `cli_implementation_plan.md` |
+| P1 | CLI foundation and command contract | Partial | `cli_implementation_plan.md` |
+| P1 | CLI `ingest`, `search`, `retrieve`, and `ask` commands | Planned | `cli_implementation_plan.md` |
+| P1 | CLI `serve` command for container/runtime entrypoint | Planned | `cli_implementation_plan.md`, `release_container_docs_plan.md` |
+| P1 | Containerfile maintenance and container CI smoke tests | Planned | `release_container_docs_plan.md` |
+| P1 | GitHub Pages documentation publishing from Markdown | Planned | `release_container_docs_plan.md` |
 | P1 | Platform-specific importers | Planned here | This doc and `roadmap.md` |
-| P2 | Summaries, digests, consolidation | Planned here | This doc and `roadmap.md` |
-| P2 | UI and developer experience | Planned here | This doc and `roadmap.md` |
-| P3 | Graph memory, decay, shared memory, plugins | Planned here | This doc and `roadmap.md` |
+| P2 | GitHub release and Docker Hub image publishing | Planned | `release_container_docs_plan.md` |
+| P2 | Storage operational hardening: startup policy logs, production fallback warnings, audit events | Partial | `storage_agnostic_byoa_plan.md` |
+| P2 | Storage provider expansion config and shared contract tests | Planned | `storage_agnostic_byoa_plan.md` |
+| P2 | ChromaDB and Qdrant vector providers | Planned | `storage_agnostic_byoa_plan.md` |
+| P2 | MongoDB metadata and MongoDB Atlas Vector Search | Planned | `storage_agnostic_byoa_plan.md` |
+| P3 | Elasticsearch/OpenSearch vector providers | Planned | `storage_agnostic_byoa_plan.md` |
+| P3 | Milvus/Zilliz and Weaviate vector providers | Planned | `storage_agnostic_byoa_plan.md` |
+| P3 | Release notes, image scanning, SBOM, and provenance | Planned | `release_container_docs_plan.md` |
+| P3 | Summaries, digests, consolidation | Planned here | This doc and `roadmap.md` |
+| P3 | UI and developer experience | Planned here | This doc and `roadmap.md` |
+| P4 | Graph memory, decay, shared memory, plugins | Planned here | This doc and `roadmap.md` |
 | P4 | Optional encrypted cloud sync | Planned here | This doc and `roadmap.md` |
 
 ## P0: Token-Budgeted Ask And Token Chunking
@@ -32,17 +45,35 @@ Implemented:
 - [x] Add opt-in `chunking.strategy: token` ingestion windows with overlap.
 - [x] Add unit, API, MCP, and regression tests.
 
+## P0: Storage Abstraction Baseline
+
+Use `storage_agnostic_byoa_plan.md` as the source of truth for implemented storage work.
+
+Implemented:
+
+- [x] Add provider capabilities to metadata and vector contracts.
+- [x] Add metadata schema-version and vector dimensionality surfaces.
+- [x] Add deterministic storage errors for unsupported operations, schema incompatibility, and dimension mismatches.
+- [x] Update SQLite metadata and LanceDB vector adapters.
+- [x] Add Postgres metadata and PGVector adapters.
+- [x] Add in-memory vector provider for local/test/fallback use.
+- [x] Add startup metadata schema compatibility checks.
+- [x] Add startup and runtime vector dimension checks.
+- [x] Add policy-gated vector fallback with degraded health.
+- [x] Add dry-run storage wrappers with return-shape parity.
+- [x] Add unit/integration coverage for storage safety, Postgres, PGVector, fallback, and redaction behavior.
+
 ## P0: Retrieval Precision
 
 Use `improvements/retrieval_precision_plan.md` as the source of truth.
 
 Implementation sequence:
 
-- [ ] Add a conservative similarity threshold.
-- [ ] Add keyword candidate matching alongside vector search.
-- [ ] Merge vector and keyword scores deterministically.
-- [ ] Add metadata-aware reranking for tags, source, and topics.
-- [ ] Tune the combined pipeline against fixed fixtures.
+- [x] Add a conservative similarity threshold.
+- [x] Add keyword candidate matching alongside vector search.
+- [x] Merge vector and keyword scores deterministically.
+- [x] Add metadata-aware reranking for tags, source, and topics.
+- [ ] Tune the combined pipeline against fixed fixtures and real representative data.
 
 ## P0: MCP Client Smoke Coverage
 
@@ -64,7 +95,7 @@ Implementation sequence:
 - [ ] Validate Codex, opencode, and Gemini headless commands before wiring them into CI.
 - [ ] Keep real-client smoke tests in a separate scheduled/manual CI lane until they are stable enough for default PR gating.
 
-## P1: CLI Commands
+## P1: CLI Foundation And Commands
 
 Use `cli_implementation_plan.md` as the source of truth.
 
@@ -72,18 +103,49 @@ Current status:
 
 - [x] A basic `memory.cli` argparse entrypoint exists.
 - [x] `python -m memory.cli tokenizer-check` is implemented for tokenizer diagnostics.
-- [ ] Roadmap items `aim ingest <file>` and `aim search "<query>"` are not implemented.
 - [ ] The distributable console script name is not finalized.
+- [ ] Global CLI options are not implemented across commands.
+- [ ] `ingest`, `search`, `retrieve`, `ask`, and `serve` are not implemented.
 
 Implementation sequence:
 
 - [ ] Stabilize the command namespace, console script name, global flags, and JSON/text output contract.
 - [x] Keep `tokenizer-check` as the first diagnostics command and align future diagnostics with the same output shape.
+- [ ] Add shared helpers for config loading, JSON/text formatting, and stable exit-code handling.
 - [ ] Implement `ingest <file>` using the same normalization, validation, hashing, dedupe, and storage path as API/MCP.
 - [ ] Implement `search "<query>"` using the existing runtime search function and deterministic result shape.
-- [ ] Add `retrieve <id>` and `ask "<question>"` only after ingest/search behavior is stable.
-- [ ] Add `--config`, `--json`, `--top-k`, and clear exit-code behavior across commands.
+- [ ] Implement `retrieve <id>` and `ask "<question>"` after ingest/search behavior is stable.
+- [ ] Implement diagnostics: `health`, `config-show`, and `storage-check`.
+- [ ] Implement `serve --host --port --config` as the preferred runtime/container entrypoint.
+- [ ] Add `--config`, `--json`, `--top-k`, `--max-context-tokens`, and clear exit-code behavior across commands.
 - [ ] Add unit tests for parser/output behavior and smoke tests for success, invalid input, and storage round trips.
+
+## P1: Container And Docs Publishing Foundation
+
+Use `release_container_docs_plan.md` as the source of truth.
+
+Current status:
+
+- [x] `Containerfile` exists.
+- [x] CI exists in `.github/workflows/pipeline.yml`.
+- [x] README and Markdown docs exist.
+- [x] Project version is declared in `pyproject.toml`.
+- [ ] Container build is not verified in CI.
+- [ ] Container smoke test is not verified in CI.
+- [ ] GitHub Pages workflow is not implemented.
+
+Implementation sequence:
+
+- [ ] Add `.dockerignore`.
+- [ ] Keep `Containerfile` aligned with `pyproject.toml`, `uv.lock`, default config, and the CLI `serve` command once implemented.
+- [ ] Add OCI labels to the container image.
+- [ ] Add a container build job to CI.
+- [ ] Add a container smoke test that starts the API/MCP app and checks readiness.
+- [ ] Decide default vs optional image variants for Postgres/PGVector and tokenizer extras.
+- [ ] Document runtime volume mounts and config/secrets environment variables.
+- [ ] Add MkDocs configuration for `README.md`, top-level `docs/*.md`, and `docs/improvements/*.md`.
+- [ ] Add a GitHub Pages workflow that builds and deploys docs from `main`.
+- [ ] Add docs link validation before making docs deploy required.
 
 ## P1: Platform-Specific Importers
 
@@ -98,7 +160,89 @@ Implementation sequence:
 - [ ] Add optional local log importers for VS Code Copilot, Ollama, LM Studio, and Llama Stack.
 - [x] Keep storage and ingestion unchanged by feeding all importers through the existing normalized schema path.
 
-## P2: Summaries And Consolidation
+## P2: GitHub Releases And Docker Hub Publishing
+
+Use `release_container_docs_plan.md` as the source of truth.
+
+Implementation sequence:
+
+- [ ] Define release version policy: GitHub tag must match `pyproject.toml`.
+- [ ] Add release tag validation for `vMAJOR.MINOR.PATCH`.
+- [ ] Add Docker Hub secrets: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`, and optional namespace.
+- [ ] Add release workflow triggered by `release.published`.
+- [ ] Build from `Containerfile` with Docker Buildx.
+- [ ] Push versioned tags for every release.
+- [ ] Push `latest` only for stable releases.
+- [ ] Add image digest to workflow summary and release notes.
+- [ ] Add manual `workflow_dispatch` for release publish recovery.
+
+## P2: Storage Operational Hardening
+
+Use `storage_agnostic_byoa_plan.md` as the source of truth.
+
+Implemented:
+
+- [x] Redact DSNs, passwords, tokens, and API keys in fallback logs.
+- [x] Expose runtime mode: `ok`, `degraded`, or `dry_run`.
+- [x] Expose active/requested vector provider and fallback state in runtime health.
+- [x] Treat metadata init errors, schema incompatibility, and vector dimension mismatch as hard errors.
+- [x] Treat vector init errors as fatal unless fallback is explicitly enabled.
+
+Remaining sequence:
+
+- [ ] Log `allow_fallback` and `dry_run` startup policy consistently, including disabled state.
+- [ ] Warn when `allow_fallback=true` is used under a production profile.
+- [ ] Emit structured audit events for fallback activation and dry-run skipped writes.
+- [ ] Consider changing the default `storage.vector.allow_fallback` to `false` for production-oriented configs.
+
+## P2: Storage Provider Expansion
+
+Use `storage_agnostic_byoa_plan.md` as the source of truth.
+
+Provider expansion sequence:
+
+- [ ] Add provider-specific config model for ChromaDB, Qdrant, Milvus, Weaviate, MongoDB Atlas, Elasticsearch, and OpenSearch.
+- [ ] Extend `providers.vector_db` and `providers.metadata_db` accepted values only as providers land.
+- [ ] Add shared metadata-store contract tests.
+- [ ] Add shared vector-store contract tests.
+- [ ] Add fake SDK/client fixtures for unit tests.
+- [ ] Add live integration tests gated by provider-specific environment variables.
+- [ ] Add fallback and secret-redaction tests for each vector provider.
+- [ ] Implement ChromaDB vector adapter first.
+- [ ] Implement Qdrant vector adapter second.
+- [ ] Implement MongoDB metadata, then MongoDB Atlas Vector Search.
+- [ ] Update architecture docs and config examples after each provider lands.
+
+## P3: Later Storage Providers
+
+Use `storage_agnostic_byoa_plan.md` as the source of truth.
+
+Implementation sequence:
+
+- [ ] Implement Elasticsearch vector adapter.
+- [ ] Implement OpenSearch vector adapter.
+- [ ] Keep Elasticsearch/OpenSearch vector-only at first; add hybrid capability only after API semantics are designed.
+- [ ] Implement Milvus/Zilliz vector adapter.
+- [ ] Implement Weaviate vector adapter.
+- [ ] Add Docker Compose examples for local provider smoke testing.
+- [ ] Document provider limitations: consistency, index readiness, score interpretation, distance metrics, and local/hosted differences.
+
+## P3: Release Notes And Supply Chain Hardening
+
+Use `release_container_docs_plan.md` as the source of truth.
+
+Implementation sequence:
+
+- [ ] Decide release notes source: GitHub generated notes, `CHANGELOG.md`, or conventional commits.
+- [ ] Add release template/checklist.
+- [ ] Include Docker image tags, digest, docs URL, and upgrade notes in release notes.
+- [ ] Add dependency vulnerability scan plan.
+- [ ] Add image vulnerability scan plan.
+- [ ] Add SBOM generation plan.
+- [ ] Add provenance/signing plan.
+- [ ] Document supported image lifecycle and security fix policy.
+
+## P3: Summaries And Consolidation
 
 Implementation sequence:
 
@@ -107,7 +251,7 @@ Implementation sequence:
 - [ ] Add duplicate/redundant memory consolidation tooling.
 - [ ] Add stable-fact extraction only after summary storage and provenance are reliable.
 
-## P2: UI And Developer Experience
+## P3: UI And Developer Experience
 
 Implementation sequence:
 
@@ -118,7 +262,7 @@ Implementation sequence:
 - [ ] Add Python SDK first, then TypeScript SDK.
 - [ ] Add packaging only after CLI and SDK contracts are stable.
 
-## P3: Advanced Memory
+## P4: Advanced Memory
 
 Implementation sequence:
 

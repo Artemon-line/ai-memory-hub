@@ -82,6 +82,10 @@ def _configure_stubs(
     chunking_strategy: str = "message",
     chunking_max_tokens: int = 800,
     chunking_overlap_tokens: int = 80,
+    retrieval_vector_score_threshold: float = 7.5,
+    retrieval_keyword_enabled: bool = True,
+    retrieval_keyword_weight: float = 0.25,
+    retrieval_metadata_weight: float = 0.15,
 ) -> tuple[StubMetadataStore, StubVectorStore]:
     metadata = StubMetadataStore()
     vectors = StubVectorStore()
@@ -95,6 +99,10 @@ def _configure_stubs(
             chunking_strategy=chunking_strategy,
             chunking_max_tokens=chunking_max_tokens,
             chunking_overlap_tokens=chunking_overlap_tokens,
+            retrieval_vector_score_threshold=retrieval_vector_score_threshold,
+            retrieval_keyword_enabled=retrieval_keyword_enabled,
+            retrieval_keyword_weight=retrieval_keyword_weight,
+            retrieval_metadata_weight=retrieval_metadata_weight,
         )
     )
     return metadata, vectors
@@ -309,6 +317,61 @@ def test_search_and_retrieve() -> None:
     assert len(search_result["results"]) >= 1
     assert retrieved is not None
     assert retrieved["id"] == "d9fd4c95-9cb3-4fd5-b967-3027f8863210"
+
+
+def test_search_filters_low_confidence_vector_matches() -> None:
+    _configure_stubs(retrieval_vector_score_threshold=0.5, retrieval_keyword_enabled=False)
+    conversation = _valid_conversation()
+    mvp_ingestion.ingest_messages(conversation)
+
+    search_result = mvp_ingestion.search(query="unrelated", top_k=5)
+
+    assert [row["score"] for row in search_result["results"]] == [0.0]
+
+
+def test_search_recovers_exact_keyword_matches_without_vector_candidate() -> None:
+    metadata, vectors = _configure_stubs(retrieval_vector_score_threshold=0.5)
+    conversation = _valid_conversation()
+    conversation["messages"] = [{"role": "user", "text": "rareterm deployment note"}]
+    metadata.insert(conversation)
+    vectors.rows = []
+
+    search_result = mvp_ingestion.search(query="rareterm", top_k=5)
+
+    assert search_result["results"][0]["id"] == conversation["id"]
+    assert search_result["results"][0]["text"] == "rareterm deployment note"
+
+
+def test_search_metadata_rerank_prefers_matching_tags() -> None:
+    metadata, vectors = _configure_stubs(retrieval_metadata_weight=2.0)
+    generic = _valid_conversation()
+    generic["id"] = "11111111-1111-4111-8111-111111111111"
+    generic["messages"] = [{"role": "user", "text": "general hardware note"}]
+    tagged = _valid_conversation()
+    tagged["id"] = "22222222-2222-4222-8222-222222222222"
+    tagged["messages"] = [{"role": "user", "text": "driver troubleshooting note"}]
+    tagged["metadata"]["tags"] = ["gpu"]
+    metadata.insert(generic)
+    metadata.insert(tagged)
+    vectors.rows = [
+        {
+            "memory_id": generic["id"],
+            "chunk_index": 0,
+            "role": "user",
+            "text": "general hardware note",
+        },
+        {
+            "memory_id": tagged["id"],
+            "chunk_index": 0,
+            "role": "user",
+            "text": "driver troubleshooting note",
+        },
+    ]
+
+    search_result = mvp_ingestion.search(query="gpu", top_k=2)
+
+    assert search_result["results"][0]["id"] == tagged["id"]
+    assert "_ranking_score" not in search_result["results"][0]
 
 
 def test_group_conversation_results_keeps_nearby_chunks_together() -> None:

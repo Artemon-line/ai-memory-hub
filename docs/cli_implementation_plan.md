@@ -23,6 +23,7 @@ Not implemented yet:
 - [ ] `search "<query>"`.
 - [ ] `retrieve <id>`.
 - [ ] `ask "<question>"`.
+- [ ] `serve`.
 - [ ] Storage/runtime initialization that matches API/MCP behavior.
 - [ ] End-to-end CLI smoke tests with temporary storage.
 
@@ -169,6 +170,38 @@ Acceptance criteria:
 - [ ] Diagnostics redact secrets and sensitive hashes.
 - [ ] Diagnostics return JSON that can be consumed in CI.
 
+## Phase 6: Serve Command
+
+Command shape:
+
+```bash
+python -m memory.cli serve --host 127.0.0.1 --port 8000
+```
+
+Future packaged command shape:
+
+```bash
+aim serve --host 127.0.0.1 --port 8000
+```
+
+Scope:
+
+- [ ] Start the same FastAPI/MCP application currently launched with `uvicorn memory.api.server:app`.
+- [ ] Support `--host`.
+- [ ] Support `--port`.
+- [ ] Support `--config <path>`.
+- [ ] Preserve the same API and MCP routes.
+- [ ] Use stable exit code `3` for runtime initialization failures.
+- [ ] Redact secrets in startup diagnostics.
+- [ ] Become the preferred `Containerfile` command after the console script is packaged.
+
+Acceptance criteria:
+
+- [ ] `python -m memory.cli serve --host 127.0.0.1 --port 8000` starts the service.
+- [ ] `aim serve --host 127.0.0.1 --port 8000` works after packaging metadata is added.
+- [ ] Container smoke tests use the CLI entrypoint instead of invoking `uvicorn` directly.
+- [ ] README documents the CLI serve command once implemented.
+
 ## Testing
 
 Unit tests:
@@ -185,6 +218,7 @@ Integration tests:
 - [ ] `search` finds the ingested conversation.
 - [ ] `retrieve` returns the ingested conversation.
 - [ ] `ask` returns citations for the ingested conversation.
+- [ ] `serve` starts the API/MCP app and responds to a health or docs endpoint.
 - [ ] Temporary storage paths prevent writes to user data during tests.
 
 Regression tests:
@@ -198,6 +232,7 @@ Regression tests:
 - [ ] `python -m memory.cli search "<query>"` returns structured results.
 - [ ] `python -m memory.cli retrieve <id>` returns stored conversations.
 - [ ] `python -m memory.cli ask "<question>"` returns answer and citations.
+- [ ] `python -m memory.cli serve` starts the API/MCP app.
 - [ ] CLI output is script-friendly with `--json`.
 - [ ] CLI commands have stable exit codes.
 - [ ] README documents the supported CLI commands without assuming unimplemented console scripts.

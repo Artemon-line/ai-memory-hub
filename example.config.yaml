@@ -12,6 +12,16 @@ storage:
     # set false in production to fail fast on vector init errors
     allow_fallback: true
 
+retrieval:
+  # Lower vector distance is better. Matches above this threshold are dropped
+  # unless keyword/metadata signals justify keeping them.
+  vector_score_threshold: 7.5
+  keyword_enabled: true
+  keyword_candidate_limit: 50
+  keyword_weight: 0.25
+  metadata_weight: 0.15
+  candidate_multiplier: 3
+
 # -------------------------
 # PROVIDERS (BYOS/BYOA)
 # -------------------------

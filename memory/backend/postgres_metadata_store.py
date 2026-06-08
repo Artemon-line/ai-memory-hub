@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from typing import Any, Callable
 
@@ -203,6 +204,27 @@ class PostgresMetadataStore:
             result[str(row[0])] = json.loads(str(row[1]))
         return result
 
+    def search_text(self, query: str, limit: int = 50) -> list[dict[str, Any]]:
+        tokens = _keyword_tokens(query)
+        if not tokens:
+            return []
+        clauses = " AND ".join(["payload::text ILIKE %s"] * len(tokens))
+        params = [f"%{token}%" for token in tokens]
+        params.append(int(limit))
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT payload::text FROM conversations
+                    WHERE {clauses}
+                    ORDER BY created_at DESC
+                    LIMIT %s
+                    """,
+                    tuple(params),
+                )
+                rows = cur.fetchall()
+        return [json.loads(str(row[0])) for row in rows]
+
     def get_by_conversation_hash(self, conversation_hash: str | None) -> dict[str, Any] | None:
         if not conversation_hash:
             return None
@@ -273,3 +295,11 @@ class PostgresMetadataStore:
         if getattr(exc, "pgcode", None) == "23505":
             return True
         return exc.__class__.__name__ == "UniqueViolation"
+
+
+def _keyword_tokens(query: str) -> list[str]:
+    return [
+        token.lower()
+        for token in re.findall(r"[A-Za-z0-9][A-Za-z0-9_-]*", query)
+        if len(token) >= 2
+    ][:8]
