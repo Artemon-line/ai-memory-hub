@@ -165,10 +165,10 @@ class SQLiteMetadataStore:
                 )
                 self._replace_child_rows(conn, conversation_json)
         except sqlite3.IntegrityError:
-            existing = self.get_by_conversation_hash(conversation_hash)
-            if existing is None:
-                raise
-            return str(existing["id"]), False
+            return self._resolve_insert_new_conflict(
+                memory_id=memory_id,
+                conversation_hash=conversation_hash,
+            )
         return memory_id, True
 
     def append_messages(
@@ -376,6 +376,18 @@ class SQLiteMetadataStore:
             value = metadata.get("upstream_thread_id")
             return str(value) if value is not None else None
         return None
+
+    def _resolve_insert_new_conflict(
+        self, *, memory_id: str, conversation_hash: str | None
+    ) -> tuple[str, bool]:
+        existing = self.get_by_conversation_hash(conversation_hash)
+        if existing is None:
+            existing = self.get(memory_id)
+        if existing is None:
+            raise sqlite3.IntegrityError("conversation insert conflict could not be resolved")
+        if self._conversation_hash(existing) != conversation_hash:
+            raise ValueError("unauthorized_update: conversation id already exists")
+        return str(existing["id"]), False
 
     def _replace_child_rows(
         self, conn: sqlite3.Connection, conversation_json: dict[str, Any]

@@ -165,12 +165,11 @@ class PostgresMetadataStore:
                         ),
                     )
         except Exception as exc:
-            if not self._is_unique_violation(exc):
-                raise
-            existing = self.get_by_conversation_hash(conversation_hash)
-            if existing is None:
-                raise
-            return str(existing["id"]), False
+            return self._handle_insert_new_error(
+                exc,
+                memory_id=memory_id,
+                conversation_hash=conversation_hash,
+            )
         return memory_id, True
 
     def append_messages(
@@ -295,6 +294,33 @@ class PostgresMetadataStore:
         if getattr(exc, "pgcode", None) == "23505":
             return True
         return exc.__class__.__name__ == "UniqueViolation"
+
+    def _handle_insert_new_error(
+        self, exc: Exception, *, memory_id: str, conversation_hash: str | None
+    ) -> tuple[str, bool]:
+        if not self._is_unique_violation(exc):
+            raise exc
+        return self._resolve_insert_new_conflict(
+            memory_id=memory_id,
+            conversation_hash=conversation_hash,
+            cause=exc,
+        )
+
+    def _resolve_insert_new_conflict(
+        self,
+        *,
+        memory_id: str,
+        conversation_hash: str | None,
+        cause: Exception,
+    ) -> tuple[str, bool]:
+        existing = self.get_by_conversation_hash(conversation_hash)
+        if existing is None:
+            existing = self.get(memory_id)
+        if existing is None:
+            raise cause
+        if self._conversation_hash(existing) != conversation_hash:
+            raise ValueError("unauthorized_update: conversation id already exists") from cause
+        return str(existing["id"]), False
 
 
 def _keyword_tokens(query: str) -> list[str]:

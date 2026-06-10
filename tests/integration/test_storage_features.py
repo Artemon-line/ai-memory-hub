@@ -469,7 +469,52 @@ def test_sqlite_insert_does_not_replace_on_conversation_hash_conflict(
         store.insert(second)
 
     assert store.get(first["id"]) == first
-    assert store.get(second["id"]) is None
+
+
+def test_sqlite_insert_new_deduplicates_same_id_same_hash(tmp_path: Path) -> None:
+    store = SQLiteMetadataStore(tmp_path / "metadata.sqlite3")
+    payload = {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "source": "manual",
+        "timestamp": "2026-01-01T00:00:00Z",
+        "messages": [{"role": "user", "text": "first", "hash": "sha256:" + ("1" * 64)}],
+        "metadata": {
+            "imported_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-01T00:00:00Z",
+            "conversation_hash": "sha256:" + ("a" * 64),
+        },
+    }
+
+    assert store.insert_new(payload) == (payload["id"], True)
+    assert store.insert_new(payload) == (payload["id"], False)
+
+
+def test_sqlite_insert_new_rejects_same_id_different_hash(tmp_path: Path) -> None:
+    store = SQLiteMetadataStore(tmp_path / "metadata.sqlite3")
+    first = {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "source": "manual",
+        "timestamp": "2026-01-01T00:00:00Z",
+        "messages": [{"role": "user", "text": "first", "hash": "sha256:" + ("1" * 64)}],
+        "metadata": {
+            "imported_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-01T00:00:00Z",
+            "conversation_hash": "sha256:" + ("a" * 64),
+        },
+    }
+    second = {
+        **first,
+        "messages": [{"role": "user", "text": "second", "hash": "sha256:" + ("2" * 64)}],
+        "metadata": {
+            **first["metadata"],
+            "conversation_hash": "sha256:" + ("b" * 64),
+        },
+    }
+
+    assert store.insert_new(first) == (first["id"], True)
+    with pytest.raises(ValueError, match="unauthorized_update"):
+        store.insert_new(second)
+    assert store.get(first["id"]) == first
 
 
 def test_runtime_health_reports_degraded_on_fallback(
@@ -670,6 +715,82 @@ def test_postgres_schema_version_invariant_and_health() -> None:
     )
     assert store.schema_version == 1
     assert store.health()["schema_version"] == 1
+
+
+class _UniqueViolation(Exception):
+    sqlstate = "23505"
+
+
+class _UniqueViolationCursor:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def execute(self, query: str, params: object | None = None) -> None:
+        _ = (query, params)
+        raise _UniqueViolation("duplicate key value violates unique constraint")
+
+
+class _UniqueViolationConnection:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def cursor(self):
+        return _UniqueViolationCursor()
+
+
+def test_postgres_insert_new_deduplicates_same_id_same_hash() -> None:
+    payload = {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "source": "manual",
+        "timestamp": "2026-01-01T00:00:00Z",
+        "messages": [{"role": "user", "text": "first", "hash": "sha256:" + ("1" * 64)}],
+        "metadata": {
+            "imported_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-01T00:00:00Z",
+            "conversation_hash": "sha256:" + ("a" * 64),
+        },
+    }
+    store = PostgresMetadataStore.__new__(PostgresMetadataStore)
+    store._connect = lambda: _UniqueViolationConnection()
+    store.get_by_conversation_hash = lambda conversation_hash: None
+    store.get = lambda memory_id: payload
+
+    assert store.insert_new(payload) == (payload["id"], False)
+
+
+def test_postgres_insert_new_rejects_same_id_different_hash() -> None:
+    first = {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "source": "manual",
+        "timestamp": "2026-01-01T00:00:00Z",
+        "messages": [{"role": "user", "text": "first", "hash": "sha256:" + ("1" * 64)}],
+        "metadata": {
+            "imported_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-01T00:00:00Z",
+            "conversation_hash": "sha256:" + ("a" * 64),
+        },
+    }
+    second = {
+        **first,
+        "messages": [{"role": "user", "text": "second", "hash": "sha256:" + ("2" * 64)}],
+        "metadata": {
+            **first["metadata"],
+            "conversation_hash": "sha256:" + ("b" * 64),
+        },
+    }
+    store = PostgresMetadataStore.__new__(PostgresMetadataStore)
+    store._connect = lambda: _UniqueViolationConnection()
+    store.get_by_conversation_hash = lambda conversation_hash: None
+    store.get = lambda memory_id: first
+
+    with pytest.raises(ValueError, match="unauthorized_update"):
+        store.insert_new(second)
 
 
 def test_postgres_schema_version_missing_row_raises() -> None:
