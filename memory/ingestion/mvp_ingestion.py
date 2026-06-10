@@ -758,11 +758,12 @@ def ingest_messages(
 
     conversation_hash = conversation_json["metadata"]["conversation_hash"]
     duplicate = _lookup_by_conversation_hash(conversation_hash)
+    duplicate_metadata_id = None
     if duplicate is not None:
-        metadata_id = str(duplicate["id"])
+        duplicate_metadata_id = str(duplicate["id"])
         # We proceed to re-index even if it's a duplicate by hash,
         # to ensure the vector store is in sync with the metadata.
-        conversation_json["id"] = metadata_id
+        conversation_json["id"] = duplicate_metadata_id
 
     existing_by_id = None
     store = _runtime().metadata_store
@@ -823,8 +824,13 @@ def ingest_messages(
     chunks = chunk_messages(conversation_json)
     _attach_index_chunks(conversation_json, chunks)
 
-    # 4. Store metadata with pending chunks before embedding
-    metadata_id, inserted = _insert_new_conversation(conversation_json)
+    # 4. Store metadata with pending chunks before embedding. Exact duplicates
+    # already have metadata; retries should re-index without attempting a second
+    # primary-key insert.
+    if duplicate_metadata_id is None:
+        metadata_id, inserted = _insert_new_conversation(conversation_json)
+    else:
+        metadata_id, inserted = duplicate_metadata_id, False
 
     # 5. Embed and write vectors
     try:
