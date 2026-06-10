@@ -474,6 +474,10 @@ docker compose up --build
 The example binds ai-memory-hub on host port `8000` for LAN clients. Use
 `http://<HOST_LAN_IP>:8000/mcp/` from another PC on the same network.
 It also enables tokenizer budgeting with the optional `tiktoken` extra.
+For remote Ollama embeddings, see
+`examples/postgres/pgvector/config.ollama.yaml`.
+When Ollama runs on the same host as Docker, the example reaches it from the
+container through `host.docker.internal`.
 
 ## Project Structure
 

@@ -66,6 +66,42 @@ The config bind mount uses the `:Z` SELinux relabel option so rootless Podman wo
 
 The config uses `providers.embeddings: local` to avoid requiring Ollama or OpenAI embeddings for this handoff test. It also enables `tokenizer.enabled: true` with `cl100k_base`, so `memory_ask` returns token-budget diagnostics using `tiktoken` when available. That keeps the test focused on MCP, Postgres, PGVector, tokenizer budgeting, and cross-client access.
 
+If you want to use Ollama embeddings from the same PC that runs Docker instead
+of deterministic local embeddings, start Compose with `config.ollama.yaml`:
+
+```bash
+AMH_CONFIG_FILE=config.ollama.yaml docker compose up --build
+```
+
+The default uses `host.docker.internal`, which points from the container back to
+the host PC:
+
+```yaml
+providers:
+  embeddings: openai
+  embedding_model: nomic-embed-text
+  embedding_dimension: 768
+
+openai:
+  base_url: http://host.docker.internal:11434/v1
+  api_key: ollama
+```
+
+Do not use `http://localhost:11434/v1` inside the ai-memory-hub container unless
+Ollama is running in that same container. From a container, `localhost` is the
+container itself.
+
+Podman users may need this host alias instead:
+
+```yaml
+openai:
+  base_url: http://host.containers.internal:11434/v1
+  api_key: ollama
+```
+
+If Ollama is on a different PC, replace `host.docker.internal` with that PC's
+LAN hostname or IP, for example `http://impression-pc:11434/v1`.
+
 ## Start The Stack
 
 From the repo root in WSL/Linux:
@@ -101,6 +137,20 @@ In the examples below:
 
 - use `http://127.0.0.1:8000` from the same machine.
 - use `http://<HOST_LAN_IP>:8000` from another PC on the same network.
+
+If using Ollama embeddings, verify the hub container can reach Ollama:
+
+```bash
+docker compose exec ai-memory-hub \
+  python -c "import urllib.request; print(urllib.request.urlopen('http://host.docker.internal:11434/api/tags', timeout=5).status)"
+```
+
+Expected output is `200`. Also make sure the embedding model is pulled on the
+Ollama PC:
+
+```bash
+ollama pull nomic-embed-text
+```
 
 In a second terminal, verify the API is reachable:
 

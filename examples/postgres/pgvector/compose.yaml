@@ -22,6 +22,9 @@ services:
     build:
       context: ../../..
       dockerfile: Containerfile
+    extra_hosts:
+      # Makes host.docker.internal work on Linux Docker Engine as well as Docker Desktop.
+      - "host.docker.internal:host-gateway"
     restart: on-failure
     depends_on:
       postgres:
@@ -32,7 +35,7 @@ services:
     volumes:
       # The :Z suffix makes this bind mount work with rootless Podman on
       # SELinux-enabled hosts. Docker ignores the SELinux relabel option.
-      - ./config.yaml:/app/config.yaml:ro,Z
+      - ./${AMH_CONFIG_FILE:-config.yaml}:/app/config.yaml:ro,Z
       - amh_hub_data:/data
       - amh_hub_logs:/logs
 
