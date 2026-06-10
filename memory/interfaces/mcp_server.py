@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from urllib.parse import unquote
 from typing import Any, Awaitable, Callable
@@ -13,6 +14,8 @@ from memory.ingestion.mvp_ingestion import normalize_conversation_json
 from memory.ingestion.validate import validate_conversation
 
 ToolFn = Callable[..., Awaitable[dict[str, Any]]]
+
+logger = logging.getLogger(__name__)
 
 
 TOOL_DESCRIPTIONS: dict[str, str] = {
@@ -453,6 +456,7 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
         try:
             result = await agent.ingest_messages(normalized)
         except Exception as exc:
+            logger.exception("MCP memory_insert failed")
             return _envelope(
                 status="error",
                 error_code="insert_failed",
@@ -519,6 +523,7 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
             result["results"] = redact_content_hashes(result["results"])
             result["cursor"] = next_cursor
         except Exception as exc:
+            logger.exception("MCP memory_search failed")
             return _envelope(
                 status="error",
                 error_code="search_failed",
@@ -604,6 +609,7 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 max_context_tokens=max_context_tokens,
             )
         except Exception as exc:
+            logger.exception("MCP memory_ask failed")
             return _envelope(
                 status="error",
                 error_code="ask_failed",
