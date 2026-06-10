@@ -250,6 +250,7 @@ Implementation sequence:
 - [ ] Add topic-level and daily/weekly digest generation.
 - [ ] Add duplicate/redundant memory consolidation tooling.
 - [ ] Add stable-fact extraction only after summary storage and provenance are reliable.
+- [ ] Use `improvements/memory_quality_fact_layer_plan.md` for confidence scoring, compact provenance, result deduplication, profile facts, and correction/supersession behavior.
 
 ## P3: UI And Developer Experience
 

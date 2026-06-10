@@ -8,6 +8,7 @@ Source date: `28-05-2026`
 2. [Retrieval Precision Plan](./improvements/retrieval_precision_plan.md)
 3. [Context Building Plan](./improvements/context_building_plan.md)
 4. [Conversation Grouping Plan](./improvements/conversation_grouping_plan.md)
+5. [Memory Quality And Fact Layer Plan](./improvements/memory_quality_fact_layer_plan.md)
 
 ## Notes
 
