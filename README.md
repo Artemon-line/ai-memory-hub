@@ -506,6 +506,7 @@ tests/          unit, integration, and end-to-end tests
 - [Agent integration](docs/agents.md)
 - [MCP plan](docs/mcp_plan.md)
 - [Release, container, and docs publishing plan](docs/release_container_docs_plan.md)
+- [Observability, logging, and telemetry plan](docs/observability_logging_telemetry_plan.md)
 - [Roadmap](docs/roadmap.md)
 - [Improvements](docs/improvements.md)
 
