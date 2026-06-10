@@ -463,6 +463,18 @@ Clean up the container:
 docker rm -f aim-pgvector-test
 ```
 
+For a reusable Docker/Podman Compose setup that runs ai-memory-hub with
+Postgres metadata and PGVector vectors, see:
+
+```bash
+cd examples/postgres/pgvector
+docker compose up --build
+```
+
+The example binds ai-memory-hub on host port `8000` for LAN clients. Use
+`http://<HOST_LAN_IP>:8000/mcp/` from another PC on the same network.
+It also enables tokenizer budgeting with the optional `tiktoken` extra.
+
 ## Project Structure
 
 ```text
