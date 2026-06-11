@@ -472,6 +472,17 @@ context size, and token chunking output. Add `--max-budgeted-ratio` or
 `--max-config-enabled-ratio` when you want the command to fail on a local
 slowdown threshold.
 
+Measure repeated operations before adding or resizing caches:
+
+```bash
+uv run python -m memory.benchmarks.cache_candidates --iterations 1000
+```
+
+The cache-candidate benchmark reports JSON timings for schema loading, schema
+compatibility checks, config parsing, and token counting, plus guidance for when
+each operation is worth caching. Add `--profile-out cache-candidates.prof` to
+write cProfile stats for deeper inspection.
+
 Default local runs do not require Postgres or PGVector. Live Postgres/PGVector
 tests are skipped unless `AMH_TEST_POSTGRES_DSN` is set.
 
