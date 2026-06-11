@@ -24,6 +24,9 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
     "memory_search": "Search existing memory by text query.",
     "memory_retrieve": "Retrieve a stored memory item by ID.",
     "memory_ask": "Answer a question using stored memory search results.",
+    "memory_fact_search": "Search normalized extracted memory facts.",
+    "memory_profile_get": "Return active normalized facts for a subject.",
+    "memory_fact_supersede": "Mark one normalized fact as superseded by another fact.",
 }
 
 
@@ -194,6 +197,12 @@ def _paginate(
     next_offset = offset + len(page)
     next_cursor = str(next_offset) if next_offset < len(rows) else None
     return page, next_cursor
+
+
+def _validate_result_mode(result_mode: str) -> str:
+    if result_mode not in {"chunks", "compact", "conversations"}:
+        raise ValueError("result_mode must be one of: chunks, compact, conversations")
+    return result_mode
 
 
 def _register_resources(mcp: Any, agent: BaseIngestionAgent) -> None:
@@ -474,6 +483,7 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
         date_from: str | None = None,
         date_to: str | None = None,
         tags: list[str] | None = None,
+        result_mode: str = "chunks",
     ) -> dict[str, Any]:
         if not isinstance(query, str) or not query.strip():
             return _envelope(
@@ -495,9 +505,17 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 error_code="invalid_input",
                 error_message="limit must be an integer between 1 and 100",
             )
+        try:
+            result_mode = _validate_result_mode(str(result_mode))
+        except ValueError as exc:
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message=str(exc),
+            )
 
         try:
-            result = await agent.search(query=query, top_k=100)
+            result = await agent.search(query=query, top_k=100, result_mode=result_mode)
             matches = result.get("results", [])
             if not isinstance(matches, list):
                 matches = []
@@ -551,7 +569,10 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
         return _envelope(status="ok", id=id, memory=redact_content_hashes(memory))
 
     async def memory_ask(
-        question: str, top_k: int = 5, max_context_tokens: int | None = None
+        question: str,
+        top_k: int = 5,
+        max_context_tokens: int | None = None,
+        result_mode: str = "chunks",
     ) -> dict[str, Any]:
         if not isinstance(question, str) or not question.strip():
             return _envelope(
@@ -601,12 +622,21 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                     error_code="invalid_input",
                     error_message="max_context_tokens must be a positive integer",
                 )
+        try:
+            result_mode = _validate_result_mode(str(result_mode))
+        except ValueError as exc:
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message=str(exc),
+            )
 
         try:
             result = await agent.ask(
                 question=question,
                 top_k=top_k,
                 max_context_tokens=max_context_tokens,
+                result_mode=result_mode,
             )
         except Exception as exc:
             logger.exception("MCP memory_ask failed")
@@ -617,12 +647,47 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
             )
         return _with_envelope_defaults(result)
 
+    async def memory_fact_search(
+        subject: str | None = None,
+        predicate: str | None = None,
+        include_superseded: bool = False,
+    ) -> dict[str, Any]:
+        result = await agent.fact_search(
+            subject=unwrap_array(subject),
+            predicate=unwrap_array(predicate),
+            include_superseded=bool(include_superseded),
+        )
+        return _with_envelope_defaults(result)
+
+    async def memory_profile_get(subject: str = "user") -> dict[str, Any]:
+        result = await agent.profile_get(subject=str(unwrap_array(subject) or "user"))
+        return _with_envelope_defaults(result)
+
+    async def memory_fact_supersede(fact_id: str, superseded_by: str) -> dict[str, Any]:
+        if not isinstance(fact_id, str) or not fact_id.strip():
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message="fact_id must be a non-empty string",
+            )
+        if not isinstance(superseded_by, str) or not superseded_by.strip():
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message="superseded_by must be a non-empty string",
+            )
+        result = await agent.fact_supersede(fact_id=fact_id, superseded_by=superseded_by)
+        return _with_envelope_defaults(result)
+
     return {
         "memory_validate": memory_validate,
         "memory_insert": memory_insert,
         "memory_search": memory_search,
         "memory_retrieve": memory_retrieve,
         "memory_ask": memory_ask,
+        "memory_fact_search": memory_fact_search,
+        "memory_profile_get": memory_profile_get,
+        "memory_fact_supersede": memory_fact_supersede,
     }
 
 

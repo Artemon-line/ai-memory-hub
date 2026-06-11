@@ -23,13 +23,37 @@ class BaseIngestionAgent(ABC):
     def postprocess_result(self, result: Dict[str, Any]) -> Dict[str, Any]:
         return result
 
-    async def search(self, query: str, *, top_k: int = 5) -> Dict[str, Any]:
+    async def search(
+        self, query: str, *, top_k: int = 5, result_mode: str = "chunks"
+    ) -> Dict[str, Any]:
         raise NotImplementedError("search is not implemented")
 
     async def retrieve(self, memory_id: str) -> Optional[Dict[str, Any]]:
         raise NotImplementedError("retrieve is not implemented")
 
     async def ask(
-        self, question: str, *, top_k: int = 5, max_context_tokens: int | None = None
+        self,
+        question: str,
+        *,
+        top_k: int = 5,
+        max_context_tokens: int | None = None,
+        result_mode: str = "chunks",
     ) -> Dict[str, Any]:
         raise NotImplementedError("ask is not implemented")
+
+    async def fact_search(
+        self,
+        *,
+        subject: str | None = None,
+        predicate: str | None = None,
+        include_superseded: bool = False,
+    ) -> Dict[str, Any]:
+        raise NotImplementedError("fact_search is not implemented")
+
+    async def profile_get(self, *, subject: str = "user") -> Dict[str, Any]:
+        raise NotImplementedError("profile_get is not implemented")
+
+    async def fact_supersede(
+        self, *, fact_id: str, superseded_by: str
+    ) -> Dict[str, Any]:
+        raise NotImplementedError("fact_supersede is not implemented")

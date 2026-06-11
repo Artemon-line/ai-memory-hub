@@ -10,19 +10,24 @@ This plan comes from real Codex to opencode MCP testing where conversation hando
 
 Implemented:
 
-- `memory_ask` returns an answer with matching results and citations.
-- Search results include chunk-level provenance and source conversation payloads.
-- Conversation-aware result metadata exists, including conversation score and match count.
-- Ask responses can track selected and dropped chunks for token-budgeted context building.
+- [x] `memory_ask` returns an answer with matching results and citations.
+- [x] Search results include chunk-level provenance and source conversation payloads.
+- [x] Conversation-aware result metadata exists, including conversation score and match count.
+- [x] Ask responses can track selected and dropped chunks for token-budgeted context building.
+- [x] `memory_ask` returns `confidence`, `answer_basis`, and compact `provenance`.
+- [x] `memory_search` and `memory_ask` accept `result_mode` with `chunks`, `compact`, and `conversations`.
+- [x] SQLite and Postgres metadata stores persist deterministic extracted facts.
+- [x] MCP and HTTP expose fact search, profile get, and fact supersession operations.
+- [x] Direct fact questions can use the fact layer before conversation retrieval.
+- [x] Superseded facts are hidden from normal profile/fact answers and retained for audit.
+- [x] Conflicting active facts produce `answer_basis: "conflict"`.
 
 Not implemented yet:
 
-- A clear `confidence` field for generated answers.
-- A compact provenance summary intended for agent display.
-- A result mode that deduplicates repeated chunks from the same conversation.
-- A normalized fact layer for user profile facts, project facts, preferences, owned items, and recurring topics.
-- A correction or supersession workflow for outdated facts.
-- Conflict-aware answers when multiple stored memories disagree.
+- [x] LLM-assisted fact extraction hook beyond the initial deterministic rules.
+- [x] Rich subject/entity resolution for project-specific fact questions.
+- [x] Recurring-topic fact extraction.
+- [x] CLI workflows for reviewing and superseding facts.
 
 ## Problems Observed
 
@@ -44,7 +49,7 @@ Not implemented yet:
 
 ## Phase 1: Improve `memory_ask` Answer Shape
 
-Add optional fields to the `memory_ask` response while preserving the existing response contract:
+- [x] Add optional fields to the `memory_ask` response while preserving the existing response contract:
 
 ```json
 {
@@ -64,24 +69,24 @@ Add optional fields to the `memory_ask` response while preserving the existing r
 }
 ```
 
-Proposed `confidence` values:
+Implemented `confidence` values:
 
-- `high`: answer is directly supported by one or more strong matching memories.
-- `medium`: answer is supported but sparse, partial, or slightly indirect.
-- `low`: memory contains possible evidence but not enough for a firm answer.
-- `none`: no relevant memory was found.
+- [x] `high`: answer is directly supported by one or more strong matching memories.
+- [x] `medium`: answer is supported but sparse, partial, or slightly indirect.
+- [x] `low`: memory contains possible evidence but not enough for a firm answer.
+- [x] `none`: no relevant memory was found.
 
-Proposed `answer_basis` values:
+Implemented `answer_basis` values:
 
-- `direct_memory`: answer comes directly from retrieved content.
-- `fact_layer`: answer comes from normalized facts.
-- `mixed`: answer uses facts plus conversation retrieval.
-- `not_found`: no answerable memory was found.
-- `conflict`: relevant memories disagree.
+- [x] `direct_memory`: answer comes directly from retrieved content.
+- [x] `fact_layer`: answer comes from normalized facts.
+- [x] `mixed`: answer uses facts plus conversation retrieval.
+- [x] `not_found`: no answerable memory was found.
+- [x] `conflict`: relevant memories disagree.
 
 ## Phase 2: Add Result Compaction
 
-Add a request option for search and ask tools:
+- [x] Add a request option for search and ask tools:
 
 ```json
 {
@@ -91,19 +96,19 @@ Add a request option for search and ask tools:
 
 Supported modes:
 
-- `chunks`: current behavior; return individual matching chunks.
-- `compact`: return the best chunks but group repeated evidence by conversation.
-- `conversations`: return one summarized result per conversation.
+- [x] `chunks`: current behavior; return individual matching chunks.
+- [x] `compact`: return the best chunks but group repeated evidence by conversation.
+- [x] `conversations`: return one summarized result per conversation.
 
 Acceptance behavior:
 
-- Repeated chunks from one conversation should not crowd out other relevant conversations.
-- Compact mode should still expose enough evidence for the agent to cite memory responsibly.
-- Existing callers should continue to get `chunks` by default.
+- [x] Repeated chunks from one conversation should not crowd out other relevant conversations.
+- [x] Compact mode should still expose enough evidence for the agent to cite memory responsibly.
+- [x] Existing callers should continue to get `chunks` by default.
 
 ## Phase 3: Add A Fact Extraction Store
 
-Create a normalized fact model beside conversation storage:
+- [x] Create a normalized fact model beside conversation storage:
 
 ```json
 {
@@ -128,30 +133,30 @@ Create a normalized fact model beside conversation storage:
 
 Start with deterministic extraction rules before adding LLM extraction:
 
-- `I have ...`
-- `I own ...`
-- `My favorite ... is ...`
-- `The creator is ...`
-- `<project> is ...`
-- `The command name is ...`
-- `The indexing strategy is ...`
+- [x] `I have ...`
+- [x] `I own ...`
+- [x] `My favorite ... is ...`
+- [x] `The creator is ...`
+- [x] `<project> is ...`
+- [x] `The command name is ...`
+- [x] `The indexing strategy is ...`
 
 Initial fact categories:
 
-- User owned items.
-- User preferences.
-- User identity/profile notes.
-- Project names and project attributes.
-- People associated with projects.
-- Recurring topics.
+- [x] User owned items.
+- [x] User preferences.
+- [x] User identity/profile notes.
+- [x] Project names and project attributes.
+- [x] People associated with projects.
+- [x] Recurring topics.
 
 ## Phase 4: Add Profile And Fact Tools
 
 Add MCP tools after the fact model is stable:
 
-- `memory_fact_search`
-- `memory_profile_get`
-- `memory_fact_supersede`
+- [x] `memory_fact_search`
+- [x] `memory_profile_get`
+- [x] `memory_fact_supersede`
 
 Example profile response:
 
@@ -175,39 +180,39 @@ Corrections should preserve history instead of deleting old memories by default.
 
 Example flow:
 
-1. User says: "Actually, my Gibson is TV yellow, not cherry."
-2. The server creates a new fact.
-3. The old fact is marked with `superseded_by`.
-4. Future answers prefer the newer fact.
-5. If old and new facts both appear relevant, the answer mentions the correction.
+1. [x] User says: "Actually, my Gibson is TV yellow, not cherry."
+2. [x] The server creates a new fact.
+3. [x] The old fact is marked with `superseded_by`.
+4. [x] Future answers prefer the newer fact.
+5. [x] If old and new facts both appear relevant, the answer mentions the correction.
 
 Required behavior:
 
-- Superseded facts are excluded from normal profile answers.
-- Superseded facts remain available for audit and provenance.
-- Conflicting active facts produce a `conflict` answer basis.
+- [x] Superseded facts are excluded from normal profile answers.
+- [x] Superseded facts remain available for audit and provenance.
+- [x] Conflicting active facts produce a `conflict` answer basis.
 
 ## Phase 6: Answer Policy
 
 Use facts first for direct profile questions:
 
-- "What guitar do I own?"
-- "What is my favorite command name?"
-- "Who created Velvet Lantern?"
+- [x] "What guitar do I own?"
+- [x] "What is my favorite command name?"
+- [x] "Who created Velvet Lantern?"
 
 Use conversation retrieval first for broader recall questions:
 
-- "What was my recent Codex conversation about?"
-- "What did we discuss about Velvet Lantern?"
-- "Summarize recent project ideas."
+- [x] "What was my recent Codex conversation about?"
+- [x] "What did we discuss about Velvet Lantern?"
+- [x] "Summarize recent project ideas."
 
-Use mixed mode when a direct fact answer needs conversation context.
+- [x] Use mixed mode when a direct fact answer needs conversation context.
 
 ## Acceptance Criteria
 
-- `memory_ask` can return `confidence`, `answer_basis`, and compact provenance.
-- Compact result mode prevents repeated chunks from one conversation dominating the response.
-- A direct fact question can be answered from the fact layer with source provenance.
-- User corrections can supersede older facts without deleting their source memories.
-- Conflicting facts produce a cautious answer with citations instead of a silent guess.
-- Existing MCP clients remain compatible with the current response fields.
+- [x] `memory_ask` can return `confidence`, `answer_basis`, and compact provenance.
+- [x] Compact result mode prevents repeated chunks from one conversation dominating the response.
+- [x] A direct fact question can be answered from the fact layer with source provenance.
+- [x] User corrections can supersede older facts without deleting their source memories.
+- [x] Conflicting facts produce a cautious answer with citations instead of a silent guess.
+- [x] Existing MCP clients remain compatible with the current response fields.

@@ -169,6 +169,27 @@ def test_ingest_messages_appends_only_new_same_id_messages() -> None:
     assert [row["chunk_index"] for row in vectors.rows] == [0, 1, 2]
 
 
+def test_trusted_append_extracts_facts_only_from_new_messages() -> None:
+    metadata, _ = _configure_stubs(allow_trusted_appends=True)
+    base = _valid_conversation()
+    base["messages"] = [
+        {"role": "user", "text": "hello"},
+    ]
+    mvp_ingestion.ingest_messages(base)
+
+    appended = _valid_conversation()
+    appended["messages"] = [
+        {"role": "user", "text": "hello"},
+        {"role": "user", "text": "I own a Gibson Special with P90 pickups, cherry."},
+    ]
+    mvp_ingestion.ingest_messages(appended)
+
+    facts = metadata._facts
+    assert len(facts) == 1
+    assert facts[0]["predicate"] == "owns_guitar"
+    assert facts[0]["source_message_indexes"] == [1]
+
+
 def test_ingest_messages_rejects_same_id_append_without_trust() -> None:
     _configure_stubs()
     mvp_ingestion.ingest_messages(_valid_conversation())
@@ -410,6 +431,153 @@ def test_group_conversation_results_keeps_distant_chunks_in_score_order() -> Non
     ]
     assert grouped[2]["conversation_score"] == 0.01
     assert grouped[2]["conversation_match_count"] == 2
+
+
+def test_search_compact_mode_groups_repeated_chunks_by_conversation() -> None:
+    metadata, vectors = _configure_stubs()
+    first = _valid_conversation()
+    first["id"] = "11111111-1111-4111-8111-111111111111"
+    first["messages"] = [{"role": "user", "text": "gpu alpha"}]
+    second = _valid_conversation()
+    second["id"] = "22222222-2222-4222-8222-222222222222"
+    second["messages"] = [{"role": "user", "text": "gpu beta"}]
+    metadata.insert(first)
+    metadata.insert(second)
+    vectors.rows = [
+        {"memory_id": first["id"], "chunk_index": 0, "role": "user", "text": "gpu alpha"},
+        {"memory_id": first["id"], "chunk_index": 1, "role": "user", "text": "gpu alpha detail"},
+        {"memory_id": second["id"], "chunk_index": 0, "role": "user", "text": "gpu beta"},
+    ]
+
+    result = mvp_ingestion.search("gpu", top_k=2, result_mode="compact")
+
+    assert [row["id"] for row in result["results"]] == [first["id"], second["id"]]
+    assert result["results"][0]["matching_chunks"] == 2
+    assert len(result["results"][0]["evidence_chunks"]) == 2
+
+
+def test_ask_answers_direct_guitar_question_from_fact_layer() -> None:
+    _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["messages"] = [
+        {"role": "user", "text": "I own a Gibson Special with P90 pickups, cherry."}
+    ]
+    mvp_ingestion.ingest_messages(conversation)
+
+    result = mvp_ingestion.ask("What guitar do I own?", top_k=5)
+
+    assert result["answer_basis"] == "fact_layer"
+    assert result["confidence"] == "high"
+    assert "Gibson Special" in result["answer"]
+    assert result["facts"][0]["predicate"] == "owns_guitar"
+
+
+def test_fact_correction_supersedes_old_fact() -> None:
+    _configure_stubs()
+    first = _valid_conversation()
+    first["id"] = "11111111-1111-4111-8111-111111111111"
+    first["messages"] = [
+        {"role": "user", "text": "I own a Gibson Special with P90 pickups, cherry."}
+    ]
+    second = _valid_conversation()
+    second["id"] = "22222222-2222-4222-8222-222222222222"
+    second["messages"] = [
+        {"role": "user", "text": "Actually, my Gibson Special is TV yellow, not cherry."}
+    ]
+    mvp_ingestion.ingest_messages(first)
+    mvp_ingestion.ingest_messages(second)
+
+    result = mvp_ingestion.ask("What guitar do I own?", top_k=5)
+    audit = mvp_ingestion.fact_search(
+        subject="user", predicate="owns_guitar", include_superseded=True
+    )
+
+    assert result["answer_basis"] == "fact_layer"
+    assert "TV yellow" in result["answer"]
+    assert "cherry" not in result["answer"]
+    assert any(fact["superseded_by"] for fact in audit["results"])
+
+
+def test_conflicting_active_facts_return_conflict_basis() -> None:
+    _configure_stubs()
+    first = _valid_conversation()
+    first["id"] = "11111111-1111-4111-8111-111111111111"
+    first["messages"] = [{"role": "user", "text": "I own a red Gibson guitar."}]
+    second = _valid_conversation()
+    second["id"] = "22222222-2222-4222-8222-222222222222"
+    second["messages"] = [{"role": "user", "text": "I own a black Fender guitar."}]
+    mvp_ingestion.ingest_messages(first)
+    mvp_ingestion.ingest_messages(second)
+
+    result = mvp_ingestion.ask("What guitar do I own?", top_k=5)
+
+    assert result["answer_basis"] == "conflict"
+    assert result["confidence"] == "low"
+    assert "red Gibson" in result["answer"]
+    assert "black Fender" in result["answer"]
+
+
+def test_fact_answer_can_include_retrieval_context_as_mixed() -> None:
+    _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["messages"] = [
+        {"role": "user", "text": "I own a Gibson Special with P90 pickups, cherry."},
+        {"role": "assistant", "text": "We discussed using that guitar for studio tracking."},
+    ]
+    mvp_ingestion.ingest_messages(conversation)
+
+    result = mvp_ingestion.ask("What guitar do I own and what context/source discussed it?", top_k=2)
+
+    assert result["answer_basis"] == "mixed"
+    assert "Gibson Special" in result["answer"]
+    assert "Context from memory" in result["answer"]
+    assert result["results"]
+
+
+def test_profile_and_recurring_topic_facts_are_extracted() -> None:
+    _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["messages"] = [
+        {"role": "user", "text": "My name is Tyran. I work as a backend engineer."},
+        {"role": "assistant", "text": "We discussed FastAPI, MCP, SQLite, and pytest."},
+    ]
+    mvp_ingestion.ingest_messages(conversation)
+
+    profile = mvp_ingestion.profile_get("user")
+    predicates = {fact["predicate"] for fact in profile["facts"]}
+
+    assert "profile_name" in predicates
+    assert "profile_role" in predicates
+    assert "recurring_topic" in predicates
+
+
+def test_project_fact_questions_match_named_subjects() -> None:
+    _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["title"] = "Velvet Lantern"
+    conversation["messages"] = [
+        {"role": "user", "text": "Velvet Lantern creator is Ada."}
+    ]
+    mvp_ingestion.ingest_messages(conversation)
+
+    result = mvp_ingestion.ask("Who created Velvet Lantern?", top_k=5)
+
+    assert result["answer_basis"] == "fact_layer"
+    assert result["answer"] == "Ada"
+
+
+def test_external_fact_extractor_hook_adds_normalized_facts() -> None:
+    metadata, vectors = _configure_stubs()
+    runtime = mvp_ingestion._runtime()
+    runtime.fact_extractor = lambda conversation, messages: [
+        {"subject": "user", "predicate": "profile_identity", "object": "a tester"}
+    ]
+    conversation = _valid_conversation()
+    conversation["messages"] = [{"role": "user", "text": "no deterministic profile fact"}]
+
+    mvp_ingestion.ingest_messages(conversation)
+
+    assert metadata._facts[0]["object"] == "a tester"
 
 
 def test_ingest_messages_enriches_topics() -> None:

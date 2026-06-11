@@ -162,6 +162,27 @@ async def test_mcp_tool_handlers_insert_search_retrieve() -> None:
 
 
 @pytest.mark.asyncio
+async def test_mcp_fact_tools_return_profile_facts() -> None:
+    runtime = _runtime()
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=runtime)
+    handlers = build_tool_handlers(agent)
+    payload = _conversation()
+    payload["messages"] = [
+        {"role": "user", "text": "I own a Gibson Special with P90 pickups, cherry."}
+    ]
+
+    await handlers["memory_insert"](payload)
+    facts = await handlers["memory_fact_search"](subject="user", predicate="owns_guitar")
+    profile = await handlers["memory_profile_get"](subject="user")
+    ask = await handlers["memory_ask"]("What guitar do I own?", 5)
+
+    assert facts["status"] == "ok"
+    assert facts["results"][0]["predicate"] == "owns_guitar"
+    assert profile["facts"][0]["object"] == facts["results"][0]["object"]
+    assert ask["answer_basis"] == "fact_layer"
+
+
+@pytest.mark.asyncio
 async def test_mcp_tool_handlers_accept_codex_style_payload() -> None:
     runtime = _runtime()
     agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=runtime)

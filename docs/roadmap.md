@@ -187,6 +187,7 @@ PGVector unlocks larger local memory sets, faster clustering workflows, and SQL-
 ### 3.2 Topic extraction
 
 - [ ] LLM-based topic labeling
+- [ ] Hosted LLM fact extractor implementation with prompt/schema tuning
 - [ ] HDBSCAN clustering
 - [ ] Topic graph
 
@@ -217,6 +218,7 @@ PGVector unlocks larger local memory sets, faster clustering workflows, and SQL-
 - [ ] Search interface
 - [ ] Conversation viewer
 - [ ] RAG query console
+- [ ] Fact review, edit, supersession, and audit workflows
 - [ ] Vector backend diagnostics
 - [ ] Storage health panel
 - [ ] Embedding dimension inspector

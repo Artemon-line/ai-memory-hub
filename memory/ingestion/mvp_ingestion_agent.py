@@ -31,15 +31,49 @@ class MVPIngestionAgent(BaseIngestionAgent):
             raise
         return self.postprocess_result(result)
 
-    async def search(self, query: str, *, top_k: int = 5) -> Dict[str, Any]:
-        return mvp_ingestion.search(query=query, top_k=top_k)
+    async def search(
+        self, query: str, *, top_k: int = 5, result_mode: str = "chunks"
+    ) -> Dict[str, Any]:
+        return mvp_ingestion.search(query=query, top_k=top_k, result_mode=result_mode)
 
     async def retrieve(self, memory_id: str) -> Optional[Dict[str, Any]]:
         return mvp_ingestion.retrieve(memory_id)
 
     async def ask(
-        self, question: str, *, top_k: int = 5, max_context_tokens: int | None = None
+        self,
+        question: str,
+        *,
+        top_k: int = 5,
+        max_context_tokens: int | None = None,
+        result_mode: str = "chunks",
     ) -> Dict[str, Any]:
         return mvp_ingestion.ask(
-            question=question, top_k=top_k, max_context_tokens=max_context_tokens
+            question=question,
+            top_k=top_k,
+            max_context_tokens=max_context_tokens,
+            result_mode=result_mode,
+        )
+
+    async def fact_search(
+        self,
+        *,
+        subject: str | None = None,
+        predicate: str | None = None,
+        include_superseded: bool = False,
+    ) -> Dict[str, Any]:
+        return mvp_ingestion.fact_search(
+            subject=subject,
+            predicate=predicate,
+            include_superseded=include_superseded,
+        )
+
+    async def profile_get(self, *, subject: str = "user") -> Dict[str, Any]:
+        return mvp_ingestion.profile_get(subject=subject)
+
+    async def fact_supersede(
+        self, *, fact_id: str, superseded_by: str
+    ) -> Dict[str, Any]:
+        return mvp_ingestion.fact_supersede(
+            fact_id=fact_id,
+            superseded_by=superseded_by,
         )

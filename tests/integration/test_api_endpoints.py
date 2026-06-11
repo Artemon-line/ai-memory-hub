@@ -150,3 +150,25 @@ def test_memory_ask_accepts_context_budget() -> None:
     assert body["chunks_selected"] == 1
     assert body["chunks_dropped"] == 0
     assert body["tokenizer_used"] in {"heuristic", "tiktoken:cl100k_base"}
+
+
+def test_memory_fact_endpoints() -> None:
+    client = _client()
+    payload = _conversation()
+    payload["messages"] = [
+        {"role": "user", "text": "I own a Gibson Special with P90 pickups, cherry."}
+    ]
+    client.post("/memory/insert", json=payload)
+
+    facts = client.post(
+        "/memory/facts/search",
+        json={"subject": "user", "predicate": "owns_guitar"},
+    )
+    profile = client.post("/memory/profile/get", json={"subject": "user"})
+    ask = client.post("/memory/ask", json={"question": "What guitar do I own?"})
+
+    assert facts.status_code == 200
+    assert facts.json()["results"][0]["predicate"] == "owns_guitar"
+    assert profile.status_code == 200
+    assert profile.json()["facts"][0]["object"] == facts.json()["results"][0]["object"]
+    assert ask.json()["answer_basis"] == "fact_layer"

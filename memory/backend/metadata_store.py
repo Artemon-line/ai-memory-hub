@@ -91,6 +91,31 @@ class SQLiteMetadataStore:
                 )
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS facts (
+                    id TEXT PRIMARY KEY,
+                    subject TEXT NOT NULL,
+                    predicate TEXT NOT NULL,
+                    object TEXT NOT NULL,
+                    qualifiers TEXT NOT NULL,
+                    confidence TEXT NOT NULL,
+                    source_conversation_id TEXT NOT NULL,
+                    source_message_indexes TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    superseded_by TEXT,
+                    deleted_at TEXT
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_facts_subject_predicate
+                ON facts(subject, predicate)
+                WHERE deleted_at IS NULL
+                """
+            )
 
     def _ensure_column(
         self, conn: sqlite3.Connection, table: str, column: str, declaration: str
@@ -290,6 +315,78 @@ class SQLiteMetadataStore:
             ).fetchall()
         return [json.loads(str(row["payload"])) for row in rows]
 
+    def insert_facts(self, facts: list[dict[str, Any]]) -> None:
+        if not facts:
+            return
+        with self._connect() as conn:
+            for fact in facts:
+                self._supersede_corrected_facts(conn, fact)
+                conn.execute(
+                    """
+                    INSERT INTO facts (
+                        id, subject, predicate, object, qualifiers, confidence,
+                        source_conversation_id, source_message_indexes,
+                        created_at, updated_at, superseded_by, deleted_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(id) DO UPDATE SET
+                        subject = excluded.subject,
+                        predicate = excluded.predicate,
+                        object = excluded.object,
+                        qualifiers = excluded.qualifiers,
+                        confidence = excluded.confidence,
+                        source_conversation_id = excluded.source_conversation_id,
+                        source_message_indexes = excluded.source_message_indexes,
+                        updated_at = excluded.updated_at,
+                        superseded_by = excluded.superseded_by,
+                        deleted_at = excluded.deleted_at
+                    """,
+                    self._fact_row(fact),
+                )
+
+    def search_facts(
+        self,
+        *,
+        subject: str | None = None,
+        predicate: str | None = None,
+        include_superseded: bool = False,
+    ) -> list[dict[str, Any]]:
+        clauses = ["deleted_at IS NULL"]
+        params: list[Any] = []
+        if subject is not None:
+            clauses.append("subject = ?")
+            params.append(subject)
+        if predicate is not None:
+            clauses.append("predicate = ?")
+            params.append(predicate)
+        if not include_superseded:
+            clauses.append("superseded_by IS NULL")
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT * FROM facts
+                WHERE {' AND '.join(clauses)}
+                ORDER BY updated_at DESC, id ASC
+                """,
+                params,
+            ).fetchall()
+        return [self._fact_from_row(row) for row in rows]
+
+    def profile_get(self, subject: str = "user") -> dict[str, Any]:
+        return {"subject": subject, "facts": self.search_facts(subject=subject)}
+
+    def supersede_fact(self, fact_id: str, superseded_by: str) -> bool:
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE facts
+                SET superseded_by = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND deleted_at IS NULL
+                """,
+                (superseded_by, fact_id),
+            )
+            return cursor.rowcount > 0
+
     def capabilities(self) -> ProviderCapabilities:
         return ProviderCapabilities(
             supports_transactions=True,
@@ -388,6 +485,64 @@ class SQLiteMetadataStore:
         if self._conversation_hash(existing) != conversation_hash:
             raise ValueError("unauthorized_update: conversation id already exists")
         return str(existing["id"]), False
+
+    def _supersede_corrected_facts(
+        self, conn: sqlite3.Connection, fact: dict[str, Any]
+    ) -> None:
+        qualifiers = fact.get("qualifiers", {})
+        corrects = qualifiers.get("corrects") if isinstance(qualifiers, dict) else None
+        if not corrects:
+            return
+        conn.execute(
+            """
+            UPDATE facts
+            SET superseded_by = ?, updated_at = ?
+            WHERE subject = ?
+              AND predicate = ?
+              AND superseded_by IS NULL
+              AND deleted_at IS NULL
+              AND lower(object) LIKE ?
+            """,
+            (
+                str(fact["id"]),
+                str(fact["updated_at"]),
+                str(fact["subject"]),
+                str(fact["predicate"]),
+                f"%{str(corrects).lower()}%",
+            ),
+        )
+
+    def _fact_row(self, fact: dict[str, Any]) -> tuple[Any, ...]:
+        return (
+            str(fact["id"]),
+            str(fact["subject"]),
+            str(fact["predicate"]),
+            str(fact["object"]),
+            json.dumps(fact.get("qualifiers", {}), separators=(",", ":"), ensure_ascii=False),
+            str(fact.get("confidence", "medium")),
+            str(fact["source_conversation_id"]),
+            json.dumps(fact.get("source_message_indexes", []), separators=(",", ":")),
+            str(fact["created_at"]),
+            str(fact["updated_at"]),
+            fact.get("superseded_by"),
+            fact.get("deleted_at"),
+        )
+
+    def _fact_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "id": str(row["id"]),
+            "subject": str(row["subject"]),
+            "predicate": str(row["predicate"]),
+            "object": str(row["object"]),
+            "qualifiers": json.loads(str(row["qualifiers"])),
+            "confidence": str(row["confidence"]),
+            "source_conversation_id": str(row["source_conversation_id"]),
+            "source_message_indexes": json.loads(str(row["source_message_indexes"])),
+            "created_at": str(row["created_at"]),
+            "updated_at": str(row["updated_at"]),
+            "superseded_by": row["superseded_by"],
+            "deleted_at": row["deleted_at"],
+        }
 
     def _replace_child_rows(
         self, conn: sqlite3.Connection, conversation_json: dict[str, Any]

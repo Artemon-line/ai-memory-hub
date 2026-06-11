@@ -95,6 +95,7 @@ class RuntimeDependencies:
     retrieval_keyword_weight: float = 0.25
     retrieval_metadata_weight: float = 0.15
     retrieval_candidate_multiplier: int = 3
+    fact_extractor: Any | None = None
 
 
 _RUNTIME: RuntimeDependencies | None = None
@@ -138,6 +139,49 @@ _TOPIC_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
         re.compile(r"\b(frontend|ui|css|html|react|vue|angular)\b", re.IGNORECASE),
     ),
     ("backend", re.compile(r"\b(backend|fastapi|flask|server)\b", re.IGNORECASE)),
+]
+_RESULT_MODES = {"chunks", "compact", "conversations"}
+_FACT_CORRECTION_RE = re.compile(
+    r"\bactually,\s+my\s+(?P<item>[A-Za-z0-9][A-Za-z0-9 _-]{1,80})\s+is\s+(?P<new>[^,.]+),\s+not\s+(?P<old>[^.]+)",
+    re.IGNORECASE,
+)
+_FACT_RULES: list[tuple[str, re.Pattern[str]]] = [
+    ("own", re.compile(r"\bI\s+(?:have|own)\s+(?P<object>[^.?!\n]+)", re.IGNORECASE)),
+    (
+        "favorite",
+        re.compile(
+            r"\bMy\s+favorite\s+(?P<name>[A-Za-z0-9 _-]+?)\s+is\s+(?P<object>[^.?!\n]+)",
+            re.IGNORECASE,
+        ),
+    ),
+    ("creator", re.compile(r"\bThe\s+creator\s+is\s+(?P<object>[^.?!\n]+)", re.IGNORECASE)),
+    (
+        "subject_creator",
+        re.compile(
+            r"\b(?P<subject>[A-Z][A-Za-z0-9 _-]{1,80})\s+creator\s+is\s+(?P<object>[^.?!\n]+)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "command_name",
+        re.compile(r"\bThe\s+command\s+name\s+is\s+(?P<object>[^.?!\n]+)", re.IGNORECASE),
+    ),
+    (
+        "indexing_strategy",
+        re.compile(r"\bThe\s+indexing\s+strategy\s+is\s+(?P<object>[^.?!\n]+)", re.IGNORECASE),
+    ),
+    (
+        "project_attribute",
+        re.compile(
+            r"\b(?P<subject>[A-Z][A-Za-z0-9 _-]{1,80})\s+is\s+(?P<object>[^.?!\n]+)",
+            re.IGNORECASE,
+        ),
+    ),
+    ("profile_name", re.compile(r"\bMy\s+name\s+is\s+(?P<object>[^.?!\n]+)", re.IGNORECASE)),
+    ("profile_identity", re.compile(r"\bI\s+am\s+(?P<object>[^.?!\n]+)", re.IGNORECASE)),
+    ("profile_identity", re.compile(r"\bI'm\s+(?P<object>[^.?!\n]+)", re.IGNORECASE)),
+    ("profile_role", re.compile(r"\bI\s+work\s+as\s+(?P<object>[^.?!\n]+)", re.IGNORECASE)),
+    ("profile_location", re.compile(r"\bI\s+live\s+in\s+(?P<object>[^.?!\n]+)", re.IGNORECASE)),
 ]
 
 
@@ -811,6 +855,12 @@ def ingest_messages(
         except Exception:
             _mark_chunks_indexing_failed(str(updated["id"]), chunks)
             raise
+        if new_messages:
+            _store_facts_for_messages(
+                updated,
+                new_messages,
+                start_message_index=start_index,
+            )
         return {
             "status": "ok",
             "id": str(updated["id"]),
@@ -840,6 +890,8 @@ def ingest_messages(
     except Exception:
         _mark_chunks_indexing_failed(metadata_id, chunks)
         raise
+    if inserted:
+        _store_facts_for_conversation(conversation_json)
 
     # 6. Return stored object
     return {
@@ -879,7 +931,8 @@ def _mark_chunks_indexing_failed(metadata_id: str, chunks: list[dict[str, Any]])
         )
 
 
-def search(query: str, top_k: int = 5) -> dict[str, Any]:
+def search(query: str, top_k: int = 5, result_mode: str = "chunks") -> dict[str, Any]:
+    _validate_result_mode(result_mode)
     runtime = _runtime()
     query_vector = runtime.embedding_provider.embed_texts([query])[0]
     candidate_multiplier = max(
@@ -945,7 +998,48 @@ def search(query: str, top_k: int = 5) -> dict[str, Any]:
         keyword_weight=runtime.retrieval_keyword_weight,
         metadata_weight=runtime.retrieval_metadata_weight,
     )
-    return {"status": "ok", "results": group_conversation_results(ranked)[:top_k]}
+    grouped = group_conversation_results(ranked)
+    return {"status": "ok", "results": _apply_result_mode(grouped, result_mode)[:top_k]}
+
+
+def _validate_result_mode(result_mode: str) -> None:
+    if result_mode not in _RESULT_MODES:
+        raise ValueError("result_mode must be one of: chunks, compact, conversations")
+
+
+def _apply_result_mode(rows: list[dict[str, Any]], result_mode: str) -> list[dict[str, Any]]:
+    if result_mode == "chunks":
+        return rows
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    order: list[str] = []
+    for row in rows:
+        memory_id = str(row.get("id", ""))
+        if memory_id not in grouped:
+            grouped[memory_id] = []
+            order.append(memory_id)
+        grouped[memory_id].append(row)
+
+    compacted: list[dict[str, Any]] = []
+    for memory_id in order:
+        chunk_rows = grouped[memory_id]
+        best = dict(chunk_rows[0])
+        evidence = [_citation_from_row(row) for row in chunk_rows]
+        best["matching_chunks"] = len(chunk_rows)
+        best["evidence_chunks"] = evidence
+        best["used_in_answer"] = False
+        if result_mode == "conversations":
+            best["chunk_index"] = 0
+            best["role"] = ""
+            best["text"] = _conversation_result_text(best.get("conversation"), evidence)
+        compacted.append(best)
+    return compacted
+
+
+def _conversation_result_text(conversation: Any, evidence: list[dict[str, Any]]) -> str:
+    if isinstance(conversation, dict):
+        title = str(conversation.get("title") or conversation.get("source") or conversation.get("id"))
+        return f"{title}: {len(evidence)} matching chunk(s)"
+    return f"{len(evidence)} matching chunk(s)"
 
 
 def group_conversation_results(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -1150,9 +1244,17 @@ def retrieve(memory_id: str) -> dict[str, Any] | None:
 
 
 def ask(
-    question: str, top_k: int = 5, max_context_tokens: int | None = None
+    question: str,
+    top_k: int = 5,
+    max_context_tokens: int | None = None,
+    result_mode: str = "chunks",
 ) -> dict[str, Any]:
-    search_result = search(query=question, top_k=top_k)
+    _validate_result_mode(result_mode)
+    fact_answer = _answer_from_facts(question, top_k=top_k, result_mode=result_mode)
+    if fact_answer is not None:
+        return fact_answer
+
+    search_result = _search_for_ask(question=question, top_k=top_k, result_mode=result_mode)
     matches = search_result.get("results", [])
     if not matches:
         return {
@@ -1160,6 +1262,9 @@ def ask(
             "results": [],
             "answer": "I could not find relevant memory for that question.",
             "citations": [],
+            "confidence": "none",
+            "answer_basis": "not_found",
+            "provenance": [],
         }
 
     runtime = _runtime()
@@ -1189,11 +1294,23 @@ def ask(
         "results": selected_matches,
         "answer": answer,
         "citations": citations,
+        "confidence": _confidence_from_matches(selected_matches),
+        "answer_basis": "direct_memory",
+        "provenance": _provenance_from_matches(selected_matches, citations),
         "context_tokens_used": tokens_used,
         "chunks_selected": len(selected_matches),
         "chunks_dropped": chunks_dropped,
         "tokenizer_used": tokenizer_used(runtime.tokenizer_encoding),
     }
+
+
+def _search_for_ask(question: str, *, top_k: int, result_mode: str) -> dict[str, Any]:
+    try:
+        return search(query=question, top_k=top_k, result_mode=result_mode)
+    except TypeError:
+        if result_mode != "chunks":
+            raise
+        return search(query=question, top_k=top_k)
 
 
 def _next_chunk_index(
@@ -1237,23 +1354,32 @@ def _ask_from_matches(matches: list[dict[str, Any]], *, top_k: int) -> dict[str,
     citations: list[dict[str, Any]] = []
     context_lines: list[str] = []
     for row in matches:
-        citation = {
-            "id": row.get("id"),
-            "chunk_index": int(row.get("chunk_index", 0)),
-            "score": float(row.get("score", 0.0)),
-            "text": row.get("text", ""),
-        }
+        citation = _citation_from_row(row)
         citations.append(citation)
         context_lines.append(
             f"- [{citation['id']}#{citation['chunk_index']}] {citation['text']}"
         )
 
     answer = "Based on stored memory:\n" + "\n".join(context_lines[:top_k])
+    selected = matches[:top_k]
+    selected_citations = citations[:top_k]
     return {
         "status": "ok",
-        "results": matches[:top_k],
+        "results": selected,
         "answer": answer,
-        "citations": citations[:top_k],
+        "citations": selected_citations,
+        "confidence": _confidence_from_matches(selected),
+        "answer_basis": "direct_memory",
+        "provenance": _provenance_from_matches(selected, selected_citations),
+    }
+
+
+def _citation_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": row.get("id"),
+        "chunk_index": int(row.get("chunk_index", 0)),
+        "score": float(row.get("score", 0.0)),
+        "text": row.get("text", ""),
     }
 
 
@@ -1293,18 +1419,602 @@ def _select_ask_context(
         line_tokens = prefix_tokens + text_tokens
         selected_row = dict(row)
         selected_row["text"] = selected_text
-        citation = {
-            "id": citation_id,
-            "chunk_index": chunk_index,
-            "score": float(row.get("score", 0.0)),
-            "text": selected_text,
-        }
+        citation = _citation_from_row({**row, "text": selected_text})
         selected_matches.append(selected_row)
         citations.append(citation)
         context_lines.append(line)
         tokens_used += line_tokens
 
     return selected_matches, citations, context_lines, tokens_used, chunks_dropped
+
+
+def _confidence_from_matches(matches: list[dict[str, Any]]) -> str:
+    if not matches:
+        return "none"
+    best = min(float(row.get("score", 0.0)) for row in matches)
+    if best <= 1.0:
+        return "high"
+    if best <= 4.0:
+        return "medium"
+    return "low"
+
+
+def _provenance_from_matches(
+    matches: list[dict[str, Any]], citations: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    used = {(str(item.get("id")), int(item.get("chunk_index", 0))) for item in citations}
+    grouped: dict[str, dict[str, Any]] = {}
+    for row in matches:
+        memory_id = str(row.get("id", ""))
+        if not memory_id:
+            continue
+        conversation = row.get("conversation")
+        item = grouped.setdefault(
+            memory_id,
+            {
+                "conversation_id": memory_id,
+                "source": conversation.get("source") if isinstance(conversation, dict) else None,
+                "title": conversation.get("title") if isinstance(conversation, dict) else None,
+                "stored_at": conversation.get("timestamp") if isinstance(conversation, dict) else None,
+                "matching_chunks": 0,
+                "used_in_answer": False,
+            },
+        )
+        item["matching_chunks"] += int(row.get("matching_chunks", 1))
+        if (memory_id, int(row.get("chunk_index", 0))) in used:
+            item["used_in_answer"] = True
+    return list(grouped.values())
+
+
+def _store_facts_for_conversation(conversation: dict[str, Any]) -> None:
+    facts = extract_facts(conversation)
+    _store_facts(facts)
+
+
+def _store_facts_for_messages(
+    conversation: dict[str, Any],
+    messages: list[dict[str, Any]],
+    *,
+    start_message_index: int,
+) -> None:
+    facts = extract_facts_from_messages(
+        conversation,
+        messages,
+        start_message_index=start_message_index,
+    )
+    _store_facts(facts)
+
+
+def _store_facts(facts: list[dict[str, Any]]) -> None:
+    if not facts:
+        return
+    store = _runtime().metadata_store
+    if hasattr(store, "insert_facts"):
+        store.insert_facts(facts)
+        return
+    existing = getattr(store, "_facts", [])
+    if not isinstance(existing, list):
+        existing = []
+    active = [fact for fact in existing if fact.get("deleted_at") is None]
+    for fact in facts:
+        _apply_in_memory_fact_supersession(active, fact)
+        active.append(fact)
+    setattr(store, "_facts", active)
+
+
+def extract_facts(conversation: dict[str, Any]) -> list[dict[str, Any]]:
+    messages = conversation.get("messages", [])
+    return extract_facts_from_messages(
+        conversation,
+        messages if isinstance(messages, list) else [],
+        start_message_index=0,
+    )
+
+
+def extract_facts_from_messages(
+    conversation: dict[str, Any],
+    messages: list[dict[str, Any]],
+    *,
+    start_message_index: int,
+) -> list[dict[str, Any]]:
+    facts: list[dict[str, Any]] = []
+    for offset, message in enumerate(messages):
+        if not isinstance(message, dict):
+            continue
+        message_index = start_message_index + offset
+        text = str(message.get("text", ""))
+        for fact in _extract_message_facts(
+            text,
+            conversation=conversation,
+            message_index=message_index,
+        ):
+            facts.append(fact)
+    facts.extend(_topic_facts(conversation, messages, start_message_index=start_message_index))
+    facts.extend(_external_extracted_facts(conversation, messages, start_message_index=start_message_index))
+    return _dedupe_facts(facts)
+
+
+def _extract_message_facts(
+    text: str, *, conversation: dict[str, Any], message_index: int
+) -> list[dict[str, Any]]:
+    facts: list[dict[str, Any]] = []
+    correction = _FACT_CORRECTION_RE.search(text)
+    if correction:
+        item = correction.group("item").strip()
+        new_value = correction.group("new").strip()
+        old_value = correction.group("old").strip()
+        facts.append(
+            _fact(
+                subject="user",
+                predicate=_owned_item_predicate(item),
+                object_value=f"{item} is {new_value}",
+                conversation=conversation,
+                message_index=message_index,
+                qualifiers={"item": item, "corrects": old_value},
+            )
+        )
+    for rule_name, pattern in _FACT_RULES:
+        for match in pattern.finditer(text):
+            if rule_name == "own":
+                object_value = _clean_fact_object(match.group("object"))
+                facts.append(
+                    _fact(
+                        subject="user",
+                        predicate=_owned_item_predicate(object_value),
+                        object_value=object_value,
+                        conversation=conversation,
+                        message_index=message_index,
+                        qualifiers=_owned_item_qualifiers(object_value),
+                    )
+                )
+            elif rule_name == "favorite":
+                name = _normalize_predicate_part(match.group("name"))
+                facts.append(
+                    _fact(
+                        subject="user",
+                        predicate=f"favorite_{name}",
+                        object_value=_clean_fact_object(match.group("object")),
+                        conversation=conversation,
+                        message_index=message_index,
+                    )
+                )
+            elif rule_name == "subject_creator":
+                facts.append(
+                    _fact(
+                        subject=match.group("subject").strip(),
+                        predicate="creator",
+                        object_value=_clean_fact_object(match.group("object")),
+                        conversation=conversation,
+                        message_index=message_index,
+                    )
+                )
+            elif rule_name in {"creator", "command_name", "indexing_strategy"}:
+                facts.append(
+                    _fact(
+                        subject=_project_subject(conversation),
+                        predicate=rule_name,
+                        object_value=_clean_fact_object(match.group("object")),
+                        conversation=conversation,
+                        message_index=message_index,
+                    )
+                )
+            elif rule_name in {"profile_name", "profile_identity", "profile_role", "profile_location"}:
+                facts.append(
+                    _fact(
+                        subject="user",
+                        predicate=rule_name,
+                        object_value=_clean_fact_object(match.group("object")),
+                        conversation=conversation,
+                        message_index=message_index,
+                    )
+                )
+            elif rule_name == "project_attribute":
+                subject = match.group("subject").strip()
+                if subject.lower() in {"i", "my", "the", "this"}:
+                    continue
+                facts.append(
+                    _fact(
+                        subject=subject,
+                        predicate="description",
+                        object_value=_clean_fact_object(match.group("object")),
+                        conversation=conversation,
+                        message_index=message_index,
+                    )
+                )
+    return _dedupe_facts(facts)
+
+
+def _topic_facts(
+    conversation: dict[str, Any],
+    messages: list[dict[str, Any]],
+    *,
+    start_message_index: int,
+) -> list[dict[str, Any]]:
+    topics = infer_topics(messages)
+    facts: list[dict[str, Any]] = []
+    for topic in topics:
+        facts.append(
+            _fact(
+                subject="user",
+                predicate="recurring_topic",
+                object_value=topic,
+                conversation=conversation,
+                message_index=start_message_index,
+                qualifiers={"topic": topic},
+            )
+        )
+    return facts
+
+
+def _external_extracted_facts(
+    conversation: dict[str, Any],
+    messages: list[dict[str, Any]],
+    *,
+    start_message_index: int,
+) -> list[dict[str, Any]]:
+    extractor = _runtime().fact_extractor
+    if not callable(extractor):
+        return []
+    raw_facts = extractor(conversation=conversation, messages=messages)
+    if not isinstance(raw_facts, list):
+        return []
+    facts: list[dict[str, Any]] = []
+    for raw in raw_facts:
+        if not isinstance(raw, dict):
+            continue
+        subject = str(raw.get("subject", "")).strip()
+        predicate = str(raw.get("predicate", "")).strip()
+        object_value = str(raw.get("object", "")).strip()
+        if not subject or not predicate or not object_value:
+            continue
+        indexes = raw.get("source_message_indexes")
+        if isinstance(indexes, list) and indexes:
+            message_index = int(indexes[0])
+        else:
+            message_index = start_message_index
+        facts.append(
+            _fact(
+                subject=subject,
+                predicate=predicate,
+                object_value=object_value,
+                conversation=conversation,
+                message_index=message_index,
+                qualifiers=raw.get("qualifiers") if isinstance(raw.get("qualifiers"), dict) else None,
+            )
+        )
+    return facts
+
+
+def _fact(
+    *,
+    subject: str,
+    predicate: str,
+    object_value: str,
+    conversation: dict[str, Any],
+    message_index: int,
+    qualifiers: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    now = _utc_now_iso()
+    source_id = str(conversation.get("id", ""))
+    identity = f"{subject}\n{predicate}\n{object_value}\n{source_id}\n{message_index}"
+    fact_id = "fact-" + hashlib.sha256(identity.encode("utf-8")).hexdigest()[:32]
+    return {
+        "id": fact_id,
+        "subject": subject,
+        "predicate": predicate,
+        "object": object_value,
+        "qualifiers": qualifiers or {},
+        "confidence": "high",
+        "source_conversation_id": source_id,
+        "source_message_indexes": [message_index],
+        "created_at": now,
+        "updated_at": now,
+        "superseded_by": None,
+        "deleted_at": None,
+    }
+
+
+def _answer_from_facts(
+    question: str, *, top_k: int, result_mode: str
+) -> dict[str, Any] | None:
+    query = _fact_query(question)
+    if query is None:
+        return None
+    facts = _search_facts(
+        subject=query.get("subject") if query.get("subject") == "user" else None,
+        predicate=query.get("predicate"),
+    )
+    facts = _filter_facts_for_question(facts, question, query)
+    active = [fact for fact in facts if not fact.get("superseded_by") and not fact.get("deleted_at")]
+    if not active:
+        return None
+    objects = {str(fact.get("object", "")) for fact in active}
+    needs_context = _fact_question_needs_context(question)
+    basis = "conflict" if len(objects) > 1 else ("mixed" if needs_context else "fact_layer")
+    confidence = "low" if basis == "conflict" else str(active[0].get("confidence", "medium"))
+    superseded = _superseded_facts_for_active(active, facts)
+    answer = _fact_answer_text(
+        question,
+        active,
+        superseded=superseded,
+        conflict=basis == "conflict",
+    )
+    citations = [_fact_citation(fact) for fact in active]
+    results: list[dict[str, Any]] = []
+    if basis == "mixed":
+        search_result = _search_for_ask(question=question, top_k=top_k, result_mode=result_mode)
+        results = search_result.get("results", [])
+        if isinstance(results, list):
+            citations.extend(_citation_from_row(row) for row in results[:top_k] if isinstance(row, dict))
+            context = "\n".join(
+                f"- [{row.get('id')}#{int(row.get('chunk_index', 0))}] {row.get('text', '')}"
+                for row in results[:top_k]
+                if isinstance(row, dict)
+            )
+            if context:
+                answer = answer + "\nContext from memory:\n" + context
+    return {
+        "status": "ok",
+        "results": results,
+        "answer": answer,
+        "citations": citations,
+        "confidence": confidence,
+        "answer_basis": basis,
+        "provenance": _provenance_from_facts(active),
+        "facts": active,
+    }
+
+
+def _fact_query(question: str) -> dict[str, str] | None:
+    lowered = question.lower()
+    subject = _question_project_subject(question)
+    if "guitar" in lowered and any(term in lowered for term in ("own", "have", "my")):
+        return {"subject": "user", "predicate": "owns_guitar"}
+    if "who am i" in lowered or "what do you know about me" in lowered:
+        return {"subject": "user", "predicate": "profile_identity"}
+    if "my name" in lowered or "what is my name" in lowered:
+        return {"subject": "user", "predicate": "profile_name"}
+    if "where do i live" in lowered:
+        return {"subject": "user", "predicate": "profile_location"}
+    if "what do i work as" in lowered or "my job" in lowered:
+        return {"subject": "user", "predicate": "profile_role"}
+    if "topic" in lowered or "recurring" in lowered:
+        return {"subject": "user", "predicate": "recurring_topic"}
+    if "command name" in lowered:
+        query = {"predicate": "command_name"}
+        if subject:
+            query["subject"] = subject
+        return query
+    if "indexing strategy" in lowered:
+        query = {"predicate": "indexing_strategy"}
+        if subject:
+            query["subject"] = subject
+        return query
+    favorite = re.search(r"favorite\s+([A-Za-z0-9 _-]+)", lowered)
+    if favorite:
+        return {"subject": "user", "predicate": f"favorite_{_normalize_predicate_part(favorite.group(1))}"}
+    if "creator" in lowered or "who created" in lowered:
+        query = {"predicate": "creator"}
+        if subject:
+            query["subject"] = subject
+        return query
+    return None
+
+
+def _question_project_subject(question: str) -> str | None:
+    patterns = [
+        r"\b(?:who created|creator of|for|about)\s+(?P<subject>[A-Z][A-Za-z0-9 _-]{1,80})",
+        r"\b(?P<subject>[A-Z][A-Za-z0-9 _-]{1,80})\?",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, question)
+        if match:
+            return match.group("subject").strip(" ?.")
+    return None
+
+
+def _filter_facts_for_question(
+    facts: list[dict[str, Any]], question: str, query: dict[str, str]
+) -> list[dict[str, Any]]:
+    subject = query.get("subject")
+    if not subject:
+        return facts
+    subject_tokens = set(_query_tokens(subject))
+    if not subject_tokens:
+        return facts
+    filtered = [
+        fact
+        for fact in facts
+        if subject_tokens.issubset(set(_query_tokens(str(fact.get("subject", "")))))
+    ]
+    if filtered:
+        return filtered
+    question_tokens = set(_query_tokens(question))
+    return [
+        fact
+        for fact in facts
+        if set(_query_tokens(str(fact.get("subject", "")))).intersection(question_tokens)
+    ] or facts
+
+
+def _fact_question_needs_context(question: str) -> bool:
+    lowered = question.lower()
+    return any(term in lowered for term in ("context", "source", "why", "when", "where did", "discuss"))
+
+
+def _superseded_facts_for_active(
+    active: list[dict[str, Any]], all_facts: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    active_ids = {str(fact.get("id")) for fact in active}
+    return [
+        fact
+        for fact in all_facts
+        if str(fact.get("superseded_by")) in active_ids and not fact.get("deleted_at")
+    ]
+
+
+def _search_facts(subject: str | None = None, predicate: str | None = None) -> list[dict[str, Any]]:
+    store = _runtime().metadata_store
+    if hasattr(store, "search_facts"):
+        return store.search_facts(subject=subject, predicate=predicate, include_superseded=False)
+    facts = getattr(store, "_facts", [])
+    if not isinstance(facts, list):
+        return []
+    return [
+        fact
+        for fact in facts
+        if isinstance(fact, dict)
+        and (subject is None or str(fact.get("subject")) == subject)
+        and (predicate is None or str(fact.get("predicate")) == predicate)
+        and not fact.get("superseded_by")
+        and not fact.get("deleted_at")
+    ]
+
+
+def fact_search(
+    *, subject: str | None = None, predicate: str | None = None, include_superseded: bool = False
+) -> dict[str, Any]:
+    store = _runtime().metadata_store
+    if hasattr(store, "search_facts"):
+        facts = store.search_facts(
+            subject=subject, predicate=predicate, include_superseded=include_superseded
+        )
+    else:
+        facts = getattr(store, "_facts", [])
+        if not isinstance(facts, list):
+            facts = []
+        facts = [
+            fact for fact in facts
+            if isinstance(fact, dict)
+            and (subject is None or str(fact.get("subject")) == subject)
+            and (predicate is None or str(fact.get("predicate")) == predicate)
+            and (include_superseded or not fact.get("superseded_by"))
+            and not fact.get("deleted_at")
+        ]
+    return {"status": "ok", "results": facts}
+
+
+def profile_get(subject: str = "user") -> dict[str, Any]:
+    return {"status": "ok", "subject": subject, "facts": fact_search(subject=subject)["results"]}
+
+
+def fact_supersede(fact_id: str, superseded_by: str) -> dict[str, Any]:
+    store = _runtime().metadata_store
+    if hasattr(store, "supersede_fact"):
+        updated = store.supersede_fact(fact_id, superseded_by)
+    else:
+        updated = False
+        for fact in getattr(store, "_facts", []):
+            if isinstance(fact, dict) and fact.get("id") == fact_id:
+                fact["superseded_by"] = superseded_by
+                fact["updated_at"] = _utc_now_iso()
+                updated = True
+    return {"status": "ok" if updated else "not_found", "id": fact_id, "superseded_by": superseded_by}
+
+
+def _fact_answer_text(
+    question: str,
+    facts: list[dict[str, Any]],
+    *,
+    superseded: list[dict[str, Any]] | None = None,
+    conflict: bool,
+) -> str:
+    objects = [str(fact.get("object", "")) for fact in facts]
+    if conflict:
+        return "Stored facts disagree: " + "; ".join(objects)
+    if "guitar" in question.lower():
+        answer = f"You own {objects[0]}."
+    elif len(objects) > 1:
+        answer = "; ".join(objects)
+    else:
+        answer = objects[0]
+    if superseded:
+        old = "; ".join(str(fact.get("object", "")) for fact in superseded)
+        answer += f" Correction noted: earlier memory said {old}."
+    return answer
+
+
+def _fact_citation(fact: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": fact.get("source_conversation_id"),
+        "fact_id": fact.get("id"),
+        "predicate": fact.get("predicate"),
+        "text": fact.get("object"),
+    }
+
+
+def _provenance_from_facts(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[str, dict[str, Any]] = {}
+    for fact in facts:
+        conversation_id = str(fact.get("source_conversation_id", ""))
+        item = grouped.setdefault(
+            conversation_id,
+            {
+                "conversation_id": conversation_id,
+                "source": None,
+                "title": None,
+                "stored_at": None,
+                "matching_chunks": 0,
+                "used_in_answer": True,
+            },
+        )
+        item["matching_chunks"] += 1
+    return list(grouped.values())
+
+
+def _apply_in_memory_fact_supersession(active: list[dict[str, Any]], new_fact: dict[str, Any]) -> None:
+    corrects = str(new_fact.get("qualifiers", {}).get("corrects", ""))
+    for fact in active:
+        if fact.get("subject") != new_fact.get("subject") or fact.get("predicate") != new_fact.get("predicate"):
+            continue
+        if corrects and corrects.lower() in str(fact.get("object", "")).lower():
+            fact["superseded_by"] = new_fact["id"]
+            fact["updated_at"] = _utc_now_iso()
+
+
+def _dedupe_facts(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: set[tuple[str, str, str]] = set()
+    output: list[dict[str, Any]] = []
+    for fact in facts:
+        key = (str(fact["subject"]), str(fact["predicate"]), str(fact["object"]))
+        if key not in seen:
+            seen.add(key)
+            output.append(fact)
+    return output
+
+
+def _owned_item_predicate(object_value: str) -> str:
+    lowered = object_value.lower()
+    if "guitar" in lowered or "gibson" in lowered:
+        return "owns_guitar"
+    return "owns_item"
+
+
+def _owned_item_qualifiers(object_value: str) -> dict[str, Any]:
+    qualifiers: dict[str, Any] = {}
+    lowered = object_value.lower()
+    if "guitar" in lowered or "gibson" in lowered:
+        qualifiers["instrument"] = "guitar"
+    if "p90" in lowered:
+        qualifiers["pickup"] = "P90"
+    for color in ("cherry", "tv yellow", "black", "white", "blue", "red"):
+        if color in lowered:
+            qualifiers["color"] = color
+            break
+    return qualifiers
+
+
+def _clean_fact_object(value: str) -> str:
+    return value.strip(" .?!\n\t\"'")
+
+
+def _normalize_predicate_part(value: str) -> str:
+    return "_".join(_query_tokens(value)) or "item"
+
+
+def _project_subject(conversation: dict[str, Any]) -> str:
+    title = str(conversation.get("title") or "").strip()
+    return title or "project"
 
 
 def runtime_health() -> dict[str, Any]:

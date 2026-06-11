@@ -35,6 +35,27 @@ CREATE TABLE IF NOT EXISTS schema_version (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 )
 """
+CREATE_FACTS_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS facts (
+    id TEXT PRIMARY KEY,
+    subject TEXT NOT NULL,
+    predicate TEXT NOT NULL,
+    object TEXT NOT NULL,
+    qualifiers JSONB NOT NULL,
+    confidence TEXT NOT NULL,
+    source_conversation_id TEXT NOT NULL,
+    source_message_indexes JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
+    superseded_by TEXT NULL,
+    deleted_at TIMESTAMPTZ NULL
+)
+"""
+CREATE_FACTS_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_facts_subject_predicate
+ON facts(subject, predicate)
+WHERE deleted_at IS NULL
+"""
 
 SEED_SCHEMA_VERSION_SQL = """
 INSERT INTO schema_version (id, version)
@@ -108,6 +129,8 @@ class PostgresMetadataStore:
                 cur.execute("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS upstream_thread_id TEXT NULL")
                 cur.execute(CREATE_UPSTREAM_THREAD_INDEX_SQL)
                 cur.execute(CREATE_SCHEMA_VERSION_TABLE_SQL)
+                cur.execute(CREATE_FACTS_TABLE_SQL)
+                cur.execute(CREATE_FACTS_INDEX_SQL)
                 cur.execute(SEED_SCHEMA_VERSION_SQL, (1, self._schema_version_seed))
 
     def _read_schema_version(self) -> int:
@@ -224,6 +247,85 @@ class PostgresMetadataStore:
                 rows = cur.fetchall()
         return [json.loads(str(row[0])) for row in rows]
 
+    def insert_facts(self, facts: list[dict[str, Any]]) -> None:
+        if not facts:
+            return
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                for fact in facts:
+                    self._supersede_corrected_facts(cur, fact)
+                    cur.execute(
+                        """
+                        INSERT INTO facts (
+                            id, subject, predicate, object, qualifiers, confidence,
+                            source_conversation_id, source_message_indexes,
+                            created_at, updated_at, superseded_by, deleted_at
+                        )
+                        VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s, %s::jsonb, %s, %s, %s, %s)
+                        ON CONFLICT (id) DO UPDATE
+                        SET subject = EXCLUDED.subject,
+                            predicate = EXCLUDED.predicate,
+                            object = EXCLUDED.object,
+                            qualifiers = EXCLUDED.qualifiers,
+                            confidence = EXCLUDED.confidence,
+                            source_conversation_id = EXCLUDED.source_conversation_id,
+                            source_message_indexes = EXCLUDED.source_message_indexes,
+                            updated_at = EXCLUDED.updated_at,
+                            superseded_by = EXCLUDED.superseded_by,
+                            deleted_at = EXCLUDED.deleted_at
+                        """,
+                        self._fact_row(fact),
+                    )
+
+    def search_facts(
+        self,
+        *,
+        subject: str | None = None,
+        predicate: str | None = None,
+        include_superseded: bool = False,
+    ) -> list[dict[str, Any]]:
+        clauses = ["deleted_at IS NULL"]
+        params: list[Any] = []
+        if subject is not None:
+            clauses.append("subject = %s")
+            params.append(subject)
+        if predicate is not None:
+            clauses.append("predicate = %s")
+            params.append(predicate)
+        if not include_superseded:
+            clauses.append("superseded_by IS NULL")
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT id, subject, predicate, object, qualifiers::text, confidence,
+                           source_conversation_id, source_message_indexes::text,
+                           created_at::text, updated_at::text, superseded_by, deleted_at::text
+                    FROM facts
+                    WHERE {' AND '.join(clauses)}
+                    ORDER BY updated_at DESC, id ASC
+                    """,
+                    tuple(params),
+                )
+                rows = cur.fetchall()
+        return [self._fact_from_row(row) for row in rows]
+
+    def profile_get(self, subject: str = "user") -> dict[str, Any]:
+        return {"subject": subject, "facts": self.search_facts(subject=subject)}
+
+    def supersede_fact(self, fact_id: str, superseded_by: str) -> bool:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE facts
+                    SET superseded_by = %s, updated_at = NOW()
+                    WHERE id = %s AND deleted_at IS NULL
+                    """,
+                    (superseded_by, fact_id),
+                )
+                return cur.rowcount > 0
+
     def get_by_conversation_hash(self, conversation_hash: str | None) -> dict[str, Any] | None:
         if not conversation_hash:
             return None
@@ -305,6 +407,62 @@ class PostgresMetadataStore:
             conversation_hash=conversation_hash,
             cause=exc,
         )
+
+    def _supersede_corrected_facts(self, cur: Any, fact: dict[str, Any]) -> None:
+        qualifiers = fact.get("qualifiers", {})
+        corrects = qualifiers.get("corrects") if isinstance(qualifiers, dict) else None
+        if not corrects:
+            return
+        cur.execute(
+            """
+            UPDATE facts
+            SET superseded_by = %s, updated_at = %s
+            WHERE subject = %s
+              AND predicate = %s
+              AND superseded_by IS NULL
+              AND deleted_at IS NULL
+              AND lower(object) LIKE %s
+            """,
+            (
+                str(fact["id"]),
+                str(fact["updated_at"]),
+                str(fact["subject"]),
+                str(fact["predicate"]),
+                f"%{str(corrects).lower()}%",
+            ),
+        )
+
+    def _fact_row(self, fact: dict[str, Any]) -> tuple[Any, ...]:
+        return (
+            str(fact["id"]),
+            str(fact["subject"]),
+            str(fact["predicate"]),
+            str(fact["object"]),
+            json.dumps(fact.get("qualifiers", {}), separators=(",", ":"), ensure_ascii=False),
+            str(fact.get("confidence", "medium")),
+            str(fact["source_conversation_id"]),
+            json.dumps(fact.get("source_message_indexes", []), separators=(",", ":")),
+            str(fact["created_at"]),
+            str(fact["updated_at"]),
+            fact.get("superseded_by"),
+            fact.get("deleted_at"),
+        )
+
+    def _fact_from_row(self, row: Any) -> dict[str, Any]:
+        return {
+            "id": str(row[0]),
+            "subject": str(row[1]),
+            "predicate": str(row[2]),
+            "object": str(row[3]),
+            "qualifiers": json.loads(str(row[4])),
+            "confidence": str(row[5]),
+            "source_conversation_id": str(row[6]),
+            "source_message_indexes": json.loads(str(row[7])),
+            "created_at": str(row[8]),
+            "updated_at": str(row[9]),
+            "superseded_by": row[10],
+            "deleted_at": row[11],
+        }
 
     def _resolve_insert_new_conflict(
         self,

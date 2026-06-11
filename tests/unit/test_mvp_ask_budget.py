@@ -109,12 +109,12 @@ def test_ask_handles_empty_results_with_request_budget(monkeypatch) -> None:
 
     result = mvp_ingestion.ask("question", top_k=3, max_context_tokens=1)
 
-    assert result == {
-        "status": "ok",
-        "results": [],
-        "answer": "I could not find relevant memory for that question.",
-        "citations": [],
-    }
+    assert result["status"] == "ok"
+    assert result["results"] == []
+    assert result["answer"] == "I could not find relevant memory for that question."
+    assert result["citations"] == []
+    assert result["confidence"] == "none"
+    assert result["answer_basis"] == "not_found"
 
 
 def test_ask_handles_tight_budget_without_selected_context(monkeypatch) -> None:

@@ -16,6 +16,7 @@ from memory.interfaces.mcp_server import create_mcp_server
 class SearchRequest(BaseModel):
     query: str
     top_k: int = Field(default=5, ge=1, le=100)
+    result_mode: str = "chunks"
 
 
 class RetrieveRequest(BaseModel):
@@ -26,6 +27,22 @@ class AskRequest(BaseModel):
     question: str
     top_k: int = Field(default=5, ge=1, le=100)
     max_context_tokens: int | None = Field(default=None, ge=1)
+    result_mode: str = "chunks"
+
+
+class FactSearchRequest(BaseModel):
+    subject: str | None = None
+    predicate: str | None = None
+    include_superseded: bool = False
+
+
+class ProfileGetRequest(BaseModel):
+    subject: str = "user"
+
+
+class FactSupersedeRequest(BaseModel):
+    fact_id: str
+    superseded_by: str
 
 
 def _register_api_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
@@ -40,7 +57,11 @@ def _register_api_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
     app.post("/memory/insert")(memory_insert)
 
     async def memory_search(request: SearchRequest) -> dict[str, Any]:
-        return redact_content_hashes(await agent.search(request.query, top_k=request.top_k))
+        return redact_content_hashes(
+            await agent.search(
+                request.query, top_k=request.top_k, result_mode=request.result_mode
+            )
+        )
 
     app.post("/memory/search")(memory_search)
 
@@ -58,10 +79,37 @@ def _register_api_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
                 request.question,
                 top_k=request.top_k,
                 max_context_tokens=request.max_context_tokens,
+                result_mode=request.result_mode,
             )
         )
 
     app.post("/memory/ask")(memory_ask)
+
+    async def memory_fact_search(request: FactSearchRequest) -> dict[str, Any]:
+        return redact_content_hashes(
+            await agent.fact_search(
+                subject=request.subject,
+                predicate=request.predicate,
+                include_superseded=request.include_superseded,
+            )
+        )
+
+    app.post("/memory/facts/search")(memory_fact_search)
+
+    async def memory_profile_get(request: ProfileGetRequest) -> dict[str, Any]:
+        return redact_content_hashes(await agent.profile_get(subject=request.subject))
+
+    app.post("/memory/profile/get")(memory_profile_get)
+
+    async def memory_fact_supersede(request: FactSupersedeRequest) -> dict[str, Any]:
+        return redact_content_hashes(
+            await agent.fact_supersede(
+                fact_id=request.fact_id,
+                superseded_by=request.superseded_by,
+            )
+        )
+
+    app.post("/memory/facts/supersede")(memory_fact_supersede)
 
 
 def create_app(
