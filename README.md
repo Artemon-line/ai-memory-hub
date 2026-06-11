@@ -121,6 +121,43 @@ schema, then sends them through the API or MCP interface.
 | `POST` | `/memory/retrieve` | Retrieve a stored conversation by ID |
 | `POST` | `/memory/ask` | Build an answer from retrieved memory |
 
+## CLI
+
+Use `python -m memory.cli` during development, or the packaged `aim` console
+script after installation.
+
+```bash
+python -m memory.cli ingest conversation.json --json
+python -m memory.cli search "local-first tools" --top-k 5 --json
+python -m memory.cli retrieve <MEMORY_ID> --json
+python -m memory.cli ask "What did I store about local-first tools?" --top-k 5 --json
+python -m memory.cli serve --host 127.0.0.1 --port 8000
+```
+
+Shared options include `--config <path>`, `--json`, `--quiet`, and `--verbose`.
+`search` also supports `--source`, `--date-from`, `--date-to`, repeated
+`--tags`, and `--result-mode chunks|compact|conversations`.
+
+Diagnostics:
+
+```bash
+python -m memory.cli tokenizer-check --json
+python -m memory.cli health --json
+python -m memory.cli config-show --json
+python -m memory.cli storage-check --json
+```
+
+Fact review helpers:
+
+```bash
+python -m memory.cli fact-search --subject user --json
+python -m memory.cli profile-get --subject user --json
+python -m memory.cli fact-supersede <OLD_FACT_ID> <NEW_FACT_ID> --json
+```
+
+The same commands are available through `aim` when the project is installed in
+an environment that exposes console scripts.
+
 ### Insert Payload
 
 If backend-generated IDs are enabled, omit `id` and let the server assign the

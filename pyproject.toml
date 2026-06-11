@@ -24,6 +24,9 @@ tokenizer = [
     "tiktoken>=0.13.0",
 ]
 
+[project.scripts]
+aim = "memory.cli:main"
+
 [dependency-groups]
 dev = [
     "mcp-pytest>=0.1.1",
