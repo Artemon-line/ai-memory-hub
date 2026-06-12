@@ -377,7 +377,7 @@ def _register_prompts(mcp: Any) -> None:
 
 
 def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
-    async def memory_validate(conversation_json: dict[str, Any]) -> dict[str, Any]:
+    async def memory_validate(conversation_json: Any) -> dict[str, Any]:
         if not isinstance(conversation_json, dict):
             return _envelope(
                 status="error",
@@ -421,9 +421,16 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 error_message=_format_schema_error(exc),
                 valid=False,
             )
+        except ValueError as exc:
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message=str(exc),
+                valid=False,
+            )
         return _envelope(status="ok", valid=True)
 
-    async def memory_insert(conversation_json: dict[str, Any]) -> dict[str, Any]:
+    async def memory_insert(conversation_json: Any) -> dict[str, Any]:
         if not isinstance(conversation_json, dict):
             return _envelope(
                 status="error",
@@ -453,14 +460,20 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
         if msgs is not None:
             conversation_json["messages"] = unwrap_array(msgs)
 
-        normalized = normalize_conversation_json(conversation_json, source="mcp")
         try:
+            normalized = normalize_conversation_json(conversation_json, source="mcp")
             validate_conversation(normalized)
         except jsonschema.ValidationError as exc:
             return _envelope(
                 status="error",
                 error_code="invalid_input",
                 error_message=_format_schema_error(exc),
+            )
+        except ValueError as exc:
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message=str(exc),
             )
         try:
             result = await agent.ingest_messages(normalized)

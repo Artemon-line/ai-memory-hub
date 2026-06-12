@@ -9,7 +9,8 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P0 | Token-budgeted `memory_ask` and token-aware ingestion chunking | Implemented | `token_budget_plan.md`, `improvements/context_building_plan.md` |
 | P0 | Storage abstraction baseline: capabilities, schema checks, dimensions, fallback, dry-run, Postgres/PGVector | Implemented | `storage_agnostic_byoa_plan.md` |
 | P0 | Retrieval precision: threshold, hybrid search, metadata rerank | Implemented | `improvements/retrieval_precision_plan.md` |
-| P0 | MCP client smoke coverage for Codex, Gemini, Copilot, Claude, opencode | Partial | `mcp_client_smoke_plan.md` |
+| P0 | MCP client smoke coverage for Codex, Gemini, Copilot, Claude, opencode | Implemented | `mcp_client_smoke_plan.md` |
+| P0 | Weekly scheduled real-client MCP smoke coverage | Planned | `real_client_mcp_smoke_plan.md` |
 | P1 | CLI foundation and command contract | Partial | `cli_implementation_plan.md` |
 | P1 | CLI `ingest`, `search`, `retrieve`, and `ask` commands | Planned | `cli_implementation_plan.md` |
 | P1 | CLI `serve` command for container/runtime entrypoint | Planned | `cli_implementation_plan.md`, `release_container_docs_plan.md` |
@@ -87,14 +88,26 @@ Implementation sequence:
 
 - [x] Keep CI smoke tests focused on MCP protocol compatibility and client-shaped payloads.
 - [x] Preserve the existing Codex, Gemini, VS Code Copilot, and opencode profile coverage.
-- [ ] Add the missing Claude profile.
-- [ ] Add explicit retrieve round-trip checks and metadata assertions.
-- [ ] Add malformed payload negative cases with stable `invalid_input` envelopes.
-- [ ] Add a separate real-client smoke harness for agent CLIs.
+- [x] Add the missing Claude profile.
+- [x] Add explicit retrieve round-trip checks and metadata assertions.
+- [x] Add malformed payload negative cases with stable `invalid_input` envelopes.
 - [x] Prefer a deterministic local OpenAI/Anthropic-compatible test gateway over Ollama, because Ollama is not the system under test.
+
+Real-client CLI smoke coverage is tracked separately as P0 in
+`real_client_mcp_smoke_plan.md`.
+
+## P0: Weekly Scheduled Real-Client MCP Smoke Coverage
+
+Use `real_client_mcp_smoke_plan.md` as the source of truth.
+
+Implementation sequence:
+
+- [ ] Add a separate real-client smoke harness for agent CLIs.
+- [ ] Run the real-client smoke lane weekly through scheduled CI.
+- [ ] Keep manual dispatch available for debugging and release checks.
 - [ ] Start with Claude Code and Copilot CLI because they expose clear base-URL/provider environment variables.
 - [ ] Validate Codex, opencode, and Gemini headless commands before wiring them into CI.
-- [ ] Keep real-client smoke tests in a separate scheduled/manual CI lane until they are stable enough for default PR gating.
+- [ ] Keep real-client smoke tests out of default PR gating until they are stable enough.
 
 ## P1: CLI Foundation And Commands
 
