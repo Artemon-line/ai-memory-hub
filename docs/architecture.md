@@ -11,6 +11,7 @@ Related docs:
 - Deterministic ingestion details: `deterministic_ingestion_plan.md`
 - Storage/provider details: `storage_agnostic_byoa_plan.md`
 - MCP contract details: `mcp_plan.md`
+- MCP utility compliance: `mcp_utility_compliance_plan.md`
 
 ## Current Status
 

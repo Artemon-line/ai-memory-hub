@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from urllib.parse import unquote
 from typing import Any, Awaitable, Callable
+from urllib.parse import unquote
 from uuid import UUID
 
 import jsonschema
+from fastmcp import Context as FastMCPContext
+
 from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig
 from memory.ingestion.base_agent import BaseIngestionAgent
@@ -16,6 +18,7 @@ from memory.ingestion.validate import validate_conversation
 ToolFn = Callable[..., Awaitable[dict[str, Any]]]
 
 logger = logging.getLogger(__name__)
+MCP_LOGGER_NAME = "ai-memory-hub.mcp"
 
 
 TOOL_DESCRIPTIONS: dict[str, str] = {
@@ -71,6 +74,30 @@ def _with_envelope_defaults(data: dict[str, Any]) -> dict[str, Any]:
         payload["results"] = redact_content_hashes(payload["results"])
 
     return payload
+
+
+async def _emit_mcp_tool_log(
+    ctx: FastMCPContext | None,
+    *,
+    tool_name: str,
+    status: str,
+    error_code: str | None = None,
+) -> None:
+    if ctx is None:
+        return
+    data: dict[str, Any] = {"tool": tool_name, "status": status}
+    if error_code:
+        data["error_code"] = error_code
+    level = "error" if status == "error" else "info"
+    try:
+        await ctx.log(
+            "mcp tool completed",
+            level=level,
+            logger_name=MCP_LOGGER_NAME,
+            extra=data,
+        )
+    except Exception:
+        logger.debug("MCP client log notification failed", exc_info=True)
 
 
 def _format_schema_error(exc: jsonschema.ValidationError) -> str:
@@ -377,7 +404,9 @@ def _register_prompts(mcp: Any) -> None:
 
 
 def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
-    async def memory_validate(conversation_json: Any) -> dict[str, Any]:
+    async def memory_validate(
+        conversation_json: Any, ctx: FastMCPContext | None = None
+    ) -> dict[str, Any]:
         if not isinstance(conversation_json, dict):
             return _envelope(
                 status="error",
@@ -428,9 +457,12 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 error_message=str(exc),
                 valid=False,
             )
+        await _emit_mcp_tool_log(ctx, tool_name="memory_validate", status="ok")
         return _envelope(status="ok", valid=True)
 
-    async def memory_insert(conversation_json: Any) -> dict[str, Any]:
+    async def memory_insert(
+        conversation_json: Any, ctx: FastMCPContext | None = None
+    ) -> dict[str, Any]:
         if not isinstance(conversation_json, dict):
             return _envelope(
                 status="error",
@@ -479,6 +511,12 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
             result = await agent.ingest_messages(normalized)
         except Exception as exc:
             logger.exception("MCP memory_insert failed")
+            await _emit_mcp_tool_log(
+                ctx,
+                tool_name="memory_insert",
+                status="error",
+                error_code="insert_failed",
+            )
             return _envelope(
                 status="error",
                 error_code="insert_failed",
@@ -497,6 +535,7 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
         date_to: str | None = None,
         tags: list[str] | None = None,
         result_mode: str = "chunks",
+        ctx: FastMCPContext | None = None,
     ) -> dict[str, Any]:
         if not isinstance(query, str) or not query.strip():
             return _envelope(
@@ -555,15 +594,25 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
             result["cursor"] = next_cursor
         except Exception as exc:
             logger.exception("MCP memory_search failed")
+            await _emit_mcp_tool_log(
+                ctx,
+                tool_name="memory_search",
+                status="error",
+                error_code="search_failed",
+            )
             return _envelope(
                 status="error",
                 error_code="search_failed",
                 error_message=str(exc),
             )
 
+        await _emit_mcp_tool_log(ctx, tool_name="memory_search", status="ok")
+        await _emit_mcp_tool_log(ctx, tool_name="memory_insert", status="ok")
         return _with_envelope_defaults(result)
 
-    async def memory_retrieve(id: str) -> dict[str, Any]:
+    async def memory_retrieve(
+        id: str, ctx: FastMCPContext | None = None
+    ) -> dict[str, Any]:
         if not isinstance(id, str) or not id.strip():
             return _envelope(
                 status="error",
@@ -579,6 +628,7 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 error_code="not_found",
                 error_message="memory not found",
             )
+        await _emit_mcp_tool_log(ctx, tool_name="memory_retrieve", status="ok")
         return _envelope(status="ok", id=id, memory=redact_content_hashes(memory))
 
     async def memory_ask(
@@ -586,6 +636,7 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
         top_k: int = 5,
         max_context_tokens: int | None = None,
         result_mode: str = "chunks",
+        ctx: FastMCPContext | None = None,
     ) -> dict[str, Any]:
         if not isinstance(question, str) or not question.strip():
             return _envelope(
@@ -653,30 +704,44 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
             )
         except Exception as exc:
             logger.exception("MCP memory_ask failed")
+            await _emit_mcp_tool_log(
+                ctx,
+                tool_name="memory_ask",
+                status="error",
+                error_code="ask_failed",
+            )
             return _envelope(
                 status="error",
                 error_code="ask_failed",
                 error_message=str(exc),
             )
+        await _emit_mcp_tool_log(ctx, tool_name="memory_ask", status="ok")
         return _with_envelope_defaults(result)
 
     async def memory_fact_search(
         subject: str | None = None,
         predicate: str | None = None,
         include_superseded: bool = False,
+        ctx: FastMCPContext | None = None,
     ) -> dict[str, Any]:
         result = await agent.fact_search(
             subject=unwrap_array(subject),
             predicate=unwrap_array(predicate),
             include_superseded=bool(include_superseded),
         )
+        await _emit_mcp_tool_log(ctx, tool_name="memory_fact_search", status="ok")
         return _with_envelope_defaults(result)
 
-    async def memory_profile_get(subject: str = "user") -> dict[str, Any]:
+    async def memory_profile_get(
+        subject: str = "user", ctx: FastMCPContext | None = None
+    ) -> dict[str, Any]:
         result = await agent.profile_get(subject=str(unwrap_array(subject) or "user"))
+        await _emit_mcp_tool_log(ctx, tool_name="memory_profile_get", status="ok")
         return _with_envelope_defaults(result)
 
-    async def memory_fact_supersede(fact_id: str, superseded_by: str) -> dict[str, Any]:
+    async def memory_fact_supersede(
+        fact_id: str, superseded_by: str, ctx: FastMCPContext | None = None
+    ) -> dict[str, Any]:
         if not isinstance(fact_id, str) or not fact_id.strip():
             return _envelope(
                 status="error",
@@ -690,6 +755,7 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 error_message="superseded_by must be a non-empty string",
             )
         result = await agent.fact_supersede(fact_id=fact_id, superseded_by=superseded_by)
+        await _emit_mcp_tool_log(ctx, tool_name="memory_fact_supersede", status="ok")
         return _with_envelope_defaults(result)
 
     return {
@@ -713,7 +779,7 @@ def create_mcp_server(*, config: HubConfig, agent: BaseIngestionAgent):
     except ImportError as exc:
         raise RuntimeError("fastmcp package is required to run MCP server") from exc
 
-    mcp = FastMCP("ai-memory-hub")
+    mcp = FastMCP("ai-memory-hub", list_page_size=config.mcp.list_page_size)
     handlers = build_tool_handlers(agent)
 
     for tool_name, tool_fn in handlers.items():

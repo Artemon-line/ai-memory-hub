@@ -1,0 +1,47 @@
+name: real-client-mcp-smoke
+
+on:
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-client-mcp-smoke:
+    name: Weekly Real-Client MCP Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Run real-client MCP smoke harness
+        env:
+          PYTHONHASHSEED: '0'
+        run: >
+          uv run python -m memory.tools.real_client_smoke
+          --artifact-dir artifacts/real-client-mcp-smoke
+
+      - name: Upload real-client smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-client-mcp-smoke
+          path: artifacts/real-client-mcp-smoke
+          if-no-files-found: warn

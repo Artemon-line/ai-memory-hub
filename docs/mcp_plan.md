@@ -7,6 +7,9 @@
 
 Make `ai-memory-hub` feel native to MCP clients (including Codex) by tightening the current MCP contract, fixing the insert ID flow, and improving discoverability and reliability without breaking existing clients.
 
+Related plan: `mcp_utility_compliance_plan.md` tracks MCP utility support for
+pagination, sanitized logging, and deferred completion.
+
 ## Scope
 
 - Keep the current MCP tool set working:

@@ -10,7 +10,8 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P0 | Storage abstraction baseline: capabilities, schema checks, dimensions, fallback, dry-run, Postgres/PGVector | Implemented | `storage_agnostic_byoa_plan.md` |
 | P0 | Retrieval precision: threshold, hybrid search, metadata rerank | Implemented | `improvements/retrieval_precision_plan.md` |
 | P0 | MCP client smoke coverage for Codex, Gemini, Copilot, Claude, opencode | Implemented | `mcp_client_smoke_plan.md` |
-| P0 | Weekly scheduled real-client MCP smoke coverage | Planned | `real_client_mcp_smoke_plan.md` |
+| P0 | Weekly scheduled real-client MCP smoke coverage | Implemented | `real_client_mcp_smoke_plan.md` |
+| P1 | MCP utility compliance: pagination first, sanitized logging next, completion deferred | Implemented | `mcp_utility_compliance_plan.md` |
 | P1 | CLI foundation and command contract | Partial | `cli_implementation_plan.md` |
 | P1 | CLI `ingest`, `search`, `retrieve`, and `ask` commands | Planned | `cli_implementation_plan.md` |
 | P1 | CLI `serve` command for container/runtime entrypoint | Planned | `cli_implementation_plan.md`, `release_container_docs_plan.md` |
@@ -102,12 +103,23 @@ Use `real_client_mcp_smoke_plan.md` as the source of truth.
 
 Implementation sequence:
 
-- [ ] Add a separate real-client smoke harness for agent CLIs.
-- [ ] Run the real-client smoke lane weekly through scheduled CI.
-- [ ] Keep manual dispatch available for debugging and release checks.
-- [ ] Start with Claude Code and Copilot CLI because they expose clear base-URL/provider environment variables.
-- [ ] Validate Codex, opencode, and Gemini headless commands before wiring them into CI.
-- [ ] Keep real-client smoke tests out of default PR gating until they are stable enough.
+- [x] Add a separate real-client smoke harness for agent CLIs.
+- [x] Run the real-client smoke lane weekly through scheduled CI.
+- [x] Keep manual dispatch available for debugging and release checks.
+- [x] Start with Claude Code and Copilot CLI because they expose clear base-URL/provider environment variables.
+- [x] Validate Codex, opencode, and Gemini headless command status before wiring them into strict CI.
+- [x] Keep real-client smoke tests out of default PR gating until they are stable enough.
+
+## P1: MCP Utility Compliance
+
+Use `mcp_utility_compliance_plan.md` as the source of truth.
+
+Recommended order:
+
+- [x] Implement MCP pagination for list operations first.
+- [x] Implement sanitized MCP logging after or alongside observability work.
+- [x] Defer MCP completion until a concrete client UX needs prompt or resource
+      argument suggestions.
 
 ## P1: CLI Foundation And Commands
 

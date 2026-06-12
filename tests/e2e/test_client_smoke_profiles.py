@@ -237,9 +237,19 @@ def _event_data_json(event_stream_body: str) -> dict[str, Any]:
     raise AssertionError(f"No event-stream data payload found: {event_stream_body}")
 
 
+def _event_result_json(event_stream_body: str) -> dict[str, Any]:
+    for line in event_stream_body.splitlines():
+        if not line.startswith("data: "):
+            continue
+        payload = json.loads(line.removeprefix("data: "))
+        if "result" in payload:
+            return payload
+    raise AssertionError(f"No event-stream result payload found: {event_stream_body}")
+
+
 def _tool_payload(response: Any) -> dict[str, Any]:
     assert response.status_code == 200, response.text
-    result = _event_data_json(response.text)["result"]
+    result = _event_result_json(response.text)["result"]
     content = result["content"]
     assert isinstance(content, list) and content
     text = content[0]["text"]

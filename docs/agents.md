@@ -8,6 +8,7 @@ Related docs:
 
 - Architecture: `architecture.md`
 - MCP contract details: `mcp_plan.md`
+- MCP utility compliance: `mcp_utility_compliance_plan.md`
 - MCP client smoke testing: `mcp_client_smoke_plan.md`
 - Deterministic ingestion details: `deterministic_ingestion_plan.md`
 - Storage/provider details: `storage_agnostic_byoa_plan.md`

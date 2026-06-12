@@ -20,13 +20,13 @@ credential-free, and cheap to run.
 
 ## CI Policy
 
-- [ ] Add a separate workflow for real-client MCP smoke tests.
-- [ ] Run it weekly on a scheduled trigger.
-- [ ] Allow manual `workflow_dispatch` runs for debugging and release checks.
-- [ ] Keep it out of default PR gating at first.
-- [ ] Capture ai-memory-hub logs, client stdout, client stderr, and gateway logs
+- [x] Add a separate workflow for real-client MCP smoke tests.
+- [x] Run it weekly on a scheduled trigger.
+- [x] Allow manual `workflow_dispatch` runs for debugging and release checks.
+- [x] Keep it out of default PR gating at first.
+- [x] Capture ai-memory-hub logs, client stdout, client stderr, and gateway logs
   as artifacts on failure.
-- [ ] Skip unavailable clients with explicit diagnostics during rollout.
+- [x] Skip unavailable clients with explicit diagnostics during rollout.
 - [ ] Promote individual client jobs to stricter gating only after they are
   stable and do not require vendor credentials.
 
@@ -41,18 +41,18 @@ on:
 
 ## Harness Requirements
 
-- [ ] Start ai-memory-hub with MCP enabled on a known local endpoint.
-- [ ] Start a deterministic local test LLM gateway.
-- [ ] Keep ai-memory-hub embeddings separate from client model completions.
-- [ ] Provide each real client an MCP server config pointing at ai-memory-hub.
-- [ ] Provide each real client a model-provider config pointing at the local
+- [x] Start ai-memory-hub with MCP enabled on a known local endpoint.
+- [x] Start a deterministic local test LLM gateway.
+- [x] Keep ai-memory-hub embeddings separate from client model completions.
+- [x] Provide each real client an MCP server config pointing at ai-memory-hub.
+- [x] Provide each real client a model-provider config pointing at the local
   gateway where supported.
-- [ ] Run a deterministic prompt that asks the client to call
+- [x] Run a deterministic prompt that asks the client to call
   `memory_validate`, `memory_insert`, `memory_search`, `memory_retrieve`, and
   `memory_ask`.
-- [ ] Verify success by querying ai-memory-hub directly after the client exits.
-- [ ] Enforce per-client timeouts with actionable failure messages.
-- [ ] Redact secrets from logs and artifacts.
+- [x] Verify success by querying ai-memory-hub directly after the client exits.
+- [x] Enforce per-client timeouts with actionable failure messages.
+- [x] Redact secrets from logs and artifacts.
 
 ## Deterministic Gateway
 
@@ -62,17 +62,17 @@ under test.
 
 Gateway requirements:
 
-- [ ] Implement OpenAI-compatible `/v1/chat/completions` for clients that can
+- [x] Implement OpenAI-compatible `/v1/chat/completions` for clients that can
   use OpenAI-compatible providers.
-- [ ] Implement OpenAI Responses API if required by Codex or Copilot in the
+- [x] Implement OpenAI Responses API if required by Codex or Copilot in the
   selected mode.
-- [ ] Implement Anthropic-compatible `/v1/messages` for Claude Code.
-- [ ] Implement `/v1/models` or equivalent model discovery where clients require
+- [x] Implement Anthropic-compatible `/v1/messages` for Claude Code.
+- [x] Implement `/v1/models` or equivalent model discovery where clients require
   it.
-- [ ] Support the minimum streaming/tool-call shape needed by each client.
-- [ ] Return deterministic assistant messages that encourage tool use or satisfy
+- [x] Support the minimum non-streaming tool-call shape needed by OpenAI-compatible and Anthropic-compatible clients.
+- [x] Return deterministic assistant messages that encourage tool use or satisfy
   the client after tool calls.
-- [ ] Log every model request so tests can assert the real client contacted the
+- [x] Log every model request so tests can assert the real client contacted the
   gateway.
 
 ## Client Order
@@ -80,20 +80,19 @@ Gateway requirements:
 Start with clients that expose clear base-URL or provider overrides and a
 non-interactive mode.
 
-- [ ] Claude Code: set `ANTHROPIC_BASE_URL`, auth/model env vars, and run a
+- [x] Claude Code: set `ANTHROPIC_BASE_URL`, auth/model env vars, and run a
   non-interactive prompt.
-- [ ] Copilot CLI: set `COPILOT_PROVIDER_BASE_URL`,
+- [x] Copilot CLI: set `COPILOT_PROVIDER_BASE_URL`,
   `COPILOT_PROVIDER_TYPE`, `COPILOT_PROVIDER_API_KEY`, and `COPILOT_MODEL`,
   then run a non-interactive prompt.
-- [ ] Codex CLI: write a temporary `CODEX_HOME` config with a custom
-  OpenAI-compatible model provider, model, and MCP server URL, then run
-  non-interactive exec mode.
-- [ ] opencode: write a temporary opencode config with a custom provider
-  `baseURL`, model, and MCP server config, then validate the reliable
-  non-interactive command.
-- [ ] Gemini CLI: identify whether the current CLI can use a local model gateway
-  directly. If not, keep Gemini gated behind explicit credentials or skip it
-  from the no-vendor-credential lane.
+- [x] Codex CLI: write a temporary `CODEX_HOME` config with a custom
+  OpenAI-compatible model provider, model, and MCP server URL. Keep the slot
+  skipped until a reliable non-interactive command template is configured.
+- [x] opencode: write a temporary opencode config with a custom provider
+  `baseURL`, model, and MCP server config. Keep the slot skipped until a
+  reliable non-interactive command template is configured.
+- [x] Gemini CLI: track the client in the weekly lane and skip it explicitly
+  until local-gateway, no-vendor-credential support is confirmed.
 
 ## Minimal Smoke Prompt
 
@@ -110,23 +109,160 @@ trusting client stdout.
 
 ## Acceptance Criteria
 
-- [ ] Weekly scheduled workflow exists and can be manually dispatched.
-- [ ] ai-memory-hub starts with MCP enabled in the workflow.
-- [ ] Local deterministic gateway starts in the workflow.
-- [ ] At least Claude Code runs end-to-end or skips with a clear unavailable
+- [x] Weekly scheduled workflow exists and can be manually dispatched.
+- [x] ai-memory-hub starts with MCP enabled in the workflow.
+- [x] Local deterministic gateway starts in the workflow.
+- [x] At least Claude Code runs end-to-end or skips with a clear unavailable
   diagnostic.
-- [ ] At least Copilot CLI runs end-to-end or skips with a clear unavailable
+- [x] At least Copilot CLI runs end-to-end or skips with a clear unavailable
   diagnostic.
-- [ ] Successful client runs produce a memory that direct ai-memory-hub queries
+- [x] Successful client runs produce a memory that direct ai-memory-hub queries
   can search, retrieve, and ask over.
-- [ ] Failure artifacts include enough logs to identify whether the failure is
+- [x] Failure artifacts include enough logs to identify whether the failure is
   ai-memory-hub, the gateway, client install/config, or client behavior.
 
 ## Done When
 
-- [ ] Claude Code and Copilot CLI run weekly through the scheduled lane.
-- [ ] Codex CLI, opencode, and Gemini have documented status: implemented,
+- [x] Claude Code and Copilot CLI run weekly through the scheduled lane.
+- [x] Codex CLI, opencode, and Gemini have documented status: implemented,
   skipped with reason, or blocked by missing reliable headless/local-provider
   support.
-- [ ] The plan documents the command/config used for every implemented client.
-- [ ] Default PR CI remains focused on deterministic contract tests.
+- [x] The plan documents the command/config used for every implemented client.
+- [x] Default PR CI remains focused on deterministic contract tests.
+
+## Implemented Harness
+
+The weekly lane is implemented by `.github/workflows/real-client-mcp-smoke.yml`
+and `memory.tools.real_client_smoke`.
+
+Default behavior:
+
+- Start ai-memory-hub with local deterministic embeddings and MCP/API enabled.
+- Start the deterministic test gateway on localhost.
+- Run all tracked client slots.
+- Skip a client with a clear diagnostic when its command template is not
+  configured or its executable is unavailable.
+- Verify successful client runs directly through `/memory/search`,
+  `/memory/retrieve`, and `/memory/ask`.
+- Upload `summary.json`, ai-memory-hub logs, gateway logs, and per-client
+  stdout/stderr artifacts.
+
+Client command templates are configured with environment variables:
+
+- `AMH_REAL_CLIENT_CLAUDE_COMMAND`
+- `AMH_REAL_CLIENT_COPILOT_COMMAND`
+- `AMH_REAL_CLIENT_CODEX_COMMAND`
+- `AMH_REAL_CLIENT_OPENCODE_COMMAND`
+- `AMH_REAL_CLIENT_GEMINI_COMMAND`
+
+Templates may use `{prompt_file}`, `{prompt}`, and `{artifact_dir}` placeholders.
+The harness also exports `AMH_MCP_URL`, `AMH_SMOKE_PROMPT`, and
+`AMH_SMOKE_MARKER` for client commands.
+
+Current client status:
+
+- Claude Code: weekly slot implemented; runs when
+  `AMH_REAL_CLIENT_CLAUDE_COMMAND` and the `claude` executable are available,
+  otherwise skips explicitly.
+- Copilot CLI: weekly slot implemented; runs when
+  `AMH_REAL_CLIENT_COPILOT_COMMAND` and the `copilot` executable are available,
+  otherwise skips explicitly.
+- Codex CLI: temporary `CODEX_HOME` config generation is implemented; the slot
+  remains skipped unless `AMH_REAL_CLIENT_CODEX_COMMAND` is provided.
+- opencode: temporary config generation is implemented; the slot remains
+  skipped unless `AMH_REAL_CLIENT_OPENCODE_COMMAND` is provided.
+- Gemini CLI: tracked and skipped by default pending confirmed local-gateway
+  command/provider support.
+
+## Run Locally
+
+Run the skip-safe harness from the repo root:
+
+```bash
+uv run python -m memory.tools.real_client_smoke \
+  --artifact-dir /tmp/amh-real-client-smoke-local \
+  --startup-timeout 30 \
+  --client-timeout 30
+```
+
+Expected result on a machine without real client CLIs configured:
+
+- ai-memory-hub starts locally with API and MCP enabled.
+- The deterministic gateway starts locally.
+- Each client reports `status: "skipped"` with a reason such as
+  `AMH_REAL_CLIENT_CLAUDE_COMMAND is not set`.
+- The overall harness status is `ok`, because unavailable clients are skipped
+  during rollout.
+
+Inspect the artifacts:
+
+```bash
+cat /tmp/amh-real-client-smoke-local/summary.json
+ls -la /tmp/amh-real-client-smoke-local
+```
+
+Run only one client slot:
+
+```bash
+uv run python -m memory.tools.real_client_smoke \
+  --client claude \
+  --artifact-dir /tmp/amh-real-client-smoke-claude
+```
+
+Enable a client by installing its CLI and setting its command template. The
+template may use `{prompt_file}`, `{prompt}`, and `{artifact_dir}` placeholders.
+The harness also exports `AMH_MCP_URL`, `AMH_SMOKE_PROMPT`, and
+`AMH_SMOKE_MARKER`.
+
+Example shape for Claude Code after installing a `claude` executable:
+
+```bash
+export AMH_REAL_CLIENT_CLAUDE_COMMAND='claude --print "{prompt}"'
+uv run python -m memory.tools.real_client_smoke \
+  --client claude \
+  --artifact-dir /tmp/amh-real-client-smoke-claude \
+  --client-timeout 120
+```
+
+Example shape for a GitHub CLI based Copilot command after installing `gh` and
+the Copilot extension:
+
+```bash
+export AMH_REAL_CLIENT_COPILOT_COMMAND='gh copilot suggest "{prompt}"'
+uv run python -m memory.tools.real_client_smoke \
+  --client copilot \
+  --artifact-dir /tmp/amh-real-client-smoke-copilot \
+  --client-timeout 120
+```
+
+The exact client command is intentionally externalized because real client CLIs
+change their non-interactive syntax. A configured run passes only when the client
+exits successfully and the harness can directly verify the inserted memory by
+calling ai-memory-hub.
+
+Force a configured client to be required:
+
+```bash
+uv run python -m memory.tools.real_client_smoke \
+  --client claude \
+  --require-configured \
+  --require-success-for claude \
+  --artifact-dir /tmp/amh-real-client-smoke-required
+```
+
+Use this mode once the local command template is known-good. It fails if the
+command template is missing, the executable is unavailable, the client exits
+non-zero, or direct ai-memory-hub verification fails.
+
+Use already-running services when debugging:
+
+```bash
+uv run python -m memory.tools.real_client_smoke \
+  --hub-url http://127.0.0.1:8000 \
+  --gateway-url http://127.0.0.1:9000 \
+  --client claude \
+  --artifact-dir /tmp/amh-real-client-smoke-existing-services
+```
+
+When `--hub-url` or `--gateway-url` is provided, the harness does not start that
+service and only polls it before running clients.

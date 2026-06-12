@@ -4,7 +4,11 @@ import pytest
 
 from memory.ingestion import mvp_ingestion
 from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
-from memory.interfaces.mcp_server import _deterministic_sort, build_tool_handlers
+from memory.interfaces.mcp_server import (
+    _deterministic_sort,
+    _emit_mcp_tool_log,
+    build_tool_handlers,
+)
 
 
 class StubEmbedder:
@@ -53,6 +57,21 @@ class StubVectorStore:
             }
             for index, row in enumerate(self.rows[:top_k])
         ]
+
+
+class StubMCPContext:
+    def __init__(self) -> None:
+        self.logs: list[dict[str, object]] = []
+
+    async def log(self, message, level=None, logger_name=None, extra=None) -> None:
+        self.logs.append(
+            {
+                "message": message,
+                "level": level,
+                "logger_name": logger_name,
+                "extra": extra,
+            }
+        )
 
 
 def _runtime() -> mvp_ingestion.RuntimeDependencies:
@@ -109,6 +128,28 @@ def test_mcp_search_sort_preserves_conversation_group_score() -> None:
         "conversation-a",
         "conversation-a",
         "conversation-b",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_mcp_tool_log_payload_is_sanitized() -> None:
+    ctx = StubMCPContext()
+
+    await _emit_mcp_tool_log(
+        ctx, tool_name="memory_insert", status="error", error_code="insert_failed"
+    )
+
+    assert ctx.logs == [
+        {
+            "message": "mcp tool completed",
+            "level": "error",
+            "logger_name": "ai-memory-hub.mcp",
+            "extra": {
+                "tool": "memory_insert",
+                "status": "error",
+                "error_code": "insert_failed",
+            },
+        }
     ]
 
 

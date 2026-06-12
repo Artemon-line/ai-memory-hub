@@ -128,6 +128,7 @@ class OpenAIConfig(BaseModel):
 class MCPConfig(BaseModel):
     host: str = "127.0.0.1"
     port: int = 8765
+    list_page_size: int | None = Field(default=100, ge=1)
 
 
 class APIConfig(BaseModel):
