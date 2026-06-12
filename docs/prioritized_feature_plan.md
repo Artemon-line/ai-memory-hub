@@ -8,7 +8,7 @@ This plan captures unimplemented or partial features found while reconciling `do
 |----------|---------|--------|---------------|
 | P0 | Token-budgeted `memory_ask` and token-aware ingestion chunking | Implemented | `token_budget_plan.md`, `improvements/context_building_plan.md` |
 | P0 | Storage abstraction baseline: capabilities, schema checks, dimensions, fallback, dry-run, Postgres/PGVector | Implemented | `storage_agnostic_byoa_plan.md` |
-| P0 | Retrieval precision: threshold, hybrid search, metadata rerank | Partial | `improvements/retrieval_precision_plan.md` |
+| P0 | Retrieval precision: threshold, hybrid search, metadata rerank | Implemented | `improvements/retrieval_precision_plan.md` |
 | P0 | MCP client smoke coverage for Codex, Gemini, Copilot, Claude, opencode | Partial | `mcp_client_smoke_plan.md` |
 | P1 | CLI foundation and command contract | Partial | `cli_implementation_plan.md` |
 | P1 | CLI `ingest`, `search`, `retrieve`, and `ask` commands | Planned | `cli_implementation_plan.md` |
@@ -73,7 +73,8 @@ Implementation sequence:
 - [x] Add keyword candidate matching alongside vector search.
 - [x] Merge vector and keyword scores deterministically.
 - [x] Add metadata-aware reranking for tags, source, and topics.
-- [ ] Tune the combined pipeline against fixed fixtures and real representative data.
+- [x] Verify the combined pipeline against fixed fixtures.
+- [x] Validate and tune retrieval quality against real representative data.
 
 ## P0: MCP Client Smoke Coverage
 

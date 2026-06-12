@@ -472,6 +472,16 @@ context size, and token chunking output. Add `--max-budgeted-ratio` or
 `--max-config-enabled-ratio` when you want the command to fail on a local
 slowdown threshold.
 
+Validate retrieval quality against representative local memory queries:
+
+```bash
+uv run python -m memory.benchmarks.retrieval_quality
+```
+
+The retrieval quality evaluator compares tuned retrieval defaults against a
+vector-only baseline on representative project-memory conversations. It reports
+`precision_at_1`, `recall_at_k`, and MRR, and exits non-zero if thresholds fail.
+
 Measure repeated operations before adding or resizing caches:
 
 ```bash
