@@ -27,6 +27,13 @@ tokenizer = [
 [project.scripts]
 aim = "memory.cli:main"
 
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["memory"]
+
 [dependency-groups]
 dev = [
     "mcp-pytest>=0.1.1",

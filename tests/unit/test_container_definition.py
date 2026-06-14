@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import tomllib
 
 
 def test_containerfile_installs_project_after_copying_package() -> None:
@@ -15,3 +16,13 @@ def test_containerfile_installs_project_after_copying_package() -> None:
     console_script_check = containerfile.index("test -x /app/.venv/bin/aim")
 
     assert dependency_sync < package_copy < project_sync < console_script_check
+
+
+def test_project_declares_build_backend_for_console_script() -> None:
+    with Path("pyproject.toml").open("rb") as pyproject_file:
+        pyproject = tomllib.load(pyproject_file)
+
+    assert pyproject["build-system"]["build-backend"] == "hatchling.build"
+    assert pyproject["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"] == [
+        "memory"
+    ]
