@@ -18,6 +18,7 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P1 | Containerfile maintenance and container CI smoke tests | Implemented | `release_container_docs_plan.md` |
 | P1 | GitHub Pages documentation publishing from Markdown | Implemented | `release_container_docs_plan.md` |
 | P1 | Platform-specific importers | Planned here | This doc and `roadmap.md` |
+| P2 | Recurring codebase cleanup and engineering-health review | Planned | `recurring_codebase_cleanup_plan.md` |
 | P2 | GitHub release and Docker Hub image publishing | Planned | `release_container_docs_plan.md` |
 | P2 | Storage operational hardening: startup policy logs, production fallback warnings, audit events | Partial | `storage_agnostic_byoa_plan.md` |
 | P2 | Storage provider expansion config and shared contract tests | Planned | `storage_agnostic_byoa_plan.md` |
@@ -203,6 +204,18 @@ Implementation sequence:
 - [ ] Push `latest` only for stable releases.
 - [ ] Add image digest to workflow summary and release notes.
 - [ ] Add manual `workflow_dispatch` for release publish recovery.
+
+## P2: Recurring Codebase Cleanup
+
+Use `recurring_codebase_cleanup_plan.md` as the source of truth.
+
+- [ ] Run weekly automated detection checks for dead code, stale docs,
+  accidental hardcoding, complex control flow, and unsafe logging patterns.
+- [ ] Open one focused monthly cleanup PR for the highest-impact findings.
+- [ ] Review public docs and examples before each release.
+- [ ] Add regression tests for cleanup work that changes behavior.
+- [ ] Keep cleanup PRs narrow enough that review can distinguish behavior
+  preservation from intentional behavior changes.
 
 ## P2: Storage Operational Hardening
 

@@ -583,7 +583,7 @@ livenessProbe:
 
 For persistent local container data, mount `/app/data` and optionally
 `/app/logs`. For custom configuration, mount a config file and start with
-`/app/.venv/bin/aim serve --config <path>`.
+`uv run aim serve --config <path>`.
 
 Keep secrets in the mounted config file or injected environment variables, not
 in committed images or repository files. Runtime environment variables currently
@@ -649,6 +649,7 @@ mkdocs build --strict
 - [MCP plan](docs/mcp_plan.md)
 - [Release, container, and docs publishing plan](docs/release_container_docs_plan.md)
 - [Observability, logging, and telemetry plan](docs/observability_logging_telemetry_plan.md)
+- [Recurring codebase cleanup plan](docs/recurring_codebase_cleanup_plan.md)
 - [Bearer/API-key auth plan](docs/bearer_api_key_auth_plan.md)
 - [Roadmap](docs/roadmap.md)
 - [Improvements](docs/improvements.md)
