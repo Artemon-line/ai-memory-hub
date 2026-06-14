@@ -1,4 +1,3 @@
-# Compatible with Podman and Docker.
 FROM python:3.14-slim
 
 ARG VERSION=0.1.0
@@ -15,7 +14,8 @@ LABEL org.opencontainers.image.title="ai-memory-hub" \
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     HOME=/tmp \
-    TIKTOKEN_CACHE_DIR=/opt/tiktoken-cache
+    TIKTOKEN_CACHE_DIR=/opt/tiktoken-cache \
+    UV_CACHE_DIR=/app/.uv-cache
 
 WORKDIR /app
 
@@ -31,11 +31,14 @@ COPY examples/container/config.yaml /app/config.yaml
 
 RUN uv sync --frozen --no-dev --extra postgres --extra tokenizer && \
     test -x /app/.venv/bin/aim && \
-    mkdir -p /app/data /app/logs "$TIKTOKEN_CACHE_DIR" && \
+    mkdir -p /app/data /app/logs /app/.uv-cache "$TIKTOKEN_CACHE_DIR" && \
     useradd --uid 1001 --gid 0 --home-dir /tmp --no-create-home \
       --shell /usr/sbin/nologin ai-memory-hub && \
     chgrp -R 0 /app "$TIKTOKEN_CACHE_DIR" && \
-    chmod -R g=u /app "$TIKTOKEN_CACHE_DIR"
+    chmod -R g=u /app "$TIKTOKEN_CACHE_DIR" && \
+    chown -R 1001:0 /tmp/.uv-cache || true && \
+    chown -R 1001:0 /app/.uv-cache && \
+    chmod -R g=u /app/.uv-cache
 
 EXPOSE 8000
 
