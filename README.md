@@ -575,6 +575,11 @@ For persistent local container data, mount `/app/data` and optionally
 `/app/logs`. For custom configuration, mount a config file and start with
 `aim serve --config <path>`.
 
+Keep secrets in the mounted config file or injected environment variables, not
+in committed images or repository files. Runtime environment variables currently
+used by the container path are `OPENAI_API_KEY` for hosted OpenAI embeddings and
+`TIKTOKEN_CACHE_DIR` for persistent tokenizer cache data.
+
 For a reusable Docker/Podman Compose setup that runs ai-memory-hub with Postgres
 metadata and PGVector vectors, see:
 
@@ -619,6 +624,15 @@ tests/          unit, integration, and end-to-end tests
 - Add authentication before exposing the API or MCP endpoint beyond localhost.
 
 ## Documentation
+
+The Markdown docs are published to GitHub Pages with MkDocs. To build the same
+site locally:
+
+```bash
+python -m pip install -r docs/requirements.txt
+python tools/prepare_mkdocs.py
+mkdocs build --strict
+```
 
 - [Architecture](docs/architecture.md)
 - [Agent integration](docs/agents.md)

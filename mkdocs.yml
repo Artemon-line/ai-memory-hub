@@ -1,0 +1,49 @@
+site_name: ai-memory-hub
+site_description: Local-first deterministic memory ingestion hub
+repo_url: https://github.com/Artemon-line/ai-memory-hub
+repo_name: Artemon-line/ai-memory-hub
+docs_dir: .docs-build
+site_dir: site
+strict: true
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - pymdownx.highlight
+  - pymdownx.superfences
+
+nav:
+  - Home: index.md
+  - Architecture: docs/architecture.md
+  - Roadmap: docs/roadmap.md
+  - Storage BYOA Plan: docs/storage_agnostic_byoa_plan.md
+  - Agent Integration: docs/agents.md
+  - MCP:
+      - MCP Plan: docs/mcp_plan.md
+      - MCP Client Smoke Plan: docs/mcp_client_smoke_plan.md
+      - Real-Client MCP Smoke Plan: docs/real_client_mcp_smoke_plan.md
+      - MCP Utility Compliance Plan: docs/mcp_utility_compliance_plan.md
+      - MCP Authorization Compliance Plan: docs/bearer_api_key_auth_plan.md
+  - Implementation Plans:
+      - Prioritized Feature Plan: docs/prioritized_feature_plan.md
+      - Deterministic Ingestion Plan: docs/deterministic_ingestion_plan.md
+      - Token Budget Plan: docs/token_budget_plan.md
+      - CLI Implementation Plan: docs/cli_implementation_plan.md
+      - Release, Container, and Docs Publishing Plan: docs/release_container_docs_plan.md
+      - Observability, Logging, and Telemetry Plan: docs/observability_logging_telemetry_plan.md
+  - Improvements:
+      - Improvement Plans: docs/improvements.md
+      - Top Priority MCP Result Shape: docs/improvements/top_priority_mcp_result_shape.md
+      - Retrieval Precision Plan: docs/improvements/retrieval_precision_plan.md
+      - Context Building Plan: docs/improvements/context_building_plan.md
+      - Conversation Grouping Plan: docs/improvements/conversation_grouping_plan.md
+      - Memory Quality And Fact Layer Plan: docs/improvements/memory_quality_fact_layer_plan.md
+      - Vector Database Options: docs/improvements/vector_dbs.md

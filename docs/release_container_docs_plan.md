@@ -28,7 +28,7 @@ images for every GitHub release, and generating GitHub Pages from README/docs Ma
 - [x] Container smoke test is verified in CI.
 - [ ] Docker Hub publishing workflow exists.
 - [ ] GitHub release workflow exists.
-- [ ] GitHub Pages docs workflow exists.
+- [x] GitHub Pages docs workflow exists.
 
 ## 1) Containerfile Maintenance
 
@@ -97,10 +97,11 @@ Required improvements:
 - [x] Add a healthcheck command or document health endpoint once the API exposes one.
 - [x] Add Containerfile linting with Hadolint.
 - [x] Simulate OpenShift arbitrary UID startup in CI with `--user 12345:0`.
-- [ ] Document runtime volume mounts:
-  - [ ] `/app/data`
-  - [ ] optional config override path
-- [ ] Document runtime environment variables for config/secrets.
+- [x] Document runtime volume mounts:
+  - [x] `/app/data`
+  - [x] `/app/logs`
+  - [x] optional config override path
+- [x] Document runtime environment variables for config/secrets.
 
 Container acceptance criteria:
 
@@ -221,71 +222,71 @@ Publishing acceptance criteria:
 
 ## 5) GitHub Pages Documentation
 
-Status: `PLANNED`
+Status: `IMPLEMENTED`
 
 Approach:
 
-- [ ] Generate a static site from Markdown docs.
-- [ ] Use `README.md` as the site landing page.
-- [ ] Include every top-level `docs/*.md`.
-- [ ] Include `docs/improvements/*.md`.
-- [ ] Keep source Markdown as the canonical docs.
+- [x] Generate a static site from Markdown docs.
+- [x] Use `README.md` as the site landing page.
+- [x] Include every top-level `docs/*.md`.
+- [x] Include `docs/improvements/*.md`.
+- [x] Keep source Markdown as the canonical docs.
 
 Recommended tooling:
 
-- [ ] Use MkDocs with Material theme for the first implementation.
-- [ ] Add `mkdocs.yml`.
-- [ ] Add docs publishing dependencies as a dev/docs dependency group if desired.
-- [ ] Copy or include `README.md` as `index.md` during docs build.
-- [ ] Generate navigation from existing docs.
+- [x] Use MkDocs with Material theme for the first implementation.
+- [x] Add `mkdocs.yml`.
+- [x] Add docs publishing dependencies in `docs/requirements.txt`.
+- [x] Copy or include `README.md` as `index.md` during docs build.
+- [x] Generate navigation from existing docs.
 
 Initial site structure:
 
-- [ ] Home: README
-- [ ] Architecture
-- [ ] Roadmap
-- [ ] Storage BYOA Plan
-- [ ] Release, Container, and Docs Publishing Plan
-- [ ] Agent Integration
-- [ ] MCP Plan
-- [ ] MCP Client Smoke Plan
-- [ ] Deterministic Ingestion Plan
-- [ ] Token Budget Plan
-- [ ] CLI Implementation Plan
-- [ ] Improvements
+- [x] Home: README
+- [x] Architecture
+- [x] Roadmap
+- [x] Storage BYOA Plan
+- [x] Release, Container, and Docs Publishing Plan
+- [x] Agent Integration
+- [x] MCP Plan
+- [x] MCP Client Smoke Plan
+- [x] Deterministic Ingestion Plan
+- [x] Token Budget Plan
+- [x] CLI Implementation Plan
+- [x] Improvements
 
 Pages workflow:
 
-- [ ] Add `.github/workflows/pages.yml`.
-- [ ] Trigger on pushes to `main`.
-- [ ] Trigger manually with `workflow_dispatch`.
-- [ ] Build docs site.
-- [ ] Upload Pages artifact.
-- [ ] Deploy to GitHub Pages.
+- [x] Add `.github/workflows/pages.yml`.
+- [x] Trigger on pushes to `main`.
+- [x] Trigger manually with `workflow_dispatch`.
+- [x] Build docs site.
+- [x] Upload Pages artifact.
+- [x] Deploy to GitHub Pages.
 
 Required GitHub settings:
 
 - [ ] Enable GitHub Pages.
 - [ ] Set Pages source to GitHub Actions.
-- [ ] Ensure workflow has:
-  - [ ] `contents: read`
-  - [ ] `pages: write`
-  - [ ] `id-token: write`
+- [x] Ensure workflow has:
+  - [x] `contents: read`
+  - [x] `pages: write`
+  - [x] `id-token: write`
 
 Docs quality checks:
 
-- [ ] Validate internal links.
-- [ ] Fail docs build on broken links.
-- [ ] Keep README links valid both on GitHub and in generated Pages.
-- [ ] Add a docs build check to CI before enabling deploy as required.
+- [x] Validate internal links.
+- [x] Fail docs build on broken links.
+- [x] Keep README links valid both on GitHub and in generated Pages.
+- [x] Add a docs build check to CI before enabling deploy as required.
 
 Pages acceptance criteria:
 
-- [ ] GitHub Pages deploys from `main`.
-- [ ] README content appears as the home page.
-- [ ] All important Markdown docs are reachable from navigation.
-- [ ] Broken internal links fail the docs workflow.
-- [ ] Release docs plan is visible on the site.
+- [x] GitHub Pages deploys from `main`.
+- [x] README content appears as the home page.
+- [x] All important Markdown docs are reachable from navigation.
+- [x] Broken internal links fail the docs workflow.
+- [x] Release docs plan is visible on the site.
 
 ## 6) GitHub Release Notes
 
@@ -329,8 +330,8 @@ Recommended sequence:
 
 1. Add `.dockerignore`. Done.
 2. Add container CI build and smoke test. Done.
-3. Improve `Containerfile` labels and runtime docs. Labels done; runtime docs remain.
-4. Add GitHub Pages MkDocs config and Pages workflow.
+3. Improve `Containerfile` labels and runtime docs. Done.
+4. Add GitHub Pages MkDocs config and Pages workflow. Done.
 5. Add release version validation script/check.
 6. Add Docker Hub publish workflow for GitHub releases.
 7. Add release template and release notes checklist.
@@ -339,8 +340,8 @@ Recommended sequence:
 ## Final Acceptance Criteria
 
 - [ ] Pull requests verify the container still builds.
-- [ ] Pull requests verify docs still build.
-- [ ] Pushes to `main` publish GitHub Pages docs.
+- [x] Pull requests verify docs still build.
+- [x] Pushes to `main` publish GitHub Pages docs.
 - [ ] GitHub releases publish Docker Hub images.
 - [ ] Docker image tags match release tags and project version.
 - [ ] Stable releases update `latest`; pre-releases do not.

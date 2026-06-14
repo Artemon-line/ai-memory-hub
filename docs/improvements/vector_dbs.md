@@ -1,3 +1,5 @@
+# Vector Database Options
+
 - Qdrant — Rust-based, strong filtering
 - Weaviate — hybrid search, GraphQL
 - Pinecone — managed/serverless

@@ -9,6 +9,7 @@ Source date: `28-05-2026`
 3. [Context Building Plan](./improvements/context_building_plan.md)
 4. [Conversation Grouping Plan](./improvements/conversation_grouping_plan.md)
 5. [Memory Quality And Fact Layer Plan](./improvements/memory_quality_fact_layer_plan.md)
+6. [Vector Database Options](./improvements/vector_dbs.md)
 
 ## Notes
 

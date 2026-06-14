@@ -16,7 +16,7 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P1 | CLI `ingest`, `search`, `retrieve`, and `ask` commands | Implemented | `cli_implementation_plan.md` |
 | P1 | CLI `serve` command for container/runtime entrypoint | Implemented | `cli_implementation_plan.md`, `release_container_docs_plan.md` |
 | P1 | Containerfile maintenance and container CI smoke tests | Implemented | `release_container_docs_plan.md` |
-| P1 | GitHub Pages documentation publishing from Markdown | Planned | `release_container_docs_plan.md` |
+| P1 | GitHub Pages documentation publishing from Markdown | Implemented | `release_container_docs_plan.md` |
 | P1 | Platform-specific importers | Planned here | This doc and `roadmap.md` |
 | P2 | GitHub release and Docker Hub image publishing | Planned | `release_container_docs_plan.md` |
 | P2 | Storage operational hardening: startup policy logs, production fallback warnings, audit events | Partial | `storage_agnostic_byoa_plan.md` |
@@ -158,7 +158,7 @@ Current status:
 - [x] Project version is declared in `pyproject.toml`.
 - [x] Container build is verified in CI.
 - [x] Container smoke test is verified in CI.
-- [ ] GitHub Pages workflow is not implemented.
+- [x] GitHub Pages workflow is implemented.
 
 Implementation sequence:
 
@@ -170,10 +170,10 @@ Implementation sequence:
 - [x] Add non-root and OpenShift arbitrary-UID container hardening.
 - [x] Add Containerfile linting with Hadolint.
 - [x] Decide default vs optional image variants for Postgres/PGVector and tokenizer extras.
-- [ ] Document runtime volume mounts and config/secrets environment variables.
-- [ ] Add MkDocs configuration for `README.md`, top-level `docs/*.md`, and `docs/improvements/*.md`.
-- [ ] Add a GitHub Pages workflow that builds and deploys docs from `main`.
-- [ ] Add docs link validation before making docs deploy required.
+- [x] Document runtime volume mounts and config/secrets environment variables.
+- [x] Add MkDocs configuration for `README.md`, top-level `docs/*.md`, and `docs/improvements/*.md`.
+- [x] Add a GitHub Pages workflow that builds and deploys docs from `main`.
+- [x] Add docs link validation before making docs deploy required.
 
 ## P1: Platform-Specific Importers
 
