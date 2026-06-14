@@ -22,14 +22,16 @@ WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
 
 RUN python -m pip install --no-cache-dir uv && \
-    uv sync --frozen --no-dev --extra postgres --extra tokenizer && \
+    uv sync --frozen --no-dev --extra postgres --extra tokenizer --no-install-project && \
     mkdir -p "$TIKTOKEN_CACHE_DIR" && \
     uv run python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"
 
 COPY memory ./memory
 COPY example.config.yaml /app/config.yaml
 
-RUN mkdir -p /app/data /app/logs "$TIKTOKEN_CACHE_DIR" && \
+RUN uv sync --frozen --no-dev --extra postgres --extra tokenizer && \
+    test -x /app/.venv/bin/aim && \
+    mkdir -p /app/data /app/logs "$TIKTOKEN_CACHE_DIR" && \
     chgrp -R 0 /app "$TIKTOKEN_CACHE_DIR" && \
     chmod -R g=u /app "$TIKTOKEN_CACHE_DIR"
 
