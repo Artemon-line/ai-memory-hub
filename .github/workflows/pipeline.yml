@@ -231,7 +231,7 @@ jobs:
 
       - name: Start container
         run: |
-          docker run --rm -d --name ai-memory-hub-ci --user 12345:0 -p 8000:8000 ai-memory-hub:ci
+          docker run -d --name ai-memory-hub-ci --user 12345:0 -p 8000:8000 ai-memory-hub:ci
 
       - name: Smoke readiness
         run: |
@@ -239,7 +239,10 @@ jobs:
             if curl --max-time 5 -fsS http://127.0.0.1:8000/ready; then
               exit 0
             fi
-            if ! docker ps --format '{{.Names}}' | grep -q '^ai-memory-hub-ci$'; then
+            if [ "$(docker inspect --format '{{.State.Running}}' ai-memory-hub-ci)" != "true" ]; then
+              docker inspect \
+                --format 'container exited with code {{.State.ExitCode}}: {{.State.Error}}' \
+                ai-memory-hub-ci
               docker logs ai-memory-hub-ci
               exit 1
             fi

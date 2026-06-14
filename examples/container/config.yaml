@@ -1,0 +1,26 @@
+providers:
+  embeddings: local
+  embedding_dimension: 32
+  metadata_db: sqlite
+  vector_db: memory
+
+storage:
+  dry_run: false
+  vector:
+    allow_fallback: false
+
+paths:
+  data_dir: ./data
+  logs_dir: ./logs
+
+schema:
+  file: ./memory/schema/conversation.schema.json
+
+interfaces:
+  api: true
+  mcp: true
+
+api:
+  host: 0.0.0.0
+  port: 8000
+  auth: none

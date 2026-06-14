@@ -27,7 +27,7 @@ RUN python -m pip install --no-cache-dir uv && \
     uv run python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"
 
 COPY memory ./memory
-COPY example.config.yaml /app/config.yaml
+COPY examples/container/config.yaml /app/config.yaml
 
 RUN uv sync --frozen --no-dev --extra postgres --extra tokenizer && \
     test -x /app/.venv/bin/aim && \

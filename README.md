@@ -559,6 +559,10 @@ The image exposes the API and MCP service on port `8000` and starts with:
 /app/.venv/bin/aim serve --host 0.0.0.0 --port 8000
 ```
 
+The built-in [`examples/container/config.yaml`](examples/container/config.yaml)
+uses deterministic local embeddings, SQLite metadata, and in-memory vectors so
+the image starts without external model or database services.
+
 Container images run as a non-root user by default and are built so OpenShift can
 override the runtime UID while keeping root-group write access to `/app/data`,
 `/app/logs`, and `TIKTOKEN_CACHE_DIR`. Use `/ready` for readiness probes and
@@ -579,7 +583,7 @@ livenessProbe:
 
 For persistent local container data, mount `/app/data` and optionally
 `/app/logs`. For custom configuration, mount a config file and start with
-`aim serve --config <path>`.
+`/app/.venv/bin/aim serve --config <path>`.
 
 Keep secrets in the mounted config file or injected environment variables, not
 in committed images or repository files. Runtime environment variables currently
