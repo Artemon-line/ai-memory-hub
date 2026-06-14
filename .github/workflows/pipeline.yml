@@ -231,7 +231,7 @@ jobs:
 
       - name: Start container
         run: |
-          docker run -d --name ai-memory-hub-ci --user 12345:0 -p 8000:8000 ai-memory-hub:ci
+          docker run -d --name ai-memory-hub-ci -p 8000:8000 ai-memory-hub:ci
 
       - name: Smoke readiness
         run: |
@@ -269,8 +269,9 @@ jobs:
 
       - name: Smoke non-root writable paths
         run: |
-          docker exec ai-memory-hub-ci sh -c \
-            'test "$(id -u)" = "12345" && test -w /app/data && test -w /app/logs && test -w "$TIKTOKEN_CACHE_DIR"'
+          docker exec ai-memory-hub-ci sh -c 'test "$(id -u)" = "1001"'
+          docker run --rm --user 12345:0 --entrypoint sh ai-memory-hub:ci -c \
+            'test -w /app/data && test -w /app/logs && test -w "$TIKTOKEN_CACHE_DIR"'
 
       - name: Capture container logs
         if: always()

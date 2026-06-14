@@ -559,7 +559,7 @@ The image exposes the API and MCP service on port `8000` and starts with:
 /app/.venv/bin/aim serve --host 0.0.0.0 --port 8000
 ```
 
-The built-in [`examples/container/config.yaml`](examples/container/config.yaml)
+The built-in [container configuration](https://github.com/Artemon-line/ai-memory-hub/blob/main/examples/container/config.yaml)
 uses deterministic local embeddings, SQLite metadata, and in-memory vectors so
 the image starts without external model or database services.
 

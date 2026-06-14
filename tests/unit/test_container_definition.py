@@ -17,6 +17,7 @@ def test_containerfile_installs_project_after_copying_package() -> None:
 
     assert dependency_sync < package_copy < project_sync < console_script_check
     assert "COPY examples/container/config.yaml /app/config.yaml" in containerfile
+    assert "useradd --uid 1001 --gid 0" in containerfile
 
 
 def test_project_declares_build_backend_for_console_script() -> None:
@@ -37,3 +38,5 @@ def test_container_smoke_retains_stopped_container_for_logs() -> None:
     )
     assert "--rm" not in run_command
     assert ".State.ExitCode" in workflow
+    assert "docker exec ai-memory-hub-ci" in workflow
+    assert "docker run --rm --user 12345:0 --entrypoint sh" in workflow

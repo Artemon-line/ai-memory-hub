@@ -32,6 +32,8 @@ COPY examples/container/config.yaml /app/config.yaml
 RUN uv sync --frozen --no-dev --extra postgres --extra tokenizer && \
     test -x /app/.venv/bin/aim && \
     mkdir -p /app/data /app/logs "$TIKTOKEN_CACHE_DIR" && \
+    useradd --uid 1001 --gid 0 --home-dir /tmp --no-create-home \
+      --shell /usr/sbin/nologin ai-memory-hub && \
     chgrp -R 0 /app "$TIKTOKEN_CACHE_DIR" && \
     chmod -R g=u /app "$TIKTOKEN_CACHE_DIR"
 
