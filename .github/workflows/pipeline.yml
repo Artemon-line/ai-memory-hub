@@ -185,3 +185,101 @@ jobs:
           postgres_schema_version or
           pgvector_live_integration_when_dsn_provided or
           runtime_postgres_pgvector_live_integration_when_dsn_provided"
+
+  container-lint:
+    name: Containerfile Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Hadolint
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Containerfile
+
+  container:
+    name: Container Build and Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read package version
+        id: version
+        run: |
+          python <<'PY' >> "$GITHUB_OUTPUT"
+          import tomllib
+
+          with open("pyproject.toml", "rb") as config_file:
+              version = tomllib.load(config_file)["project"]["version"]
+          print(f"version={version}")
+          PY
+
+      - name: Build image
+        run: |
+          docker build \
+            --build-arg VERSION="${{ steps.version.outputs.version }}" \
+            --build-arg REVISION="${GITHUB_SHA}" \
+            --build-arg SOURCE="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            -t ai-memory-hub:ci \
+            -f Containerfile .
+
+      - name: Start container
+        run: |
+          docker run --rm -d --name ai-memory-hub-ci --user 12345:0 -p 8000:8000 ai-memory-hub:ci
+
+      - name: Smoke readiness
+        run: |
+          for i in {1..30}; do
+            if curl --max-time 5 -fsS http://127.0.0.1:8000/ready; then
+              exit 0
+            fi
+            if ! docker ps --format '{{.Names}}' | grep -q '^ai-memory-hub-ci$'; then
+              docker logs ai-memory-hub-ci
+              exit 1
+            fi
+            sleep 2
+          done
+          docker logs ai-memory-hub-ci
+          exit 1
+
+      - name: Smoke MCP initialize
+        run: |
+          curl --max-time 10 -fsS -X POST http://127.0.0.1:8000/mcp/ \
+            -H "Content-Type: application/json" \
+            -H "Accept: application/json, text/event-stream" \
+            -d '{
+              "jsonrpc": "2.0",
+              "id": 1,
+              "method": "initialize",
+              "params": {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": {"name": "container-smoke", "version": "0.1.0"}
+              }
+            }'
+
+      - name: Smoke non-root writable paths
+        run: |
+          docker exec ai-memory-hub-ci sh -c \
+            'test "$(id -u)" = "12345" && test -w /app/data && test -w /app/logs && test -w "$TIKTOKEN_CACHE_DIR"'
+
+      - name: Capture container logs
+        if: always()
+        run: docker logs ai-memory-hub-ci > container.log 2>&1 || true
+
+      - name: Upload container logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: container-smoke-logs
+          path: container.log
+
+      - name: Stop container
+        if: always()
+        run: docker rm -f ai-memory-hub-ci || true

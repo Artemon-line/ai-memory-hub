@@ -45,6 +45,25 @@ class FactSupersedeRequest(BaseModel):
     superseded_by: str
 
 
+def _register_health_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
+    async def health() -> dict[str, Any]:
+        return {
+            "status": "ok",
+            "health": redact_content_hashes(await agent.health()),
+        }
+
+    async def ready() -> dict[str, Any]:
+        health_state = redact_content_hashes(await agent.health())
+        return {
+            "status": "ok",
+            "mode": health_state.get("mode"),
+            "health": health_state,
+        }
+
+    app.get("/health")(health)
+    app.get("/ready")(ready)
+
+
 def _register_api_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
     async def memory_insert(conversation_json: dict[str, Any]) -> dict[str, Any]:
         try:
@@ -136,6 +155,8 @@ def create_app(
 
     if mcp_app is not None:
         app.mount("/mcp", mcp_app)
+
+    _register_health_routes(app, agent)
 
     # ⭐ Only enable API if config says so
     if cfg.interfaces.api:

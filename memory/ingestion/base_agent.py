@@ -41,6 +41,9 @@ class BaseIngestionAgent(ABC):
     ) -> Dict[str, Any]:
         raise NotImplementedError("ask is not implemented")
 
+    async def health(self) -> Dict[str, Any]:
+        raise NotImplementedError("health is not implemented")
+
     async def fact_search(
         self,
         *,

@@ -12,10 +12,10 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P0 | MCP client smoke coverage for Codex, Gemini, Copilot, Claude, opencode | Implemented | `mcp_client_smoke_plan.md` |
 | P0 | Weekly scheduled real-client MCP smoke coverage | Implemented | `real_client_mcp_smoke_plan.md` |
 | P1 | MCP utility compliance: pagination first, sanitized logging next, completion deferred | Implemented | `mcp_utility_compliance_plan.md` |
-| P1 | CLI foundation and command contract | Partial | `cli_implementation_plan.md` |
-| P1 | CLI `ingest`, `search`, `retrieve`, and `ask` commands | Planned | `cli_implementation_plan.md` |
-| P1 | CLI `serve` command for container/runtime entrypoint | Planned | `cli_implementation_plan.md`, `release_container_docs_plan.md` |
-| P1 | Containerfile maintenance and container CI smoke tests | Planned | `release_container_docs_plan.md` |
+| P1 | CLI foundation and command contract | Implemented | `cli_implementation_plan.md` |
+| P1 | CLI `ingest`, `search`, `retrieve`, and `ask` commands | Implemented | `cli_implementation_plan.md` |
+| P1 | CLI `serve` command for container/runtime entrypoint | Implemented | `cli_implementation_plan.md`, `release_container_docs_plan.md` |
+| P1 | Containerfile maintenance and container CI smoke tests | Implemented | `release_container_docs_plan.md` |
 | P1 | GitHub Pages documentation publishing from Markdown | Planned | `release_container_docs_plan.md` |
 | P1 | Platform-specific importers | Planned here | This doc and `roadmap.md` |
 | P2 | GitHub release and Docker Hub image publishing | Planned | `release_container_docs_plan.md` |
@@ -129,22 +129,22 @@ Current status:
 
 - [x] A basic `memory.cli` argparse entrypoint exists.
 - [x] `python -m memory.cli tokenizer-check` is implemented for tokenizer diagnostics.
-- [ ] The distributable console script name is not finalized.
-- [ ] Global CLI options are not implemented across commands.
-- [ ] `ingest`, `search`, `retrieve`, `ask`, and `serve` are not implemented.
+- [x] The distributable console script name is finalized as `aim`.
+- [x] Global CLI options are implemented across commands.
+- [x] `ingest`, `search`, `retrieve`, `ask`, and `serve` are implemented.
 
 Implementation sequence:
 
-- [ ] Stabilize the command namespace, console script name, global flags, and JSON/text output contract.
+- [x] Stabilize the command namespace, console script name, global flags, and JSON/text output contract.
 - [x] Keep `tokenizer-check` as the first diagnostics command and align future diagnostics with the same output shape.
-- [ ] Add shared helpers for config loading, JSON/text formatting, and stable exit-code handling.
-- [ ] Implement `ingest <file>` using the same normalization, validation, hashing, dedupe, and storage path as API/MCP.
-- [ ] Implement `search "<query>"` using the existing runtime search function and deterministic result shape.
-- [ ] Implement `retrieve <id>` and `ask "<question>"` after ingest/search behavior is stable.
-- [ ] Implement diagnostics: `health`, `config-show`, and `storage-check`.
-- [ ] Implement `serve --host --port --config` as the preferred runtime/container entrypoint.
-- [ ] Add `--config`, `--json`, `--top-k`, `--max-context-tokens`, and clear exit-code behavior across commands.
-- [ ] Add unit tests for parser/output behavior and smoke tests for success, invalid input, and storage round trips.
+- [x] Add shared helpers for config loading, JSON/text formatting, and stable exit-code handling.
+- [x] Implement `ingest <file>` using the same normalization, validation, hashing, dedupe, and storage path as API/MCP.
+- [x] Implement `search "<query>"` using the existing runtime search function and deterministic result shape.
+- [x] Implement `retrieve <id>` and `ask "<question>"` after ingest/search behavior is stable.
+- [x] Implement diagnostics: `health`, `config-show`, and `storage-check`.
+- [x] Implement `serve --host --port --config` as the preferred runtime/container entrypoint.
+- [x] Add `--config`, `--json`, `--top-k`, `--max-context-tokens`, and clear exit-code behavior across commands.
+- [x] Add unit tests for parser/output behavior and smoke tests for success, invalid input, and storage round trips.
 
 ## P1: Container And Docs Publishing Foundation
 
@@ -156,18 +156,20 @@ Current status:
 - [x] CI exists in `.github/workflows/pipeline.yml`.
 - [x] README and Markdown docs exist.
 - [x] Project version is declared in `pyproject.toml`.
-- [ ] Container build is not verified in CI.
-- [ ] Container smoke test is not verified in CI.
+- [x] Container build is verified in CI.
+- [x] Container smoke test is verified in CI.
 - [ ] GitHub Pages workflow is not implemented.
 
 Implementation sequence:
 
-- [ ] Add `.dockerignore`.
-- [ ] Keep `Containerfile` aligned with `pyproject.toml`, `uv.lock`, default config, and the CLI `serve` command once implemented.
-- [ ] Add OCI labels to the container image.
-- [ ] Add a container build job to CI.
-- [ ] Add a container smoke test that starts the API/MCP app and checks readiness.
-- [ ] Decide default vs optional image variants for Postgres/PGVector and tokenizer extras.
+- [x] Add `.dockerignore`.
+- [x] Keep `Containerfile` aligned with `pyproject.toml`, `uv.lock`, default config, and the CLI `serve` command once implemented.
+- [x] Add OCI labels to the container image.
+- [x] Add a container build job to CI.
+- [x] Add a container smoke test that starts the API/MCP app and checks readiness.
+- [x] Add non-root and OpenShift arbitrary-UID container hardening.
+- [x] Add Containerfile linting with Hadolint.
+- [x] Decide default vs optional image variants for Postgres/PGVector and tokenizer extras.
 - [ ] Document runtime volume mounts and config/secrets environment variables.
 - [ ] Add MkDocs configuration for `README.md`, top-level `docs/*.md`, and `docs/improvements/*.md`.
 - [ ] Add a GitHub Pages workflow that builds and deploys docs from `main`.

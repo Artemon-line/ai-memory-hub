@@ -24,73 +24,79 @@ images for every GitHub release, and generating GitHub Pages from README/docs Ma
 - [x] CI exists in `.github/workflows/pipeline.yml`.
 - [x] README and Markdown docs exist.
 - [x] Project version is declared in `pyproject.toml`.
-- [ ] Container build is verified in CI.
-- [ ] Container smoke test is verified in CI.
+- [x] Container build is verified in CI.
+- [x] Container smoke test is verified in CI.
 - [ ] Docker Hub publishing workflow exists.
 - [ ] GitHub release workflow exists.
 - [ ] GitHub Pages docs workflow exists.
 
 ## 1) Containerfile Maintenance
 
-Status: `PLANNED`
+Status: `IMPLEMENTED`
 
 Container contract:
 
-- [ ] Build from the checked-in `Containerfile`.
-- [ ] Use Python version compatible with `pyproject.toml`.
-- [ ] Install dependencies from `uv.lock` with frozen resolution.
-- [ ] Include `memory/`, `README.md`, `pyproject.toml`, `uv.lock`, and default config.
-- [ ] Expose API/MCP service on port `8000`.
-- [ ] Start through the project CLI once the serve command exists.
-- [ ] Use direct `uvicorn memory.api.server:app` only as the current transitional fallback.
-- [ ] Keep runtime defaults local-safe.
+- [x] Build from the checked-in `Containerfile`.
+- [x] Use Python version compatible with `pyproject.toml`.
+- [x] Install dependencies from `uv.lock` with frozen resolution.
+- [x] Include `memory/`, `README.md`, `pyproject.toml`, `uv.lock`, and default config.
+- [x] Expose API/MCP service on port `8000`.
+- [x] Start through the project CLI once the serve command exists.
+- [x] Remove the direct `uvicorn memory.api.server:app` transitional fallback.
+- [x] Run as non-root by default.
+- [x] Support OpenShift arbitrary runtime UIDs in root group by making runtime
+      paths group-writable.
+- [x] Execute the installed `aim` console script directly instead of invoking
+      `uv` at runtime.
+- [x] Keep runtime defaults local-safe.
 
 CLI dependency:
 
-- [ ] Implement the serve command tracked in `docs/cli_implementation_plan.md`.
-- [ ] Preferred final container command:
+- [x] Implement the serve command tracked in `docs/cli_implementation_plan.md`.
+- [x] Preferred final container command:
 
 ```bash
 aim serve --host 0.0.0.0 --port 8000
 ```
 
-- [ ] Development fallback until the console script exists:
+- [x] Development fallback until the console script exists:
 
 ```bash
 python -m memory.cli serve --host 0.0.0.0 --port 8000
 ```
 
-- [ ] Add packaging metadata for the selected console script before using `aim` in `Containerfile`.
-- [ ] Keep `Containerfile` and CLI docs aligned whenever the serve command changes.
+- [x] Add packaging metadata for the selected console script before using `aim` in `Containerfile`.
+- [x] Keep `Containerfile` and CLI docs aligned whenever the serve command changes.
 
 Required improvements:
 
-- [ ] Add `serve` to the CLI implementation plan:
-  - [ ] starts the same FastAPI/MCP app as the current `uvicorn` command
-  - [ ] supports `--host`
-  - [ ] supports `--port`
-  - [ ] supports `--config`
-  - [ ] returns stable exit code `3` on runtime initialization failure
-  - [ ] logs the active config path and redacted provider summary
-- [ ] Add OCI labels:
-  - [ ] `org.opencontainers.image.title`
-  - [ ] `org.opencontainers.image.description`
-  - [ ] `org.opencontainers.image.source`
-  - [ ] `org.opencontainers.image.revision`
-  - [ ] `org.opencontainers.image.version`
-  - [ ] `org.opencontainers.image.licenses`
-- [ ] Add `.dockerignore` to keep builds small:
-  - [ ] `.git`
-  - [ ] `.venv`
-  - [ ] `.pytest_cache`
-  - [ ] `.ruff_cache`
-  - [ ] `data`
-  - [ ] local logs/artifacts
-- [ ] Decide whether the image should install optional extras:
-  - [ ] default image: core dependencies only
-  - [ ] optional image variant: Postgres/PGVector support
-  - [ ] optional image variant: tokenizer support
-- [ ] Add a healthcheck command or document health endpoint once the API exposes one.
+- [x] Add `serve` to the CLI implementation plan:
+  - [x] starts the same FastAPI/MCP app as the current `uvicorn` command
+  - [x] supports `--host`
+  - [x] supports `--port`
+  - [x] supports `--config`
+  - [x] returns stable exit code `3` on runtime initialization failure
+  - [x] logs the active config path and redacted provider summary
+- [x] Add OCI labels:
+  - [x] `org.opencontainers.image.title`
+  - [x] `org.opencontainers.image.description`
+  - [x] `org.opencontainers.image.source`
+  - [x] `org.opencontainers.image.revision`
+  - [x] `org.opencontainers.image.version`
+  - [x] `org.opencontainers.image.licenses`
+- [x] Add `.dockerignore` to keep builds small:
+  - [x] `.git`
+  - [x] `.venv`
+  - [x] `.pytest_cache`
+  - [x] `.ruff_cache`
+  - [x] `data`
+  - [x] local logs/artifacts
+- [x] Decide whether the image should install optional extras:
+  - [x] default image includes Postgres/PGVector and tokenizer extras for the current reusable Compose/runtime path
+  - [x] optional slimmer image variants are deferred until release publishing needs them
+- [x] Add a healthcheck command or document health endpoint once the API exposes one.
+- [x] Add Containerfile linting with Hadolint.
+- [x] Simulate OpenShift arbitrary UID startup in CI with `--user 12345:0`.
 - [ ] Document runtime volume mounts:
   - [ ] `/app/data`
   - [ ] optional config override path
@@ -98,33 +104,36 @@ Required improvements:
 
 Container acceptance criteria:
 
-- [ ] `docker build -f Containerfile .` succeeds locally.
-- [ ] Container starts successfully.
-- [ ] `GET /health` or equivalent smoke check succeeds if/when available.
-- [ ] MCP endpoint remains reachable at `/mcp/`.
-- [ ] Image does not include repo-local `data/`, `.git/`, or virtualenv files.
+- [x] `docker build -f Containerfile .` succeeds in CI.
+- [x] Container starts successfully in CI.
+- [x] `GET /ready` smoke check succeeds.
+- [x] MCP endpoint remains reachable at `/mcp/`.
+- [x] Container smoke verifies non-root writable runtime paths.
+- [x] Image does not include repo-local `data/`, `.git/`, or virtualenv files.
 
 ## 2) CI Container Verification
 
-Status: `PLANNED`
+Status: `IMPLEMENTED`
 
 Add CI checks before publishing is enabled:
 
-- [ ] Add a `container` job to `.github/workflows/pipeline.yml`.
-- [ ] Build the image on pull requests and pushes to `main`.
-- [ ] Tag CI image locally as `ai-memory-hub:ci`.
-- [ ] Run a container smoke test:
-  - [ ] start container on port `8000`
-  - [ ] wait for service readiness
-  - [ ] call API health or docs endpoint
-  - [ ] call MCP initialize smoke if lightweight enough
-- [ ] Fail CI if container exits early.
-- [ ] Upload container logs as an artifact on failure.
-- [ ] Keep publishing disabled in PR builds.
+- [x] Add a `container` job to `.github/workflows/pipeline.yml`.
+- [x] Build the image on pull requests and pushes to `main`.
+- [x] Tag CI image locally as `ai-memory-hub:ci`.
+- [x] Run a container smoke test:
+  - [x] start container on port `8000`
+  - [x] run with an arbitrary non-root UID in root group
+  - [x] wait for service readiness
+  - [x] call `/ready`
+  - [x] call MCP initialize smoke
+  - [x] verify `/app/data`, `/app/logs`, and tokenizer cache are writable
+- [x] Fail CI if container exits early.
+- [x] Upload container logs as an artifact on failure.
+- [x] Keep publishing disabled in PR builds.
 
 Optional hardening:
 
-- [ ] Add Hadolint or similar Dockerfile linting.
+- [x] Add Hadolint or similar Dockerfile linting.
 - [ ] Add Trivy image scan in warning mode first.
 - [ ] Promote image scanning to required once false positives are triaged.
 
@@ -318,9 +327,9 @@ Status: `PLANNED`
 
 Recommended sequence:
 
-1. Add `.dockerignore`.
-2. Add container CI build and smoke test.
-3. Improve `Containerfile` labels and runtime docs.
+1. Add `.dockerignore`. Done.
+2. Add container CI build and smoke test. Done.
+3. Improve `Containerfile` labels and runtime docs. Labels done; runtime docs remain.
 4. Add GitHub Pages MkDocs config and Pages workflow.
 5. Add release version validation script/check.
 6. Add Docker Hub publish workflow for GitHub releases.

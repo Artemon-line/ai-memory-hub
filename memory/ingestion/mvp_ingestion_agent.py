@@ -54,6 +54,9 @@ class MVPIngestionAgent(BaseIngestionAgent):
             result_mode=result_mode,
         )
 
+    async def health(self) -> Dict[str, Any]:
+        return mvp_ingestion.runtime_health()
+
     async def fact_search(
         self,
         *,

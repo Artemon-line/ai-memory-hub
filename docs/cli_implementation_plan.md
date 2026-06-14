@@ -193,13 +193,13 @@ Scope:
 - [x] Preserve the same API and MCP routes.
 - [x] Use stable exit code `3` for runtime initialization failures.
 - [x] Redact secrets in startup diagnostics.
-- [ ] Become the preferred `Containerfile` command after the console script is packaged.
+- [x] Become the preferred `Containerfile` command after the console script is packaged.
 
 Acceptance criteria:
 
 - [x] `python -m memory.cli serve --host 127.0.0.1 --port 8000` starts the service.
 - [x] `aim serve --host 127.0.0.1 --port 8000` works after packaging metadata is added.
-- [ ] Container smoke tests use the CLI entrypoint instead of invoking `uvicorn` directly.
+- [x] Container smoke tests use the CLI entrypoint instead of invoking `uvicorn` directly.
 - [x] README documents the CLI serve command once implemented.
 
 ## Testing

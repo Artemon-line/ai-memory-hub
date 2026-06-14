@@ -59,7 +59,7 @@ uv sync --dev --extra tokenizer
 Start the API and MCP server:
 
 ```bash
-uv run uvicorn memory.api.server:app --host 127.0.0.1 --port 8000
+uv run aim serve --host 127.0.0.1 --port 8000
 ```
 
 Insert a conversation:
@@ -120,6 +120,8 @@ schema, then sends them through the API or MCP interface.
 | `POST` | `/memory/search` | Return ranked semantic matches |
 | `POST` | `/memory/retrieve` | Retrieve a stored conversation by ID |
 | `POST` | `/memory/ask` | Build an answer from retrieved memory |
+| `GET` | `/health` | Liveness endpoint with redacted runtime health |
+| `GET` | `/ready` | Readiness endpoint for container orchestration |
 
 ## CLI
 
@@ -496,6 +498,16 @@ write cProfile stats for deeper inspection.
 Default local runs do not require Postgres or PGVector. Live Postgres/PGVector
 tests are skipped unless `AMH_TEST_POSTGRES_DSN` is set.
 
+Container CI also verifies:
+
+- `Containerfile` linting with Hadolint
+- image build from the checked-in `Containerfile`
+- startup through the packaged `aim serve` command
+- `/ready` readiness
+- MCP initialize at `/mcp/`
+- non-root runtime behavior with an arbitrary UID in root group
+- writable `/app/data`, `/app/logs`, and tokenizer cache paths
+
 To run live Postgres and PGVector tests locally, start a PGVector-enabled
 Postgres container:
 
@@ -521,8 +533,50 @@ Clean up the container:
 docker rm -f aim-pgvector-test
 ```
 
-For a reusable Docker/Podman Compose setup that runs ai-memory-hub with
-Postgres metadata and PGVector vectors, see:
+## Containers
+
+Build the local image:
+
+```bash
+docker build -t ai-memory-hub:local -f Containerfile .
+```
+
+Run the default image locally:
+
+```bash
+docker run --rm -p 8000:8000 ai-memory-hub:local
+```
+
+The image exposes the API and MCP service on port `8000` and starts with:
+
+```bash
+/app/.venv/bin/aim serve --host 0.0.0.0 --port 8000
+```
+
+Container images run as a non-root user by default and are built so OpenShift can
+override the runtime UID while keeping root-group write access to `/app/data`,
+`/app/logs`, and `TIKTOKEN_CACHE_DIR`. Use `/ready` for readiness probes and
+`/health` for liveness probes.
+
+Kubernetes probe example:
+
+```yaml
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: 8000
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8000
+```
+
+For persistent local container data, mount `/app/data` and optionally
+`/app/logs`. For custom configuration, mount a config file and start with
+`aim serve --config <path>`.
+
+For a reusable Docker/Podman Compose setup that runs ai-memory-hub with Postgres
+metadata and PGVector vectors, see:
 
 ```bash
 cd examples/postgres/pgvector
@@ -536,6 +590,12 @@ For remote Ollama embeddings, see
 `examples/postgres/pgvector/config.ollama.yaml`.
 When Ollama runs on the same host as Docker, the example reaches it from the
 container through `host.docker.internal`.
+
+The current CI builds and smokes container images but does not publish them.
+Future image publishing is intended for GitHub Releases, with no required repo
+secrets for the current build-only container CI path. Docker Hub publishing will
+require `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`, and optionally
+`DOCKERHUB_NAMESPACE`.
 
 ## Project Structure
 

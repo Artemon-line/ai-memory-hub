@@ -89,6 +89,21 @@ def test_memory_insert_200() -> None:
     assert response.json()["status"] == "ok"
 
 
+def test_health_and_ready_are_public_and_redacted() -> None:
+    client = _client()
+
+    health = client.get("/health")
+    ready = client.get("/ready")
+
+    assert health.status_code == 200
+    assert ready.status_code == 200
+    assert health.json()["status"] == "ok"
+    assert ready.json()["status"] == "ok"
+    assert ready.json()["mode"] == "ok"
+    assert "content_hash" not in str(health.json())
+    assert "content_hash" not in str(ready.json())
+
+
 def test_memory_insert_400_on_invalid_schema() -> None:
     client = _client()
     bad_payload = _conversation()
