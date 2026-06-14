@@ -556,7 +556,7 @@ docker run --rm -p 8000:8000 ai-memory-hub:local
 The image exposes the API and MCP service on port `8000` and starts with:
 
 ```bash
-/app/.venv/bin/aim serve --host 0.0.0.0 --port 8000
+uv run aim serve --host 0.0.0.0 --port 8000
 ```
 
 The built-in [container configuration](https://github.com/Artemon-line/ai-memory-hub/blob/main/examples/container/config.yaml)
