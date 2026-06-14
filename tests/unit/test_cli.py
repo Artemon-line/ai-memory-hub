@@ -120,7 +120,18 @@ def test_fact_supersede_cli_returns_nonzero_when_missing(capsys, monkeypatch) ->
 def test_parser_includes_core_commands() -> None:
     help_text = cli.build_parser().format_help()
 
-    for command in ("ingest", "search", "retrieve", "ask", "serve", "health", "config-show", "storage-check"):
+    commands = (
+        "ingest",
+        "import",
+        "search",
+        "retrieve",
+        "ask",
+        "serve",
+        "health",
+        "config-show",
+        "storage-check",
+    )
+    for command in commands:
         assert command in help_text
 
 
@@ -158,6 +169,94 @@ def test_ingest_cli_reads_json_file(capsys, monkeypatch, tmp_path) -> None:
     body = json.loads(capsys.readouterr().out)
     assert exit_code == 0
     assert body["id"] == "memory-1"
+
+
+def test_manual_import_cli_ingests_unified_payload(capsys, monkeypatch, tmp_path) -> None:
+    transcript_path = tmp_path / "copilot.txt"
+    transcript_path.write_text("You: Remember the blue deployment.\nCopilot: Noted.", encoding="utf-8")
+    captured_payloads = []
+    monkeypatch.setattr(cli, "_configure_memory_runtime", lambda config_path: None)
+    monkeypatch.setattr(
+        cli.mvp_ingestion,
+        "ingest_messages",
+        lambda payload: captured_payloads.append(payload)
+        or {"status": "ok", "id": "memory-1", "chunks": 2},
+    )
+
+    exit_code = cli.main(
+        [
+            "import",
+            "manual",
+            str(transcript_path),
+            "--source",
+            "vscode-copilot",
+            "--title",
+            "Deployment chat",
+            "--json",
+        ]
+    )
+
+    body = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert body["imported"] == 1
+    assert body["results"][0]["id"] == "memory-1"
+    assert captured_payloads == [
+        {
+            "source": "vscode-copilot",
+            "title": "Deployment chat",
+            "messages": [
+                {"role": "user", "text": "Remember the blue deployment."},
+                {"role": "assistant", "text": "Noted."},
+            ],
+            "metadata": {"importer": "manual"},
+        }
+    ]
+
+
+def test_manual_import_cli_stores_retrievable_conversation(capsys, tmp_path) -> None:
+    data_dir = (tmp_path / "data").as_posix()
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "providers:",
+                "  embeddings: local",
+                "  embedding_dimension: 32",
+                "  metadata_db: sqlite",
+                "  vector_db: lancedb",
+                "paths:",
+                f"  data_dir: {data_dir}",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    transcript_path = tmp_path / "manual.txt"
+    transcript_path.write_text(
+        "Human: Remember the amber release switch.\nClaude: I will remember it.",
+        encoding="utf-8",
+    )
+
+    import_code = cli.main(
+        [
+            "import",
+            "manual",
+            str(transcript_path),
+            "--config",
+            str(config_path),
+            "--json",
+        ]
+    )
+    imported = json.loads(capsys.readouterr().out)
+    memory_id = imported["results"][0]["id"]
+    retrieve_code = cli.main(
+        ["retrieve", memory_id, "--config", str(config_path), "--json"]
+    )
+    retrieved = json.loads(capsys.readouterr().out)
+
+    assert import_code == 0
+    assert retrieve_code == 0
+    assert retrieved["memory"]["metadata"]["importer"] == "manual"
+    assert retrieved["memory"]["messages"][0]["text"] == "Remember the amber release switch."
 
 
 def test_search_cli_validates_top_k(capsys, monkeypatch) -> None:

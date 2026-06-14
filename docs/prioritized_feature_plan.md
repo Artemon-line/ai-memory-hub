@@ -177,12 +177,12 @@ Implementation sequence:
 
 ## P1: Platform-Specific Importers
 
-Roadmap importers are not implemented. The current code normalizes common payload variants, but it does not parse external exports.
+The importer boundary and manual paste importer are implemented. Export-specific parsers remain planned.
 
 Implementation sequence:
 
-- [ ] Define an importer interface that returns unified conversation payloads.
-- [ ] Add manual paste importer first because it is lowest risk and useful across clients.
+- [x] Define an importer interface that returns unified conversation payloads.
+- [x] Add manual paste importer first because it is lowest risk and useful across clients.
 - [ ] Add Gemini Takeout parser.
 - [ ] Add Claude HTML export parser.
 - [ ] Add optional local log importers for VS Code Copilot, Ollama, LM Studio, and Llama Stack.

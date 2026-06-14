@@ -108,9 +108,10 @@ Conversation JSON
   -> Search / Retrieve / Ask
 ```
 
-The hub expects structured conversation JSON. It does not scrape exports or parse
-HTML directly. A caller, importer, or agent formats source messages into the shared
-schema, then sends them through the API or MCP interface.
+The hub expects structured conversation JSON. Importers convert supported external
+formats into that shared schema before using the same ingestion pipeline. Manual
+speaker-labelled transcripts are supported; export-specific parsers are tracked in
+the roadmap.
 
 ## API Endpoints
 
@@ -130,11 +131,16 @@ script after installation.
 
 ```bash
 python -m memory.cli ingest conversation.json --json
+python -m memory.cli import manual copilot-chat.txt --source vscode-copilot --json
 python -m memory.cli search "local-first tools" --top-k 5 --json
 python -m memory.cli retrieve <MEMORY_ID> --json
 python -m memory.cli ask "What did I store about local-first tools?" --top-k 5 --json
 python -m memory.cli serve --host 127.0.0.1 --port 8000
 ```
+
+Manual imports accept multiline messages labelled with common speaker names such
+as `User:`, `You:`, `Human:`, `Assistant:`, `Copilot:`, `Claude:`, or `Gemini:`.
+Use `-` as the file name to read the transcript from stdin.
 
 Shared options include `--config <path>`, `--json`, `--quiet`, and `--verbose`.
 `search` also supports `--source`, `--date-from`, `--date-to`, repeated

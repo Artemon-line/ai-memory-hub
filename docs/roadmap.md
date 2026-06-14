@@ -151,7 +151,7 @@ PGVector makes large ingestion sets more practical, but ingestion code should st
 
 Copilot does not provide a structured export comparable to ChatGPT. Ingestion must use one or more of the following strategies:
 
-- [ ] **Manual paste importer** — user pastes a Copilot chat; parser extracts roles and messages.
+- [x] **Manual paste importer** — user pastes a speaker-labelled chat; parser extracts roles and messages.
 
 - [ ] **VS Code Copilot logs (optional)** — parse local `.jsonl` logs when available.
 

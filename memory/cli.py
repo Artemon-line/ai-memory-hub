@@ -11,6 +11,7 @@ import jsonschema
 from memory.backend.log_safety import redact_secrets
 from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig, load_config
+from memory.importers import get_importer
 from memory.ingestion import mvp_ingestion
 from memory.ingestion.tokenizer import tokenizer_diagnostics
 from memory.interfaces.mcp_server import _apply_search_filters
@@ -54,6 +55,26 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Treat string input as a strict User:/Assistant: raw transcript.",
     )
+
+    import_command = subparsers.add_parser(
+        "import", help="Import an external conversation format."
+    )
+    _add_common_options(import_command)
+    import_subparsers = import_command.add_subparsers(
+        dest="importer", required=True, parser_class=CLIArgumentParser
+    )
+    manual_import = import_subparsers.add_parser(
+        "manual",
+        help="Import a pasted speaker-labelled transcript.",
+    )
+    _add_common_options(manual_import)
+    manual_import.add_argument("file", help="Transcript file path, or '-' for stdin.")
+    manual_import.add_argument(
+        "--source",
+        default="manual-paste",
+        help="Conversation source stored with the imported transcript.",
+    )
+    manual_import.add_argument("--title", default=None, help="Optional conversation title.")
 
     search = subparsers.add_parser("search", help="Search stored memory.")
     _add_common_options(search)
@@ -161,6 +182,8 @@ def _dispatch(args: argparse.Namespace) -> int:
         return _tokenizer_check(args)
     if args.command == "ingest":
         return _ingest(args)
+    if args.command == "import":
+        return _import_conversations(args)
     if args.command == "search":
         return _search(args)
     if args.command == "retrieve":
@@ -206,6 +229,28 @@ def _ingest(args: argparse.Namespace) -> int:
     result = mvp_ingestion.ingest_messages(payload, strict_transcript=args.strict_transcript)
     result = redact_content_hashes(result)
     _emit_result(args, result, text_formatter=_format_ingest_text)
+    return EXIT_OK
+
+
+def _import_conversations(args: argparse.Namespace) -> int:
+    importer = get_importer(args.importer)
+    text = _read_text(args.file)
+    payloads = importer.import_text(text, source=args.source, title=args.title)
+    if not payloads:
+        raise ValueError(f"{args.importer} importer returned no conversations")
+
+    _configure_memory_runtime(args.config)
+    results = [
+        redact_content_hashes(mvp_ingestion.ingest_messages(payload))
+        for payload in payloads
+    ]
+    result = _envelope(
+        status="ok",
+        results=results,
+        importer=args.importer,
+        imported=len(results),
+    )
+    _emit_result(args, result, text_formatter=_format_import_text)
     return EXIT_OK
 
 
@@ -337,14 +382,17 @@ def _configure_memory_runtime(config_path: str | None) -> mvp_ingestion.RuntimeD
 
 
 def _read_payload(path: str) -> Any:
-    if path == "-":
-        text = sys.stdin.read()
-    else:
-        text = Path(path).read_text(encoding="utf-8")
+    text = _read_text(path)
     stripped = text.lstrip()
     if stripped.startswith("{") or stripped.startswith("["):
         return json.loads(text)
     return text
+
+
+def _read_text(path: str) -> str:
+    if path == "-":
+        return sys.stdin.read()
+    return Path(path).read_text(encoding="utf-8")
 
 
 def _validate_top_k(value: int) -> None:
@@ -430,6 +478,10 @@ def _print_json(value: Any) -> None:
 
 def _format_ingest_text(result: dict[str, Any]) -> str:
     return f"stored {result.get('id')} chunks={result.get('chunks', 0)} status={result.get('status')}"
+
+
+def _format_import_text(result: dict[str, Any]) -> str:
+    return f"imported {result.get('imported', 0)} conversation(s) with {result.get('importer')}"
 
 
 def _format_search_text(result: dict[str, Any]) -> str:
