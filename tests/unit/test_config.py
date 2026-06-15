@@ -2,7 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from memory.config import HubConfig, parse_config, load_config
+from memory.config import HubConfig, load_config, parse_config
+
 
 def test_load_config_default():
     # Now this should load config.yaml if it exists

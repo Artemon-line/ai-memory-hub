@@ -4,7 +4,6 @@ import argparse
 import shutil
 from pathlib import Path
 
-
 DEFAULT_OUTPUT_DIR = ".docs-build"
 
 

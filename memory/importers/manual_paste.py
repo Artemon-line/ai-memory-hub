@@ -5,7 +5,6 @@ from typing import Any
 
 from memory.importers.base import ConversationImporter
 
-
 _MAX_INPUT_BYTES = 5_000_000
 _SPEAKER_LINE_RE = re.compile(
     r"^(?P<speaker>User|You|Human|Assistant|AI|Bot|Copilot|Claude|Gemini|ChatGPT):\s?(?P<text>.*)$",

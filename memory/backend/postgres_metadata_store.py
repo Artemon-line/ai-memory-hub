@@ -8,7 +8,6 @@ from typing import Any, Callable
 from memory.backend.contracts import ProviderCapabilities
 from memory.backend.errors import SchemaVersionError
 
-
 CREATE_CONVERSATIONS_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS conversations (
     id TEXT PRIMARY KEY,

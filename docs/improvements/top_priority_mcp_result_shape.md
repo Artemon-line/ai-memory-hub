@@ -42,7 +42,7 @@ Acceptance criteria:
 ### Phase 2: Implement result promotion
 
 - Populate `results` with the top matching memory hits.
-- Populate structured fact evidence for fact-layer answers.
+- [x] Populate structured fact evidence for fact-layer answers.
 - Keep `citations` aligned with the included matches.
 - Ensure `answer` remains a concise synthesized response.
 
@@ -50,7 +50,7 @@ Acceptance criteria:
 
 - `memory_ask` returns non-empty `results` when relevant matches exist.
 - The top matches in `results` correspond to the evidence used for `answer`.
-- Fact-only answers expose the facts used for `answer` even when no chunk-style results are returned.
+- [x] Fact-only answers expose the facts used for `answer` even when no chunk-style results are returned.
 - `citations` still provide provenance for the selected matches.
 
 ### Phase 3: Compatibility and edge cases
@@ -58,26 +58,27 @@ Acceptance criteria:
 - Keep empty-result behavior graceful.
 - Keep error handling consistent with existing MCP conventions.
 - Verify the payload remains stable for downstream consumers that rely on `status` and `answer`.
-- Verify fact-layer, mixed, conflict, and not-found answer paths all have unsurprising structured fields.
+- [x] Verify fact-layer, mixed, and conflict answer paths have unsurprising structured fact fields.
+- Verify not-found answer paths have unsurprising structured fields.
 
 Acceptance criteria:
 
 - No regression for no-hit queries.
 - No regression for invalid-input handling.
-- No ambiguity between "no answer found" and "answer found from facts rather than chunks".
+- [x] No ambiguity between "no answer found" and "answer found from facts rather than chunks" for fact-backed answers.
 - Existing MCP tool tests continue to pass or are updated intentionally.
 
 ## Testing
 
 - Add or update unit tests for `memory_ask` result-shape behavior.
 - Verify a successful query exposes meaningful structured results.
-- Verify a successful fact-layer query exposes meaningful structured fact evidence.
+- [x] Verify a successful fact-layer query exposes meaningful structured fact evidence.
 - Verify an empty query or no-hit query still returns a valid envelope.
 
 ## Done When
 
 - `results` contains the useful matches.
-- Fact-layer evidence is not hidden behind an empty chunk result list.
+- [x] Fact-layer evidence is not hidden behind an empty chunk result list.
 - `answer` stays usable as a summary.
 - `citations` remain present for provenance.
 - The output is reliable for Codex and other MCP clients.

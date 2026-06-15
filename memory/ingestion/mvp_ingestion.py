@@ -17,17 +17,17 @@ from memory.backend.metadata_store import SQLiteMetadataStore
 from memory.backend.postgres_metadata_store import PostgresMetadataStore
 from memory.backend.vector_store import InMemoryVectorStore, LanceDBVectorStore, PGVectorStore
 from memory.config import HubConfig, load_config, parse_config
-from memory.ingestion.validate import (
-    load_schema,
-    set_schema_path,
-    validate_conversation,
-    validate_schema_compatibility,
-)
 from memory.ingestion.tokenizer import (
     count_tokens,
     split_token_windows,
     tokenizer_used,
     truncate_to_tokens,
+)
+from memory.ingestion.validate import (
+    load_schema,
+    set_schema_path,
+    validate_conversation,
+    validate_schema_compatibility,
 )
 
 logger = logging.getLogger(__name__)
@@ -1698,13 +1698,14 @@ def _fact(
     source_id = str(conversation.get("id", ""))
     identity = f"{subject}\n{predicate}\n{object_value}\n{source_id}\n{message_index}"
     fact_id = "fact-" + hashlib.sha256(identity.encode("utf-8")).hexdigest()[:32]
-    return {
+    fact = {
         "id": fact_id,
         "subject": subject,
         "predicate": predicate,
         "object": object_value,
         "qualifiers": qualifiers or {},
         "confidence": "high",
+        "last_confirmed_at": now,
         "source_conversation_id": source_id,
         "source_message_indexes": [message_index],
         "created_at": now,
@@ -1712,6 +1713,9 @@ def _fact(
         "superseded_by": None,
         "deleted_at": None,
     }
+    fact["source_quality"] = _source_quality_for_fact(fact)
+    fact["confidence_reason"] = _confidence_reason_for_fact(fact)
+    return fact
 
 
 def _answer_from_facts(
@@ -1733,13 +1737,17 @@ def _answer_from_facts(
     basis = "conflict" if len(objects) > 1 else ("mixed" if needs_context else "fact_layer")
     confidence = "low" if basis == "conflict" else str(active[0].get("confidence", "medium"))
     superseded = _superseded_facts_for_active(active, facts)
+    public_active = [_public_fact(fact) for fact in active]
+    public_superseded = [_public_fact(fact) for fact in superseded]
+    fact_evidence = [_fact_evidence(fact, used_in_answer=True) for fact in public_active]
+    fact_evidence.extend(_fact_evidence(fact, used_in_answer=False) for fact in public_superseded)
     answer = _fact_answer_text(
         question,
-        active,
-        superseded=superseded,
+        public_active,
+        superseded=public_superseded,
         conflict=basis == "conflict",
     )
-    citations = [_fact_citation(fact) for fact in active]
+    citations = [_fact_citation(fact) for fact in public_active]
     results: list[dict[str, Any]] = []
     if basis == "mixed":
         search_result = _search_for_ask(question=question, top_k=top_k, result_mode=result_mode)
@@ -1759,9 +1767,15 @@ def _answer_from_facts(
         "answer": answer,
         "citations": citations,
         "confidence": confidence,
+        "confidence_reason": _confidence_reason_for_facts(public_active, basis),
         "answer_basis": basis,
-        "provenance": _provenance_from_facts(active),
-        "facts": active,
+        "provenance": _provenance_from_facts(public_active),
+        "facts": public_active,
+        "evidence": fact_evidence,
+        "structured_evidence": {
+            "facts": fact_evidence,
+            "results": results,
+        },
     }
 
 
@@ -1891,7 +1905,7 @@ def fact_search(
             and (include_superseded or not fact.get("superseded_by"))
             and not fact.get("deleted_at")
         ]
-    return {"status": "ok", "results": facts}
+    return {"status": "ok", "results": [_public_fact(fact) for fact in facts]}
 
 
 def profile_get(subject: str = "user") -> dict[str, Any]:
@@ -1934,12 +1948,84 @@ def _fact_answer_text(
     return answer
 
 
+def _public_fact(fact: dict[str, Any]) -> dict[str, Any]:
+    public = dict(fact)
+    computed_source_quality = _source_quality_for_fact(public)
+    if "source_quality" not in public or computed_source_quality == "corrected_by_user":
+        public["source_quality"] = computed_source_quality
+    if "confidence_reason" not in public or computed_source_quality == "corrected_by_user":
+        public["confidence_reason"] = _confidence_reason_for_fact(public)
+    public.setdefault("last_confirmed_at", public.get("updated_at") or public.get("created_at"))
+    public.setdefault("object_raw", public.get("object"))
+    public.setdefault("object_normalized", _normalized_fact_object(public))
+    return public
+
+
+def _source_quality_for_fact(fact: dict[str, Any]) -> str:
+    qualifiers = fact.get("qualifiers")
+    if isinstance(qualifiers, dict) and qualifiers.get("corrects"):
+        return "corrected_by_user"
+    if fact.get("predicate") == "recurring_topic":
+        return "inferred_from_conversation"
+    return "direct_user_statement"
+
+
+def _confidence_reason_for_fact(fact: dict[str, Any]) -> str:
+    source_quality = str(fact.get("source_quality") or _source_quality_for_fact(fact))
+    if source_quality == "corrected_by_user":
+        return "Extracted from a direct user correction."
+    if source_quality == "direct_user_statement":
+        return "Extracted from a direct user statement."
+    if source_quality == "inferred_from_conversation":
+        return "Inferred from recurring conversation topics."
+    return "Extracted from stored conversation context."
+
+
+def _confidence_reason_for_facts(facts: list[dict[str, Any]], basis: str) -> str:
+    if basis == "conflict":
+        return "Multiple active facts match the question but disagree."
+    if not facts:
+        return "No matching facts were used."
+    reasons = _unique_strings([str(fact.get("confidence_reason", "")) for fact in facts])
+    return "; ".join(reasons) if reasons else "Matching normalized facts were used."
+
+
+def _normalized_fact_object(fact: dict[str, Any]) -> str:
+    value = str(fact.get("object", "")).strip()
+    return " ".join(value.split())
+
+
+def _fact_evidence(fact: dict[str, Any], *, used_in_answer: bool) -> dict[str, Any]:
+    return {
+        "type": "fact",
+        "fact_id": fact.get("id"),
+        "subject": fact.get("subject"),
+        "predicate": fact.get("predicate"),
+        "object_raw": fact.get("object_raw", fact.get("object")),
+        "object_normalized": fact.get("object_normalized", fact.get("object")),
+        "confidence": fact.get("confidence"),
+        "confidence_reason": fact.get("confidence_reason"),
+        "source_quality": fact.get("source_quality"),
+        "source_conversation_id": fact.get("source_conversation_id"),
+        "source_message_indexes": fact.get("source_message_indexes", []),
+        "created_at": fact.get("created_at"),
+        "updated_at": fact.get("updated_at"),
+        "last_confirmed_at": fact.get("last_confirmed_at"),
+        "superseded_by": fact.get("superseded_by"),
+        "deleted_at": fact.get("deleted_at"),
+        "used_in_answer": used_in_answer,
+    }
+
+
 def _fact_citation(fact: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": fact.get("source_conversation_id"),
         "fact_id": fact.get("id"),
         "predicate": fact.get("predicate"),
-        "text": fact.get("object"),
+        "text": fact.get("object_normalized", fact.get("object")),
+        "source_quality": fact.get("source_quality"),
+        "confidence_reason": fact.get("confidence_reason"),
+        "last_confirmed_at": fact.get("last_confirmed_at"),
     }
 
 

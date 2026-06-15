@@ -6,6 +6,7 @@ import sys
 import types
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 import pytest
@@ -19,12 +20,8 @@ from memory.backend.errors import (
 from memory.backend.log_safety import redact_secrets
 from memory.backend.metadata_store import SQLiteMetadataStore
 from memory.backend.postgres_metadata_store import PostgresMetadataStore
-from memory.backend.vector_store import InMemoryVectorStore
-from memory.backend.vector_store import LanceDBVectorStore
-from memory.backend.vector_store import PGVectorStore
+from memory.backend.vector_store import InMemoryVectorStore, LanceDBVectorStore, PGVectorStore
 from memory.ingestion import mvp_ingestion
-from typing import Any
-
 
 VectorStoreFactory = Callable[[Path], Any]
 

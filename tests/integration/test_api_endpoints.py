@@ -184,6 +184,13 @@ def test_memory_fact_endpoints() -> None:
 
     assert facts.status_code == 200
     assert facts.json()["results"][0]["predicate"] == "owns_guitar"
+    assert facts.json()["results"][0]["source_quality"] == "direct_user_statement"
+    assert facts.json()["results"][0]["last_confirmed_at"] == facts.json()["results"][0]["updated_at"]
     assert profile.status_code == 200
     assert profile.json()["facts"][0]["object"] == facts.json()["results"][0]["object"]
-    assert ask.json()["answer_basis"] == "fact_layer"
+    ask_body = ask.json()
+    assert ask_body["answer_basis"] == "fact_layer"
+    assert ask_body["confidence_reason"] == "Extracted from a direct user statement."
+    assert ask_body["evidence"][0]["type"] == "fact"
+    assert ask_body["structured_evidence"]["results"] == []
+    assert ask_body["facts"][0]["last_confirmed_at"] == ask_body["facts"][0]["updated_at"]

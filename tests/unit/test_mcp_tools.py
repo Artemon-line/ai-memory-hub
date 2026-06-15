@@ -219,8 +219,12 @@ async def test_mcp_fact_tools_return_profile_facts() -> None:
 
     assert facts["status"] == "ok"
     assert facts["results"][0]["predicate"] == "owns_guitar"
+    assert facts["results"][0]["source_quality"] == "direct_user_statement"
     assert profile["facts"][0]["object"] == facts["results"][0]["object"]
     assert ask["answer_basis"] == "fact_layer"
+    assert ask["confidence_reason"] == "Extracted from a direct user statement."
+    assert ask["evidence"][0]["type"] == "fact"
+    assert ask["structured_evidence"]["facts"][0]["source_quality"] == "direct_user_statement"
 
 
 @pytest.mark.asyncio

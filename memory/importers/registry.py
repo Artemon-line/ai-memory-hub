@@ -3,7 +3,6 @@ from __future__ import annotations
 from memory.importers.base import ConversationImporter
 from memory.importers.manual_paste import ManualPasteImporter
 
-
 _IMPORTERS: dict[str, ConversationImporter] = {
     ManualPasteImporter.name: ManualPasteImporter(),
 }

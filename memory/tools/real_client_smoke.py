@@ -22,7 +22,6 @@ from typing import Any, Iterable, Sequence
 
 from memory.backend.log_safety import redact_secrets
 
-
 DEFAULT_CLIENTS = ("claude", "copilot", "codex", "opencode", "gemini")
 STARTER_CLIENTS = {"claude", "copilot"}
 SMOKE_MARKER = "weekly real-client smoke test marker"

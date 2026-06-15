@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import math
 import logging
+import math
 import re
 from pathlib import Path
 from typing import Any, Callable, Protocol
+
 import pyarrow as pa
 
 from memory.backend.contracts import ProviderCapabilities

@@ -8,6 +8,7 @@ from memory.config import HubConfig
 from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
 from memory.interfaces.mcp_server import create_mcp_server
 
+
 def main():
     # Use a specific configuration for tests to ensure they don't mess with real data
     # and use the requested embedding model.

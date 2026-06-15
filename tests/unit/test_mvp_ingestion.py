@@ -470,6 +470,18 @@ def test_ask_answers_direct_guitar_question_from_fact_layer() -> None:
     assert result["confidence"] == "high"
     assert "Gibson Special" in result["answer"]
     assert result["facts"][0]["predicate"] == "owns_guitar"
+    assert result["confidence_reason"] == "Extracted from a direct user statement."
+    assert result["facts"][0]["source_quality"] == "direct_user_statement"
+    assert result["facts"][0]["object_raw"] == result["facts"][0]["object"]
+    assert result["facts"][0]["object_normalized"] == result["facts"][0]["object"]
+    assert result["facts"][0]["last_confirmed_at"] == result["facts"][0]["updated_at"]
+    assert result["evidence"][0]["type"] == "fact"
+    assert result["evidence"][0]["used_in_answer"] is True
+    assert result["evidence"][0]["source_quality"] == "direct_user_statement"
+    assert result["structured_evidence"]["facts"] == result["evidence"]
+    assert result["structured_evidence"]["results"] == []
+    assert result["citations"][0]["source_quality"] == "direct_user_statement"
+    assert result["citations"][0]["last_confirmed_at"] == result["facts"][0]["last_confirmed_at"]
 
 
 def test_fact_correction_supersedes_old_fact() -> None:
@@ -496,6 +508,9 @@ def test_fact_correction_supersedes_old_fact() -> None:
     assert "TV yellow" in result["answer"]
     assert "cherry" not in result["answer"]
     assert any(fact["superseded_by"] for fact in audit["results"])
+    assert result["facts"][0]["source_quality"] == "corrected_by_user"
+    assert result["facts"][0]["confidence_reason"] == "Extracted from a direct user correction."
+    assert result["evidence"][0]["source_quality"] == "corrected_by_user"
 
 
 def test_conflicting_active_facts_return_conflict_basis() -> None:
@@ -513,6 +528,7 @@ def test_conflicting_active_facts_return_conflict_basis() -> None:
 
     assert result["answer_basis"] == "conflict"
     assert result["confidence"] == "low"
+    assert result["confidence_reason"] == "Multiple active facts match the question but disagree."
     assert "red Gibson" in result["answer"]
     assert "black Fender" in result["answer"]
 
@@ -545,10 +561,13 @@ def test_profile_and_recurring_topic_facts_are_extracted() -> None:
 
     profile = mvp_ingestion.profile_get("user")
     predicates = {fact["predicate"] for fact in profile["facts"]}
+    topic_fact = next(fact for fact in profile["facts"] if fact["predicate"] == "recurring_topic")
 
     assert "profile_name" in predicates
     assert "profile_role" in predicates
     assert "recurring_topic" in predicates
+    assert topic_fact["source_quality"] == "inferred_from_conversation"
+    assert topic_fact["confidence_reason"] == "Inferred from recurring conversation topics."
 
 
 def test_project_fact_questions_match_named_subjects() -> None:

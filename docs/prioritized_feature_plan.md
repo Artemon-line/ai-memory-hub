@@ -116,12 +116,13 @@ Implementation sequence:
 
 - [ ] Make `memory_ask` structured fields clear for chunk-backed, fact-backed,
       mixed, conflict, and not-found answers.
-- [ ] Ensure a fact-layer answer does not look like an empty retrieval miss.
-- [ ] Separate raw source memory, normalized facts, and polished answer text.
-- [ ] Add source-quality or confidence-reason fields for fact answers.
-- [ ] Expose fact freshness fields such as `created_at`, `updated_at`, and
+- [x] Ensure a fact-layer answer does not look like an empty retrieval miss.
+- [x] Separate raw source memory, normalized facts, and polished answer text for
+      fact-backed answers.
+- [x] Add source-quality or confidence-reason fields for fact answers.
+- [x] Expose fact freshness fields such as `created_at`, `updated_at`, and
       `last_confirmed_at`.
-- [ ] Add tests for the Codex-observed response shape and confidence/freshness
+- [x] Add tests for the Codex-observed response shape and confidence/freshness
       behavior.
 
 ## P0: MCP Client Smoke Coverage

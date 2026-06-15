@@ -4,9 +4,9 @@ from typing import Any, Dict, Optional
 
 import jsonschema
 
-from memory.ingestion.base_agent import BaseIngestionAgent
-from memory.ingestion import mvp_ingestion
 from memory.config import HubConfig
+from memory.ingestion import mvp_ingestion
+from memory.ingestion.base_agent import BaseIngestionAgent
 
 
 class MVPIngestionAgent(BaseIngestionAgent):

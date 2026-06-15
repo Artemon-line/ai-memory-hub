@@ -2,7 +2,7 @@
 
 Source date: `15-06-2026`
 
-Status: planned
+Status: partial
 
 ## Goal
 
@@ -35,14 +35,16 @@ Source feedback:
 
 Implementation sequence:
 
-- [ ] Make `memory_ask` return structured evidence for every successful answer path:
-  - [ ] retrieved conversation chunks for `direct_memory` and `mixed`
-  - [ ] fact evidence for `fact_layer`
-  - [ ] conflicting fact evidence for `conflict`
+- [x] Make `memory_ask` return structured evidence for fact-backed successful answer paths:
+  - [x] fact evidence for `fact_layer`
+  - [x] conflicting fact evidence for `conflict`
+  - [x] fact evidence plus retrieved chunks for `mixed`
+  - [ ] general `evidence` entries for pure `direct_memory` chunk answers
 - [ ] Keep `answer` as the user-facing polished string.
-- [ ] Add a stable `evidence` or `facts` section for normalized fact-layer evidence instead of overloading chunk-shaped `results`.
-- [ ] Document the exact relationship between `answer`, `results`, `citations`, `provenance`, and fact evidence.
-- [ ] Add tests for fact-only answers, mixed answers, no-hit answers, and conflict answers.
+- [x] Add stable `evidence` and `structured_evidence.facts` sections for normalized fact-layer evidence instead of overloading chunk-shaped `results`.
+- [ ] Document the exact relationship between `answer`, `results`, `citations`, `provenance`, and fact evidence in public API docs.
+- [x] Add tests for fact-only answers, mixed answers, and conflict answers.
+- [ ] Add explicit no-hit response-shape tests for `structured_evidence`.
 
 Acceptance criteria:
 
@@ -59,20 +61,21 @@ Source feedback:
 
 Implementation sequence:
 
-- [ ] Add `source_quality` or `confidence_reason` to fact and ask responses.
-- [ ] Start with deterministic values:
-  - [ ] `direct_user_statement`
+- [x] Add `source_quality` and `confidence_reason` to fact and ask responses.
+- [x] Start with deterministic values:
+  - [x] `direct_user_statement`
   - [ ] `assistant_statement`
-  - [ ] `inferred_from_conversation`
-  - [ ] `corrected_by_user`
-  - [ ] `conflicting_sources`
-- [ ] Add or expose fact freshness fields:
-  - [ ] `created_at`
-  - [ ] `updated_at`
-  - [ ] `last_confirmed_at`
+  - [x] `inferred_from_conversation` for recurring-topic facts
+  - [x] `corrected_by_user`
+  - [x] conflict answers expose a confidence reason for disagreeing active facts
+- [x] Add or expose fact freshness fields:
+  - [x] `created_at`
+  - [x] `updated_at`
+  - [x] `last_confirmed_at`
   - [ ] `superseded_at` where applicable
 - [ ] Update correction/supersession flows so direct user confirmations refresh `last_confirmed_at`.
-- [ ] Add API, MCP, CLI, SQLite, and Postgres tests for freshness and source-quality fields.
+- [x] Add API and MCP tests for freshness and source-quality fields.
+- [ ] Add SQLite and Postgres storage-level tests for persisted freshness/source-quality fields after schema migration.
 
 Acceptance criteria:
 

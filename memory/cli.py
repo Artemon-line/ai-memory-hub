@@ -16,7 +16,6 @@ from memory.ingestion import mvp_ingestion
 from memory.ingestion.tokenizer import tokenizer_diagnostics
 from memory.interfaces.mcp_server import _apply_search_filters
 
-
 EXIT_OK = 0
 EXIT_COMMAND_FAILURE = 1
 EXIT_USAGE = 2

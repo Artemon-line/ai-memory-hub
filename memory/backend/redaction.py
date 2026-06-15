@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 _REDACTED_HASH_KEYS = {
     "chunk_id",
     "conversation_hash",

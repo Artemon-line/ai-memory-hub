@@ -13,7 +13,6 @@ from memory.config import parse_config
 from memory.ingestion import validate
 from memory.ingestion.tokenizer import count_tokens
 
-
 _TEXT = "Token budgets, schema validation, and config parsing are cache candidates."
 _CONFIG = {
     "providers": {
