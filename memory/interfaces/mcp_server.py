@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Any, Awaitable, Callable
+from typing import Annotated, Any, Awaitable, Callable
 from urllib.parse import unquote
 from uuid import UUID
 
 import jsonschema
 from fastmcp import Context as FastMCPContext
+from pydantic import Field
 
 from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig
@@ -19,17 +20,56 @@ ToolFn = Callable[..., Awaitable[dict[str, Any]]]
 
 logger = logging.getLogger(__name__)
 MCP_LOGGER_NAME = "ai-memory-hub.mcp"
+ConversationJsonArg = Annotated[
+    Any, Field(json_schema_extra={"type": "object", "additionalProperties": True})
+]
+
+SERVER_INSTRUCTIONS = (
+    "Use ai-memory-hub tools directly. For memory_validate and memory_insert, "
+    "pass conversation_json as a nested JSON object, not as a JSON string. "
+    "Omit id by default so the hub generates the canonical UUID; if id is supplied, "
+    "it must be a valid UUID. Messages may use text or content fields."
+)
 
 
 TOOL_DESCRIPTIONS: dict[str, str] = {
-    "memory_validate": "Validate a conversation payload against the conversation schema.",
-    "memory_insert": "Insert a conversation into memory.",
+    "memory_validate": (
+        "Validate a conversation payload against the conversation schema. "
+        "Pass `conversation_json` as a nested JSON object, omit `id` unless it is a valid UUID, "
+        "and use message `text` or `content` fields."
+    ),
+    "memory_insert": (
+        "Insert a conversation into memory. Pass `conversation_json` as a nested JSON object, "
+        "omit `id` unless it is a valid UUID, and use message `text` or `content` fields."
+    ),
     "memory_search": "Search existing memory by text query.",
     "memory_retrieve": "Retrieve a stored memory item by ID.",
     "memory_ask": "Answer a question using stored memory search results.",
     "memory_fact_search": "Search normalized extracted memory facts.",
     "memory_profile_get": "Return active normalized facts for a subject.",
     "memory_fact_supersede": "Mark one normalized fact as superseded by another fact.",
+}
+
+CONVERSATION_JSON_TOOL_META: dict[str, Any] = {
+    "ai-memory-hub/input-guidance": {
+        "conversation_json": {
+            "type": "object",
+            "instructions": [
+                "Pass as a nested JSON object, not as a string.",
+                "Omit id by default so the hub can generate a UUID.",
+                "If id is supplied, it must be a valid UUID.",
+                "Messages may use text or content; content is normalized to text.",
+            ],
+            "minimal_example": {
+                "source": "opencode",
+                "messages": [
+                    {"role": "user", "content": "I own a Gibson Special."},
+                    {"role": "assistant", "content": "Noted."},
+                ],
+                "metadata": {"tags": ["guitar", "opencode"]},
+            },
+        }
+    }
 }
 
 
@@ -405,7 +445,7 @@ def _register_prompts(mcp: Any) -> None:
 
 def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
     async def memory_validate(
-        conversation_json: Any, ctx: FastMCPContext | None = None
+        conversation_json: ConversationJsonArg, ctx: FastMCPContext | None = None
     ) -> dict[str, Any]:
         if not isinstance(conversation_json, dict):
             return _envelope(
@@ -461,7 +501,7 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
         return _envelope(status="ok", valid=True)
 
     async def memory_insert(
-        conversation_json: Any, ctx: FastMCPContext | None = None
+        conversation_json: ConversationJsonArg, ctx: FastMCPContext | None = None
     ) -> dict[str, Any]:
         if not isinstance(conversation_json, dict):
             return _envelope(
@@ -779,11 +819,22 @@ def create_mcp_server(*, config: HubConfig, agent: BaseIngestionAgent):
     except ImportError as exc:
         raise RuntimeError("fastmcp package is required to run MCP server") from exc
 
-    mcp = FastMCP("ai-memory-hub", list_page_size=config.mcp.list_page_size)
+    mcp = FastMCP(
+        "ai-memory-hub",
+        instructions=SERVER_INSTRUCTIONS,
+        list_page_size=config.mcp.list_page_size,
+    )
     handlers = build_tool_handlers(agent)
 
     for tool_name, tool_fn in handlers.items():
-        mcp.tool(name=tool_name, description=TOOL_DESCRIPTIONS[tool_name])(tool_fn)
+        meta = (
+            CONVERSATION_JSON_TOOL_META
+            if tool_name in {"memory_validate", "memory_insert"}
+            else None
+        )
+        mcp.tool(name=tool_name, description=TOOL_DESCRIPTIONS[tool_name], meta=meta)(
+            tool_fn
+        )
     _register_resources(mcp, agent)
     _register_prompts(mcp)
 

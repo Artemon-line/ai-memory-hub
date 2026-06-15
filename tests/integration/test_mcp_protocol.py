@@ -48,6 +48,30 @@ def _init_headers(client: TestClient) -> dict[str, str]:
     return {**headers, "Mcp-Session-Id": session_id}
 
 
+def test_mcp_initialize_returns_startup_instructions() -> None:
+    with _mcp_client() as client:
+        headers = {"Accept": "application/json, text/event-stream"}
+        initialize_payload = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": {"name": "pytest", "version": "0.1"},
+            },
+        }
+        response = client.post("/mcp/", json=initialize_payload, headers=headers)
+        assert response.status_code == 200
+        result = _event_data_json(response.text)["result"]
+        assert isinstance(result, dict)
+        instructions = result.get("instructions")
+        assert isinstance(instructions, str)
+        assert "conversation_json as a nested JSON object" in instructions
+        assert "not as a JSON string" in instructions
+        assert "Omit id by default" in instructions
+
+
 def test_mcp_initialize_and_tools_list_with_session() -> None:
     with _mcp_client() as client:
         headers = _init_headers(client)
@@ -65,6 +89,7 @@ def test_mcp_initialize_and_tools_list_with_session() -> None:
         assert isinstance(tools, list)
         tool_names = {tool["name"] for tool in tools if isinstance(tool, dict) and "name" in tool}
         assert {"memory_validate", "memory_insert", "memory_search", "memory_retrieve"}.issubset(tool_names)
+        tools_by_name = {tool["name"]: tool for tool in tools if isinstance(tool, dict) and "name" in tool}
         for tool in tools:
             if not isinstance(tool, dict):
                 continue
@@ -74,6 +99,15 @@ def test_mcp_initialize_and_tools_list_with_session() -> None:
             properties = schema.get("properties", {})
             assert isinstance(properties, dict)
             assert "ctx" not in properties
+        for tool_name in ("memory_validate", "memory_insert"):
+            tool = tools_by_name[tool_name]
+            schema = tool["inputSchema"]
+            conversation_schema = schema["properties"]["conversation_json"]
+            assert conversation_schema["type"] == "object"
+            guidance = tool["_meta"]["ai-memory-hub/input-guidance"]["conversation_json"]
+            assert guidance["type"] == "object"
+            assert "not as a string" in guidance["instructions"][0]
+            assert "id" not in guidance["minimal_example"]
 
 
 def test_mcp_tools_list_cursor_pagination_is_stable() -> None:

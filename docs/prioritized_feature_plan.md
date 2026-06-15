@@ -9,9 +9,9 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P0 | Token-budgeted `memory_ask` and token-aware ingestion chunking | Implemented | `token_budget_plan.md`, `improvements/context_building_plan.md` |
 | P0 | Storage abstraction baseline: capabilities, schema checks, dimensions, fallback, dry-run, Postgres/PGVector | Implemented | `storage_agnostic_byoa_plan.md` |
 | P0 | Retrieval precision: threshold, hybrid search, metadata rerank | Implemented | `improvements/retrieval_precision_plan.md` |
+| P0 | MCP protocol compliance: initialize instructions, schemas, pagination, logging, completion when client UX needs it | Partial | `mcp_utility_compliance_plan.md`, `mcp_plan.md` |
 | P0 | MCP client smoke coverage for Codex, Gemini, Copilot, Claude, opencode | Implemented | `mcp_client_smoke_plan.md` |
 | P0 | Weekly scheduled real-client MCP smoke coverage | Implemented | `real_client_mcp_smoke_plan.md` |
-| P1 | MCP utility compliance: pagination first, sanitized logging next, completion deferred | Implemented | `mcp_utility_compliance_plan.md` |
 | P1 | CLI foundation and command contract | Implemented | `cli_implementation_plan.md` |
 | P1 | CLI `ingest`, `search`, `retrieve`, and `ask` commands | Implemented | `cli_implementation_plan.md` |
 | P1 | CLI `serve` command for container/runtime entrypoint | Implemented | `cli_implementation_plan.md`, `release_container_docs_plan.md` |
@@ -79,6 +79,30 @@ Implementation sequence:
 - [x] Verify the combined pipeline against fixed fixtures.
 - [x] Validate and tune retrieval quality against real representative data.
 
+## P0: MCP Protocol Compliance
+
+Use `mcp_utility_compliance_plan.md` and `mcp_plan.md` as the source of truth.
+
+MCP is the primary agent integration boundary, so protocol compliance is a P0
+quality bar. Treat spec-defined fields, lifecycle behavior, tool schemas,
+capabilities, utility methods, and transport behavior as compatibility-critical
+surface area, not optional polish.
+
+Current status:
+
+- [x] Return server startup guidance through MCP `InitializeResult.instructions`.
+- [x] Keep tool input schemas explicit enough for real clients to construct valid
+      `tools/call` arguments.
+- [x] Implement MCP pagination for list operations.
+- [x] Implement sanitized MCP logging with no payload, query, embedding, secret,
+      DSN, or stack-trace leakage.
+- [x] Cover initialize, tool listing, pagination, logging, and malformed protocol
+      cases with MCP transport tests.
+- [ ] Keep checking protocol compliance whenever the MCP spec version changes or
+      real clients expose new interpretation gaps.
+- [ ] Implement MCP completion only when a concrete client UX needs prompt or
+      resource argument suggestions.
+
 ## P0: MCP Client Smoke Coverage
 
 Use `mcp_client_smoke_plan.md` as the source of truth.
@@ -110,17 +134,6 @@ Implementation sequence:
 - [x] Start with Claude Code and Copilot CLI because they expose clear base-URL/provider environment variables.
 - [x] Validate Codex, opencode, and Gemini headless command status before wiring them into strict CI.
 - [x] Keep real-client smoke tests out of default PR gating until they are stable enough.
-
-## P1: MCP Utility Compliance
-
-Use `mcp_utility_compliance_plan.md` as the source of truth.
-
-Recommended order:
-
-- [x] Implement MCP pagination for list operations first.
-- [x] Implement sanitized MCP logging after or alongside observability work.
-- [x] Defer MCP completion until a concrete client UX needs prompt or resource
-      argument suggestions.
 
 ## P1: CLI Foundation And Commands
 

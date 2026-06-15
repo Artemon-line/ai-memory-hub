@@ -2,8 +2,9 @@
 
 ## Goal
 
-Add the MCP server utility features that improve protocol compatibility without
-distracting from the core memory workflow.
+Add and maintain MCP server protocol features that improve client compatibility
+without distracting from the core memory workflow. MCP is the primary agent
+integration boundary, so protocol compliance is a P0 quality bar.
 
 This plan covers:
 
@@ -50,7 +51,7 @@ reliable memory ingest, search, retrieve, or ask flows.
 
 Status: Implemented.
 
-Priority: P1.
+Priority: P0.
 
 MCP list operations that should support cursor pagination:
 
@@ -108,7 +109,7 @@ Implementation notes:
 
 Status: Implemented for `logging/setLevel` and sanitized tool notifications.
 
-Priority: P1 after pagination, or alongside observability work.
+Priority: P0 after pagination, or alongside observability work.
 
 MCP logging support should include:
 
