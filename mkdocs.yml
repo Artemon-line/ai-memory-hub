@@ -42,6 +42,7 @@ nav:
       - Recurring Codebase Cleanup Plan: docs/recurring_codebase_cleanup_plan.md
   - Improvements:
       - Improvement Plans: docs/improvements.md
+      - Client Feedback Improvement Plan: docs/improvements/client_feedback_improvement_plan.md
       - Top Priority MCP Result Shape: docs/improvements/top_priority_mcp_result_shape.md
       - Retrieval Precision Plan: docs/improvements/retrieval_precision_plan.md
       - Context Building Plan: docs/improvements/context_building_plan.md

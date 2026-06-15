@@ -2,7 +2,7 @@
 
 Source date: `28-05-2026`
 
-Status: implemented
+Status: partial
 
 ## Goal
 
@@ -13,6 +13,7 @@ Make `memory_ask` easier to consume programmatically by surfacing the useful mat
 - `answer` is useful, but not structured.
 - `results` is currently empty even when the tool clearly found relevant content.
 - A client that only reads `results` can misinterpret a successful search as a miss.
+- Real Codex feedback showed the same issue for fact-layer answers: the tool returned a useful answer from normalized facts, but `results: []` made the structured evidence shape surprising.
 
 ## Scope
 
@@ -20,6 +21,7 @@ Make `memory_ask` easier to consume programmatically by surfacing the useful mat
 - Keep `answer` as a summary response.
 - Keep `citations` for provenance.
 - Preserve the current success envelope and existing clients as much as possible.
+- Separate raw evidence, normalized facts, and polished answer text.
 
 ## Phases
 
@@ -27,17 +29,20 @@ Make `memory_ask` easier to consume programmatically by surfacing the useful mat
 
 - Identify the current `memory_ask` response fields and how they are populated.
 - Decide which retrieved items should be promoted into `results`.
+- Decide whether fact-layer evidence belongs in `results`, a dedicated `facts` field, or a general `evidence` field.
 - Keep `answer` generation unchanged unless it depends on the old empty-results behavior.
 
 Acceptance criteria:
 
 - The intended `results` payload shape is defined.
 - The relationship between `results`, `answer`, and `citations` is explicit.
+- The relationship between chunk results and fact evidence is explicit.
 - Existing consumers are not broken by accidental schema removal.
 
 ### Phase 2: Implement result promotion
 
 - Populate `results` with the top matching memory hits.
+- Populate structured fact evidence for fact-layer answers.
 - Keep `citations` aligned with the included matches.
 - Ensure `answer` remains a concise synthesized response.
 
@@ -45,6 +50,7 @@ Acceptance criteria:
 
 - `memory_ask` returns non-empty `results` when relevant matches exist.
 - The top matches in `results` correspond to the evidence used for `answer`.
+- Fact-only answers expose the facts used for `answer` even when no chunk-style results are returned.
 - `citations` still provide provenance for the selected matches.
 
 ### Phase 3: Compatibility and edge cases
@@ -52,22 +58,26 @@ Acceptance criteria:
 - Keep empty-result behavior graceful.
 - Keep error handling consistent with existing MCP conventions.
 - Verify the payload remains stable for downstream consumers that rely on `status` and `answer`.
+- Verify fact-layer, mixed, conflict, and not-found answer paths all have unsurprising structured fields.
 
 Acceptance criteria:
 
 - No regression for no-hit queries.
 - No regression for invalid-input handling.
+- No ambiguity between "no answer found" and "answer found from facts rather than chunks".
 - Existing MCP tool tests continue to pass or are updated intentionally.
 
 ## Testing
 
 - Add or update unit tests for `memory_ask` result-shape behavior.
 - Verify a successful query exposes meaningful structured results.
+- Verify a successful fact-layer query exposes meaningful structured fact evidence.
 - Verify an empty query or no-hit query still returns a valid envelope.
 
 ## Done When
 
 - `results` contains the useful matches.
+- Fact-layer evidence is not hidden behind an empty chunk result list.
 - `answer` stays usable as a summary.
 - `citations` remain present for provenance.
 - The output is reliable for Codex and other MCP clients.

@@ -4,12 +4,13 @@ Source date: `28-05-2026`
 
 ## Plan Index
 
-1. [Top Priority: Improve MCP Result Shape for `memory_ask`](./improvements/top_priority_mcp_result_shape.md)
-2. [Retrieval Precision Plan](./improvements/retrieval_precision_plan.md)
-3. [Context Building Plan](./improvements/context_building_plan.md)
-4. [Conversation Grouping Plan](./improvements/conversation_grouping_plan.md)
-5. [Memory Quality And Fact Layer Plan](./improvements/memory_quality_fact_layer_plan.md)
-6. [Vector Database Options](./improvements/vector_dbs.md)
+1. [Client Feedback Improvement Plan](./improvements/client_feedback_improvement_plan.md)
+2. [Top Priority: Improve MCP Result Shape for `memory_ask`](./improvements/top_priority_mcp_result_shape.md)
+3. [Retrieval Precision Plan](./improvements/retrieval_precision_plan.md)
+4. [Context Building Plan](./improvements/context_building_plan.md)
+5. [Conversation Grouping Plan](./improvements/conversation_grouping_plan.md)
+6. [Memory Quality And Fact Layer Plan](./improvements/memory_quality_fact_layer_plan.md)
+7. [Vector Database Options](./improvements/vector_dbs.md)
 
 ## Notes
 

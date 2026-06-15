@@ -10,6 +10,7 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P0 | Storage abstraction baseline: capabilities, schema checks, dimensions, fallback, dry-run, Postgres/PGVector | Implemented | `storage_agnostic_byoa_plan.md` |
 | P0 | Retrieval precision: threshold, hybrid search, metadata rerank | Implemented | `improvements/retrieval_precision_plan.md` |
 | P0 | MCP protocol compliance: initialize instructions, schemas, pagination, logging, completion when client UX needs it | Partial | `mcp_utility_compliance_plan.md`, `mcp_plan.md` |
+| P0 | MCP client feedback: response shape clarity, fact freshness, and source quality | Planned | `improvements/client_feedback_improvement_plan.md` |
 | P0 | MCP client smoke coverage for Codex, Gemini, Copilot, Claude, opencode | Implemented | `mcp_client_smoke_plan.md` |
 | P0 | Weekly scheduled real-client MCP smoke coverage | Implemented | `real_client_mcp_smoke_plan.md` |
 | P1 | CLI foundation and command contract | Implemented | `cli_implementation_plan.md` |
@@ -102,6 +103,26 @@ Current status:
       real clients expose new interpretation gaps.
 - [ ] Implement MCP completion only when a concrete client UX needs prompt or
       resource argument suggestions.
+
+## P0: MCP Client Feedback Improvements
+
+Use `improvements/client_feedback_improvement_plan.md` as the source of truth.
+
+This plan comes from real opencode and Codex feedback after using ai-memory-hub
+through MCP. Treat the P0 items as product-contract work because they affect how
+agents interpret successful answers.
+
+Implementation sequence:
+
+- [ ] Make `memory_ask` structured fields clear for chunk-backed, fact-backed,
+      mixed, conflict, and not-found answers.
+- [ ] Ensure a fact-layer answer does not look like an empty retrieval miss.
+- [ ] Separate raw source memory, normalized facts, and polished answer text.
+- [ ] Add source-quality or confidence-reason fields for fact answers.
+- [ ] Expose fact freshness fields such as `created_at`, `updated_at`, and
+      `last_confirmed_at`.
+- [ ] Add tests for the Codex-observed response shape and confidence/freshness
+      behavior.
 
 ## P0: MCP Client Smoke Coverage
 
