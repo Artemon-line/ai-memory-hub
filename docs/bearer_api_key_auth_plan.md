@@ -1,24 +1,35 @@
-# MCP Authorization Compliance Plan
+# Bearer Auth And User Isolation Plan
 
 ## Goal
 
-Protect ai-memory-hub MCP and HTTP access beyond local testing while complying
-with the MCP 2025-11-25 HTTP authorization specification.
+Protect ai-memory-hub MCP and HTTP access beyond local testing, starting with a
+simple bearer-token mode that supports per-user memory isolation. Keep the design
+compatible with MCP HTTP authorization expectations so OAuth resource-server mode
+can be added later without changing client request shape.
 
 Supported modes:
 
 - `api.auth: none` for CI and loopback-only local testing.
-- `api.auth: oauth_resource_server` for MCP-compliant HTTP authorization.
+- `api.auth: bearer_token` for local/LAN deployments that need simple personal
+  access tokens and per-user memory isolation.
+- `api.auth: oauth_resource_server` later for MCP-compliant OAuth authorization.
 
 Source: https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization
 
 ## Recommendation
 
-Drop local shared-secret and `X-API-Key` modes from the implementation plan.
+Implement `bearer_token` first. It is not full OAuth, but it uses the same client
+request shape required by MCP HTTP auth:
 
-Do not implement a LAN-only API-key workaround. It would protect casual access,
-but it is not MCP-compliant authorization and would create a second auth path to
-document, test, and support.
+```http
+Authorization: Bearer <token>
+```
+
+Do not implement `X-API-Key`.
+
+Do not put user keys in `config.yaml`. Store users and token hashes in the
+metadata database so an admin CLI/API/UI can create, revoke, expire, and rotate
+tokens without editing config.
 
 Use `api.auth: none` only when:
 
@@ -26,8 +37,10 @@ Use `api.auth: none` only when:
 - Running loopback-only local development, for example `127.0.0.1:8000`.
 - Running isolated smoke tests where the service is not exposed to other hosts.
 
-Use `api.auth: oauth_resource_server` whenever the HTTP MCP endpoint is exposed
-beyond local test boundaries.
+Use `api.auth: bearer_token` before exposing AMH on a trusted LAN. Use HTTPS,
+VPN, SSH tunnel, or a trusted reverse proxy if the endpoint crosses machines.
+Use `api.auth: oauth_resource_server` later for internet-facing or federated
+Google/Apple/Meta-style login.
 
 ## Current Status
 
@@ -41,6 +54,9 @@ Implemented:
 Not implemented yet:
 
 - [ ] Auth enforcement middleware.
+- [ ] User and token storage in metadata providers.
+- [ ] Per-user ownership fields and query scoping.
+- [ ] Admin CLI/API commands for user and token management.
 - [ ] MCP OAuth protected resource metadata.
 - [ ] MCP `WWW-Authenticate` challenges with `resource_metadata` and scope hints.
 - [ ] OAuth access-token validation with audience/resource binding.
@@ -57,6 +73,7 @@ This plan protects against:
 - Drive-by calls to `/memory/*` and `/mcp/`.
 - MCP clients accidentally sending credentials through unsupported paths.
 - Access tokens issued for other resources being reused against ai-memory-hub.
+- One valid user reading or writing another user's memory.
 
 This plan does not protect against:
 
@@ -117,8 +134,11 @@ Config:
 
 ```yaml
 api:
-  auth: none                 # none | oauth_resource_server
+  auth: none                 # none | bearer_token | oauth_resource_server
   public_base_url: ""        # required for oauth_resource_server
+  token:
+    hash_secret_env: AMH_TOKEN_HASH_SECRET
+    default_expiry_days: 365
   oauth:
     authorization_servers: []
     resource: ""             # defaults to public_base_url + /mcp when unset
@@ -131,6 +151,9 @@ api:
 Rules:
 
 - `none`: allow all requests. Use only for CI and loopback-only local testing.
+- `bearer_token`: require a server-issued personal access token in the
+  `Authorization: Bearer` header, map it to a user, then scope every read/write
+  to that user.
 - `oauth_resource_server`: require MCP-compliant Bearer access tokens for
   protected routes.
 
@@ -153,6 +176,80 @@ Public paths:
 - `/.well-known/oauth-protected-resource/*`
 - `/docs`, `/openapi.json`, and `/redoc` should be configurable. For production,
   protect or disable them.
+
+## P0: Simple Bearer Tokens And Per-User Isolation
+
+This is the first implementation target.
+
+Implementation sequence:
+
+- [ ] Add config validation:
+  - [ ] allowed `api.auth` values: `none`, `bearer_token`,
+    `oauth_resource_server`
+  - [ ] `bearer_token` requires a token hash secret from environment or a
+    generated local secret file outside the repo
+  - [ ] warn when `auth=none` is used with a non-loopback bind address
+- [ ] Add metadata-store tables/records for auth:
+  - [ ] `users`
+  - [ ] `api_tokens`
+  - [ ] token hash, token prefix, name, scopes, created/last-used/expires/revoked
+        timestamps
+  - [ ] store only token hashes, never raw tokens
+- [ ] Add admin CLI commands:
+  - [ ] `aim admin user create <username>`
+  - [ ] `aim admin user list`
+  - [ ] `aim admin token create --user <username> --scopes memory:read,memory:write`
+  - [ ] `aim admin token list --user <username>`
+  - [ ] `aim admin token revoke <token-id>`
+  - [ ] print raw token only once on creation
+- [ ] Add HTTP auth middleware:
+  - [ ] parse `Authorization: Bearer <token>`
+  - [ ] reject missing/invalid/revoked/expired tokens with `401`
+  - [ ] reject insufficient scope with `403`
+  - [ ] keep `/health` and `/ready` public
+  - [ ] protect `/memory/*` and `/mcp/*`
+  - [ ] reject or ignore tokens in query strings
+- [ ] Add request principal context:
+  - [ ] `user_id`
+  - [ ] token id
+  - [ ] scopes
+  - [ ] auth mode
+- [ ] Add per-user ownership:
+  - [ ] stamp new conversations with server-side `owner_id`
+  - [ ] stamp extracted facts with `owner_id`
+  - [ ] do not trust client-supplied `metadata.owner_id`
+  - [ ] filter search/retrieve/ask/fact/profile operations by `owner_id`
+  - [ ] prevent direct retrieval of another user's memory by id
+- [ ] Add vector isolation:
+  - [ ] include `owner_id` in vector rows where provider supports metadata
+  - [ ] for providers without vector-side filters, filter candidates after
+        metadata lookup before returning or answering
+  - [ ] add tests proving no cross-user leakage through vector candidates
+- [ ] Add scopes:
+  - [ ] `memory:read` for search/retrieve/ask/fact search/profile
+  - [ ] `memory:write` for validate/insert/fact supersession
+  - [ ] `memory:admin` for future admin UI/API
+- [ ] Add redaction:
+  - [ ] redact `Authorization: Bearer ...` in logs and errors
+  - [ ] avoid returning token hashes
+  - [ ] never log raw generated tokens
+- [ ] Add tests:
+  - [ ] no-auth mode still passes existing tests
+  - [ ] bearer mode rejects missing/invalid/revoked/expired token
+  - [ ] bearer mode accepts valid token
+  - [ ] user A cannot search/retrieve/ask user B memory
+  - [ ] user A cannot access user B facts/profile
+  - [ ] insufficient scope returns `403`
+  - [ ] admin CLI creates and revokes tokens
+
+Acceptance criteria:
+
+- A Raspberry Pi or LAN deployment can be protected with personal access tokens.
+- Each token maps to exactly one user/principal.
+- Every memory/fact read and write is scoped to the token's user.
+- Raw tokens are shown once and only token hashes are stored.
+- Existing CI/local `auth=none` behavior remains available.
+- The MCP client request shape is already compatible with future OAuth mode.
 
 ## OAuth Resource-Server Mode
 

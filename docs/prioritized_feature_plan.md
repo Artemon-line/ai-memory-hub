@@ -10,6 +10,7 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P0 | Storage abstraction baseline: capabilities, schema checks, dimensions, fallback, dry-run, Postgres/PGVector | Implemented | `storage_agnostic_byoa_plan.md` |
 | P0 | Retrieval precision: threshold, hybrid search, metadata rerank | Implemented | `improvements/retrieval_precision_plan.md` |
 | P0 | MCP protocol compliance: initialize instructions, schemas, pagination, logging, completion when client UX needs it | Partial | `mcp_utility_compliance_plan.md`, `mcp_plan.md` |
+| P0 | Bearer-token auth and per-user memory isolation | Planned | `bearer_api_key_auth_plan.md` |
 | P0 | MCP client feedback: response shape clarity, fact freshness, and source quality | Implemented | `improvements/client_feedback_improvement_plan.md` |
 | P0 | Advanced search filters for ask, facts, and profile queries | Planned | `improvements/client_feedback_improvement_plan.md` |
 | P0 | Conversation summary metadata and profile views | Partial | `improvements/client_feedback_improvement_plan.md` |
@@ -106,6 +107,43 @@ Current status:
       real clients expose new interpretation gaps.
 - [ ] Implement MCP completion only when a concrete client UX needs prompt or
       resource argument suggestions.
+
+## P0: Bearer-Token Auth And Per-User Isolation
+
+Use `bearer_api_key_auth_plan.md` as the source of truth.
+
+This is the top security priority before recommending Raspberry Pi, LAN, or
+multi-user deployments. AMH currently has config placeholders but no enforced
+auth. A server bound to `0.0.0.0` can expose conversation history to any device
+that can reach the port.
+
+Implementation sequence:
+
+- [ ] Add `api.auth: bearer_token` alongside existing `none` mode.
+- [ ] Store users and token hashes in the metadata database, not in config files.
+- [ ] Add admin CLI commands to create users, issue tokens, list tokens, and
+      revoke tokens.
+- [ ] Accept tokens through `Authorization: Bearer <token>` for HTTP API and MCP.
+- [ ] Map each token to a server-side user/principal and scopes.
+- [ ] Stamp new conversations and facts with server-side `owner_id`.
+- [ ] Scope search, retrieve, ask, fact search, profile, and future admin
+      operations by `owner_id`.
+- [ ] Prevent cross-user leakage from vector candidates by filtering against
+      metadata ownership before returning or answering.
+- [ ] Redact bearer tokens from logs, errors, and diagnostics.
+- [ ] Keep `auth=none` for CI and loopback-only local development.
+- [ ] Leave Google/Apple/Meta OAuth for later `oauth_resource_server` mode or a
+      trusted identity-aware reverse proxy.
+
+Acceptance criteria:
+
+- A valid token is required for `/memory/*` and `/mcp/*` when bearer auth is
+  enabled.
+- User A cannot read, search, ask over, or retrieve User B's memory or facts.
+- Raw tokens are displayed only once and only hashes are stored.
+- Existing no-auth local tests continue to pass.
+- Client request shape is compatible with future MCP OAuth: `Authorization:
+  Bearer <token>`.
 
 ## P0: MCP Client Feedback Improvements
 

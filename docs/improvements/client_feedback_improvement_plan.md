@@ -30,6 +30,8 @@ Observed improvement themes:
   boundaries can introduce duplicated, split, or out-of-sync memory. Clients
   should save one complete conversation per insert.
 - General delete/update tools are intentionally not part of the agent-facing MCP surface. Administrative memory hiding or cleanup should be CLI/API-only and gated by local/admin controls.
+- Auth and per-user isolation are required before LAN, Raspberry Pi, multi-user,
+  or admin UI deployments are recommended.
 
 ## P0: Response Shape Clarity
 
@@ -151,6 +153,50 @@ Acceptance criteria:
 
 - A user can ask about a project or topic across multiple Codex/opencode conversations and receive thread-aware context.
 - Threading does not collapse unrelated conversations just because they share broad tags.
+
+## P0: Bearer Auth And Per-User Isolation
+
+Source feedback:
+
+- A persistent AMH service on a Raspberry Pi or LAN would expose conversation
+  history without enforced auth.
+- Multiple clients or users need separate memory spaces, not just one shared
+  token-protected database.
+- A future admin UI needs a clear auth boundary before it can safely manage
+  memory and keys.
+
+Current status:
+
+- Config placeholders exist, but auth is not enforced.
+- MCP and HTTP API are mounted by the same FastAPI app.
+- Conversation and fact reads are not scoped by user.
+
+Implementation sequence:
+
+- [ ] Add `api.auth: bearer_token` for simple personal access tokens.
+- [ ] Keep `Authorization: Bearer <token>` as the only token transport so the
+  client shape remains compatible with MCP OAuth later.
+- [ ] Store users and token hashes in the metadata database, not config files.
+- [ ] Add admin CLI commands to create users, issue tokens, list tokens, and
+  revoke tokens.
+- [ ] Map each token to `user_id` plus scopes.
+- [ ] Stamp new conversations and facts with server-side `owner_id`.
+- [ ] Scope search, retrieve, ask, fact search, profile, and future admin actions
+  by `owner_id`.
+- [ ] Do not trust client-supplied owner metadata.
+- [ ] Filter vector candidates through metadata ownership before returning or
+  answering.
+- [ ] Redact bearer tokens from logs and diagnostics.
+- [ ] Keep Google/Apple/Meta OAuth as a later `oauth_resource_server` or reverse
+  proxy option.
+
+Acceptance criteria:
+
+- LAN deployments can require a bearer token for `/memory/*` and `/mcp/*`.
+- Each bearer token maps to exactly one user/principal.
+- User A cannot read, search, retrieve, or ask over User B's memory.
+- Tokens are shown once at creation and only hashes are stored.
+- `auth=none` remains available for CI and loopback-only local testing.
 
 ## P2: Admin-Only Mutation Workflows
 
@@ -285,7 +331,7 @@ Acceptance criteria:
 
 ## Priority Mapping
 
-- P0: response shape clarity, fact freshness, source-quality explanation, advanced filters, and conversation summary metadata/profile views.
+- P0: bearer auth/user isolation, response shape clarity, fact freshness, source-quality explanation, advanced filters, and conversation summary metadata/profile views.
 - P1: fact text normalization, answer polish, auto-tagging, and conversation threading.
 - P2: admin-only mutation workflows and generated topic/project summaries.
 
