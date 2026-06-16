@@ -39,12 +39,12 @@ Implementation sequence:
   - [x] fact evidence for `fact_layer`
   - [x] conflicting fact evidence for `conflict`
   - [x] fact evidence plus retrieved chunks for `mixed`
-  - [ ] general `evidence` entries for pure `direct_memory` chunk answers
-- [ ] Keep `answer` as the user-facing polished string.
+  - [x] general `evidence` entries for pure `direct_memory` chunk answers
+- [x] Keep `answer` as the user-facing polished string.
 - [x] Add stable `evidence` and `structured_evidence.facts` sections for normalized fact-layer evidence instead of overloading chunk-shaped `results`.
-- [ ] Document the exact relationship between `answer`, `results`, `citations`, `provenance`, and fact evidence in public API docs.
+- [x] Document the exact relationship between `answer`, `results`, `citations`, `provenance`, and fact evidence in public API docs.
 - [x] Add tests for fact-only answers, mixed answers, and conflict answers.
-- [ ] Add explicit no-hit response-shape tests for `structured_evidence`.
+- [x] Add explicit no-hit response-shape tests for `structured_evidence`.
 
 Acceptance criteria:
 
@@ -64,7 +64,7 @@ Implementation sequence:
 - [x] Add `source_quality` and `confidence_reason` to fact and ask responses.
 - [x] Start with deterministic values:
   - [x] `direct_user_statement`
-  - [ ] `assistant_statement`
+  - [x] `assistant_statement`
   - [x] `inferred_from_conversation` for recurring-topic facts
   - [x] `corrected_by_user`
   - [x] conflict answers expose a confidence reason for disagreeing active facts
@@ -72,10 +72,10 @@ Implementation sequence:
   - [x] `created_at`
   - [x] `updated_at`
   - [x] `last_confirmed_at`
-  - [ ] `superseded_at` where applicable
-- [ ] Update correction/supersession flows so direct user confirmations refresh `last_confirmed_at`.
+  - [x] `superseded_at` where applicable
+- [x] Update correction/supersession flows so direct user confirmations refresh `last_confirmed_at`.
 - [x] Add API and MCP tests for freshness and source-quality fields.
-- [ ] Add SQLite and Postgres storage-level tests for persisted freshness/source-quality fields after schema migration.
+- [x] Add SQLite and Postgres storage-level tests for persisted freshness/source-quality fields.
 
 Acceptance criteria:
 
@@ -91,14 +91,14 @@ Source feedback:
 
 Implementation sequence:
 
-- [ ] Preserve raw source text exactly in provenance and source conversations.
+- [x] Preserve raw source text exactly in provenance and source conversations.
 - [ ] Add normalized fact fields for display and matching:
-  - [ ] `object_raw`
-  - [ ] `object_normalized`
+  - [x] `object_raw`
+  - [x] `object_normalized`
   - [ ] optional structured qualifiers for dates, names, casing, and common spelling fixes
-- [ ] Use normalized fact values for answer wording when confidence is high.
-- [ ] Keep normalization deterministic at first; add hosted or local LLM cleanup only behind explicit configuration.
-- [ ] Add regression tests for common spelling/casing cleanup and no-overwrite provenance behavior.
+- [x] Use normalized fact values for answer wording when confidence is high.
+- [x] Keep normalization deterministic at first; add hosted or local LLM cleanup only behind explicit configuration.
+- [x] Add regression tests for common spelling/casing cleanup and no-overwrite provenance behavior.
 
 Acceptance criteria:
 
@@ -185,7 +185,7 @@ Current status:
 
 Implementation sequence:
 
-- [ ] Document current filters in MCP tool descriptions and initialize instructions.
+- [x] Document current filters in MCP tool descriptions and initialize instructions.
 - [ ] Add filter support to `memory_ask` where it can preserve answer quality.
 - [ ] Add fact/profile filters for source, predicate, date range, confidence, active/superseded status, and freshness.
 - [ ] Add `memory_insert_many` or batch HTTP ingest with per-item success/error envelopes.

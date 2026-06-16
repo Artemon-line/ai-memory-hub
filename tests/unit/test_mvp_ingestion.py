@@ -456,6 +456,34 @@ def test_search_compact_mode_groups_repeated_chunks_by_conversation() -> None:
     assert len(result["results"][0]["evidence_chunks"]) == 2
 
 
+def test_ask_direct_memory_returns_structured_chunk_evidence() -> None:
+    _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["messages"] = [{"role": "user", "text": "rareterm deployment note"}]
+    mvp_ingestion.ingest_messages(conversation)
+
+    result = mvp_ingestion.ask("rareterm", top_k=1)
+
+    assert result["answer_basis"] == "direct_memory"
+    assert result["confidence_reason"] == "Answer built from ranked retrieved conversation chunks."
+    assert result["evidence"][0]["type"] == "chunk"
+    assert result["evidence"][0]["conversation_id"] == conversation["id"]
+    assert result["structured_evidence"]["facts"] == []
+    assert result["structured_evidence"]["results"] == result["results"]
+
+
+def test_ask_no_hit_returns_empty_structured_evidence() -> None:
+    _configure_stubs(retrieval_vector_score_threshold=999.0, retrieval_keyword_enabled=False)
+
+    result = mvp_ingestion.ask("unmatched query", top_k=1)
+
+    assert result["answer_basis"] == "not_found"
+    assert result["confidence"] == "none"
+    assert result["confidence_reason"] == "No matching memory or facts were found."
+    assert result["evidence"] == []
+    assert result["structured_evidence"] == {"facts": [], "results": []}
+
+
 def test_ask_answers_direct_guitar_question_from_fact_layer() -> None:
     _configure_stubs()
     conversation = _valid_conversation()
@@ -484,6 +512,33 @@ def test_ask_answers_direct_guitar_question_from_fact_layer() -> None:
     assert result["citations"][0]["last_confirmed_at"] == result["facts"][0]["last_confirmed_at"]
 
 
+def test_fact_from_assistant_statement_exposes_source_quality() -> None:
+    _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["title"] = "Velvet Lantern"
+    conversation["messages"] = [{"role": "assistant", "text": "Velvet Lantern creator is Ada."}]
+    mvp_ingestion.ingest_messages(conversation)
+
+    result = mvp_ingestion.ask("Who created Velvet Lantern?", top_k=5)
+
+    assert result["answer_basis"] == "fact_layer"
+    assert result["facts"][0]["source_quality"] == "assistant_statement"
+    assert result["facts"][0]["confidence_reason"] == "Extracted from an assistant statement."
+
+
+def test_fact_answer_uses_normalized_object_without_rewriting_raw_value() -> None:
+    _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["messages"] = [{"role": "user", "text": "My favorite holiday is aniversary."}]
+    mvp_ingestion.ingest_messages(conversation)
+
+    result = mvp_ingestion.ask("What is my favorite holiday?", top_k=5)
+
+    assert result["answer"] == "anniversary"
+    assert result["facts"][0]["object_raw"] == "aniversary"
+    assert result["facts"][0]["object_normalized"] == "anniversary"
+
+
 def test_fact_correction_supersedes_old_fact() -> None:
     _configure_stubs()
     first = _valid_conversation()
@@ -508,6 +563,7 @@ def test_fact_correction_supersedes_old_fact() -> None:
     assert "TV yellow" in result["answer"]
     assert "cherry" not in result["answer"]
     assert any(fact["superseded_by"] for fact in audit["results"])
+    assert any(fact["superseded_at"] for fact in audit["results"] if fact["superseded_by"])
     assert result["facts"][0]["source_quality"] == "corrected_by_user"
     assert result["facts"][0]["confidence_reason"] == "Extracted from a direct user correction."
     assert result["evidence"][0]["source_quality"] == "corrected_by_user"

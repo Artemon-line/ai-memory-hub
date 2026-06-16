@@ -28,7 +28,8 @@ SERVER_INSTRUCTIONS = (
     "Use ai-memory-hub tools directly. For memory_validate and memory_insert, "
     "pass conversation_json as a nested JSON object, not as a JSON string. "
     "Omit id by default so the hub generates the canonical UUID; if id is supplied, "
-    "it must be a valid UUID. Messages may use text or content fields."
+    "it must be a valid UUID. Messages may use text or content fields. "
+    "memory_search supports source, date_from, date_to, and tags filters when narrowing recall."
 )
 
 
@@ -42,7 +43,10 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "Insert a conversation into memory. Pass `conversation_json` as a nested JSON object, "
         "omit `id` unless it is a valid UUID, and use message `text` or `content` fields."
     ),
-    "memory_search": "Search existing memory by text query.",
+    "memory_search": (
+        "Search existing memory by text query. Optional filters: source, date_from, date_to, tags. "
+        "Use limit and cursor for paged results."
+    ),
     "memory_retrieve": "Retrieve a stored memory item by ID.",
     "memory_ask": "Answer a question using stored memory search results.",
     "memory_fact_search": "Search normalized extracted memory facts.",

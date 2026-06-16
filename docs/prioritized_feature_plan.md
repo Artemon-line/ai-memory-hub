@@ -10,7 +10,7 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P0 | Storage abstraction baseline: capabilities, schema checks, dimensions, fallback, dry-run, Postgres/PGVector | Implemented | `storage_agnostic_byoa_plan.md` |
 | P0 | Retrieval precision: threshold, hybrid search, metadata rerank | Implemented | `improvements/retrieval_precision_plan.md` |
 | P0 | MCP protocol compliance: initialize instructions, schemas, pagination, logging, completion when client UX needs it | Partial | `mcp_utility_compliance_plan.md`, `mcp_plan.md` |
-| P0 | MCP client feedback: response shape clarity, fact freshness, and source quality | Planned | `improvements/client_feedback_improvement_plan.md` |
+| P0 | MCP client feedback: response shape clarity, fact freshness, and source quality | Implemented | `improvements/client_feedback_improvement_plan.md` |
 | P0 | MCP client smoke coverage for Codex, Gemini, Copilot, Claude, opencode | Implemented | `mcp_client_smoke_plan.md` |
 | P0 | Weekly scheduled real-client MCP smoke coverage | Implemented | `real_client_mcp_smoke_plan.md` |
 | P1 | CLI foundation and command contract | Implemented | `cli_implementation_plan.md` |
@@ -114,14 +114,14 @@ agents interpret successful answers.
 
 Implementation sequence:
 
-- [ ] Make `memory_ask` structured fields clear for chunk-backed, fact-backed,
+- [x] Make `memory_ask` structured fields clear for chunk-backed, fact-backed,
       mixed, conflict, and not-found answers.
 - [x] Ensure a fact-layer answer does not look like an empty retrieval miss.
 - [x] Separate raw source memory, normalized facts, and polished answer text for
       fact-backed answers.
 - [x] Add source-quality or confidence-reason fields for fact answers.
-- [x] Expose fact freshness fields such as `created_at`, `updated_at`, and
-      `last_confirmed_at`.
+- [x] Expose fact freshness fields such as `created_at`, `updated_at`,
+      `last_confirmed_at`, and `superseded_at`.
 - [x] Add tests for the Codex-observed response shape and confidence/freshness
       behavior.
 

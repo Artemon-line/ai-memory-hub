@@ -20,6 +20,12 @@ class SQLiteMetadataStore:
     _MIGRATION_COLUMNS = {
         ("conversations", "conversation_hash"): "TEXT",
         ("conversations", "upstream_thread_id"): "TEXT",
+        ("facts", "source_quality"): "TEXT",
+        ("facts", "confidence_reason"): "TEXT",
+        ("facts", "last_confirmed_at"): "TEXT",
+        ("facts", "superseded_at"): "TEXT",
+        ("facts", "object_raw"): "TEXT",
+        ("facts", "object_normalized"): "TEXT",
     }
 
     def __init__(self, db_path: str | Path):
@@ -105,10 +111,25 @@ class SQLiteMetadataStore:
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
                     superseded_by TEXT,
+                    superseded_at TEXT,
+                    source_quality TEXT,
+                    confidence_reason TEXT,
+                    last_confirmed_at TEXT,
+                    object_raw TEXT,
+                    object_normalized TEXT,
                     deleted_at TEXT
                 )
                 """
             )
+            for column, declaration in (
+                ("source_quality", "TEXT"),
+                ("confidence_reason", "TEXT"),
+                ("last_confirmed_at", "TEXT"),
+                ("superseded_at", "TEXT"),
+                ("object_raw", "TEXT"),
+                ("object_normalized", "TEXT"),
+            ):
+                self._ensure_column(conn, "facts", column, declaration)
             conn.execute(
                 """
                 CREATE INDEX IF NOT EXISTS idx_facts_subject_predicate
@@ -320,15 +341,18 @@ class SQLiteMetadataStore:
             return
         with self._connect() as conn:
             for fact in facts:
+                self._refresh_matching_fact_confirmation(conn, fact)
                 self._supersede_corrected_facts(conn, fact)
                 conn.execute(
                     """
                     INSERT INTO facts (
                         id, subject, predicate, object, qualifiers, confidence,
                         source_conversation_id, source_message_indexes,
-                        created_at, updated_at, superseded_by, deleted_at
+                        created_at, updated_at, superseded_by, superseded_at,
+                        source_quality, confidence_reason, last_confirmed_at,
+                        object_raw, object_normalized, deleted_at
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(id) DO UPDATE SET
                         subject = excluded.subject,
                         predicate = excluded.predicate,
@@ -339,6 +363,12 @@ class SQLiteMetadataStore:
                         source_message_indexes = excluded.source_message_indexes,
                         updated_at = excluded.updated_at,
                         superseded_by = excluded.superseded_by,
+                        superseded_at = excluded.superseded_at,
+                        source_quality = excluded.source_quality,
+                        confidence_reason = excluded.confidence_reason,
+                        last_confirmed_at = excluded.last_confirmed_at,
+                        object_raw = excluded.object_raw,
+                        object_normalized = excluded.object_normalized,
                         deleted_at = excluded.deleted_at
                     """,
                     self._fact_row(fact),
@@ -380,7 +410,7 @@ class SQLiteMetadataStore:
             cursor = conn.execute(
                 """
                 UPDATE facts
-                SET superseded_by = ?, updated_at = CURRENT_TIMESTAMP
+                SET superseded_by = ?, superseded_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ? AND deleted_at IS NULL
                 """,
                 (superseded_by, fact_id),
@@ -496,7 +526,7 @@ class SQLiteMetadataStore:
         conn.execute(
             """
             UPDATE facts
-            SET superseded_by = ?, updated_at = ?
+            SET superseded_by = ?, superseded_at = ?, updated_at = ?
             WHERE subject = ?
               AND predicate = ?
               AND superseded_by IS NULL
@@ -506,9 +536,34 @@ class SQLiteMetadataStore:
             (
                 str(fact["id"]),
                 str(fact["updated_at"]),
+                str(fact["updated_at"]),
                 str(fact["subject"]),
                 str(fact["predicate"]),
                 f"%{str(corrects).lower()}%",
+            ),
+        )
+
+    def _refresh_matching_fact_confirmation(
+        self, conn: sqlite3.Connection, fact: dict[str, Any]
+    ) -> None:
+        if fact.get("source_quality") != "direct_user_statement":
+            return
+        conn.execute(
+            """
+            UPDATE facts
+            SET last_confirmed_at = ?, updated_at = ?
+            WHERE subject = ?
+              AND predicate = ?
+              AND object = ?
+              AND superseded_by IS NULL
+              AND deleted_at IS NULL
+            """,
+            (
+                str(fact["last_confirmed_at"]),
+                str(fact["updated_at"]),
+                str(fact["subject"]),
+                str(fact["predicate"]),
+                str(fact["object"]),
             ),
         )
 
@@ -525,6 +580,12 @@ class SQLiteMetadataStore:
             str(fact["created_at"]),
             str(fact["updated_at"]),
             fact.get("superseded_by"),
+            fact.get("superseded_at"),
+            fact.get("source_quality"),
+            fact.get("confidence_reason"),
+            fact.get("last_confirmed_at"),
+            fact.get("object_raw", fact.get("object")),
+            fact.get("object_normalized", fact.get("object")),
             fact.get("deleted_at"),
         )
 
@@ -541,6 +602,12 @@ class SQLiteMetadataStore:
             "created_at": str(row["created_at"]),
             "updated_at": str(row["updated_at"]),
             "superseded_by": row["superseded_by"],
+            "superseded_at": row["superseded_at"],
+            "source_quality": row["source_quality"],
+            "confidence_reason": row["confidence_reason"],
+            "last_confirmed_at": row["last_confirmed_at"],
+            "object_raw": row["object_raw"],
+            "object_normalized": row["object_normalized"],
             "deleted_at": row["deleted_at"],
         }
 

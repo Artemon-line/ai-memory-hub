@@ -22,6 +22,7 @@ markdown_extensions:
 
 nav:
   - Home: index.md
+  - Technical Overview: docs/overview.md
   - Architecture: docs/architecture.md
   - Roadmap: docs/roadmap.md
   - Storage BYOA Plan: docs/storage_agnostic_byoa_plan.md

@@ -1263,8 +1263,11 @@ def ask(
             "answer": "I could not find relevant memory for that question.",
             "citations": [],
             "confidence": "none",
+            "confidence_reason": "No matching memory or facts were found.",
             "answer_basis": "not_found",
             "provenance": [],
+            "evidence": [],
+            "structured_evidence": {"facts": [], "results": []},
         }
 
     runtime = _runtime()
@@ -1295,8 +1298,14 @@ def ask(
         "answer": answer,
         "citations": citations,
         "confidence": _confidence_from_matches(selected_matches),
+        "confidence_reason": _confidence_reason_from_matches(selected_matches),
         "answer_basis": "direct_memory",
         "provenance": _provenance_from_matches(selected_matches, citations),
+        "evidence": _chunk_evidence_from_matches(selected_matches),
+        "structured_evidence": {
+            "facts": [],
+            "results": selected_matches,
+        },
         "context_tokens_used": tokens_used,
         "chunks_selected": len(selected_matches),
         "chunks_dropped": chunks_dropped,
@@ -1369,8 +1378,14 @@ def _ask_from_matches(matches: list[dict[str, Any]], *, top_k: int) -> dict[str,
         "answer": answer,
         "citations": selected_citations,
         "confidence": _confidence_from_matches(selected),
+        "confidence_reason": _confidence_reason_from_matches(selected),
         "answer_basis": "direct_memory",
         "provenance": _provenance_from_matches(selected, selected_citations),
+        "evidence": _chunk_evidence_from_matches(selected),
+        "structured_evidence": {
+            "facts": [],
+            "results": selected,
+        },
     }
 
 
@@ -1466,6 +1481,27 @@ def _provenance_from_matches(
     return list(grouped.values())
 
 
+def _chunk_evidence_from_matches(matches: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "type": "chunk",
+            "conversation_id": row.get("id"),
+            "chunk_index": int(row.get("chunk_index", 0)),
+            "role": row.get("role"),
+            "text": row.get("text"),
+            "score": row.get("score"),
+            "used_in_answer": True,
+        }
+        for row in matches
+    ]
+
+
+def _confidence_reason_from_matches(matches: list[dict[str, Any]]) -> str:
+    if not matches:
+        return "No retrieved chunks were used."
+    return "Answer built from ranked retrieved conversation chunks."
+
+
 def _store_facts_for_conversation(conversation: dict[str, Any]) -> None:
     facts = extract_facts(conversation)
     _store_facts(facts)
@@ -1527,6 +1563,7 @@ def extract_facts_from_messages(
             text,
             conversation=conversation,
             message_index=message_index,
+            source_role=str(message.get("role", "")),
         ):
             facts.append(fact)
     facts.extend(_topic_facts(conversation, messages, start_message_index=start_message_index))
@@ -1535,7 +1572,7 @@ def extract_facts_from_messages(
 
 
 def _extract_message_facts(
-    text: str, *, conversation: dict[str, Any], message_index: int
+    text: str, *, conversation: dict[str, Any], message_index: int, source_role: str
 ) -> list[dict[str, Any]]:
     facts: list[dict[str, Any]] = []
     correction = _FACT_CORRECTION_RE.search(text)
@@ -1551,6 +1588,7 @@ def _extract_message_facts(
                 conversation=conversation,
                 message_index=message_index,
                 qualifiers={"item": item, "corrects": old_value},
+                source_role=source_role,
             )
         )
     for rule_name, pattern in _FACT_RULES:
@@ -1565,6 +1603,7 @@ def _extract_message_facts(
                         conversation=conversation,
                         message_index=message_index,
                         qualifiers=_owned_item_qualifiers(object_value),
+                        source_role=source_role,
                     )
                 )
             elif rule_name == "favorite":
@@ -1576,6 +1615,7 @@ def _extract_message_facts(
                         object_value=_clean_fact_object(match.group("object")),
                         conversation=conversation,
                         message_index=message_index,
+                        source_role=source_role,
                     )
                 )
             elif rule_name == "subject_creator":
@@ -1586,6 +1626,7 @@ def _extract_message_facts(
                         object_value=_clean_fact_object(match.group("object")),
                         conversation=conversation,
                         message_index=message_index,
+                        source_role=source_role,
                     )
                 )
             elif rule_name in {"creator", "command_name", "indexing_strategy"}:
@@ -1596,6 +1637,7 @@ def _extract_message_facts(
                         object_value=_clean_fact_object(match.group("object")),
                         conversation=conversation,
                         message_index=message_index,
+                        source_role=source_role,
                     )
                 )
             elif rule_name in {"profile_name", "profile_identity", "profile_role", "profile_location"}:
@@ -1606,6 +1648,7 @@ def _extract_message_facts(
                         object_value=_clean_fact_object(match.group("object")),
                         conversation=conversation,
                         message_index=message_index,
+                        source_role=source_role,
                     )
                 )
             elif rule_name == "project_attribute":
@@ -1619,6 +1662,7 @@ def _extract_message_facts(
                         object_value=_clean_fact_object(match.group("object")),
                         conversation=conversation,
                         message_index=message_index,
+                        source_role=source_role,
                     )
                 )
     return _dedupe_facts(facts)
@@ -1693,17 +1737,21 @@ def _fact(
     conversation: dict[str, Any],
     message_index: int,
     qualifiers: dict[str, Any] | None = None,
+    source_role: str | None = None,
 ) -> dict[str, Any]:
     now = _utc_now_iso()
     source_id = str(conversation.get("id", ""))
     identity = f"{subject}\n{predicate}\n{object_value}\n{source_id}\n{message_index}"
     fact_id = "fact-" + hashlib.sha256(identity.encode("utf-8")).hexdigest()[:32]
+    normalized_qualifiers = dict(qualifiers or {})
+    if source_role in {"user", "assistant"}:
+        normalized_qualifiers.setdefault("source_role", source_role)
     fact = {
         "id": fact_id,
         "subject": subject,
         "predicate": predicate,
         "object": object_value,
-        "qualifiers": qualifiers or {},
+        "qualifiers": normalized_qualifiers,
         "confidence": "high",
         "last_confirmed_at": now,
         "source_conversation_id": source_id,
@@ -1711,8 +1759,11 @@ def _fact(
         "created_at": now,
         "updated_at": now,
         "superseded_by": None,
+        "superseded_at": None,
         "deleted_at": None,
     }
+    fact["object_raw"] = object_value
+    fact["object_normalized"] = _normalized_fact_object(fact)
     fact["source_quality"] = _source_quality_for_fact(fact)
     fact["confidence_reason"] = _confidence_reason_for_fact(fact)
     return fact
@@ -1732,7 +1783,7 @@ def _answer_from_facts(
     active = [fact for fact in facts if not fact.get("superseded_by") and not fact.get("deleted_at")]
     if not active:
         return None
-    objects = {str(fact.get("object", "")) for fact in active}
+    objects = {str(fact.get("object_normalized") or fact.get("object", "")) for fact in active}
     needs_context = _fact_question_needs_context(question)
     basis = "conflict" if len(objects) > 1 else ("mixed" if needs_context else "fact_layer")
     confidence = "low" if basis == "conflict" else str(active[0].get("confidence", "medium"))
@@ -1792,6 +1843,9 @@ def _fact_query(question: str) -> dict[str, str] | None:
         return {"subject": "user", "predicate": "profile_location"}
     if "what do i work as" in lowered or "my job" in lowered:
         return {"subject": "user", "predicate": "profile_role"}
+    favorite_match = re.search(r"favorite\s+(?P<name>[A-Za-z0-9 _-]+)", question, re.IGNORECASE)
+    if favorite_match:
+        return {"subject": "user", "predicate": f"favorite_{_normalize_predicate_part(favorite_match.group('name'))}"}
     if "topic" in lowered or "recurring" in lowered:
         return {"subject": "user", "predicate": "recurring_topic"}
     if "command name" in lowered:
@@ -1920,8 +1974,10 @@ def fact_supersede(fact_id: str, superseded_by: str) -> dict[str, Any]:
         updated = False
         for fact in getattr(store, "_facts", []):
             if isinstance(fact, dict) and fact.get("id") == fact_id:
+                now = _utc_now_iso()
                 fact["superseded_by"] = superseded_by
-                fact["updated_at"] = _utc_now_iso()
+                fact["superseded_at"] = now
+                fact["updated_at"] = now
                 updated = True
     return {"status": "ok" if updated else "not_found", "id": fact_id, "superseded_by": superseded_by}
 
@@ -1933,7 +1989,7 @@ def _fact_answer_text(
     superseded: list[dict[str, Any]] | None = None,
     conflict: bool,
 ) -> str:
-    objects = [str(fact.get("object", "")) for fact in facts]
+    objects = [str(fact.get("object_normalized") or fact.get("object", "")) for fact in facts]
     if conflict:
         return "Stored facts disagree: " + "; ".join(objects)
     if "guitar" in question.lower():
@@ -1943,7 +1999,7 @@ def _fact_answer_text(
     else:
         answer = objects[0]
     if superseded:
-        old = "; ".join(str(fact.get("object", "")) for fact in superseded)
+        old = "; ".join(str(fact.get("object_normalized") or fact.get("object", "")) for fact in superseded)
         answer += f" Correction noted: earlier memory said {old}."
     return answer
 
@@ -1951,22 +2007,29 @@ def _fact_answer_text(
 def _public_fact(fact: dict[str, Any]) -> dict[str, Any]:
     public = dict(fact)
     computed_source_quality = _source_quality_for_fact(public)
-    if "source_quality" not in public or computed_source_quality == "corrected_by_user":
+    if not public.get("source_quality") or computed_source_quality == "corrected_by_user":
         public["source_quality"] = computed_source_quality
-    if "confidence_reason" not in public or computed_source_quality == "corrected_by_user":
+    if not public.get("confidence_reason") or computed_source_quality == "corrected_by_user":
         public["confidence_reason"] = _confidence_reason_for_fact(public)
-    public.setdefault("last_confirmed_at", public.get("updated_at") or public.get("created_at"))
-    public.setdefault("object_raw", public.get("object"))
-    public.setdefault("object_normalized", _normalized_fact_object(public))
+    if not public.get("last_confirmed_at"):
+        public["last_confirmed_at"] = public.get("updated_at") or public.get("created_at")
+    if not public.get("object_raw"):
+        public["object_raw"] = public.get("object")
+    if not public.get("object_normalized"):
+        public["object_normalized"] = _normalized_fact_object(public)
+    public.setdefault("superseded_at", None)
     return public
 
 
 def _source_quality_for_fact(fact: dict[str, Any]) -> str:
     qualifiers = fact.get("qualifiers")
-    if isinstance(qualifiers, dict) and qualifiers.get("corrects"):
+    source_role = qualifiers.get("source_role") if isinstance(qualifiers, dict) else None
+    if isinstance(qualifiers, dict) and qualifiers.get("corrects") and source_role != "assistant":
         return "corrected_by_user"
     if fact.get("predicate") == "recurring_topic":
         return "inferred_from_conversation"
+    if source_role == "assistant":
+        return "assistant_statement"
     return "direct_user_statement"
 
 
@@ -1976,6 +2039,8 @@ def _confidence_reason_for_fact(fact: dict[str, Any]) -> str:
         return "Extracted from a direct user correction."
     if source_quality == "direct_user_statement":
         return "Extracted from a direct user statement."
+    if source_quality == "assistant_statement":
+        return "Extracted from an assistant statement."
     if source_quality == "inferred_from_conversation":
         return "Inferred from recurring conversation topics."
     return "Extracted from stored conversation context."
@@ -1992,7 +2057,14 @@ def _confidence_reason_for_facts(facts: list[dict[str, Any]], basis: str) -> str
 
 def _normalized_fact_object(fact: dict[str, Any]) -> str:
     value = str(fact.get("object", "")).strip()
-    return " ".join(value.split())
+    normalized = " ".join(value.split())
+    replacements = {
+        "aniversary": "anniversary",
+        "anniversery": "anniversary",
+    }
+    for misspelled, corrected in replacements.items():
+        normalized = re.sub(rf"\b{misspelled}\b", corrected, normalized, flags=re.IGNORECASE)
+    return normalized
 
 
 def _fact_evidence(fact: dict[str, Any], *, used_in_answer: bool) -> dict[str, Any]:
@@ -2012,6 +2084,7 @@ def _fact_evidence(fact: dict[str, Any], *, used_in_answer: bool) -> dict[str, A
         "updated_at": fact.get("updated_at"),
         "last_confirmed_at": fact.get("last_confirmed_at"),
         "superseded_by": fact.get("superseded_by"),
+        "superseded_at": fact.get("superseded_at"),
         "deleted_at": fact.get("deleted_at"),
         "used_in_answer": used_in_answer,
     }
@@ -2054,8 +2127,10 @@ def _apply_in_memory_fact_supersession(active: list[dict[str, Any]], new_fact: d
         if fact.get("subject") != new_fact.get("subject") or fact.get("predicate") != new_fact.get("predicate"):
             continue
         if corrects and corrects.lower() in str(fact.get("object", "")).lower():
+            now = _utc_now_iso()
             fact["superseded_by"] = new_fact["id"]
-            fact["updated_at"] = _utc_now_iso()
+            fact["superseded_at"] = now
+            fact["updated_at"] = now
 
 
 def _dedupe_facts(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:

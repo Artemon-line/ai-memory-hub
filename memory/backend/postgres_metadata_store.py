@@ -47,6 +47,12 @@ CREATE TABLE IF NOT EXISTS facts (
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL,
     superseded_by TEXT NULL,
+    superseded_at TIMESTAMPTZ NULL,
+    source_quality TEXT NULL,
+    confidence_reason TEXT NULL,
+    last_confirmed_at TIMESTAMPTZ NULL,
+    object_raw TEXT NULL,
+    object_normalized TEXT NULL,
     deleted_at TIMESTAMPTZ NULL
 )
 """
@@ -129,6 +135,12 @@ class PostgresMetadataStore:
                 cur.execute(CREATE_UPSTREAM_THREAD_INDEX_SQL)
                 cur.execute(CREATE_SCHEMA_VERSION_TABLE_SQL)
                 cur.execute(CREATE_FACTS_TABLE_SQL)
+                cur.execute("ALTER TABLE facts ADD COLUMN IF NOT EXISTS superseded_at TIMESTAMPTZ NULL")
+                cur.execute("ALTER TABLE facts ADD COLUMN IF NOT EXISTS source_quality TEXT NULL")
+                cur.execute("ALTER TABLE facts ADD COLUMN IF NOT EXISTS confidence_reason TEXT NULL")
+                cur.execute("ALTER TABLE facts ADD COLUMN IF NOT EXISTS last_confirmed_at TIMESTAMPTZ NULL")
+                cur.execute("ALTER TABLE facts ADD COLUMN IF NOT EXISTS object_raw TEXT NULL")
+                cur.execute("ALTER TABLE facts ADD COLUMN IF NOT EXISTS object_normalized TEXT NULL")
                 cur.execute(CREATE_FACTS_INDEX_SQL)
                 cur.execute(SEED_SCHEMA_VERSION_SQL, (1, self._schema_version_seed))
 
@@ -252,15 +264,21 @@ class PostgresMetadataStore:
         with self._connect() as conn:
             with conn.cursor() as cur:
                 for fact in facts:
+                    self._refresh_matching_fact_confirmation(cur, fact)
                     self._supersede_corrected_facts(cur, fact)
                     cur.execute(
                         """
                         INSERT INTO facts (
                             id, subject, predicate, object, qualifiers, confidence,
                             source_conversation_id, source_message_indexes,
-                            created_at, updated_at, superseded_by, deleted_at
+                            created_at, updated_at, superseded_by, superseded_at,
+                            source_quality, confidence_reason, last_confirmed_at,
+                            object_raw, object_normalized, deleted_at
                         )
-                        VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s, %s::jsonb, %s, %s, %s, %s)
+                        VALUES (
+                            %s, %s, %s, %s, %s::jsonb, %s, %s, %s::jsonb, %s, %s,
+                            %s, %s, %s, %s, %s, %s, %s, %s
+                        )
                         ON CONFLICT (id) DO UPDATE
                         SET subject = EXCLUDED.subject,
                             predicate = EXCLUDED.predicate,
@@ -271,6 +289,12 @@ class PostgresMetadataStore:
                             source_message_indexes = EXCLUDED.source_message_indexes,
                             updated_at = EXCLUDED.updated_at,
                             superseded_by = EXCLUDED.superseded_by,
+                            superseded_at = EXCLUDED.superseded_at,
+                            source_quality = EXCLUDED.source_quality,
+                            confidence_reason = EXCLUDED.confidence_reason,
+                            last_confirmed_at = EXCLUDED.last_confirmed_at,
+                            object_raw = EXCLUDED.object_raw,
+                            object_normalized = EXCLUDED.object_normalized,
                             deleted_at = EXCLUDED.deleted_at
                         """,
                         self._fact_row(fact),
@@ -299,7 +323,10 @@ class PostgresMetadataStore:
                     f"""
                     SELECT id, subject, predicate, object, qualifiers::text, confidence,
                            source_conversation_id, source_message_indexes::text,
-                           created_at::text, updated_at::text, superseded_by, deleted_at::text
+                           created_at::text, updated_at::text, superseded_by,
+                           superseded_at::text, source_quality, confidence_reason,
+                           last_confirmed_at::text, object_raw, object_normalized,
+                           deleted_at::text
                     FROM facts
                     WHERE {' AND '.join(clauses)}
                     ORDER BY updated_at DESC, id ASC
@@ -318,7 +345,7 @@ class PostgresMetadataStore:
                 cur.execute(
                     """
                     UPDATE facts
-                    SET superseded_by = %s, updated_at = NOW()
+                    SET superseded_by = %s, superseded_at = NOW(), updated_at = NOW()
                     WHERE id = %s AND deleted_at IS NULL
                     """,
                     (superseded_by, fact_id),
@@ -415,7 +442,7 @@ class PostgresMetadataStore:
         cur.execute(
             """
             UPDATE facts
-            SET superseded_by = %s, updated_at = %s
+            SET superseded_by = %s, superseded_at = %s, updated_at = %s
             WHERE subject = %s
               AND predicate = %s
               AND superseded_by IS NULL
@@ -425,9 +452,32 @@ class PostgresMetadataStore:
             (
                 str(fact["id"]),
                 str(fact["updated_at"]),
+                str(fact["updated_at"]),
                 str(fact["subject"]),
                 str(fact["predicate"]),
                 f"%{str(corrects).lower()}%",
+            ),
+        )
+
+    def _refresh_matching_fact_confirmation(self, cur: Any, fact: dict[str, Any]) -> None:
+        if fact.get("source_quality") != "direct_user_statement":
+            return
+        cur.execute(
+            """
+            UPDATE facts
+            SET last_confirmed_at = %s, updated_at = %s
+            WHERE subject = %s
+              AND predicate = %s
+              AND object = %s
+              AND superseded_by IS NULL
+              AND deleted_at IS NULL
+            """,
+            (
+                str(fact["last_confirmed_at"]),
+                str(fact["updated_at"]),
+                str(fact["subject"]),
+                str(fact["predicate"]),
+                str(fact["object"]),
             ),
         )
 
@@ -444,6 +494,12 @@ class PostgresMetadataStore:
             str(fact["created_at"]),
             str(fact["updated_at"]),
             fact.get("superseded_by"),
+            fact.get("superseded_at"),
+            fact.get("source_quality"),
+            fact.get("confidence_reason"),
+            fact.get("last_confirmed_at"),
+            fact.get("object_raw", fact.get("object")),
+            fact.get("object_normalized", fact.get("object")),
             fact.get("deleted_at"),
         )
 
@@ -460,7 +516,13 @@ class PostgresMetadataStore:
             "created_at": str(row[8]),
             "updated_at": str(row[9]),
             "superseded_by": row[10],
-            "deleted_at": row[11],
+            "superseded_at": row[11],
+            "source_quality": row[12],
+            "confidence_reason": row[13],
+            "last_confirmed_at": row[14],
+            "object_raw": row[15],
+            "object_normalized": row[16],
+            "deleted_at": row[17],
         }
 
     def _resolve_insert_new_conflict(

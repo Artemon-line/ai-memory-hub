@@ -79,6 +79,58 @@ def test_sqlite_metadata_store_tracks_index_chunk_manifest(tmp_path: Path) -> No
     assert store.is_fully_indexed(memory_id) is True
 
 
+def test_sqlite_fact_storage_persists_freshness_and_source_quality(tmp_path: Path) -> None:
+    store = SQLiteMetadataStore(tmp_path / "metadata.sqlite3")
+    fact = {
+        "id": "fact-1",
+        "subject": "user",
+        "predicate": "favorite_holiday",
+        "object": "aniversary",
+        "qualifiers": {"source_role": "user"},
+        "confidence": "high",
+        "source_conversation_id": "11111111-1111-4111-8111-111111111111",
+        "source_message_indexes": [0],
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-01T00:00:00Z",
+        "last_confirmed_at": "2026-01-01T00:00:00Z",
+        "superseded_by": None,
+        "superseded_at": None,
+        "deleted_at": None,
+        "source_quality": "direct_user_statement",
+        "confidence_reason": "Extracted from a direct user statement.",
+        "object_raw": "aniversary",
+        "object_normalized": "anniversary",
+    }
+
+    store.insert_facts([fact])
+    loaded = store.search_facts(subject="user", predicate="favorite_holiday")[0]
+
+    assert loaded["source_quality"] == "direct_user_statement"
+    assert loaded["confidence_reason"] == "Extracted from a direct user statement."
+    assert loaded["last_confirmed_at"] == "2026-01-01T00:00:00Z"
+    assert loaded["object_raw"] == "aniversary"
+    assert loaded["object_normalized"] == "anniversary"
+
+    replacement = dict(fact)
+    replacement["id"] = "fact-2"
+    replacement["object"] = "anniversary"
+    replacement["object_raw"] = "anniversary"
+    replacement["qualifiers"] = {"source_role": "user", "corrects": "aniversary"}
+    replacement["source_quality"] = "corrected_by_user"
+    replacement["confidence_reason"] = "Extracted from a direct user correction."
+    replacement["created_at"] = "2026-01-02T00:00:00Z"
+    replacement["updated_at"] = "2026-01-02T00:00:00Z"
+    replacement["last_confirmed_at"] = "2026-01-02T00:00:00Z"
+    store.insert_facts([replacement])
+    audit = store.search_facts(
+        subject="user", predicate="favorite_holiday", include_superseded=True
+    )
+    superseded = next(row for row in audit if row["id"] == "fact-1")
+
+    assert superseded["superseded_by"] == "fact-2"
+    assert superseded["superseded_at"] == "2026-01-02T00:00:00Z"
+
+
 def test_inmemory_vector_dimension_validation_insert_and_search() -> None:
     store = InMemoryVectorStore(dimension=3)
 
@@ -788,6 +840,61 @@ def test_postgres_insert_new_rejects_same_id_different_hash() -> None:
 
     with pytest.raises(ValueError, match="unauthorized_update"):
         store.insert_new(second)
+
+
+def test_postgres_fact_row_mapping_includes_freshness_and_source_quality() -> None:
+    store = PostgresMetadataStore.__new__(PostgresMetadataStore)
+    fact = {
+        "id": "fact-1",
+        "subject": "user",
+        "predicate": "favorite_holiday",
+        "object": "aniversary",
+        "qualifiers": {"source_role": "user"},
+        "confidence": "high",
+        "source_conversation_id": "11111111-1111-4111-8111-111111111111",
+        "source_message_indexes": [0],
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-02T00:00:00Z",
+        "last_confirmed_at": "2026-01-02T00:00:00Z",
+        "superseded_by": "fact-2",
+        "superseded_at": "2026-01-03T00:00:00Z",
+        "deleted_at": None,
+        "source_quality": "direct_user_statement",
+        "confidence_reason": "Extracted from a direct user statement.",
+        "object_raw": "aniversary",
+        "object_normalized": "anniversary",
+    }
+
+    row = store._fact_row(fact)
+    loaded = store._fact_from_row(
+        (
+            row[0],
+            row[1],
+            row[2],
+            row[3],
+            row[4],
+            row[5],
+            row[6],
+            row[7],
+            row[8],
+            row[9],
+            row[10],
+            row[11],
+            row[12],
+            row[13],
+            row[14],
+            row[15],
+            row[16],
+            row[17],
+        )
+    )
+
+    assert loaded["source_quality"] == "direct_user_statement"
+    assert loaded["confidence_reason"] == "Extracted from a direct user statement."
+    assert loaded["last_confirmed_at"] == "2026-01-02T00:00:00Z"
+    assert loaded["superseded_at"] == "2026-01-03T00:00:00Z"
+    assert loaded["object_raw"] == "aniversary"
+    assert loaded["object_normalized"] == "anniversary"
 
 
 def test_postgres_schema_version_missing_row_raises() -> None:
