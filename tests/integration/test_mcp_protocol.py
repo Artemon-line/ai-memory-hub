@@ -107,7 +107,9 @@ def test_mcp_initialize_and_tools_list_with_session() -> None:
             guidance = tool["_meta"]["ai-memory-hub/input-guidance"]["conversation_json"]
             assert guidance["type"] == "object"
             assert "not as a string" in guidance["instructions"][0]
+            assert any("metadata.summary" in item for item in guidance["instructions"])
             assert "id" not in guidance["minimal_example"]
+            assert "summary" in guidance["minimal_example"]["metadata"]
 
 
 def test_mcp_tools_list_cursor_pagination_is_stable() -> None:

@@ -30,6 +30,8 @@ SERVER_INSTRUCTIONS = (
     "Omit id by default so the hub generates the canonical UUID; if id is supplied, "
     "it must be a valid UUID. Messages may use text or content fields. "
     "Save one complete conversation per insert; do not split one thread into bulk items. "
+    "Include metadata.summary as a short factual retrieval hint when available, while "
+    "still preserving all source messages. "
     "memory_search supports source, date_from, date_to, and tags filters when narrowing recall."
 )
 
@@ -43,7 +45,8 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
     "memory_insert": (
         "Insert a conversation into memory. Pass `conversation_json` as a nested JSON object, "
         "omit `id` unless it is a valid UUID, use message `text` or `content` fields, "
-        "and include the whole conversation in one object rather than splitting it into batches."
+        "include the whole conversation in one object rather than splitting it into batches, "
+        "and optionally include a short factual `metadata.summary` retrieval hint."
     ),
     "memory_search": (
         "Search existing memory by text query. Optional filters: source, date_from, date_to, tags. "
@@ -65,6 +68,7 @@ CONVERSATION_JSON_TOOL_META: dict[str, Any] = {
                 "Omit id by default so the hub can generate a UUID.",
                 "If id is supplied, it must be a valid UUID.",
                 "Messages may use text or content; content is normalized to text.",
+                "Optional metadata.summary should be a short factual retrieval hint, not a substitute for messages.",
             ],
             "minimal_example": {
                 "source": "opencode",
@@ -72,7 +76,10 @@ CONVERSATION_JSON_TOOL_META: dict[str, Any] = {
                     {"role": "user", "content": "I own a Gibson Special."},
                     {"role": "assistant", "content": "Noted."},
                 ],
-                "metadata": {"tags": ["guitar", "opencode"]},
+                "metadata": {
+                    "tags": ["guitar", "opencode"],
+                    "summary": "User said they own a Gibson Special.",
+                },
             },
         }
     }
@@ -398,6 +405,7 @@ def _register_prompts(mcp: Any) -> None:
             "Save this chat to ai-memory-hub using MCP tools directly.\n"
             "You MUST include ALL user and assistant messages, including code blocks, SQL, Python, multi-line text, and long responses. Do NOT filter or summarize any messages.\n"
             "Save the whole conversation as one `conversation_json` object; do not split this thread into multiple inserts or batch-shaped payloads.\n"
+            "Add a short factual `metadata.summary` when useful for retrieval, but never use it instead of full `messages`.\n"
             "Before insert, call `memory_validate` with argument `conversation_json`.\n"
             "Only call `memory_insert` after validation passes (do not use curl or config-file reads).\n"
             "Never include the save command itself in messages.\n"

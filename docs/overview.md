@@ -72,12 +72,16 @@ canonical UUID. When the backend requires caller-supplied IDs, include an `id`:
   ],
   "metadata": {
     "imported_at": "2026-05-17T00:00:00Z",
+    "summary": "User asked the assistant to remember a preference.",
     "tags": ["preferences"]
   }
 }
 ```
 
 Messages may use `text` or `content`; `content` is normalized to `text`.
+`metadata.summary` is optional. Use it as a short factual retrieval hint only;
+raw `messages` and normalized facts remain the source of truth for answers and
+citations.
 
 Store one complete conversation per insert. Do not split one thread into
 multiple batch items. If an importer has many independent source conversations,
@@ -191,7 +195,8 @@ Core tools:
 - `memory_fact_supersede(fact_id, superseded_by)`
 
 `memory_insert` accepts one complete conversation object. There is intentionally
-no bulk MCP insert tool.
+no bulk MCP insert tool. Clients may include a short `metadata.summary`, but
+must still send the complete `messages` list.
 
 Resources:
 

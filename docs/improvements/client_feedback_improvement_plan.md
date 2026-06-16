@@ -204,32 +204,43 @@ Acceptance criteria:
 
 - Agents can narrow retrieval without post-filtering client-side.
 
-## P0: Client-Provided Conversation Summary Metadata
+## P0: Conversation Summary Metadata And Profile Views
 
 Source feedback:
 
 - Users want exact data to be easier to find during search.
 - Clients can cheaply produce a short summary at save time, but they can also
   speculate. The summary must therefore be treated as metadata, not source truth.
+- opencode wanted a built-in way to get a profile summary without fetching raw
+  chunks.
 
 Current status:
 
 - Full `messages` are the source of truth.
 - `metadata.tags` and inferred topics already help retrieval/reranking.
-- `metadata.summary` is not yet documented as a first-class ingestion hint.
+- `metadata.summary` is documented as a first-class ingestion hint.
+- Built-in generated conversation, profile, topic, and project summaries remain
+  planned after summary provenance is reliable.
 
 Implementation sequence:
 
-- [ ] Document optional `metadata.summary` in the conversation schema and public docs.
-- [ ] Update MCP save guidance to ask clients for a short factual summary while
+- [x] Document optional `metadata.summary` in the conversation schema and public docs.
+- [x] Update MCP save guidance to ask clients for a short factual summary while
   still saving the complete conversation.
-- [ ] Validate `metadata.summary` as a bounded string.
-- [ ] Include summary text in metadata search/reranking so whole-conversation
+- [x] Validate `metadata.summary` as a bounded string.
+- [x] Include summary text in metadata search/reranking so whole-conversation
   themes can help find exact chunks.
-- [ ] Return summary in search/retrieve responses as metadata, not as a citation
+- [x] Return summary in search/retrieve responses as metadata, not as a citation
   unless the raw message evidence also supports the answer.
-- [ ] Add tests showing summary improves recall without replacing message
+- [x] Add tests showing summary improves recall without replacing message
   provenance.
+- [ ] Add server-generated per-conversation summaries after client-provided
+  summaries have enough real usage examples.
+- [ ] Add a profile summary response that combines active facts, freshness, and
+  compact provenance.
+- [ ] Add topic and project summaries after conversation summaries are reliable.
+- [ ] Keep generated summary storage separate from raw chunks and normalized facts.
+- [ ] Add tests showing generated summaries cite their source conversations or facts.
 
 Acceptance criteria:
 
@@ -237,6 +248,8 @@ Acceptance criteria:
 - Search can use the summary to find relevant conversations more reliably.
 - Answers still cite raw messages or normalized facts, not unsupported summary
   speculation.
+- Agents can fetch compact profile or project summaries without reading every raw
+  chunk once generated summaries are implemented.
 
 ## Closed: Bulk Conversation Insert
 
@@ -270,30 +283,11 @@ Acceptance criteria:
 - Future importer work can still iterate single inserts for many independent
   source conversations.
 
-## P2: Summaries And Profile Views
-
-Source feedback:
-
-- opencode wanted a built-in way to get a profile summary without fetching raw chunks.
-
-Implementation sequence:
-
-- [ ] Add per-conversation summaries as planned in the summaries roadmap.
-- [ ] Add a profile summary response that combines active facts, freshness, and compact provenance.
-- [ ] Add topic and project summaries after conversation summaries are reliable.
-- [ ] Keep summary storage separate from raw chunks and normalized facts.
-- [ ] Add tests showing summaries cite their source conversations or facts.
-
-Acceptance criteria:
-
-- Agents can fetch a compact profile or project summary without reading every raw chunk.
-- Summaries are traceable and refreshable.
-
 ## Priority Mapping
 
-- P0: response shape clarity, fact freshness, source-quality explanation, advanced filters, and client-provided summary metadata.
+- P0: response shape clarity, fact freshness, source-quality explanation, advanced filters, and conversation summary metadata/profile views.
 - P1: fact text normalization, answer polish, auto-tagging, and conversation threading.
-- P2: admin-only mutation workflows and summaries.
+- P2: admin-only mutation workflows and generated topic/project summaries.
 
 ## Done When
 

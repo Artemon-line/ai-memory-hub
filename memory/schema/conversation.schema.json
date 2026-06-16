@@ -96,6 +96,11 @@
           "items": { "type": "string" },
           "description": "Optional topics extracted or assigned by agents."
         },
+        "summary": {
+          "type": "string",
+          "description": "Optional short client-provided factual summary used as a retrieval hint. Raw messages remain the source of truth.",
+          "maxLength": 2000
+        },
         "model": {
           "type": "string",
           "description": "Model used to generate assistant messages (e.g., gpt-4.1, claude-3-opus)."

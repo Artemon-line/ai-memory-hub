@@ -106,6 +106,7 @@ _MAX_MESSAGE_BYTES = 1_000_000
 _MAX_PAYLOAD_BYTES = 25_000_000
 _MAX_RAW_TRANSCRIPT_BYTES = 5_000_000
 _MAX_METADATA_BYTES = 1_000_000
+_MAX_METADATA_SUMMARY_CHARS = 2_000
 _ROLE_ALIASES = {
     "human": "user",
     "user_message": "user",
@@ -657,6 +658,7 @@ def normalize_conversation_json(
     )
     if "imported_at" not in metadata and isinstance(metadata.get("saved_at"), str):
         metadata["imported_at"] = metadata["saved_at"]
+    _normalize_metadata_summary(metadata)
     metadata.setdefault("imported_at", now)
     metadata["imported_at"] = _validate_datetime_string(
         metadata["imported_at"], field_name="metadata.imported_at"
@@ -690,6 +692,23 @@ def _coerce_payload(payload: Any, *, strict_transcript: bool) -> dict[str, Any]:
             raise ValueError("raw transcript input requires strict_transcript=True")
         return {"messages": _parse_strict_transcript(payload)}
     raise ValueError("ambiguous input: expected object or strict raw transcript string")
+
+
+def _normalize_metadata_summary(metadata: dict[str, Any]) -> None:
+    if "summary" not in metadata:
+        return
+    summary = metadata["summary"]
+    if not isinstance(summary, str):
+        raise ValueError("metadata.summary must be a string")
+    summary = " ".join(summary.strip().split())
+    if not summary:
+        metadata.pop("summary", None)
+        return
+    if len(summary) > _MAX_METADATA_SUMMARY_CHARS:
+        raise ValueError(
+            f"metadata.summary exceeds max length of {_MAX_METADATA_SUMMARY_CHARS} characters"
+        )
+    metadata["summary"] = summary
 
 
 def _parse_strict_transcript(text: str) -> list[dict[str, str]]:
@@ -1209,7 +1228,7 @@ def _metadata_overlap(query: str, conversation: Any) -> int:
     metadata = conversation.get("metadata", {})
     metadata_values: list[str] = [str(conversation.get("source", "")), str(conversation.get("title", ""))]
     if isinstance(metadata, dict):
-        for key in ("tags", "topics"):
+        for key in ("tags", "topics", "summary"):
             value = metadata.get(key)
             if isinstance(value, list):
                 metadata_values.extend(str(item) for item in value)
@@ -1233,7 +1252,7 @@ def _conversation_search_text(conversation: dict[str, Any]) -> str:
                 parts.append(str(message.get("text", "")))
     metadata = conversation.get("metadata", {})
     if isinstance(metadata, dict):
-        for key in ("tags", "topics"):
+        for key in ("tags", "topics", "summary"):
             value = metadata.get(key)
             if isinstance(value, list):
                 parts.extend(str(item) for item in value)

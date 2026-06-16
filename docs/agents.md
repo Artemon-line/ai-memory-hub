@@ -48,7 +48,7 @@ Planned or partial:
 - Omit `id` unless the user or upstream system requires a specific UUID.
 - Treat the returned `id` as canonical for retrieve/search citations.
 - Call `memory_validate` before `memory_insert` when using MCP.
-- Include full user and assistant turns that should be remembered; do not summarize before insert unless the user asked to store a summary.
+- Include full user and assistant turns that should be remembered. You may add a short factual `metadata.summary` retrieval hint, but do not use it instead of `messages`.
 - Do not include tool output, debug logs, or operational planning text as conversation messages unless the user explicitly wants that stored.
 - Do not supply client-side embeddings, message hashes, or conversation hashes. The hub computes them.
 - Never expose raw stored secrets in messages or metadata.
@@ -84,6 +84,7 @@ Use this before insert to check payload shape.
     ],
     "metadata": {
       "imported_at": "2026-06-08T12:00:00Z",
+      "summary": "User said they prefer local-first tools.",
       "tags": ["preferences"]
     }
   }
@@ -115,6 +116,7 @@ Insert the same payload after validation. Omit `id` by default; the hub assigns 
     ],
     "metadata": {
       "imported_at": "2026-06-08T12:00:00Z",
+      "summary": "User said they prefer local-first tools.",
       "tags": ["preferences"]
     }
   }
@@ -258,6 +260,9 @@ The MCP layer tolerates common client-shaped payloads:
 - supported roles normalize to `user` and `assistant`.
 
 Invalid explicit IDs still fail fast. If an agent supplies `id`, it must be a valid UUID.
+`metadata.summary` must be a string of 2000 characters or fewer. It improves
+search recall and metadata reranking, but answers still need support from raw
+messages or normalized facts.
 
 ## Storage Awareness For Agents
 

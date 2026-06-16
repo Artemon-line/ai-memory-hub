@@ -129,6 +129,35 @@ def test_ingest_messages_success() -> None:
     assert stored["metadata"]["updated_at"].startswith("2026-")
 
 
+def test_ingest_messages_preserves_bounded_metadata_summary() -> None:
+    metadata, _ = _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["metadata"]["summary"] = "  Discussed search recall\nand profile context.  "
+
+    mvp_ingestion.ingest_messages(conversation)
+
+    stored = metadata.by_id["d9fd4c95-9cb3-4fd5-b967-3027f8863210"]
+    assert stored["metadata"]["summary"] == "Discussed search recall and profile context."
+
+
+def test_ingest_messages_rejects_non_string_metadata_summary() -> None:
+    _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["metadata"]["summary"] = ["not", "a", "summary"]
+
+    with pytest.raises(ValueError, match="metadata.summary must be a string"):
+        mvp_ingestion.ingest_messages(conversation)
+
+
+def test_ingest_messages_rejects_long_metadata_summary() -> None:
+    _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["metadata"]["summary"] = "x" * 2001
+
+    with pytest.raises(ValueError, match="metadata.summary exceeds max length"):
+        mvp_ingestion.ingest_messages(conversation)
+
+
 def test_ingest_messages_deduplicates_exact_content_before_embedding() -> None:
     metadata, vectors = _configure_stubs()
 
@@ -361,6 +390,23 @@ def test_search_recovers_exact_keyword_matches_without_vector_candidate() -> Non
 
     assert search_result["results"][0]["id"] == conversation["id"]
     assert search_result["results"][0]["text"] == "rareterm deployment note"
+
+
+def test_search_uses_metadata_summary_without_returning_summary_as_chunk_text() -> None:
+    metadata, vectors = _configure_stubs(retrieval_vector_score_threshold=0.5)
+    conversation = _valid_conversation()
+    conversation["messages"] = [{"role": "user", "text": "We discussed deployment notes."}]
+    conversation["metadata"]["summary"] = "Includes the phosphor-scheduler rollout decision."
+    metadata.insert(conversation)
+    vectors.rows = []
+
+    search_result = mvp_ingestion.search(query="phosphor-scheduler", top_k=5)
+
+    assert search_result["results"][0]["id"] == conversation["id"]
+    assert search_result["results"][0]["text"] == "We discussed deployment notes."
+    assert search_result["results"][0]["conversation"]["metadata"]["summary"] == (
+        "Includes the phosphor-scheduler rollout decision."
+    )
 
 
 def test_search_metadata_rerank_prefers_matching_tags() -> None:

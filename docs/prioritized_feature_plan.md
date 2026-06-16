@@ -12,7 +12,7 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P0 | MCP protocol compliance: initialize instructions, schemas, pagination, logging, completion when client UX needs it | Partial | `mcp_utility_compliance_plan.md`, `mcp_plan.md` |
 | P0 | MCP client feedback: response shape clarity, fact freshness, and source quality | Implemented | `improvements/client_feedback_improvement_plan.md` |
 | P0 | Advanced search filters for ask, facts, and profile queries | Planned | `improvements/client_feedback_improvement_plan.md` |
-| P0 | Client-provided conversation summary metadata for retrieval hints | Planned | `improvements/client_feedback_improvement_plan.md` |
+| P0 | Conversation summary metadata and profile views | Partial | `improvements/client_feedback_improvement_plan.md` |
 | P0 | MCP client smoke coverage for Codex, Gemini, Copilot, Claude, opencode | Implemented | `mcp_client_smoke_plan.md` |
 | P0 | Weekly scheduled real-client MCP smoke coverage | Implemented | `real_client_mcp_smoke_plan.md` |
 | P1 | CLI foundation and command contract | Implemented | `cli_implementation_plan.md` |
@@ -31,7 +31,7 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P3 | Elasticsearch/OpenSearch vector providers | Planned | `storage_agnostic_byoa_plan.md` |
 | P3 | Milvus/Zilliz and Weaviate vector providers | Planned | `storage_agnostic_byoa_plan.md` |
 | P3 | Release notes, image scanning, SBOM, and provenance | Planned | `release_container_docs_plan.md` |
-| P3 | Summaries, digests, consolidation | Planned here | This doc and `roadmap.md` |
+| P3 | Topic/project summaries, digests, consolidation | Planned here | This doc and `roadmap.md` |
 | P3 | UI and developer experience | Planned here | This doc and `roadmap.md` |
 | P4 | Graph memory, decay, shared memory, plugins | Planned here | This doc and `roadmap.md` |
 | P4 | Optional encrypted cloud sync | Planned here | This doc and `roadmap.md` |
@@ -144,26 +144,32 @@ Implementation sequence:
       active/superseded status, and freshness.
 - [ ] Add tests for filtered ask retrieval and fact/profile filter combinations.
 
-## P0: Client-Provided Conversation Summary Metadata
+## P0: Conversation Summary Metadata And Profile Views
 
 Use `improvements/client_feedback_improvement_plan.md` as the source of truth.
 
 This is not graph memory. It is a lightweight retrieval hint: clients may provide
 a short factual `metadata.summary` while still saving the complete conversation.
 The summary can improve recall and reranking, but raw messages and normalized
-facts remain the source of truth for answers and citations.
+facts remain the source of truth for answers and citations. Built-in generated
+conversation, profile, topic, and project summaries are tracked in the same
+feedback item because they share provenance and trust constraints.
 
 Implementation sequence:
 
-- [ ] Document optional `metadata.summary` in the conversation schema and public docs.
-- [ ] Update MCP save guidance to ask for a short factual summary while still
+- [x] Document optional `metadata.summary` in the conversation schema and public docs.
+- [x] Update MCP save guidance to ask for a short factual summary while still
       saving the complete conversation.
-- [ ] Validate `metadata.summary` as a bounded string.
-- [ ] Include summary text in metadata search/reranking.
-- [ ] Return summary in search/retrieve metadata, not as standalone answer
+- [x] Validate `metadata.summary` as a bounded string.
+- [x] Include summary text in metadata search/reranking.
+- [x] Return summary in search/retrieve metadata, not as standalone answer
       evidence unless raw messages or facts support it.
-- [ ] Add tests showing summary improves recall without replacing message
+- [x] Add tests showing summary improves recall without replacing message
       provenance.
+- [ ] Add a profile summary response that combines active facts, freshness, and
+      compact provenance.
+- [ ] Add server-generated conversation, topic, and project summaries after
+      summary provenance is reliable.
 
 ## Closed: Bulk Conversation Insert
 
@@ -397,11 +403,10 @@ Implementation sequence:
 - [ ] Add provenance/signing plan.
 - [ ] Document supported image lifecycle and security fix policy.
 
-## P3: Summaries And Consolidation
+## P3: Topic/Project Summaries And Consolidation
 
 Implementation sequence:
 
-- [ ] Add per-conversation summaries as metadata or a separate summary table.
 - [ ] Add topic-level and daily/weekly digest generation.
 - [ ] Add duplicate/redundant memory consolidation tooling.
 - [ ] Add stable-fact extraction only after summary storage and provenance are reliable.
