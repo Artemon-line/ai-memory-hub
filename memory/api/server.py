@@ -3,9 +3,10 @@ from __future__ import annotations
 from typing import Any
 
 import jsonschema
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from memory.auth import install_auth_middleware
 from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig, normalize_config
 from memory.ingestion.base_agent import BaseIngestionAgent
@@ -65,9 +66,17 @@ def _register_health_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
 
 
 def _register_api_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
-    async def memory_insert(conversation_json: dict[str, Any]) -> dict[str, Any]:
+    def owner_id(request: Request) -> str | None:
+        auth = getattr(request.state, "auth", None)
+        return getattr(auth, "owner_id", None)
+
+    async def memory_insert(
+        conversation_json: dict[str, Any], request: Request
+    ) -> dict[str, Any]:
         try:
-            return redact_content_hashes(await agent.ingest_messages(conversation_json))
+            return redact_content_hashes(
+                await agent.ingest_messages(conversation_json, owner_id=owner_id(request))
+            )
         except jsonschema.ValidationError as exc:
             raise HTTPException(status_code=400, detail=exc.message) from exc
         except ValueError as exc:
@@ -75,56 +84,70 @@ def _register_api_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
 
     app.post("/memory/insert")(memory_insert)
 
-    async def memory_search(request: SearchRequest) -> dict[str, Any]:
+    async def memory_search(payload: SearchRequest, request: Request) -> dict[str, Any]:
         return redact_content_hashes(
             await agent.search(
-                request.query, top_k=request.top_k, result_mode=request.result_mode
+                payload.query,
+                top_k=payload.top_k,
+                result_mode=payload.result_mode,
+                owner_id=owner_id(request),
             )
         )
 
     app.post("/memory/search")(memory_search)
 
-    async def memory_retrieve(request: RetrieveRequest) -> dict[str, Any]:
-        conversation = await agent.retrieve(request.id)
+    async def memory_retrieve(payload: RetrieveRequest, request: Request) -> dict[str, Any]:
+        conversation = await agent.retrieve(payload.id, owner_id=owner_id(request))
         if conversation is None:
             raise HTTPException(status_code=404, detail="memory not found")
         return {"status": "ok", "memory": redact_content_hashes(conversation)}
 
     app.post("/memory/retrieve")(memory_retrieve)
 
-    async def memory_ask(request: AskRequest) -> dict[str, Any]:
+    async def memory_ask(payload: AskRequest, request: Request) -> dict[str, Any]:
         return redact_content_hashes(
             await agent.ask(
-                request.question,
-                top_k=request.top_k,
-                max_context_tokens=request.max_context_tokens,
-                result_mode=request.result_mode,
+                payload.question,
+                top_k=payload.top_k,
+                max_context_tokens=payload.max_context_tokens,
+                result_mode=payload.result_mode,
+                owner_id=owner_id(request),
             )
         )
 
     app.post("/memory/ask")(memory_ask)
 
-    async def memory_fact_search(request: FactSearchRequest) -> dict[str, Any]:
+    async def memory_fact_search(
+        payload: FactSearchRequest, request: Request
+    ) -> dict[str, Any]:
         return redact_content_hashes(
             await agent.fact_search(
-                subject=request.subject,
-                predicate=request.predicate,
-                include_superseded=request.include_superseded,
+                subject=payload.subject,
+                predicate=payload.predicate,
+                include_superseded=payload.include_superseded,
+                owner_id=owner_id(request),
             )
         )
 
     app.post("/memory/facts/search")(memory_fact_search)
 
-    async def memory_profile_get(request: ProfileGetRequest) -> dict[str, Any]:
-        return redact_content_hashes(await agent.profile_get(subject=request.subject))
+    async def memory_profile_get(
+        payload: ProfileGetRequest, request: Request
+    ) -> dict[str, Any]:
+        return redact_content_hashes(
+            await agent.profile_get(subject=payload.subject, owner_id=owner_id(request))
+        )
 
     app.post("/memory/profile/get")(memory_profile_get)
 
-    async def memory_fact_supersede(request: FactSupersedeRequest) -> dict[str, Any]:
+    async def memory_fact_supersede(
+        payload: FactSupersedeRequest, request: Request
+    ) -> dict[str, Any]:
         return redact_content_hashes(
             await agent.fact_supersede(
-                fact_id=request.fact_id,
-                superseded_by=request.superseded_by,
+                fact_id=payload.fact_id,
+                superseded_by=payload.superseded_by,
+                owner_id=owner_id(request),
             )
         )
 
@@ -152,6 +175,8 @@ def create_app(
         version="0.1.0",
         lifespan=mcp_app.lifespan if mcp_app is not None else None,
     )
+
+    install_auth_middleware(app, config=cfg, agent=agent)
 
     if mcp_app is not None:
         app.mount("/mcp", mcp_app)

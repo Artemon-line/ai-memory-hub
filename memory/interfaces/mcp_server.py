@@ -10,6 +10,7 @@ import jsonschema
 from fastmcp import Context as FastMCPContext
 from pydantic import Field
 
+from memory.auth import current_owner_id
 from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig
 from memory.ingestion.base_agent import BaseIngestionAgent
@@ -315,7 +316,7 @@ def _register_resources(mcp: Any, agent: BaseIngestionAgent) -> None:
                 "error_code": "invalid_input",
                 "error_message": "id must be non-empty",
             }
-        memory = await agent.retrieve(id)
+        memory = await agent.retrieve(id, owner_id=current_owner_id())
         if memory is None:
             return {
                 "status": "not_found",
@@ -340,7 +341,9 @@ def _register_resources(mcp: Any, agent: BaseIngestionAgent) -> None:
                 "error_code": "invalid_input",
                 "error_message": "query must be non-empty",
             }
-        result = await agent.search(query=unquote(query), top_k=top_k)
+        result = await agent.search(
+            query=unquote(query), top_k=top_k, owner_id=current_owner_id()
+        )
         matches = result.get("results", [])
         if source:
             matches = [
@@ -374,7 +377,7 @@ def _register_resources(mcp: Any, agent: BaseIngestionAgent) -> None:
                 "error_code": "invalid_input",
                 "error_message": "day must be YYYY-MM-DD",
             }
-        result = await agent.search(query=day, top_k=top_k)
+        result = await agent.search(query=day, top_k=top_k, owner_id=current_owner_id())
         matches = result.get("results", [])
         filtered: list[dict[str, Any]] = []
         for row in matches:
@@ -459,6 +462,9 @@ def _register_prompts(mcp: Any) -> None:
 
 
 def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
+    def owner_id() -> str | None:
+        return current_owner_id()
+
     async def memory_validate(
         conversation_json: ConversationJsonArg, ctx: FastMCPContext | None = None
     ) -> dict[str, Any]:
@@ -563,7 +569,7 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 error_message=str(exc),
             )
         try:
-            result = await agent.ingest_messages(normalized)
+            result = await agent.ingest_messages(normalized, owner_id=owner_id())
         except Exception as exc:
             logger.exception("MCP memory_insert failed")
             await _emit_mcp_tool_log(
@@ -622,7 +628,12 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
             )
 
         try:
-            result = await agent.search(query=query, top_k=100, result_mode=result_mode)
+            result = await agent.search(
+                query=query,
+                top_k=100,
+                result_mode=result_mode,
+                owner_id=owner_id(),
+            )
             matches = result.get("results", [])
             if not isinstance(matches, list):
                 matches = []
@@ -674,7 +685,7 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 error_code="invalid_input",
                 error_message="id must be a non-empty string",
             )
-        memory = await agent.retrieve(id)
+        memory = await agent.retrieve(id, owner_id=owner_id())
 
         if memory is None:
             return _envelope(
@@ -756,6 +767,7 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 top_k=top_k,
                 max_context_tokens=max_context_tokens,
                 result_mode=result_mode,
+                owner_id=owner_id(),
             )
         except Exception as exc:
             logger.exception("MCP memory_ask failed")
@@ -783,6 +795,7 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
             subject=unwrap_array(subject),
             predicate=unwrap_array(predicate),
             include_superseded=bool(include_superseded),
+            owner_id=owner_id(),
         )
         await _emit_mcp_tool_log(ctx, tool_name="memory_fact_search", status="ok")
         return _with_envelope_defaults(result)
@@ -790,7 +803,9 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
     async def memory_profile_get(
         subject: str = "user", ctx: FastMCPContext | None = None
     ) -> dict[str, Any]:
-        result = await agent.profile_get(subject=str(unwrap_array(subject) or "user"))
+        result = await agent.profile_get(
+            subject=str(unwrap_array(subject) or "user"), owner_id=owner_id()
+        )
         await _emit_mcp_tool_log(ctx, tool_name="memory_profile_get", status="ok")
         return _with_envelope_defaults(result)
 
@@ -809,7 +824,9 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 error_code="invalid_input",
                 error_message="superseded_by must be a non-empty string",
             )
-        result = await agent.fact_supersede(fact_id=fact_id, superseded_by=superseded_by)
+        result = await agent.fact_supersede(
+            fact_id=fact_id, superseded_by=superseded_by, owner_id=owner_id()
+        )
         await _emit_mcp_tool_log(ctx, tool_name="memory_fact_supersede", status="ok")
         return _with_envelope_defaults(result)
 

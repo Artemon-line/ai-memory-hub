@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import sqlite3
@@ -26,6 +27,7 @@ class SQLiteMetadataStore:
         ("facts", "superseded_at"): "TEXT",
         ("facts", "object_raw"): "TEXT",
         ("facts", "object_normalized"): "TEXT",
+        ("facts", "owner_id"): "TEXT",
     }
 
     def __init__(self, db_path: str | Path):
@@ -56,6 +58,35 @@ class SQLiteMetadataStore:
             )
             self._ensure_column(conn, "conversations", "conversation_hash", "TEXT")
             self._ensure_column(conn, "conversations", "upstream_thread_id", "TEXT")
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS users (
+                    id TEXT PRIMARY KEY,
+                    display_name TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    disabled_at TEXT
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS auth_tokens (
+                    token_hash TEXT PRIMARY KEY,
+                    owner_id TEXT NOT NULL,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TEXT,
+                    revoked_at TEXT,
+                    FOREIGN KEY(owner_id) REFERENCES users(id)
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_auth_tokens_owner
+                ON auth_tokens(owner_id)
+                WHERE revoked_at IS NULL
+                """
+            )
             conn.execute(
                 """
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_conversations_conversation_hash
@@ -107,6 +138,7 @@ class SQLiteMetadataStore:
                     qualifiers TEXT NOT NULL,
                     confidence TEXT NOT NULL,
                     source_conversation_id TEXT NOT NULL,
+                    owner_id TEXT,
                     source_message_indexes TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
@@ -128,6 +160,7 @@ class SQLiteMetadataStore:
                 ("superseded_at", "TEXT"),
                 ("object_raw", "TEXT"),
                 ("object_normalized", "TEXT"),
+                ("owner_id", "TEXT"),
             ):
                 self._ensure_column(conn, "facts", column, declaration)
             conn.execute(
@@ -182,6 +215,47 @@ class SQLiteMetadataStore:
             )
             self._replace_child_rows(conn, conversation_json)
         return memory_id
+
+    def create_auth_token(
+        self, *, owner_id: str, token: str, display_name: str | None = None
+    ) -> None:
+        owner = _validate_owner_id(owner_id)
+        token_hash = _hash_bearer_token(token)
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO users (id, display_name)
+                VALUES (?, ?)
+                ON CONFLICT(id) DO UPDATE SET display_name = excluded.display_name
+                """,
+                (owner, display_name),
+            )
+            conn.execute(
+                """
+                INSERT INTO auth_tokens (token_hash, owner_id)
+                VALUES (?, ?)
+                ON CONFLICT(token_hash) DO UPDATE SET owner_id = excluded.owner_id,
+                    revoked_at = NULL
+                """,
+                (token_hash, owner),
+            )
+
+    def owner_for_token(self, token: str) -> str | None:
+        token_hash = _hash_bearer_token(token)
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT auth_tokens.owner_id
+                FROM auth_tokens
+                JOIN users ON users.id = auth_tokens.owner_id
+                WHERE auth_tokens.token_hash = ?
+                  AND auth_tokens.revoked_at IS NULL
+                  AND users.disabled_at IS NULL
+                  AND (auth_tokens.expires_at IS NULL OR auth_tokens.expires_at > CURRENT_TIMESTAMP)
+                """,
+                (token_hash,),
+            ).fetchone()
+        return str(row["owner_id"]) if row is not None else None
 
     def insert_new(self, conversation_json: dict[str, Any]) -> tuple[str, bool]:
         memory_id = self._validate_memory_id(conversation_json["id"])
@@ -347,12 +421,12 @@ class SQLiteMetadataStore:
                     """
                     INSERT INTO facts (
                         id, subject, predicate, object, qualifiers, confidence,
-                        source_conversation_id, source_message_indexes,
+                        source_conversation_id, owner_id, source_message_indexes,
                         created_at, updated_at, superseded_by, superseded_at,
                         source_quality, confidence_reason, last_confirmed_at,
                         object_raw, object_normalized, deleted_at
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(id) DO UPDATE SET
                         subject = excluded.subject,
                         predicate = excluded.predicate,
@@ -360,6 +434,7 @@ class SQLiteMetadataStore:
                         qualifiers = excluded.qualifiers,
                         confidence = excluded.confidence,
                         source_conversation_id = excluded.source_conversation_id,
+                        owner_id = excluded.owner_id,
                         source_message_indexes = excluded.source_message_indexes,
                         updated_at = excluded.updated_at,
                         superseded_by = excluded.superseded_by,
@@ -529,6 +604,7 @@ class SQLiteMetadataStore:
             SET superseded_by = ?, superseded_at = ?, updated_at = ?
             WHERE subject = ?
               AND predicate = ?
+              AND (owner_id IS ? OR owner_id = ?)
               AND superseded_by IS NULL
               AND deleted_at IS NULL
               AND lower(object) LIKE ?
@@ -539,6 +615,8 @@ class SQLiteMetadataStore:
                 str(fact["updated_at"]),
                 str(fact["subject"]),
                 str(fact["predicate"]),
+                fact.get("owner_id"),
+                fact.get("owner_id"),
                 f"%{str(corrects).lower()}%",
             ),
         )
@@ -555,6 +633,7 @@ class SQLiteMetadataStore:
             WHERE subject = ?
               AND predicate = ?
               AND object = ?
+              AND (owner_id IS ? OR owner_id = ?)
               AND superseded_by IS NULL
               AND deleted_at IS NULL
             """,
@@ -564,6 +643,8 @@ class SQLiteMetadataStore:
                 str(fact["subject"]),
                 str(fact["predicate"]),
                 str(fact["object"]),
+                fact.get("owner_id"),
+                fact.get("owner_id"),
             ),
         )
 
@@ -576,6 +657,7 @@ class SQLiteMetadataStore:
             json.dumps(fact.get("qualifiers", {}), separators=(",", ":"), ensure_ascii=False),
             str(fact.get("confidence", "medium")),
             str(fact["source_conversation_id"]),
+            fact.get("owner_id"),
             json.dumps(fact.get("source_message_indexes", []), separators=(",", ":")),
             str(fact["created_at"]),
             str(fact["updated_at"]),
@@ -598,6 +680,7 @@ class SQLiteMetadataStore:
             "qualifiers": json.loads(str(row["qualifiers"])),
             "confidence": str(row["confidence"]),
             "source_conversation_id": str(row["source_conversation_id"]),
+            "owner_id": row["owner_id"],
             "source_message_indexes": json.loads(str(row["source_message_indexes"])),
             "created_at": str(row["created_at"]),
             "updated_at": str(row["updated_at"]),
@@ -676,3 +759,18 @@ def _keyword_tokens(query: str) -> list[str]:
         for token in re.findall(r"[A-Za-z0-9][A-Za-z0-9_-]*", query)
         if len(token) >= 2
     ][:8]
+
+
+def _hash_bearer_token(token: str) -> str:
+    if not isinstance(token, str) or not token:
+        raise ValueError("bearer token must be a non-empty string")
+    return "sha256:" + hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _validate_owner_id(owner_id: str) -> str:
+    value = str(owner_id).strip()
+    if not value:
+        raise ValueError("owner_id must be non-empty")
+    if len(value) > 128:
+        raise ValueError("owner_id exceeds max length 128")
+    return value

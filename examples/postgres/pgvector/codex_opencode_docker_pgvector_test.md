@@ -127,6 +127,42 @@ The Compose example publishes ai-memory-hub on `0.0.0.0:8000`, so clients on
 another PC can use the host machine's LAN IP. It keeps Postgres bound to
 `127.0.0.1:5432` because remote clients do not need direct database access.
 
+The checked-in config keeps `api.auth: none` so local smoke tests work without a
+setup step. Before using this listener from another PC, seed a bearer token and
+switch the mounted config to `bearer_token`:
+
+```bash
+cd examples/postgres/pgvector
+
+AMH_OWNER="personal"
+AMH_TOKEN="$(openssl rand -hex 32)"
+AMH_TOKEN_HASH="sha256:$(printf '%s' "$AMH_TOKEN" | sha256sum | awk '{print $1}')"
+
+docker compose exec -T postgres psql -U memory -d memory <<SQL
+INSERT INTO users (id, display_name)
+VALUES ('$AMH_OWNER', '$AMH_OWNER')
+ON CONFLICT (id) DO UPDATE SET display_name = EXCLUDED.display_name;
+
+INSERT INTO auth_tokens (token_hash, owner_id)
+VALUES ('$AMH_TOKEN_HASH', '$AMH_OWNER')
+ON CONFLICT (token_hash) DO UPDATE SET owner_id = EXCLUDED.owner_id,
+  revoked_at = NULL;
+SQL
+
+sed -i 's/^  auth: none$/  auth: bearer_token/' config.yaml
+docker compose restart ai-memory-hub
+
+printf 'ai-memory-hub bearer token: %s\n' "$AMH_TOKEN"
+```
+
+If you started Compose with `AMH_CONFIG_FILE=config.ollama.yaml`, run the `sed`
+command against `config.ollama.yaml` instead. After enabling bearer auth, direct
+HTTP calls need this header:
+
+```bash
+-H "Authorization: Bearer $AMH_TOKEN"
+```
+
 Find the host LAN IP from WSL/Linux:
 
 ```bash
@@ -420,7 +456,10 @@ docker compose down -v
 - The checked-in `Containerfile` must install `psycopg` through `uv sync --frozen --no-dev --extra postgres` before using Postgres in containers.
 - The checked-in `Containerfile` must install `tiktoken` through `uv sync --frozen --no-dev --extra tokenizer` before precise token budgeting is available.
 - `storage.vector.allow_fallback: false` is intentional. If PGVector fails, the container should fail instead of silently using in-memory vectors.
-- The Compose example exposes ai-memory-hub on the LAN. Do not use this unauthenticated setup on untrusted networks.
+- The Compose example exposes ai-memory-hub on the LAN. Keep `api.auth: none`
+  only for local smoke tests; use `api.auth: bearer_token` before trusted-LAN
+  use, and do not expose it on untrusted networks without TLS, a VPN, or a
+  trusted reverse proxy.
 
 ## References
 

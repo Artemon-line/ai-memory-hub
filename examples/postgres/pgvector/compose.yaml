@@ -31,6 +31,7 @@ services:
         condition: service_healthy
     ports:
       # Bind on all host interfaces so another PC on the same LAN can reach MCP/API.
+      # Use api.auth: bearer_token in the mounted config before trusted-LAN use.
       - "0.0.0.0:8000:8000"
     volumes:
       # The :Z suffix makes this bind mount work with rootless Podman on

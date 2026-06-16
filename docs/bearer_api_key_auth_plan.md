@@ -48,14 +48,19 @@ Implemented:
 
 - [x] Config placeholders exist:
   - `api.auth: none`
+  - `api.auth: bearer_token`
 - [x] Docs warn not to expose the API/MCP endpoint beyond localhost without auth.
 - [x] MCP and HTTP API are both mounted by the same FastAPI app.
+- [x] Auth enforcement middleware protects `/memory/*` and `/mcp/*`.
+- [x] SQLite and Postgres metadata providers store users and token hashes.
+- [x] Conversations and facts are stamped with server-derived `owner_id`.
+- [x] Search, retrieve, ask, fact search, profile, and fact supersession are
+      scoped by `owner_id`.
+- [x] Vector candidates are filtered through metadata ownership before returning
+      or answering.
 
 Not implemented yet:
 
-- [ ] Auth enforcement middleware.
-- [ ] User and token storage in metadata providers.
-- [ ] Per-user ownership fields and query scoping.
 - [ ] Admin CLI/API commands for user and token management.
 - [ ] MCP OAuth protected resource metadata.
 - [ ] MCP `WWW-Authenticate` challenges with `resource_metadata` and scope hints.
@@ -183,18 +188,18 @@ This is the first implementation target.
 
 Implementation sequence:
 
-- [ ] Add config validation:
-  - [ ] allowed `api.auth` values: `none`, `bearer_token`,
+- [x] Add config validation:
+  - [x] allowed `api.auth` values: `none`, `bearer_token`,
     `oauth_resource_server`
   - [ ] `bearer_token` requires a token hash secret from environment or a
     generated local secret file outside the repo
   - [ ] warn when `auth=none` is used with a non-loopback bind address
-- [ ] Add metadata-store tables/records for auth:
-  - [ ] `users`
-  - [ ] `api_tokens`
+- [x] Add metadata-store tables/records for auth:
+  - [x] `users`
+  - [x] `auth_tokens`
   - [ ] token hash, token prefix, name, scopes, created/last-used/expires/revoked
         timestamps
-  - [ ] store only token hashes, never raw tokens
+  - [x] store only token hashes, never raw tokens
 - [ ] Add admin CLI commands:
   - [ ] `aim admin user create <username>`
   - [ ] `aim admin user list`
@@ -202,29 +207,29 @@ Implementation sequence:
   - [ ] `aim admin token list --user <username>`
   - [ ] `aim admin token revoke <token-id>`
   - [ ] print raw token only once on creation
-- [ ] Add HTTP auth middleware:
-  - [ ] parse `Authorization: Bearer <token>`
-  - [ ] reject missing/invalid/revoked/expired tokens with `401`
+- [x] Add HTTP auth middleware:
+  - [x] parse `Authorization: Bearer <token>`
+  - [x] reject missing/invalid/revoked/expired tokens with `401`
   - [ ] reject insufficient scope with `403`
-  - [ ] keep `/health` and `/ready` public
-  - [ ] protect `/memory/*` and `/mcp/*`
-  - [ ] reject or ignore tokens in query strings
+  - [x] keep `/health` and `/ready` public
+  - [x] protect `/memory/*` and `/mcp/*`
+  - [x] reject or ignore tokens in query strings
 - [ ] Add request principal context:
   - [ ] `user_id`
   - [ ] token id
   - [ ] scopes
   - [ ] auth mode
-- [ ] Add per-user ownership:
-  - [ ] stamp new conversations with server-side `owner_id`
-  - [ ] stamp extracted facts with `owner_id`
-  - [ ] do not trust client-supplied `metadata.owner_id`
-  - [ ] filter search/retrieve/ask/fact/profile operations by `owner_id`
-  - [ ] prevent direct retrieval of another user's memory by id
+- [x] Add per-user ownership:
+  - [x] stamp new conversations with server-side `owner_id`
+  - [x] stamp extracted facts with `owner_id`
+  - [x] do not trust client-supplied `metadata.owner_id`
+  - [x] filter search/retrieve/ask/fact/profile operations by `owner_id`
+  - [x] prevent direct retrieval of another user's memory by id
 - [ ] Add vector isolation:
   - [ ] include `owner_id` in vector rows where provider supports metadata
-  - [ ] for providers without vector-side filters, filter candidates after
+  - [x] for providers without vector-side filters, filter candidates after
         metadata lookup before returning or answering
-  - [ ] add tests proving no cross-user leakage through vector candidates
+  - [x] add tests proving no cross-user leakage through vector candidates
 - [ ] Add scopes:
   - [ ] `memory:read` for search/retrieve/ask/fact search/profile
   - [ ] `memory:write` for validate/insert/fact supersession
@@ -233,12 +238,12 @@ Implementation sequence:
   - [ ] redact `Authorization: Bearer ...` in logs and errors
   - [ ] avoid returning token hashes
   - [ ] never log raw generated tokens
-- [ ] Add tests:
-  - [ ] no-auth mode still passes existing tests
-  - [ ] bearer mode rejects missing/invalid/revoked/expired token
-  - [ ] bearer mode accepts valid token
-  - [ ] user A cannot search/retrieve/ask user B memory
-  - [ ] user A cannot access user B facts/profile
+- [x] Add tests:
+  - [x] no-auth mode still passes existing tests
+  - [x] bearer mode rejects missing/invalid/revoked/expired token
+  - [x] bearer mode accepts valid token
+  - [x] user A cannot search/retrieve/ask user B memory
+  - [x] user A cannot access user B facts/profile
   - [ ] insufficient scope returns `403`
   - [ ] admin CLI creates and revokes tokens
 
@@ -499,8 +504,10 @@ only through a VPN. Do not publish unauthenticated MCP/API endpoints.
 
 ## Acceptance Criteria
 
-- `api.auth` supports only `none` and `oauth_resource_server`.
+- `api.auth` supports `none`, `bearer_token`, and `oauth_resource_server`.
 - `api.auth: none` remains available for CI and loopback-only local testing.
+- `api.auth: bearer_token` protects `/memory/*` and `/mcp/*` with
+  `Authorization: Bearer <token>`.
 - `api.auth: oauth_resource_server` exposes MCP protected resource metadata.
 - Protected MCP responses include proper Bearer challenges.
 - OAuth mode validates token audience/resource before processing MCP requests.

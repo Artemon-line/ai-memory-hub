@@ -119,16 +119,16 @@ that can reach the port.
 
 Implementation sequence:
 
-- [ ] Add `api.auth: bearer_token` alongside existing `none` mode.
-- [ ] Store users and token hashes in the metadata database, not in config files.
+- [x] Add `api.auth: bearer_token` alongside existing `none` mode.
+- [x] Store users and token hashes in the metadata database, not in config files.
 - [ ] Add admin CLI commands to create users, issue tokens, list tokens, and
       revoke tokens.
-- [ ] Accept tokens through `Authorization: Bearer <token>` for HTTP API and MCP.
-- [ ] Map each token to a server-side user/principal and scopes.
-- [ ] Stamp new conversations and facts with server-side `owner_id`.
-- [ ] Scope search, retrieve, ask, fact search, profile, and future admin
+- [x] Accept tokens through `Authorization: Bearer <token>` for HTTP API and MCP.
+- [x] Map each token to a server-side user/principal; scopes remain planned.
+- [x] Stamp new conversations and facts with server-side `owner_id`.
+- [x] Scope search, retrieve, ask, fact search, profile, and future admin
       operations by `owner_id`.
-- [ ] Prevent cross-user leakage from vector candidates by filtering against
+- [x] Prevent cross-user leakage from vector candidates by filtering against
       metadata ownership before returning or answering.
 - [ ] Redact bearer tokens from logs, errors, and diagnostics.
 - [ ] Keep `auth=none` for CI and loopback-only local development.

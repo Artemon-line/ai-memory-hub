@@ -102,6 +102,12 @@ cd examples/postgres/pgvector
 docker compose up --build
 ```
 
+The Compose example is unauthenticated for local smoke testing. Before exposing
+it on a LAN, create a bearer token in the metadata database and change
+`api.auth` in the mounted config to `bearer_token`; clients then send
+`Authorization: Bearer <token>` to both HTTP and MCP endpoints. See the PGVector
+runbook in the checked-in Compose example directory for the exact commands.
+
 ## Documentation
 
 - [Technical overview](docs/overview.md)

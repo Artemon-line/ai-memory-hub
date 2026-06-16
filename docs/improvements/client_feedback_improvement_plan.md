@@ -167,24 +167,25 @@ Source feedback:
 
 Current status:
 
-- Config placeholders exist, but auth is not enforced.
+- `api.auth: bearer_token` is enforced for `/memory/*` and `/mcp/*`.
 - MCP and HTTP API are mounted by the same FastAPI app.
-- Conversation and fact reads are not scoped by user.
+- Conversation and fact reads are scoped by server-derived `owner_id` when
+  bearer auth is enabled.
 
 Implementation sequence:
 
-- [ ] Add `api.auth: bearer_token` for simple personal access tokens.
-- [ ] Keep `Authorization: Bearer <token>` as the only token transport so the
+- [x] Add `api.auth: bearer_token` for simple personal access tokens.
+- [x] Keep `Authorization: Bearer <token>` as the only token transport so the
   client shape remains compatible with MCP OAuth later.
-- [ ] Store users and token hashes in the metadata database, not config files.
+- [x] Store users and token hashes in the metadata database, not config files.
 - [ ] Add admin CLI commands to create users, issue tokens, list tokens, and
   revoke tokens.
-- [ ] Map each token to `user_id` plus scopes.
-- [ ] Stamp new conversations and facts with server-side `owner_id`.
-- [ ] Scope search, retrieve, ask, fact search, profile, and future admin actions
+- [x] Map each token to `user_id`; scopes remain planned.
+- [x] Stamp new conversations and facts with server-side `owner_id`.
+- [x] Scope search, retrieve, ask, fact search, profile, and future admin actions
   by `owner_id`.
-- [ ] Do not trust client-supplied owner metadata.
-- [ ] Filter vector candidates through metadata ownership before returning or
+- [x] Do not trust client-supplied owner metadata.
+- [x] Filter vector candidates through metadata ownership before returning or
   answering.
 - [ ] Redact bearer tokens from logs and diagnostics.
 - [ ] Keep Google/Apple/Meta OAuth as a later `oauth_resource_server` or reverse

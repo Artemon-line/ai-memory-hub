@@ -17,6 +17,7 @@ class StubEmbedder(mvp_ingestion.EmbeddingProvider):
 class StubMetadataStore:
     def __init__(self):
         self.rows: dict[str, dict[str, object]] = {}
+        self.auth_tokens: dict[str, str] = {}
 
     def insert(self, conversation_json: dict[str, object]) -> str:
         memory_id = str(conversation_json["id"])
@@ -77,9 +78,34 @@ def _conversation() -> dict[str, object]:
 
 
 def _client() -> TestClient:
-    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}, "interfaces": {"api": 'true'}}, runtime=_runtime())
-    app = create_app(config={"providers": {"embeddings": "local", "vector_db": "in_memory"}}, ingestion_agent=agent)
+    runtime = _runtime()
+    agent = MVPIngestionAgent(
+        config={"providers": {"agent": "mvp"}, "interfaces": {"api": "true"}},
+        runtime=runtime,
+    )
+    app = create_app(
+        config={"providers": {"embeddings": "local", "vector_db": "in_memory"}},
+        ingestion_agent=agent,
+    )
     return TestClient(app)
+
+
+def _auth_client() -> tuple[TestClient, StubMetadataStore]:
+    runtime = _runtime()
+    store = runtime.metadata_store
+    store.auth_tokens = {"token-a": "owner-a", "token-b": "owner-b"}
+    agent = MVPIngestionAgent(
+        config={"providers": {"agent": "mvp"}, "interfaces": {"api": "true"}},
+        runtime=runtime,
+    )
+    app = create_app(
+        config={
+            "api": {"auth": "bearer_token"},
+            "providers": {"embeddings": "local", "vector_db": "in_memory"},
+        },
+        ingestion_agent=agent,
+    )
+    return TestClient(app), store
 
 
 def test_memory_insert_200() -> None:
@@ -102,6 +128,64 @@ def test_health_and_ready_are_public_and_redacted() -> None:
     assert ready.json()["mode"] == "ok"
     assert "content_hash" not in str(health.json())
     assert "content_hash" not in str(ready.json())
+
+
+def test_bearer_auth_rejects_missing_and_invalid_tokens() -> None:
+    client, _ = _auth_client()
+
+    health = client.get("/health")
+    missing = client.post("/memory/search", json={"query": "hello"})
+    invalid = client.post(
+        "/memory/search",
+        json={"query": "hello"},
+        headers={"Authorization": "Bearer wrong"},
+    )
+    mcp_missing = client.post("/mcp/")
+
+    assert health.status_code == 200
+    assert missing.status_code == 401
+    assert invalid.status_code == 401
+    assert mcp_missing.status_code == 401
+    assert missing.headers["www-authenticate"].startswith("Bearer")
+
+
+def test_bearer_auth_stamps_owner_and_isolates_memory() -> None:
+    client, store = _auth_client()
+    owner_a_headers = {"Authorization": "Bearer token-a"}
+    owner_b_headers = {"Authorization": "Bearer token-b"}
+    owner_a_payload = _conversation()
+    owner_a_payload["metadata"]["owner_id"] = "client-supplied"
+    owner_a_payload["messages"] = [
+        {"role": "user", "text": "I own a blue Gibson guitar."}
+    ]
+    owner_b_payload = _conversation()
+    owner_b_payload["id"] = "11111111-1111-4111-8111-111111111111"
+    owner_b_payload["messages"] = [
+        {"role": "user", "text": "I own a red Fender guitar."}
+    ]
+
+    insert_a = client.post("/memory/insert", json=owner_a_payload, headers=owner_a_headers)
+    insert_b = client.post("/memory/insert", json=owner_b_payload, headers=owner_b_headers)
+    search_a = client.post("/memory/search", json={"query": "Gibson"}, headers=owner_a_headers)
+    search_b = client.post("/memory/search", json={"query": "Gibson"}, headers=owner_b_headers)
+    retrieve_cross = client.post(
+        "/memory/retrieve", json={"id": owner_a_payload["id"]}, headers=owner_b_headers
+    )
+    ask_a = client.post(
+        "/memory/ask", json={"question": "What guitar do I own?"}, headers=owner_a_headers
+    )
+    ask_b = client.post(
+        "/memory/ask", json={"question": "What guitar do I own?"}, headers=owner_b_headers
+    )
+
+    assert insert_a.status_code == 200
+    assert insert_b.status_code == 200
+    assert store.rows[owner_a_payload["id"]]["metadata"]["owner_id"] == "owner-a"
+    assert search_a.json()["results"][0]["id"] == owner_a_payload["id"]
+    assert owner_a_payload["id"] not in {row["id"] for row in search_b.json()["results"]}
+    assert retrieve_cross.status_code == 404
+    assert "blue Gibson" in ask_a.json()["answer"]
+    assert "red Fender" in ask_b.json()["answer"]
 
 
 def test_memory_insert_400_on_invalid_schema() -> None:

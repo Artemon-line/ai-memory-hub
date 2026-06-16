@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import uuid
@@ -34,6 +35,28 @@ CREATE TABLE IF NOT EXISTS schema_version (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 )
 """
+CREATE_USERS_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    display_name TEXT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    disabled_at TIMESTAMPTZ NULL
+)
+"""
+CREATE_AUTH_TOKENS_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS auth_tokens (
+    token_hash TEXT PRIMARY KEY,
+    owner_id TEXT NOT NULL REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NULL,
+    revoked_at TIMESTAMPTZ NULL
+)
+"""
+CREATE_AUTH_TOKENS_OWNER_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_auth_tokens_owner
+ON auth_tokens(owner_id)
+WHERE revoked_at IS NULL
+"""
 CREATE_FACTS_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS facts (
     id TEXT PRIMARY KEY,
@@ -43,6 +66,7 @@ CREATE TABLE IF NOT EXISTS facts (
     qualifiers JSONB NOT NULL,
     confidence TEXT NOT NULL,
     source_conversation_id TEXT NOT NULL,
+    owner_id TEXT NULL,
     source_message_indexes JSONB NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL,
@@ -134,6 +158,9 @@ class PostgresMetadataStore:
                 cur.execute("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS upstream_thread_id TEXT NULL")
                 cur.execute(CREATE_UPSTREAM_THREAD_INDEX_SQL)
                 cur.execute(CREATE_SCHEMA_VERSION_TABLE_SQL)
+                cur.execute(CREATE_USERS_TABLE_SQL)
+                cur.execute(CREATE_AUTH_TOKENS_TABLE_SQL)
+                cur.execute(CREATE_AUTH_TOKENS_OWNER_INDEX_SQL)
                 cur.execute(CREATE_FACTS_TABLE_SQL)
                 cur.execute("ALTER TABLE facts ADD COLUMN IF NOT EXISTS superseded_at TIMESTAMPTZ NULL")
                 cur.execute("ALTER TABLE facts ADD COLUMN IF NOT EXISTS source_quality TEXT NULL")
@@ -141,6 +168,7 @@ class PostgresMetadataStore:
                 cur.execute("ALTER TABLE facts ADD COLUMN IF NOT EXISTS last_confirmed_at TIMESTAMPTZ NULL")
                 cur.execute("ALTER TABLE facts ADD COLUMN IF NOT EXISTS object_raw TEXT NULL")
                 cur.execute("ALTER TABLE facts ADD COLUMN IF NOT EXISTS object_normalized TEXT NULL")
+                cur.execute("ALTER TABLE facts ADD COLUMN IF NOT EXISTS owner_id TEXT NULL")
                 cur.execute(CREATE_FACTS_INDEX_SQL)
                 cur.execute(SEED_SCHEMA_VERSION_SQL, (1, self._schema_version_seed))
 
@@ -178,6 +206,50 @@ class PostgresMetadataStore:
                     ),
                 )
         return memory_id
+
+    def create_auth_token(
+        self, *, owner_id: str, token: str, display_name: str | None = None
+    ) -> None:
+        owner = _validate_owner_id(owner_id)
+        token_hash = _hash_bearer_token(token)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO users (id, display_name)
+                    VALUES (%s, %s)
+                    ON CONFLICT (id) DO UPDATE SET display_name = EXCLUDED.display_name
+                    """,
+                    (owner, display_name),
+                )
+                cur.execute(
+                    """
+                    INSERT INTO auth_tokens (token_hash, owner_id)
+                    VALUES (%s, %s)
+                    ON CONFLICT (token_hash) DO UPDATE SET owner_id = EXCLUDED.owner_id,
+                        revoked_at = NULL
+                    """,
+                    (token_hash, owner),
+                )
+
+    def owner_for_token(self, token: str) -> str | None:
+        token_hash = _hash_bearer_token(token)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT auth_tokens.owner_id
+                    FROM auth_tokens
+                    JOIN users ON users.id = auth_tokens.owner_id
+                    WHERE auth_tokens.token_hash = %s
+                      AND auth_tokens.revoked_at IS NULL
+                      AND users.disabled_at IS NULL
+                      AND (auth_tokens.expires_at IS NULL OR auth_tokens.expires_at > NOW())
+                    """,
+                    (token_hash,),
+                )
+                row = cur.fetchone()
+        return str(row[0]) if row is not None else None
 
     def insert_new(self, conversation_json: dict[str, Any]) -> tuple[str, bool]:
         memory_id = self._validate_memory_id(conversation_json["id"])
@@ -270,14 +342,14 @@ class PostgresMetadataStore:
                         """
                         INSERT INTO facts (
                             id, subject, predicate, object, qualifiers, confidence,
-                            source_conversation_id, source_message_indexes,
+                            source_conversation_id, owner_id, source_message_indexes,
                             created_at, updated_at, superseded_by, superseded_at,
                             source_quality, confidence_reason, last_confirmed_at,
                             object_raw, object_normalized, deleted_at
                         )
                         VALUES (
-                            %s, %s, %s, %s, %s::jsonb, %s, %s, %s::jsonb, %s, %s,
-                            %s, %s, %s, %s, %s, %s, %s, %s
+                            %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s::jsonb, %s,
+                            %s, %s, %s, %s, %s, %s, %s, %s, %s
                         )
                         ON CONFLICT (id) DO UPDATE
                         SET subject = EXCLUDED.subject,
@@ -286,6 +358,7 @@ class PostgresMetadataStore:
                             qualifiers = EXCLUDED.qualifiers,
                             confidence = EXCLUDED.confidence,
                             source_conversation_id = EXCLUDED.source_conversation_id,
+                            owner_id = EXCLUDED.owner_id,
                             source_message_indexes = EXCLUDED.source_message_indexes,
                             updated_at = EXCLUDED.updated_at,
                             superseded_by = EXCLUDED.superseded_by,
@@ -322,7 +395,7 @@ class PostgresMetadataStore:
                 cur.execute(
                     f"""
                     SELECT id, subject, predicate, object, qualifiers::text, confidence,
-                           source_conversation_id, source_message_indexes::text,
+                           source_conversation_id, owner_id, source_message_indexes::text,
                            created_at::text, updated_at::text, superseded_by,
                            superseded_at::text, source_quality, confidence_reason,
                            last_confirmed_at::text, object_raw, object_normalized,
@@ -445,6 +518,7 @@ class PostgresMetadataStore:
             SET superseded_by = %s, superseded_at = %s, updated_at = %s
             WHERE subject = %s
               AND predicate = %s
+              AND owner_id IS NOT DISTINCT FROM %s
               AND superseded_by IS NULL
               AND deleted_at IS NULL
               AND lower(object) LIKE %s
@@ -455,6 +529,7 @@ class PostgresMetadataStore:
                 str(fact["updated_at"]),
                 str(fact["subject"]),
                 str(fact["predicate"]),
+                fact.get("owner_id"),
                 f"%{str(corrects).lower()}%",
             ),
         )
@@ -469,6 +544,7 @@ class PostgresMetadataStore:
             WHERE subject = %s
               AND predicate = %s
               AND object = %s
+              AND owner_id IS NOT DISTINCT FROM %s
               AND superseded_by IS NULL
               AND deleted_at IS NULL
             """,
@@ -478,6 +554,7 @@ class PostgresMetadataStore:
                 str(fact["subject"]),
                 str(fact["predicate"]),
                 str(fact["object"]),
+                fact.get("owner_id"),
             ),
         )
 
@@ -490,6 +567,7 @@ class PostgresMetadataStore:
             json.dumps(fact.get("qualifiers", {}), separators=(",", ":"), ensure_ascii=False),
             str(fact.get("confidence", "medium")),
             str(fact["source_conversation_id"]),
+            fact.get("owner_id"),
             json.dumps(fact.get("source_message_indexes", []), separators=(",", ":")),
             str(fact["created_at"]),
             str(fact["updated_at"]),
@@ -504,6 +582,11 @@ class PostgresMetadataStore:
         )
 
     def _fact_from_row(self, row: Any) -> dict[str, Any]:
+        if len(row) == 18:
+            if row[7] is None:
+                row = (*row, None)
+            else:
+                row = (*row[:7], None, *row[7:])
         return {
             "id": str(row[0]),
             "subject": str(row[1]),
@@ -512,17 +595,18 @@ class PostgresMetadataStore:
             "qualifiers": json.loads(str(row[4])),
             "confidence": str(row[5]),
             "source_conversation_id": str(row[6]),
-            "source_message_indexes": json.loads(str(row[7])),
-            "created_at": str(row[8]),
-            "updated_at": str(row[9]),
-            "superseded_by": row[10],
-            "superseded_at": row[11],
-            "source_quality": row[12],
-            "confidence_reason": row[13],
-            "last_confirmed_at": row[14],
-            "object_raw": row[15],
-            "object_normalized": row[16],
-            "deleted_at": row[17],
+            "owner_id": row[7],
+            "source_message_indexes": json.loads(str(row[8])),
+            "created_at": str(row[9]),
+            "updated_at": str(row[10]),
+            "superseded_by": row[11],
+            "superseded_at": row[12],
+            "source_quality": row[13],
+            "confidence_reason": row[14],
+            "last_confirmed_at": row[15],
+            "object_raw": row[16],
+            "object_normalized": row[17],
+            "deleted_at": row[18],
         }
 
     def _resolve_insert_new_conflict(
@@ -548,3 +632,18 @@ def _keyword_tokens(query: str) -> list[str]:
         for token in re.findall(r"[A-Za-z0-9][A-Za-z0-9_-]*", query)
         if len(token) >= 2
     ][:8]
+
+
+def _hash_bearer_token(token: str) -> str:
+    if not isinstance(token, str) or not token:
+        raise ValueError("bearer token must be a non-empty string")
+    return "sha256:" + hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _validate_owner_id(owner_id: str) -> str:
+    value = str(owner_id).strip()
+    if not value:
+        raise ValueError("owner_id must be non-empty")
+    if len(value) > 128:
+        raise ValueError("owner_id exceeds max length 128")
+    return value

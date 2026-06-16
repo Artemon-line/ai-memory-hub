@@ -137,6 +137,16 @@ class APIConfig(BaseModel):
     auth: str = "none"
     api_key: str = ""
 
+    @field_validator("auth")
+    @classmethod
+    def validate_auth(cls, v: str) -> str:
+        value = v.lower()
+        if value not in {"none", "bearer_token", "oauth_resource_server"}:
+            raise ValueError(
+                "api.auth must be one of: none, bearer_token, oauth_resource_server"
+            )
+        return value
+
 
 class HubConfig(BaseModel):
     model_config = ConfigDict(populate_by_name=True, protected_namespaces=())

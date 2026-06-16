@@ -14,7 +14,7 @@ class BaseIngestionAgent(ABC):
 
     @abstractmethod
     async def ingest_messages(
-        self, conversation_json: Dict[str, Any]
+        self, conversation_json: Dict[str, Any], *, owner_id: str | None = None
     ) -> Dict[str, Any]:
         """Ingest a pre-formatted conversation JSON object."""
 
@@ -25,11 +25,18 @@ class BaseIngestionAgent(ABC):
         return result
 
     async def search(
-        self, query: str, *, top_k: int = 5, result_mode: str = "chunks"
+        self,
+        query: str,
+        *,
+        top_k: int = 5,
+        result_mode: str = "chunks",
+        owner_id: str | None = None,
     ) -> Dict[str, Any]:
         raise NotImplementedError("search is not implemented")
 
-    async def retrieve(self, memory_id: str) -> Optional[Dict[str, Any]]:
+    async def retrieve(
+        self, memory_id: str, *, owner_id: str | None = None
+    ) -> Optional[Dict[str, Any]]:
         raise NotImplementedError("retrieve is not implemented")
 
     async def ask(
@@ -39,6 +46,7 @@ class BaseIngestionAgent(ABC):
         top_k: int = 5,
         max_context_tokens: int | None = None,
         result_mode: str = "chunks",
+        owner_id: str | None = None,
     ) -> Dict[str, Any]:
         raise NotImplementedError("ask is not implemented")
 
@@ -51,13 +59,19 @@ class BaseIngestionAgent(ABC):
         subject: str | None = None,
         predicate: str | None = None,
         include_superseded: bool = False,
+        owner_id: str | None = None,
     ) -> Dict[str, Any]:
         raise NotImplementedError("fact_search is not implemented")
 
-    async def profile_get(self, *, subject: str = "user") -> Dict[str, Any]:
+    async def profile_get(
+        self, *, subject: str = "user", owner_id: str | None = None
+    ) -> Dict[str, Any]:
         raise NotImplementedError("profile_get is not implemented")
 
     async def fact_supersede(
-        self, *, fact_id: str, superseded_by: str
+        self, *, fact_id: str, superseded_by: str, owner_id: str | None = None
     ) -> Dict[str, Any]:
         raise NotImplementedError("fact_supersede is not implemented")
+
+    async def authenticate_bearer_token(self, token: str) -> str | None:
+        raise NotImplementedError("authenticate_bearer_token is not implemented")

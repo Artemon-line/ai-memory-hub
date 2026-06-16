@@ -509,7 +509,9 @@ def _lookup_by_conversation_hash(conversation_hash: str) -> dict[str, Any] | Non
     return None
 
 
-def _lookup_same_thread(incoming: dict[str, Any]) -> dict[str, Any] | None:
+def _lookup_same_thread(
+    incoming: dict[str, Any], *, owner_id: str | None = None
+) -> dict[str, Any] | None:
     if not _runtime().allow_trusted_appends:
         return None
     store = _runtime().metadata_store
@@ -517,7 +519,7 @@ def _lookup_same_thread(incoming: dict[str, Any]) -> dict[str, Any] | None:
     if memory_id:
         existing = store.get(memory_id) if hasattr(store, "get") else None
         if isinstance(existing, dict):
-            return existing
+            return existing if _conversation_owner_matches(existing, owner_id) else None
 
     metadata = incoming.get("metadata", {})
     upstream_thread_id = (
@@ -526,7 +528,10 @@ def _lookup_same_thread(incoming: dict[str, Any]) -> dict[str, Any] | None:
     if isinstance(upstream_thread_id, str) and upstream_thread_id:
         source = str(incoming.get("source", ""))
         if hasattr(store, "get_by_upstream_thread"):
-            return store.get_by_upstream_thread(source, upstream_thread_id)
+            candidate = store.get_by_upstream_thread(source, upstream_thread_id)
+            if isinstance(candidate, dict) and _conversation_owner_matches(candidate, owner_id):
+                return candidate
+            return None
         for attr in ("by_id", "rows"):
             rows = getattr(store, attr, None)
             if isinstance(rows, dict):
@@ -538,7 +543,8 @@ def _lookup_same_thread(incoming: dict[str, Any]) -> dict[str, Any] | None:
                         and conversation_metadata.get("upstream_thread_id")
                         == upstream_thread_id
                     ):
-                        return conversation
+                        if _conversation_owner_matches(conversation, owner_id):
+                            return conversation
     return None
 
 
@@ -582,6 +588,64 @@ def _conversation_hash(conversation: dict[str, Any]) -> str | None:
         if isinstance(value, str):
             return value
     return None
+
+
+def _stamp_owner(conversation: dict[str, Any], *, owner_id: str | None) -> None:
+    if owner_id is None:
+        return
+    metadata = conversation.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+        conversation["metadata"] = metadata
+    metadata["owner_id"] = _validate_owner_id(owner_id)
+
+
+def _scope_conversation_hash(
+    conversation: dict[str, Any], *, owner_id: str | None
+) -> None:
+    if owner_id is None:
+        return
+    metadata = conversation.get("metadata", {})
+    if not isinstance(metadata, dict):
+        return
+    conversation_hash = metadata.get("conversation_hash")
+    if not isinstance(conversation_hash, str):
+        return
+    digest = hashlib.sha256(f"{owner_id}\n{conversation_hash}".encode("utf-8")).hexdigest()
+    metadata["conversation_hash"] = f"sha256:{digest}"
+
+
+def _owner_id_from_conversation(conversation: Any) -> str | None:
+    if not isinstance(conversation, dict):
+        return None
+    metadata = conversation.get("metadata", {})
+    if not isinstance(metadata, dict):
+        return None
+    value = metadata.get("owner_id")
+    return str(value) if value is not None else None
+
+
+def _conversation_owner_matches(conversation: Any, owner_id: str | None) -> bool:
+    if owner_id is None:
+        return True
+    return _owner_id_from_conversation(conversation) == owner_id
+
+
+def _fact_owner_matches(fact: Any, owner_id: str | None) -> bool:
+    if owner_id is None:
+        return True
+    if not isinstance(fact, dict):
+        return False
+    return str(fact.get("owner_id", "")) == owner_id
+
+
+def _validate_owner_id(owner_id: str) -> str:
+    value = str(owner_id).strip()
+    if not value:
+        raise ValueError("owner_id must be non-empty")
+    if len(value) > 128:
+        raise ValueError("owner_id exceeds max length 128")
+    return value
 
 
 def _detect_new_messages(
@@ -828,12 +892,17 @@ def json_dumps(value: Any) -> str:
 
 
 def ingest_messages(
-    conversation_json: Any, *, strict_transcript: bool = False
+    conversation_json: Any,
+    *,
+    strict_transcript: bool = False,
+    owner_id: str | None = None,
 ) -> dict[str, Any]:
     # 0. Normalize
     conversation_json = normalize_conversation_json(
         conversation_json, strict_transcript=strict_transcript
     )
+    _stamp_owner(conversation_json, owner_id=owner_id)
+    _scope_conversation_hash(conversation_json, owner_id=owner_id)
 
     # 1. Validate JSON against schema
     validate_json(conversation_json)
@@ -844,7 +913,7 @@ def ingest_messages(
     conversation_hash = conversation_json["metadata"]["conversation_hash"]
     duplicate = _lookup_by_conversation_hash(conversation_hash)
     duplicate_metadata_id = None
-    if duplicate is not None:
+    if duplicate is not None and _conversation_owner_matches(duplicate, owner_id):
         duplicate_metadata_id = str(duplicate["id"])
         # We proceed to re-index even if it's a duplicate by hash,
         # to ensure the vector store is in sync with the metadata.
@@ -854,13 +923,15 @@ def ingest_messages(
     store = _runtime().metadata_store
     if hasattr(store, "get"):
         existing_by_id = store.get(str(conversation_json.get("id", "")))
+    if existing_by_id is not None and not _conversation_owner_matches(existing_by_id, owner_id):
+        raise ValueError("unauthorized_update: conversation id already exists")
     if existing_by_id is not None and not _runtime().allow_trusted_appends:
         # If it's a duplicate by ID but not by hash, it's an unauthorized update.
         # But if it's the SAME hash (we already checked), it's fine.
         if _conversation_hash(existing_by_id) != conversation_hash:
             raise ValueError("unauthorized_update: conversation id already exists")
 
-    same_thread = _lookup_same_thread(conversation_json)
+    same_thread = _lookup_same_thread(conversation_json, owner_id=owner_id)
     if same_thread is not None:
         new_messages = _detect_new_messages(same_thread, conversation_json)
         if not new_messages:
@@ -972,7 +1043,12 @@ def _mark_chunks_indexing_failed(metadata_id: str, chunks: list[dict[str, Any]])
         )
 
 
-def search(query: str, top_k: int = 5, result_mode: str = "chunks") -> dict[str, Any]:
+def search(
+    query: str,
+    top_k: int = 5,
+    result_mode: str = "chunks",
+    owner_id: str | None = None,
+) -> dict[str, Any]:
     _validate_result_mode(result_mode)
     runtime = _runtime()
     query_vector = runtime.embedding_provider.embed_texts([query])[0]
@@ -988,6 +1064,7 @@ def search(query: str, top_k: int = 5, result_mode: str = "chunks") -> dict[str,
         query,
         enabled=runtime.retrieval_keyword_enabled,
         limit=runtime.retrieval_keyword_candidate_limit,
+        owner_id=owner_id,
     )
     ids.extend(str(conversation["id"]) for conversation in keyword_conversations if "id" in conversation)
     ids = _unique_strings(ids)
@@ -1002,6 +1079,8 @@ def search(query: str, top_k: int = 5, result_mode: str = "chunks") -> dict[str,
         memory_id = str(match["memory_id"])
         score = float(match["score"])
         conversation = conversations.get(memory_id)
+        if not _conversation_owner_matches(conversation, owner_id):
+            continue
         row = {
             "id": memory_id,
             "score": score,
@@ -1023,6 +1102,8 @@ def search(query: str, top_k: int = 5, result_mode: str = "chunks") -> dict[str,
     for conversation in keyword_conversations:
         memory_id = str(conversation.get("id", ""))
         if not memory_id:
+            continue
+        if not _conversation_owner_matches(conversation, owner_id):
             continue
         row = _keyword_result_row(
             conversation,
@@ -1129,13 +1210,20 @@ def group_conversation_results(rows: list[dict[str, Any]]) -> list[dict[str, Any
 
 
 def _keyword_conversations(
-    metadata_store: Any, query: str, *, enabled: bool, limit: int
+    metadata_store: Any,
+    query: str,
+    *,
+    enabled: bool,
+    limit: int,
+    owner_id: str | None = None,
 ) -> list[dict[str, Any]]:
     if not enabled:
         return []
     if hasattr(metadata_store, "search_text"):
         return [
-            item for item in metadata_store.search_text(query, limit=limit) if isinstance(item, dict)
+            item
+            for item in metadata_store.search_text(query, limit=limit)
+            if isinstance(item, dict) and _conversation_owner_matches(item, owner_id)
         ]
     rows = getattr(metadata_store, "by_id", None) or getattr(metadata_store, "rows", None)
     if not isinstance(rows, dict):
@@ -1146,6 +1234,8 @@ def _keyword_conversations(
     matches: list[dict[str, Any]] = []
     for conversation in rows.values():
         if not isinstance(conversation, dict):
+            continue
+        if not _conversation_owner_matches(conversation, owner_id):
             continue
         text = _conversation_search_text(conversation).lower()
         if all(token in text for token in tokens):
@@ -1279,9 +1369,12 @@ def _unique_strings(values: list[str]) -> list[str]:
     return output
 
 
-def retrieve(memory_id: str) -> dict[str, Any] | None:
+def retrieve(memory_id: str, *, owner_id: str | None = None) -> dict[str, Any] | None:
     runtime = _runtime()
-    return runtime.metadata_store.get(memory_id)
+    conversation = runtime.metadata_store.get(memory_id)
+    if not _conversation_owner_matches(conversation, owner_id):
+        return None
+    return conversation
 
 
 def ask(
@@ -1289,13 +1382,18 @@ def ask(
     top_k: int = 5,
     max_context_tokens: int | None = None,
     result_mode: str = "chunks",
+    owner_id: str | None = None,
 ) -> dict[str, Any]:
     _validate_result_mode(result_mode)
-    fact_answer = _answer_from_facts(question, top_k=top_k, result_mode=result_mode)
+    fact_answer = _answer_from_facts(
+        question, top_k=top_k, result_mode=result_mode, owner_id=owner_id
+    )
     if fact_answer is not None:
         return fact_answer
 
-    search_result = _search_for_ask(question=question, top_k=top_k, result_mode=result_mode)
+    search_result = _search_for_ask(
+        question=question, top_k=top_k, result_mode=result_mode, owner_id=owner_id
+    )
     matches = search_result.get("results", [])
     if not matches:
         return {
@@ -1354,9 +1452,15 @@ def ask(
     }
 
 
-def _search_for_ask(question: str, *, top_k: int, result_mode: str) -> dict[str, Any]:
+def _search_for_ask(
+    question: str,
+    *,
+    top_k: int,
+    result_mode: str,
+    owner_id: str | None = None,
+) -> dict[str, Any]:
     try:
-        return search(query=question, top_k=top_k, result_mode=result_mode)
+        return search(query=question, top_k=top_k, result_mode=result_mode, owner_id=owner_id)
     except TypeError:
         if result_mode != "chunks":
             raise
@@ -1801,6 +1905,7 @@ def _fact(
         "confidence": "high",
         "last_confirmed_at": now,
         "source_conversation_id": source_id,
+        "owner_id": _owner_id_from_conversation(conversation),
         "source_message_indexes": [message_index],
         "created_at": now,
         "updated_at": now,
@@ -1816,7 +1921,11 @@ def _fact(
 
 
 def _answer_from_facts(
-    question: str, *, top_k: int, result_mode: str
+    question: str,
+    *,
+    top_k: int,
+    result_mode: str,
+    owner_id: str | None = None,
 ) -> dict[str, Any] | None:
     query = _fact_query(question)
     if query is None:
@@ -1824,6 +1933,7 @@ def _answer_from_facts(
     facts = _search_facts(
         subject=query.get("subject") if query.get("subject") == "user" else None,
         predicate=query.get("predicate"),
+        owner_id=owner_id,
     )
     facts = _filter_facts_for_question(facts, question, query)
     active = [fact for fact in facts if not fact.get("superseded_by") and not fact.get("deleted_at")]
@@ -1847,7 +1957,12 @@ def _answer_from_facts(
     citations = [_fact_citation(fact) for fact in public_active]
     results: list[dict[str, Any]] = []
     if basis == "mixed":
-        search_result = _search_for_ask(question=question, top_k=top_k, result_mode=result_mode)
+        search_result = _search_for_ask(
+            question=question,
+            top_k=top_k,
+            result_mode=result_mode,
+            owner_id=owner_id,
+        )
         results = search_result.get("results", [])
         if isinstance(results, list):
             citations.extend(_citation_from_row(row) for row in results[:top_k] if isinstance(row, dict))
@@ -1967,10 +2082,15 @@ def _superseded_facts_for_active(
     ]
 
 
-def _search_facts(subject: str | None = None, predicate: str | None = None) -> list[dict[str, Any]]:
+def _search_facts(
+    subject: str | None = None,
+    predicate: str | None = None,
+    owner_id: str | None = None,
+) -> list[dict[str, Any]]:
     store = _runtime().metadata_store
     if hasattr(store, "search_facts"):
-        return store.search_facts(subject=subject, predicate=predicate, include_superseded=False)
+        facts = store.search_facts(subject=subject, predicate=predicate, include_superseded=False)
+        return [fact for fact in facts if _fact_owner_matches(fact, owner_id)]
     facts = getattr(store, "_facts", [])
     if not isinstance(facts, list):
         return []
@@ -1980,19 +2100,25 @@ def _search_facts(subject: str | None = None, predicate: str | None = None) -> l
         if isinstance(fact, dict)
         and (subject is None or str(fact.get("subject")) == subject)
         and (predicate is None or str(fact.get("predicate")) == predicate)
+        and _fact_owner_matches(fact, owner_id)
         and not fact.get("superseded_by")
         and not fact.get("deleted_at")
     ]
 
 
 def fact_search(
-    *, subject: str | None = None, predicate: str | None = None, include_superseded: bool = False
+    *,
+    subject: str | None = None,
+    predicate: str | None = None,
+    include_superseded: bool = False,
+    owner_id: str | None = None,
 ) -> dict[str, Any]:
     store = _runtime().metadata_store
     if hasattr(store, "search_facts"):
         facts = store.search_facts(
             subject=subject, predicate=predicate, include_superseded=include_superseded
         )
+        facts = [fact for fact in facts if _fact_owner_matches(fact, owner_id)]
     else:
         facts = getattr(store, "_facts", [])
         if not isinstance(facts, list):
@@ -2002,17 +2128,27 @@ def fact_search(
             if isinstance(fact, dict)
             and (subject is None or str(fact.get("subject")) == subject)
             and (predicate is None or str(fact.get("predicate")) == predicate)
+            and _fact_owner_matches(fact, owner_id)
             and (include_superseded or not fact.get("superseded_by"))
             and not fact.get("deleted_at")
         ]
     return {"status": "ok", "results": [_public_fact(fact) for fact in facts]}
 
 
-def profile_get(subject: str = "user") -> dict[str, Any]:
-    return {"status": "ok", "subject": subject, "facts": fact_search(subject=subject)["results"]}
+def profile_get(subject: str = "user", *, owner_id: str | None = None) -> dict[str, Any]:
+    return {
+        "status": "ok",
+        "subject": subject,
+        "facts": fact_search(subject=subject, owner_id=owner_id)["results"],
+    }
 
 
-def fact_supersede(fact_id: str, superseded_by: str) -> dict[str, Any]:
+def fact_supersede(
+    fact_id: str, superseded_by: str, *, owner_id: str | None = None
+) -> dict[str, Any]:
+    existing = fact_search(include_superseded=True, owner_id=owner_id)["results"]
+    if owner_id is not None and not any(fact.get("id") == fact_id for fact in existing):
+        return {"status": "not_found", "id": fact_id, "superseded_by": superseded_by}
     store = _runtime().metadata_store
     if hasattr(store, "supersede_fact"):
         updated = store.supersede_fact(fact_id, superseded_by)
@@ -2026,6 +2162,17 @@ def fact_supersede(fact_id: str, superseded_by: str) -> dict[str, Any]:
                 fact["updated_at"] = now
                 updated = True
     return {"status": "ok" if updated else "not_found", "id": fact_id, "superseded_by": superseded_by}
+
+
+def authenticate_bearer_token(token: str) -> str | None:
+    store = _runtime().metadata_store
+    if hasattr(store, "owner_for_token"):
+        return store.owner_for_token(token)
+    auth_tokens = getattr(store, "auth_tokens", None)
+    if isinstance(auth_tokens, dict):
+        owner_id = auth_tokens.get(token)
+        return str(owner_id) if owner_id is not None else None
+    return None
 
 
 def _fact_answer_text(
