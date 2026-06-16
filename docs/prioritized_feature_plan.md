@@ -12,7 +12,7 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P0 | MCP protocol compliance: initialize instructions, schemas, pagination, logging, completion when client UX needs it | Partial | `mcp_utility_compliance_plan.md`, `mcp_plan.md` |
 | P0 | MCP client feedback: response shape clarity, fact freshness, and source quality | Implemented | `improvements/client_feedback_improvement_plan.md` |
 | P0 | Advanced search filters for ask, facts, and profile queries | Planned | `improvements/client_feedback_improvement_plan.md` |
-| P0 | Bulk conversation insert with per-item envelopes | Planned | `improvements/client_feedback_improvement_plan.md` |
+| P0 | Client-provided conversation summary metadata for retrieval hints | Planned | `improvements/client_feedback_improvement_plan.md` |
 | P0 | MCP client smoke coverage for Codex, Gemini, Copilot, Claude, opencode | Implemented | `mcp_client_smoke_plan.md` |
 | P0 | Weekly scheduled real-client MCP smoke coverage | Implemented | `real_client_mcp_smoke_plan.md` |
 | P1 | CLI foundation and command contract | Implemented | `cli_implementation_plan.md` |
@@ -144,23 +144,46 @@ Implementation sequence:
       active/superseded status, and freshness.
 - [ ] Add tests for filtered ask retrieval and fact/profile filter combinations.
 
-## P0: Bulk Conversation Insert
+## P0: Client-Provided Conversation Summary Metadata
 
 Use `improvements/client_feedback_improvement_plan.md` as the source of truth.
 
-Bulk insert is high priority for importing real chat history without forcing
-agents or users to loop over one conversation at a time.
+This is not graph memory. It is a lightweight retrieval hint: clients may provide
+a short factual `metadata.summary` while still saving the complete conversation.
+The summary can improve recall and reranking, but raw messages and normalized
+facts remain the source of truth for answers and citations.
 
 Implementation sequence:
 
-- [ ] Add batch HTTP ingest with per-item success/error envelopes.
-- [ ] Add CLI bulk ingest using the same per-item envelope shape.
-- [ ] Keep MCP bulk insert out of scope until real clients prove single-call
-      batch insertion is necessary and safe.
-- [ ] Route every item through the existing validation, hashing, dedupe, fact
-      extraction, and indexing path.
-- [ ] Add tests for partial batch failure, deduplication, stable ordering, and
-      independent item success behavior.
+- [ ] Document optional `metadata.summary` in the conversation schema and public docs.
+- [ ] Update MCP save guidance to ask for a short factual summary while still
+      saving the complete conversation.
+- [ ] Validate `metadata.summary` as a bounded string.
+- [ ] Include summary text in metadata search/reranking.
+- [ ] Return summary in search/retrieve metadata, not as standalone answer
+      evidence unless raw messages or facts support it.
+- [ ] Add tests showing summary improves recall without replacing message
+      provenance.
+
+## Closed: Bulk Conversation Insert
+
+Use `improvements/client_feedback_improvement_plan.md` as the source of truth.
+
+Decision: do not add a first-class bulk insert endpoint, CLI command, or MCP tool
+now. Clients should store one complete conversation per insert, with the full
+`messages` list in a single `conversation_json` object. Importers that need to
+save many independent conversations can loop over the existing single insert path
+while preserving source thread/session boundaries.
+
+Rationale:
+
+- Batch insert encourages clients to guess boundaries, split one real thread into
+  many fake conversations, merge unrelated sessions, or resend overlapping
+  messages.
+- Single conversation insert keeps validation, dedupe, hashing, trusted append,
+  fact extraction, and vector indexing synchronized through one write path.
+- If importer throughput becomes a real problem later, optimize importer loops
+  without changing the public memory contract first.
 
 ## P0: MCP Client Smoke Coverage
 

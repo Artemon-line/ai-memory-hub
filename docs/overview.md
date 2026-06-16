@@ -79,6 +79,11 @@ canonical UUID. When the backend requires caller-supplied IDs, include an `id`:
 
 Messages may use `text` or `content`; `content` is normalized to `text`.
 
+Store one complete conversation per insert. Do not split one thread into
+multiple batch items. If an importer has many independent source conversations,
+it should call the existing single insert path once per source conversation while
+preserving each original thread/session boundary.
+
 ## Search Result Shape
 
 `/memory/search` returns ranked chunk matches in `results`. Each result includes:
@@ -184,6 +189,9 @@ Core tools:
 - `memory_fact_search(subject=None, predicate=None, include_superseded=False)`
 - `memory_profile_get(subject="user")`
 - `memory_fact_supersede(fact_id, superseded_by)`
+
+`memory_insert` accepts one complete conversation object. There is intentionally
+no bulk MCP insert tool.
 
 Resources:
 

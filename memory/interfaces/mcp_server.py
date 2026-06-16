@@ -29,6 +29,7 @@ SERVER_INSTRUCTIONS = (
     "pass conversation_json as a nested JSON object, not as a JSON string. "
     "Omit id by default so the hub generates the canonical UUID; if id is supplied, "
     "it must be a valid UUID. Messages may use text or content fields. "
+    "Save one complete conversation per insert; do not split one thread into bulk items. "
     "memory_search supports source, date_from, date_to, and tags filters when narrowing recall."
 )
 
@@ -41,7 +42,8 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
     ),
     "memory_insert": (
         "Insert a conversation into memory. Pass `conversation_json` as a nested JSON object, "
-        "omit `id` unless it is a valid UUID, and use message `text` or `content` fields."
+        "omit `id` unless it is a valid UUID, use message `text` or `content` fields, "
+        "and include the whole conversation in one object rather than splitting it into batches."
     ),
     "memory_search": (
         "Search existing memory by text query. Optional filters: source, date_from, date_to, tags. "
@@ -395,6 +397,7 @@ def _register_prompts(mcp: Any) -> None:
         return (
             "Save this chat to ai-memory-hub using MCP tools directly.\n"
             "You MUST include ALL user and assistant messages, including code blocks, SQL, Python, multi-line text, and long responses. Do NOT filter or summarize any messages.\n"
+            "Save the whole conversation as one `conversation_json` object; do not split this thread into multiple inserts or batch-shaped payloads.\n"
             "Before insert, call `memory_validate` with argument `conversation_json`.\n"
             "Only call `memory_insert` after validation passes (do not use curl or config-file reads).\n"
             "Never include the save command itself in messages.\n"

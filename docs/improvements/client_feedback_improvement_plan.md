@@ -24,7 +24,11 @@ Observed improvement themes:
 - Confidence should explain why it is high, medium, low, or absent.
 - Personal facts need freshness fields such as creation time, update time, and last confirmation.
 - Stored facts need light normalization for spelling/casing without destroying provenance.
-- Auto-tagging, conversation threading, richer filters, bulk insert, and summaries would reduce manual work.
+- Auto-tagging, conversation threading, richer filters, and summaries would reduce manual work.
+- Client-provided `metadata.summary` is a lightweight retrieval hint, not graph memory. It should supplement the full saved conversation and never replace raw messages.
+- Bulk insert is intentionally not planned now because batched conversation
+  boundaries can introduce duplicated, split, or out-of-sync memory. Clients
+  should save one complete conversation per insert.
 - General delete/update tools are intentionally not part of the agent-facing MCP surface. Administrative memory hiding or cleanup should be CLI/API-only and gated by local/admin controls.
 
 ## P0: Response Shape Clarity
@@ -200,29 +204,71 @@ Acceptance criteria:
 
 - Agents can narrow retrieval without post-filtering client-side.
 
-## P0: Bulk Conversation Insert
+## P0: Client-Provided Conversation Summary Metadata
+
+Source feedback:
+
+- Users want exact data to be easier to find during search.
+- Clients can cheaply produce a short summary at save time, but they can also
+  speculate. The summary must therefore be treated as metadata, not source truth.
+
+Current status:
+
+- Full `messages` are the source of truth.
+- `metadata.tags` and inferred topics already help retrieval/reranking.
+- `metadata.summary` is not yet documented as a first-class ingestion hint.
+
+Implementation sequence:
+
+- [ ] Document optional `metadata.summary` in the conversation schema and public docs.
+- [ ] Update MCP save guidance to ask clients for a short factual summary while
+  still saving the complete conversation.
+- [ ] Validate `metadata.summary` as a bounded string.
+- [ ] Include summary text in metadata search/reranking so whole-conversation
+  themes can help find exact chunks.
+- [ ] Return summary in search/retrieve responses as metadata, not as a citation
+  unless the raw message evidence also supports the answer.
+- [ ] Add tests showing summary improves recall without replacing message
+  provenance.
+
+Acceptance criteria:
+
+- Clients can provide a concise conversation summary during save.
+- Search can use the summary to find relevant conversations more reliably.
+- Answers still cite raw messages or normalized facts, not unsupported summary
+  speculation.
+
+## Closed: Bulk Conversation Insert
 
 Source feedback:
 
 - opencode wanted bulk conversation insert.
 
-Current status:
+Decision:
 
 - Single conversation insert is implemented through HTTP, MCP, and CLI.
-- Bulk insert is not yet a first-class operation.
+- Do not add a first-class bulk insert endpoint, CLI command, or MCP tool now.
+- Clients should store each whole conversation as one `conversation_json` object
+  with a complete `messages` list, not split one thread into many batch items.
+- Importers that have many conversations should loop over the existing single
+  insert path and preserve each source conversation/thread boundary explicitly.
+- This keeps validation, dedupe, hashing, fact extraction, trusted append, and
+  vector indexing synchronized through one existing write path.
 
-Implementation sequence:
+Rationale:
 
-- [ ] Add batch HTTP ingest with per-item success/error envelopes.
-- [ ] Add admin/user CLI bulk ingest that uses the same per-item envelope shape.
-- [ ] Keep MCP bulk insert out of scope until real clients prove single-call batch insertion is necessary and safe.
-- [ ] Preserve deduplication, validation, hashing, fact extraction, and vector indexing behavior by routing each item through the existing ingestion path.
-- [ ] Add tests for partial batch failure, deduplication, stable ordering, and no rollback of successful independent items.
+- Bulk writes make it easier for clients to split one real thread into many fake
+  conversations, merge unrelated sessions, or resend overlapping messages.
+- Partial batch success/error handling adds complexity without solving a current
+  product need.
+- One complete conversation per insert keeps provenance and facts easier to
+  audit.
 
 Acceptance criteria:
 
-- Bulk insert can import many conversations while reporting item-level failures clearly.
-- Bulk ingest does not bypass validation, dedupe, or fact extraction.
+- MCP and docs guide clients to save whole conversations, not arbitrary batches.
+- Future importer work can still iterate single inserts for many independent
+  source conversations.
 
 ## P2: Summaries And Profile Views
 
@@ -245,7 +291,7 @@ Acceptance criteria:
 
 ## Priority Mapping
 
-- P0: response shape clarity, fact freshness, source-quality explanation, advanced filters, and bulk insert.
+- P0: response shape clarity, fact freshness, source-quality explanation, advanced filters, and client-provided summary metadata.
 - P1: fact text normalization, answer polish, auto-tagging, and conversation threading.
 - P2: admin-only mutation workflows and summaries.
 
