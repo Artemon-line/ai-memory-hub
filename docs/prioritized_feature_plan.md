@@ -11,6 +11,8 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P0 | Retrieval precision: threshold, hybrid search, metadata rerank | Implemented | `improvements/retrieval_precision_plan.md` |
 | P0 | MCP protocol compliance: initialize instructions, schemas, pagination, logging, completion when client UX needs it | Partial | `mcp_utility_compliance_plan.md`, `mcp_plan.md` |
 | P0 | MCP client feedback: response shape clarity, fact freshness, and source quality | Implemented | `improvements/client_feedback_improvement_plan.md` |
+| P0 | Advanced search filters for ask, facts, and profile queries | Planned | `improvements/client_feedback_improvement_plan.md` |
+| P0 | Bulk conversation insert with per-item envelopes | Planned | `improvements/client_feedback_improvement_plan.md` |
 | P0 | MCP client smoke coverage for Codex, Gemini, Copilot, Claude, opencode | Implemented | `mcp_client_smoke_plan.md` |
 | P0 | Weekly scheduled real-client MCP smoke coverage | Implemented | `real_client_mcp_smoke_plan.md` |
 | P1 | CLI foundation and command contract | Implemented | `cli_implementation_plan.md` |
@@ -20,6 +22,7 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P1 | GitHub Pages documentation publishing from Markdown | Implemented | `release_container_docs_plan.md` |
 | P1 | Platform-specific importers | Planned here | This doc and `roadmap.md` |
 | P2 | Recurring codebase cleanup and engineering-health review | Planned | `recurring_codebase_cleanup_plan.md` |
+| P2 | Admin-only mutation workflows for local/API maintenance, not MCP | Planned | `improvements/client_feedback_improvement_plan.md` |
 | P2 | GitHub release and Docker Hub image publishing | Planned | `release_container_docs_plan.md` |
 | P2 | Storage operational hardening: startup policy logs, production fallback warnings, audit events | Partial | `storage_agnostic_byoa_plan.md` |
 | P2 | Storage provider expansion config and shared contract tests | Planned | `storage_agnostic_byoa_plan.md` |
@@ -124,6 +127,40 @@ Implementation sequence:
       `last_confirmed_at`, and `superseded_at`.
 - [x] Add tests for the Codex-observed response shape and confidence/freshness
       behavior.
+
+## P0: Advanced Search Filters
+
+Use `improvements/client_feedback_improvement_plan.md` as the source of truth.
+
+These filters are high priority because they let agents narrow recall without
+client-side post-filtering or overfetching.
+
+Implementation sequence:
+
+- [x] Document current `memory_search` filters in MCP tool descriptions and
+      initialize instructions.
+- [ ] Add filter support to `memory_ask` where it can preserve answer quality.
+- [ ] Add fact/profile filters for source, predicate, date range, confidence,
+      active/superseded status, and freshness.
+- [ ] Add tests for filtered ask retrieval and fact/profile filter combinations.
+
+## P0: Bulk Conversation Insert
+
+Use `improvements/client_feedback_improvement_plan.md` as the source of truth.
+
+Bulk insert is high priority for importing real chat history without forcing
+agents or users to loop over one conversation at a time.
+
+Implementation sequence:
+
+- [ ] Add batch HTTP ingest with per-item success/error envelopes.
+- [ ] Add CLI bulk ingest using the same per-item envelope shape.
+- [ ] Keep MCP bulk insert out of scope until real clients prove single-call
+      batch insertion is necessary and safe.
+- [ ] Route every item through the existing validation, hashing, dedupe, fact
+      extraction, and indexing path.
+- [ ] Add tests for partial batch failure, deduplication, stable ordering, and
+      independent item success behavior.
 
 ## P0: MCP Client Smoke Coverage
 
@@ -251,6 +288,25 @@ Use `recurring_codebase_cleanup_plan.md` as the source of truth.
 - [ ] Add regression tests for cleanup work that changes behavior.
 - [ ] Keep cleanup PRs narrow enough that review can distinguish behavior
   preservation from intentional behavior changes.
+
+## P2: Admin-Only Mutation Workflows
+
+Use `improvements/client_feedback_improvement_plan.md` as the source of truth.
+
+General delete/update through MCP is intentionally out of scope. Source memory
+should remain immutable by default; corrections should use fact supersession.
+Any future mutation support must be admin-only through CLI and HTTP API, with
+clear auth, audit, and provider-consistency behavior.
+
+Implementation sequence:
+
+- [ ] Define admin-only soft delete, fact hide, metadata edit, append, and
+      supersession semantics.
+- [ ] Do not add MCP delete/update tools.
+- [ ] Add admin-scoped HTTP API endpoints only after auth scope handling is clear.
+- [ ] Add admin CLI commands for local maintenance only after API semantics are stable.
+- [ ] Add audit fields for who/what performed a mutation.
+- [ ] Add provider contract tests for metadata and vector cleanup parity.
 
 ## P2: Storage Operational Hardening
 

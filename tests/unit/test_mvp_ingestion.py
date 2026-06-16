@@ -537,6 +537,48 @@ def test_fact_answer_uses_normalized_object_without_rewriting_raw_value() -> Non
     assert result["answer"] == "anniversary"
     assert result["facts"][0]["object_raw"] == "aniversary"
     assert result["facts"][0]["object_normalized"] == "anniversary"
+    normalization = result["facts"][0]["qualifiers"]["normalization"]
+    assert normalization["object_raw"] == "aniversary"
+    assert normalization["object_normalized"] == "anniversary"
+    assert normalization["spelling_corrections"] == [
+        {"raw": "aniversary", "normalized": "anniversary"}
+    ]
+
+
+def test_fact_normalization_records_name_casing_qualifier() -> None:
+    _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["messages"] = [{"role": "user", "text": "My name is aDA lOVELACE."}]
+    mvp_ingestion.ingest_messages(conversation)
+
+    result = mvp_ingestion.ask("What is my name?", top_k=5)
+
+    assert result["answer"] == "Ada Lovelace"
+    assert result["facts"][0]["object_raw"] == "aDA lOVELACE"
+    assert result["facts"][0]["object_normalized"] == "Ada Lovelace"
+    assert result["facts"][0]["qualifiers"]["normalization"]["casing"] == {
+        "strategy": "title_case_name",
+        "raw": "aDA lOVELACE",
+        "normalized": "Ada Lovelace",
+    }
+
+
+def test_fact_normalization_records_date_qualifier() -> None:
+    _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["messages"] = [{"role": "user", "text": "My favorite anniversary is june 16th 2026."}]
+    mvp_ingestion.ingest_messages(conversation)
+
+    result = mvp_ingestion.ask("What is my favorite anniversary?", top_k=5)
+
+    assert result["answer"] == "June 16, 2026"
+    assert result["facts"][0]["object_raw"] == "june 16th 2026"
+    assert result["facts"][0]["object_normalized"] == "June 16, 2026"
+    assert result["facts"][0]["qualifiers"]["normalization"]["date"] == {
+        "raw": "june 16th 2026",
+        "normalized": "June 16, 2026",
+        "precision": "day",
+    }
 
 
 def test_fact_correction_supersedes_old_fact() -> None:

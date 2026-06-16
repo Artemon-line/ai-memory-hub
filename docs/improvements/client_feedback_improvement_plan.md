@@ -24,7 +24,8 @@ Observed improvement themes:
 - Confidence should explain why it is high, medium, low, or absent.
 - Personal facts need freshness fields such as creation time, update time, and last confirmation.
 - Stored facts need light normalization for spelling/casing without destroying provenance.
-- Auto-tagging, conversation threading, mutation workflows, richer filters, bulk insert, and summaries would reduce manual work.
+- Auto-tagging, conversation threading, richer filters, bulk insert, and summaries would reduce manual work.
+- General delete/update tools are intentionally not part of the agent-facing MCP surface. Administrative memory hiding or cleanup should be CLI/API-only and gated by local/admin controls.
 
 ## P0: Response Shape Clarity
 
@@ -92,10 +93,10 @@ Source feedback:
 Implementation sequence:
 
 - [x] Preserve raw source text exactly in provenance and source conversations.
-- [ ] Add normalized fact fields for display and matching:
+- [x] Add normalized fact fields for display and matching:
   - [x] `object_raw`
   - [x] `object_normalized`
-  - [ ] optional structured qualifiers for dates, names, casing, and common spelling fixes
+  - [x] optional structured qualifiers for dates, names, casing, and common spelling fixes
 - [x] Use normalized fact values for answer wording when confidence is high.
 - [x] Keep normalization deterministic at first; add hosted or local LLM cleanup only behind explicit configuration.
 - [x] Add regression tests for common spelling/casing cleanup and no-overwrite provenance behavior.
@@ -147,54 +148,81 @@ Acceptance criteria:
 - A user can ask about a project or topic across multiple Codex/opencode conversations and receive thread-aware context.
 - Threading does not collapse unrelated conversations just because they share broad tags.
 
-## P2: Mutation Workflows
+## P2: Admin-Only Mutation Workflows
 
 Source feedback:
 
 - opencode wanted delete/update in addition to supersession.
+- Project decision: general mutation over MCP is not worth the security and
+  auditability risk. Source conversations should remain immutable by default, and
+  correction should use fact supersession. Any future mutation support must be
+  administrative only.
 
 Implementation sequence:
 
-- [ ] Define mutation semantics before adding tools:
+- [ ] Define admin-only mutation semantics before adding any endpoint or CLI command:
   - [ ] soft delete conversation
   - [ ] soft delete fact
   - [ ] edit metadata only
   - [ ] append messages
   - [ ] supersede fact
 - [ ] Keep source conversation payloads immutable by default.
-- [ ] Add admin-scoped API and MCP tools only after auth scope handling is clear.
+- [ ] Do not add MCP delete/update tools.
+- [ ] Add admin-scoped HTTP API endpoints only after auth scope handling is clear.
+- [ ] Add admin CLI commands for local maintenance only after API semantics are stable.
 - [ ] Add audit fields for who/what performed a mutation.
 - [ ] Add provider contract tests for metadata and vector cleanup parity.
 
 Acceptance criteria:
 
-- Users can remove or hide incorrect memory without losing auditability by default.
+- Users can hide incorrect memory through explicit admin flows without losing auditability by default.
 - Vector and metadata stores remain consistent after delete/update operations.
+- Agent clients cannot mutate or delete memory through MCP.
 
-## P2: Advanced Search Filters And Bulk Operations
+## P0: Advanced Search Filters
 
 Source feedback:
 
 - opencode wanted filters by date range, tags, and source.
-- opencode wanted bulk conversation insert.
 
 Current status:
 
 - Source, date range, and tag filters already exist for `memory_search`.
-- Bulk insert is not yet a first-class operation.
 
 Implementation sequence:
 
 - [x] Document current filters in MCP tool descriptions and initialize instructions.
 - [ ] Add filter support to `memory_ask` where it can preserve answer quality.
 - [ ] Add fact/profile filters for source, predicate, date range, confidence, active/superseded status, and freshness.
-- [ ] Add `memory_insert_many` or batch HTTP ingest with per-item success/error envelopes.
-- [ ] Add tests for partial batch failure, deduplication, and stable ordering.
+- [ ] Add tests for `memory_ask` filtered retrieval and fact/profile filter combinations.
 
 Acceptance criteria:
 
 - Agents can narrow retrieval without post-filtering client-side.
+
+## P0: Bulk Conversation Insert
+
+Source feedback:
+
+- opencode wanted bulk conversation insert.
+
+Current status:
+
+- Single conversation insert is implemented through HTTP, MCP, and CLI.
+- Bulk insert is not yet a first-class operation.
+
+Implementation sequence:
+
+- [ ] Add batch HTTP ingest with per-item success/error envelopes.
+- [ ] Add admin/user CLI bulk ingest that uses the same per-item envelope shape.
+- [ ] Keep MCP bulk insert out of scope until real clients prove single-call batch insertion is necessary and safe.
+- [ ] Preserve deduplication, validation, hashing, fact extraction, and vector indexing behavior by routing each item through the existing ingestion path.
+- [ ] Add tests for partial batch failure, deduplication, stable ordering, and no rollback of successful independent items.
+
+Acceptance criteria:
+
 - Bulk insert can import many conversations while reporting item-level failures clearly.
+- Bulk ingest does not bypass validation, dedupe, or fact extraction.
 
 ## P2: Summaries And Profile Views
 
@@ -217,9 +245,9 @@ Acceptance criteria:
 
 ## Priority Mapping
 
-- P0: response shape clarity, fact freshness, and source-quality explanation.
+- P0: response shape clarity, fact freshness, source-quality explanation, advanced filters, and bulk insert.
 - P1: fact text normalization, answer polish, auto-tagging, and conversation threading.
-- P2: mutation workflows, advanced filters, bulk operations, and summaries.
+- P2: admin-only mutation workflows and summaries.
 
 ## Done When
 

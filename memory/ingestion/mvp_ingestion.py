@@ -183,6 +183,28 @@ _FACT_RULES: list[tuple[str, re.Pattern[str]]] = [
     ("profile_role", re.compile(r"\bI\s+work\s+as\s+(?P<object>[^.?!\n]+)", re.IGNORECASE)),
     ("profile_location", re.compile(r"\bI\s+live\s+in\s+(?P<object>[^.?!\n]+)", re.IGNORECASE)),
 ]
+_COMMON_FACT_SPELLING_CORRECTIONS = {
+    "aniversary": "anniversary",
+    "anniversery": "anniversary",
+}
+_MONTH_NAMES = {
+    "january": "January",
+    "february": "February",
+    "march": "March",
+    "april": "April",
+    "may": "May",
+    "june": "June",
+    "july": "July",
+    "august": "August",
+    "september": "September",
+    "october": "October",
+    "november": "November",
+    "december": "December",
+}
+_NAME_LIKE_PREDICATES = {
+    "creator",
+    "profile_name",
+}
 
 
 def build_runtime(
@@ -1746,6 +1768,11 @@ def _fact(
     normalized_qualifiers = dict(qualifiers or {})
     if source_role in {"user", "assistant"}:
         normalized_qualifiers.setdefault("source_role", source_role)
+    object_normalized, normalization = _normalize_fact_object(
+        predicate=predicate, object_value=object_value
+    )
+    if normalization:
+        normalized_qualifiers["normalization"] = normalization
     fact = {
         "id": fact_id,
         "subject": subject,
@@ -1763,7 +1790,7 @@ def _fact(
         "deleted_at": None,
     }
     fact["object_raw"] = object_value
-    fact["object_normalized"] = _normalized_fact_object(fact)
+    fact["object_normalized"] = object_normalized
     fact["source_quality"] = _source_quality_for_fact(fact)
     fact["confidence_reason"] = _confidence_reason_for_fact(fact)
     return fact
@@ -2056,15 +2083,86 @@ def _confidence_reason_for_facts(facts: list[dict[str, Any]], basis: str) -> str
 
 
 def _normalized_fact_object(fact: dict[str, Any]) -> str:
-    value = str(fact.get("object", "")).strip()
-    normalized = " ".join(value.split())
-    replacements = {
-        "aniversary": "anniversary",
-        "anniversery": "anniversary",
-    }
-    for misspelled, corrected in replacements.items():
-        normalized = re.sub(rf"\b{misspelled}\b", corrected, normalized, flags=re.IGNORECASE)
+    normalized, _ = _normalize_fact_object(
+        predicate=str(fact.get("predicate", "")),
+        object_value=str(fact.get("object", "")),
+    )
     return normalized
+
+
+def _normalize_fact_object(*, predicate: str, object_value: str) -> tuple[str, dict[str, Any]]:
+    normalized = " ".join(object_value.strip().split())
+    normalization: dict[str, Any] = {}
+
+    normalized, spelling_corrections = _apply_common_spelling_corrections(normalized)
+    if spelling_corrections:
+        normalization["spelling_corrections"] = spelling_corrections
+
+    normalized, date_qualifier = _normalize_fact_date(normalized)
+    if date_qualifier:
+        normalization["date"] = date_qualifier
+
+    if _is_name_like_fact(predicate):
+        cased = _title_case_name(normalized)
+        if cased != normalized:
+            normalization["casing"] = {
+                "strategy": "title_case_name",
+                "raw": normalized,
+                "normalized": cased,
+            }
+            normalized = cased
+
+    if normalization:
+        normalization["object_raw"] = object_value
+        normalization["object_normalized"] = normalized
+    return normalized, normalization
+
+
+def _apply_common_spelling_corrections(value: str) -> tuple[str, list[dict[str, str]]]:
+    normalized = value
+    corrections: list[dict[str, str]] = []
+    for misspelled, corrected in _COMMON_FACT_SPELLING_CORRECTIONS.items():
+        pattern = re.compile(rf"\b{misspelled}\b", re.IGNORECASE)
+        if not pattern.search(normalized):
+            continue
+        normalized = pattern.sub(corrected, normalized)
+        corrections.append({"raw": misspelled, "normalized": corrected})
+    return normalized, corrections
+
+
+def _normalize_fact_date(value: str) -> tuple[str, dict[str, str] | None]:
+    month_pattern = re.compile(
+        r"^(?P<month>january|february|march|april|may|june|july|august|september|october|november|december)\s+"
+        r"(?P<day>\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(?P<year>\d{4}))?$",
+        re.IGNORECASE,
+    )
+    month_match = month_pattern.match(value)
+    if month_match:
+        month = _MONTH_NAMES[month_match.group("month").lower()]
+        day = int(month_match.group("day"))
+        year = month_match.group("year")
+        normalized = f"{month} {day}, {year}" if year else f"{month} {day}"
+        if normalized != value:
+            return normalized, {"raw": value, "normalized": normalized, "precision": "day"}
+        return value, {"raw": value, "normalized": normalized, "precision": "day"}
+
+    iso_pattern = re.compile(r"^(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})$")
+    iso_match = iso_pattern.match(value)
+    if iso_match:
+        month_number = int(iso_match.group("month"))
+        if 1 <= month_number <= 12:
+            month = list(_MONTH_NAMES.values())[month_number - 1]
+            normalized = f"{month} {int(iso_match.group('day'))}, {iso_match.group('year')}"
+            return normalized, {"raw": value, "normalized": normalized, "precision": "day"}
+    return value, None
+
+
+def _is_name_like_fact(predicate: str) -> bool:
+    return predicate in _NAME_LIKE_PREDICATES
+
+
+def _title_case_name(value: str) -> str:
+    return " ".join(part[:1].upper() + part[1:].lower() for part in value.split())
 
 
 def _fact_evidence(fact: dict[str, Any], *, used_in_answer: bool) -> dict[str, Any]:
