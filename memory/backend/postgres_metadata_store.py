@@ -13,11 +13,15 @@ from memory.backend.metadata_store import (
     PROJECT_ROLE_ORDER,
     _default_project_id,
     _hash_bearer_token,
+    _new_token_id,
     _owner_id_from_payload,
     _stamp_project_id,
+    _token_id_from_hash,
+    _token_prefix,
     _validate_owner_id,
     _validate_project_id,
     _validate_project_role,
+    _validate_token_lookup,
 )
 
 CREATE_CONVERSATIONS_TABLE_SQL = """
@@ -58,7 +62,10 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE_AUTH_TOKENS_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS auth_tokens (
     token_hash TEXT PRIMARY KEY,
+    token_id TEXT NULL,
     owner_id TEXT NOT NULL REFERENCES users(id),
+    display_name TEXT NULL,
+    token_prefix TEXT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     expires_at TIMESTAMPTZ NULL,
     revoked_at TIMESTAMPTZ NULL
@@ -68,6 +75,11 @@ CREATE_AUTH_TOKENS_OWNER_INDEX_SQL = """
 CREATE INDEX IF NOT EXISTS idx_auth_tokens_owner
 ON auth_tokens(owner_id)
 WHERE revoked_at IS NULL
+"""
+CREATE_AUTH_TOKENS_TOKEN_ID_INDEX_SQL = """
+CREATE UNIQUE INDEX IF NOT EXISTS idx_auth_tokens_token_id
+ON auth_tokens(token_id)
+WHERE token_id IS NOT NULL
 """
 CREATE_PROJECTS_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS projects (
@@ -214,7 +226,11 @@ class PostgresMetadataStore:
                 cur.execute(CREATE_SCHEMA_VERSION_TABLE_SQL)
                 cur.execute(CREATE_USERS_TABLE_SQL)
                 cur.execute(CREATE_AUTH_TOKENS_TABLE_SQL)
+                cur.execute("ALTER TABLE auth_tokens ADD COLUMN IF NOT EXISTS token_id TEXT NULL")
+                cur.execute("ALTER TABLE auth_tokens ADD COLUMN IF NOT EXISTS display_name TEXT NULL")
+                cur.execute("ALTER TABLE auth_tokens ADD COLUMN IF NOT EXISTS token_prefix TEXT NULL")
                 cur.execute(CREATE_AUTH_TOKENS_OWNER_INDEX_SQL)
+                cur.execute(CREATE_AUTH_TOKENS_TOKEN_ID_INDEX_SQL)
                 cur.execute(CREATE_PROJECTS_TABLE_SQL)
                 cur.execute(CREATE_PROJECT_MEMBERSHIPS_TABLE_SQL)
                 cur.execute(CREATE_DEFAULT_PROJECT_OWNER_INDEX_SQL)
@@ -230,6 +246,7 @@ class PostgresMetadataStore:
                 cur.execute("ALTER TABLE facts ADD COLUMN IF NOT EXISTS project_id TEXT NULL")
                 cur.execute(CREATE_FACTS_INDEX_SQL)
                 cur.execute(SEED_SCHEMA_VERSION_SQL, (1, self._schema_version_seed))
+                self._migrate_auth_token_ids(cur)
                 self._migrate_default_projects(cur)
 
     def _read_schema_version(self) -> int:
@@ -268,31 +285,101 @@ class PostgresMetadataStore:
                 )
         return memory_id
 
-    def create_auth_token(
-        self, *, owner_id: str, token: str, display_name: str | None = None
-    ) -> None:
-        owner = _validate_owner_id(owner_id)
-        token_hash = _hash_bearer_token(token)
+    def create_user(self, *, user_id: str, display_name: str | None = None) -> dict[str, Any]:
+        owner = _validate_owner_id(user_id)
         with self._connect() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
                     INSERT INTO users (id, display_name)
                     VALUES (%s, %s)
-                    ON CONFLICT (id) DO UPDATE SET display_name = EXCLUDED.display_name
+                    ON CONFLICT (id) DO UPDATE SET
+                        display_name = COALESCE(EXCLUDED.display_name, users.display_name),
+                        disabled_at = NULL
                     """,
                     (owner, display_name),
                 )
                 self._ensure_default_project(cur, owner)
                 cur.execute(
                     """
-                    INSERT INTO auth_tokens (token_hash, owner_id)
+                    SELECT id, display_name, created_at::text, disabled_at::text
+                    FROM users
+                    WHERE id = %s
+                    """,
+                    (owner,),
+                )
+                row = cur.fetchone()
+        if row is None:
+            raise RuntimeError("user could not be created")
+        return self._user_from_row(row)
+
+    def list_users(self) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id, display_name, created_at::text, disabled_at::text
+                    FROM users
+                    ORDER BY id ASC
+                    """
+                )
+                rows = cur.fetchall()
+        return [self._user_from_row(row) for row in rows]
+
+    def create_auth_token(
+        self,
+        *,
+        owner_id: str,
+        token: str,
+        display_name: str | None = None,
+        token_display_name: str | None = None,
+        expires_at: str | None = None,
+    ) -> dict[str, Any]:
+        owner = _validate_owner_id(owner_id)
+        token_hash = _hash_bearer_token(token)
+        token_id = _new_token_id()
+        token_name = token_display_name
+        token_prefix = _token_prefix(token)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO users (id, display_name)
                     VALUES (%s, %s)
-                    ON CONFLICT (token_hash) DO UPDATE SET owner_id = EXCLUDED.owner_id,
+                    ON CONFLICT (id) DO UPDATE SET
+                        display_name = COALESCE(EXCLUDED.display_name, users.display_name)
+                    """,
+                    (owner, display_name),
+                )
+                self._ensure_default_project(cur, owner)
+                cur.execute(
+                    """
+                    INSERT INTO auth_tokens
+                        (token_hash, token_id, owner_id, display_name, token_prefix, expires_at)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (token_hash) DO UPDATE SET
+                        token_id = COALESCE(auth_tokens.token_id, EXCLUDED.token_id),
+                        owner_id = EXCLUDED.owner_id,
+                        display_name = EXCLUDED.display_name,
+                        token_prefix = EXCLUDED.token_prefix,
+                        expires_at = EXCLUDED.expires_at,
                         revoked_at = NULL
                     """,
-                    (token_hash, owner),
+                    (token_hash, token_id, owner, token_name, token_prefix, expires_at),
                 )
+                cur.execute(
+                    """
+                    SELECT token_id, owner_id, display_name, token_prefix,
+                           created_at::text, expires_at::text, revoked_at::text
+                    FROM auth_tokens
+                    WHERE token_hash = %s
+                    """,
+                    (token_hash,),
+                )
+                row = cur.fetchone()
+        if row is None:
+            raise RuntimeError("auth token could not be created")
+        return self._token_from_row(row)
 
     def owner_for_token(self, token: str) -> str | None:
         token_hash = _hash_bearer_token(token)
@@ -312,6 +399,66 @@ class PostgresMetadataStore:
                 )
                 row = cur.fetchone()
         return str(row[0]) if row is not None else None
+
+    def list_auth_tokens(self, *, owner_id: str) -> list[dict[str, Any]]:
+        owner = _validate_owner_id(owner_id)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT token_id, owner_id, display_name, token_prefix,
+                           created_at::text, expires_at::text, revoked_at::text
+                    FROM auth_tokens
+                    WHERE owner_id = %s
+                    ORDER BY created_at DESC, token_id ASC
+                    """,
+                    (owner,),
+                )
+                rows = cur.fetchall()
+        return [self._token_from_row(row) for row in rows]
+
+    def revoke_auth_token(self, token_id_or_prefix: str) -> dict[str, Any] | None:
+        handle = _validate_token_lookup(token_id_or_prefix)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT token_hash, token_id, owner_id, display_name, token_prefix,
+                           created_at::text, expires_at::text, revoked_at::text
+                    FROM auth_tokens
+                    WHERE token_id = %s
+                       OR token_id LIKE %s
+                       OR token_prefix = %s
+                    ORDER BY token_id ASC
+                    """,
+                    (handle, f"{handle}%", handle),
+                )
+                rows = cur.fetchall()
+                if not rows:
+                    return None
+                token_ids = {str(row[1]) for row in rows}
+                if len(token_ids) > 1:
+                    raise ValueError("token identifier is ambiguous")
+                token_hash = str(rows[0][0])
+                cur.execute(
+                    """
+                    UPDATE auth_tokens
+                    SET revoked_at = NOW()
+                    WHERE token_hash = %s
+                    """,
+                    (token_hash,),
+                )
+                cur.execute(
+                    """
+                    SELECT token_id, owner_id, display_name, token_prefix,
+                           created_at::text, expires_at::text, revoked_at::text
+                    FROM auth_tokens
+                    WHERE token_hash = %s
+                    """,
+                    (token_hash,),
+                )
+                row = cur.fetchone()
+        return self._token_from_row(row) if row is not None else None
 
     def ensure_default_project(self, owner_id: str | None) -> dict[str, Any]:
         owner = _validate_owner_id(owner_id) if owner_id is not None else None
@@ -378,6 +525,27 @@ class PostgresMetadataStore:
                     (user, user),
                 )
                 self._upsert_project_membership(cur, project, user, normalized_role)
+
+    def list_project_members(self, *, project_id: str) -> list[dict[str, Any]]:
+        project = _validate_project_id(project_id)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT project_memberships.project_id, project_memberships.user_id,
+                           project_memberships.role, project_memberships.created_at::text,
+                           project_memberships.updated_at::text, users.display_name
+                    FROM project_memberships
+                    JOIN projects ON projects.id = project_memberships.project_id
+                    JOIN users ON users.id = project_memberships.user_id
+                    WHERE project_memberships.project_id = %s
+                      AND projects.archived_at IS NULL
+                    ORDER BY project_memberships.role ASC, project_memberships.user_id ASC
+                    """,
+                    (project,),
+                )
+                rows = cur.fetchall()
+        return [self._project_member_from_row(row) for row in rows]
 
     def project_has_role(self, *, project_id: str, user_id: str | None, role: str) -> bool:
         project = _validate_project_id(project_id)
@@ -975,6 +1143,53 @@ class PostgresMetadataStore:
             "archived_at": row[7],
             "role": row[8],
         }
+
+    def _user_from_row(self, row: Any) -> dict[str, Any]:
+        return {
+            "id": str(row[0]),
+            "display_name": row[1],
+            "created_at": str(row[2]),
+            "disabled_at": row[3],
+        }
+
+    def _token_from_row(self, row: Any) -> dict[str, Any]:
+        return {
+            "token_id": str(row[0]),
+            "owner_id": str(row[1]),
+            "display_name": row[2],
+            "token_prefix": row[3],
+            "created_at": str(row[4]),
+            "expires_at": row[5],
+            "revoked_at": row[6],
+        }
+
+    def _project_member_from_row(self, row: Any) -> dict[str, Any]:
+        return {
+            "project_id": str(row[0]),
+            "user_id": str(row[1]),
+            "role": str(row[2]),
+            "created_at": str(row[3]),
+            "updated_at": str(row[4]),
+            "display_name": row[5],
+        }
+
+    def _migrate_auth_token_ids(self, cur: Any) -> None:
+        cur.execute(
+            """
+            SELECT token_hash FROM auth_tokens
+            WHERE token_id IS NULL
+            """
+        )
+        for row in cur.fetchall():
+            token_hash = str(row[0])
+            cur.execute(
+                """
+                UPDATE auth_tokens
+                SET token_id = %s
+                WHERE token_hash = %s
+                """,
+                (_token_id_from_hash(token_hash), token_hash),
+            )
 
     def _migrate_default_projects(self, cur: Any) -> None:
         local_project = self._ensure_default_project(cur, None)

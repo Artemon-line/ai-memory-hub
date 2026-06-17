@@ -167,6 +167,23 @@ python -m memory.cli config-show --json
 python -m memory.cli storage-check --json
 ```
 
+Local bearer-token and project administration is CLI-first. Token creation prints
+the raw bearer token once; token list and revoke commands only expose stable
+token ids and non-secret prefixes.
+
+```bash
+python -m memory.cli admin user create jane --display-name "Jane" --json
+python -m memory.cli admin user list --json
+python -m memory.cli admin token create --user jane --display-name laptop --json
+python -m memory.cli admin token list --user jane --json
+python -m memory.cli admin token revoke <TOKEN_ID_OR_PREFIX> --json
+
+python -m memory.cli admin project create shared-321 --owner jane --name "Shared 321" --json
+python -m memory.cli admin project list --user jane --json
+python -m memory.cli admin project member add shared-321 --user carl --role writer --json
+python -m memory.cli admin project member list shared-321 --json
+```
+
 Fact review helpers:
 
 ```bash

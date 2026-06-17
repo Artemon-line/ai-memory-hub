@@ -130,6 +130,7 @@ def test_parser_includes_core_commands() -> None:
         "health",
         "config-show",
         "storage-check",
+        "admin",
     )
     for command in commands:
         assert command in help_text
@@ -381,6 +382,174 @@ def test_storage_check_cli_json(capsys, monkeypatch) -> None:
     body = json.loads(capsys.readouterr().out)
     assert exit_code == 0
     assert body["metadata"]["provider"] == "memory"
+
+
+def test_admin_token_create_json_prints_raw_token_once(capsys, monkeypatch) -> None:
+    class Store:
+        def create_auth_token(self, **kwargs):
+            assert kwargs["owner_id"] == "jane"
+            assert kwargs["token"] == "amh_raw_once"
+            assert kwargs["token_display_name"] == "laptop"
+            return {
+                "token_id": "tok_123",
+                "owner_id": "jane",
+                "display_name": "laptop",
+                "token_prefix": "amh_raw_once",
+                "created_at": "2026-06-17T00:00:00Z",
+                "expires_at": None,
+                "revoked_at": None,
+            }
+
+    runtime = type("Runtime", (), {"metadata_store": Store()})()
+    monkeypatch.setattr(cli, "_configure_memory_runtime", lambda config_path: runtime)
+    monkeypatch.setattr(cli, "_generate_bearer_token", lambda: "amh_raw_once")
+
+    exit_code = cli.main(
+        [
+            "admin",
+            "token",
+            "create",
+            "--user",
+            "jane",
+            "--display-name",
+            "laptop",
+            "--json",
+        ]
+    )
+
+    body = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert body["token"] == "amh_raw_once"
+    assert body["token_record"]["token_id"] == "tok_123"
+    assert "token_hash" not in json.dumps(body)
+
+
+def test_admin_token_list_does_not_expose_raw_tokens(capsys, monkeypatch) -> None:
+    class Store:
+        def list_auth_tokens(self, *, owner_id):
+            assert owner_id == "jane"
+            return [
+                {
+                    "token_id": "tok_123",
+                    "owner_id": "jane",
+                    "display_name": "laptop",
+                    "token_prefix": "amh_abcd1234",
+                    "created_at": "2026-06-17T00:00:00Z",
+                    "expires_at": None,
+                    "revoked_at": None,
+                }
+            ]
+
+    runtime = type("Runtime", (), {"metadata_store": Store()})()
+    monkeypatch.setattr(cli, "_configure_memory_runtime", lambda config_path: runtime)
+
+    exit_code = cli.main(["admin", "token", "list", "--user", "jane", "--json"])
+
+    body = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert body["results"][0]["token_id"] == "tok_123"
+    assert "amh_raw_once" not in json.dumps(body)
+    assert "token_hash" not in json.dumps(body)
+
+
+def test_admin_user_project_and_member_cli_json(capsys, monkeypatch) -> None:
+    class Store:
+        def __init__(self):
+            self.members = []
+
+        def create_user(self, *, user_id, display_name):
+            return {
+                "id": user_id,
+                "display_name": display_name,
+                "created_at": "2026-06-17T00:00:00Z",
+                "disabled_at": None,
+            }
+
+        def create_project(self, *, project_id, owner_id, name, description):
+            return {
+                "id": project_id,
+                "owner_id": owner_id,
+                "name": name,
+                "description": description,
+                "is_default": False,
+                "created_at": "2026-06-17T00:00:00Z",
+                "updated_at": "2026-06-17T00:00:00Z",
+                "archived_at": None,
+                "role": None,
+            }
+
+        def add_project_member(self, *, project_id, user_id, role):
+            self.members.append({"project_id": project_id, "user_id": user_id, "role": role})
+
+        def list_project_members(self, *, project_id):
+            return [member for member in self.members if member["project_id"] == project_id]
+
+    store = Store()
+    runtime = type("Runtime", (), {"metadata_store": store})()
+    monkeypatch.setattr(cli, "_configure_memory_runtime", lambda config_path: runtime)
+
+    user_code = cli.main(
+        ["admin", "user", "create", "jane", "--display-name", "Jane", "--json"]
+    )
+    user = json.loads(capsys.readouterr().out)
+    project_code = cli.main(
+        [
+            "admin",
+            "project",
+            "create",
+            "shared-321",
+            "--owner",
+            "jane",
+            "--name",
+            "Shared",
+            "--json",
+        ]
+    )
+    project = json.loads(capsys.readouterr().out)
+    member_add_code = cli.main(
+        [
+            "admin",
+            "project",
+            "member",
+            "add",
+            "shared-321",
+            "--user",
+            "carl",
+            "--role",
+            "writer",
+            "--json",
+        ]
+    )
+    member_add = json.loads(capsys.readouterr().out)
+    member_list_code = cli.main(
+        ["admin", "project", "member", "list", "shared-321", "--json"]
+    )
+    member_list = json.loads(capsys.readouterr().out)
+
+    assert user_code == 0
+    assert project_code == 0
+    assert member_add_code == 0
+    assert member_list_code == 0
+    assert user["user"]["id"] == "jane"
+    assert project["project"]["id"] == "shared-321"
+    assert member_add["member"]["role"] == "writer"
+    assert member_list["results"] == [{"project_id": "shared-321", "user_id": "carl", "role": "writer"}]
+
+
+def test_admin_token_revoke_not_found(capsys, monkeypatch) -> None:
+    class Store:
+        def revoke_auth_token(self, token_id):
+            assert token_id == "tok_missing"
+            return None
+
+    runtime = type("Runtime", (), {"metadata_store": Store()})()
+    monkeypatch.setattr(cli, "_configure_memory_runtime", lambda config_path: runtime)
+
+    exit_code = cli.main(["admin", "token", "revoke", "tok_missing", "--json"])
+
+    body = json.loads(capsys.readouterr().out)
+    assert exit_code == 1
+    assert body["status"] == "not_found"
 
 
 def test_serve_cli_uses_config_host_port(capsys, monkeypatch, tmp_path) -> None:

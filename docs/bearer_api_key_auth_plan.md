@@ -61,8 +61,9 @@ Implemented:
 
 Not implemented yet:
 
-- [ ] Admin CLI/API commands for user and token management.
-- [ ] Project workspace membership for shared collaboration. See
+- [x] Admin CLI commands for user, bearer-token, project, and membership
+      management.
+- [x] Project workspace membership for shared collaboration. See
       `project_workspace_collaboration_plan.md`.
 - [ ] MCP OAuth protected resource metadata.
 - [ ] MCP `WWW-Authenticate` challenges with `resource_metadata` and scope hints.
@@ -199,16 +200,17 @@ Implementation sequence:
 - [x] Add metadata-store tables/records for auth:
   - [x] `users`
   - [x] `auth_tokens`
-  - [ ] token hash, token prefix, name, scopes, created/last-used/expires/revoked
+  - [x] token hash, token id, token prefix, display name, created/expires/revoked
         timestamps
+  - [ ] scopes and last-used timestamps
   - [x] store only token hashes, never raw tokens
-- [ ] Add admin CLI commands:
-  - [ ] `aim admin user create <username>`
-  - [ ] `aim admin user list`
-  - [ ] `aim admin token create --user <username> --scopes memory:read,memory:write`
-  - [ ] `aim admin token list --user <username>`
-  - [ ] `aim admin token revoke <token-id>`
-  - [ ] print raw token only once on creation
+- [x] Add admin CLI commands:
+  - [x] `aim admin user create <user_id> [--display-name ...]`
+  - [x] `aim admin user list`
+  - [x] `aim admin token create --user <user_id> [--display-name ...]`
+  - [x] `aim admin token list --user <user_id>`
+  - [x] `aim admin token revoke <token_id_or_prefix>`
+  - [x] print raw token only once on creation
 - [x] Add HTTP auth middleware:
   - [x] parse `Authorization: Bearer <token>`
   - [x] reject missing/invalid/revoked/expired tokens with `401`
@@ -247,7 +249,7 @@ Implementation sequence:
   - [x] user A cannot search/retrieve/ask user B memory
   - [x] user A cannot access user B facts/profile
   - [ ] insufficient scope returns `403`
-  - [ ] admin CLI creates and revokes tokens
+  - [x] admin CLI creates and revokes tokens
 
 Acceptance criteria:
 

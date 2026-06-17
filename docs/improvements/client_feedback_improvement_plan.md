@@ -181,7 +181,7 @@ Implementation sequence:
 - [x] Keep `Authorization: Bearer <token>` as the only token transport so the
   client shape remains compatible with MCP OAuth later.
 - [x] Store users and token hashes in the metadata database, not config files.
-- [ ] Add admin CLI commands to create users, issue tokens, list tokens, and
+- [x] Add admin CLI commands to create users, issue tokens, list tokens, and
   revoke tokens.
 - [x] Map each token to `user_id`; scopes remain planned.
 - [x] Stamp new conversations and facts with server-side `owner_id`.
@@ -219,6 +219,7 @@ Current status:
 - Conversations and facts are already stamped with `owner_id`.
 - Shared project membership is implemented in SQLite and Postgres metadata
   stores, with project-scoped reads/writes in HTTP and MCP memory operations.
+- Admin CLI commands can create/list projects and add/list project members.
 
 Implementation sequence:
 

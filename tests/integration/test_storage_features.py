@@ -131,6 +131,84 @@ def test_sqlite_fact_storage_persists_freshness_and_source_quality(tmp_path: Pat
     assert superseded["superseded_at"] == "2026-01-02T00:00:00Z"
 
 
+def test_sqlite_admin_user_token_and_project_management(tmp_path: Path) -> None:
+    store = SQLiteMetadataStore(tmp_path / "metadata.sqlite3")
+
+    user = store.create_user(user_id="jane", display_name="Jane")
+    token = store.create_auth_token(
+        owner_id="jane",
+        token="amh_secret_value",
+        token_display_name="laptop",
+    )
+    project = store.create_project(project_id="shared-321", owner_id="jane", name="Shared 321")
+    store.create_user(user_id="carl", display_name="Carl")
+    store.add_project_member(project_id="shared-321", user_id="carl", role="writer")
+
+    assert user["id"] == "jane"
+    assert any(
+        row["id"] == "jane" and row["display_name"] == "Jane"
+        for row in store.list_users()
+    )
+    assert token["token_id"].startswith("tok_")
+    assert token["token_prefix"] == "amh_secret_v"
+    assert "token_hash" not in token
+    assert store.owner_for_token("amh_secret_value") == "jane"
+    listed_tokens = store.list_auth_tokens(owner_id="jane")
+    assert listed_tokens == [token]
+    assert "token_hash" not in listed_tokens[0]
+    assert project["id"] == "shared-321"
+    assert "shared-321" in {row["id"] for row in store.list_projects(user_id="carl")}
+    members = store.list_project_members(project_id="shared-321")
+    assert {member["user_id"]: member["role"] for member in members} == {
+        "carl": "writer",
+        "jane": "admin",
+    }
+
+    revoked = store.revoke_auth_token(token["token_id"][:12])
+
+    assert revoked is not None
+    assert revoked["revoked_at"] is not None
+    assert store.owner_for_token("amh_secret_value") is None
+
+
+def test_sqlite_auth_token_id_migration_backfills_existing_rows(tmp_path: Path) -> None:
+    db_path = tmp_path / "metadata.sqlite3"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE users (
+                id TEXT PRIMARY KEY,
+                display_name TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                disabled_at TEXT
+            )
+            """
+        )
+        conn.execute("INSERT INTO users (id, display_name) VALUES (?, ?)", ("jane", "Jane"))
+        conn.execute(
+            """
+            CREATE TABLE auth_tokens (
+                token_hash TEXT PRIMARY KEY,
+                owner_id TEXT NOT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                expires_at TEXT,
+                revoked_at TEXT
+            )
+            """
+        )
+        conn.execute(
+            "INSERT INTO auth_tokens (token_hash, owner_id) VALUES (?, ?)",
+            ("sha256:" + "a" * 64, "jane"),
+        )
+
+    store = SQLiteMetadataStore(db_path)
+    tokens = store.list_auth_tokens(owner_id="jane")
+
+    assert len(tokens) == 1
+    assert tokens[0]["token_id"].startswith("tok_")
+    assert "token_hash" not in tokens[0]
+
+
 def test_inmemory_vector_dimension_validation_insert_and_search() -> None:
     store = InMemoryVectorStore(dimension=3)
 

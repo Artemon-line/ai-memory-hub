@@ -179,7 +179,9 @@ Profile views should therefore be project-relative:
       search, profile lookup, and fact supersession.
 - [x] Add optional `project_id` to HTTP and MCP tool schemas.
 - [ ] Add HTTP/MCP project list/default helper operations.
-- [ ] Add admin CLI/API flows for project creation and membership management.
+- [x] Add admin CLI flows for project creation and membership management.
+- [ ] Add admin API flows for project creation and membership management if a
+      non-local admin UI needs them.
 - [x] Add vector metadata `project_id` where providers support metadata filters.
 - [x] Add tests proving private default isolation, shared project collaboration,
       reader/writer/admin role behavior, and vector candidate filtering.

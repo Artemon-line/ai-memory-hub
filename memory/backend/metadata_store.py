@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import secrets
 import sqlite3
 import uuid
 from pathlib import Path
@@ -32,6 +33,9 @@ class SQLiteMetadataStore:
         ("conversations", "conversation_hash"): "TEXT",
         ("conversations", "upstream_thread_id"): "TEXT",
         ("conversations", "project_id"): "TEXT",
+        ("auth_tokens", "token_id"): "TEXT",
+        ("auth_tokens", "token_prefix"): "TEXT",
+        ("auth_tokens", "display_name"): "TEXT",
         ("facts", "source_quality"): "TEXT",
         ("facts", "confidence_reason"): "TEXT",
         ("facts", "last_confirmed_at"): "TEXT",
@@ -86,7 +90,10 @@ class SQLiteMetadataStore:
                 """
                 CREATE TABLE IF NOT EXISTS auth_tokens (
                     token_hash TEXT PRIMARY KEY,
+                    token_id TEXT,
                     owner_id TEXT NOT NULL,
+                    display_name TEXT,
+                    token_prefix TEXT,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                     expires_at TEXT,
                     revoked_at TEXT,
@@ -94,6 +101,9 @@ class SQLiteMetadataStore:
                 )
                 """
             )
+            self._ensure_column(conn, "auth_tokens", "token_id", "TEXT")
+            self._ensure_column(conn, "auth_tokens", "token_prefix", "TEXT")
+            self._ensure_column(conn, "auth_tokens", "display_name", "TEXT")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS projects (
@@ -142,6 +152,13 @@ class SQLiteMetadataStore:
                 CREATE INDEX IF NOT EXISTS idx_auth_tokens_owner
                 ON auth_tokens(owner_id)
                 WHERE revoked_at IS NULL
+                """
+            )
+            conn.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_auth_tokens_token_id
+                ON auth_tokens(token_id)
+                WHERE token_id IS NOT NULL
                 """
             )
             conn.execute(
@@ -234,6 +251,7 @@ class SQLiteMetadataStore:
                 WHERE deleted_at IS NULL
                 """
             )
+            self._migrate_auth_token_ids(conn)
             self._migrate_default_projects(conn)
 
     def _ensure_column(
@@ -285,30 +303,91 @@ class SQLiteMetadataStore:
             self._replace_child_rows(conn, conversation_json)
         return memory_id
 
-    def create_auth_token(
-        self, *, owner_id: str, token: str, display_name: str | None = None
-    ) -> None:
-        owner = _validate_owner_id(owner_id)
-        token_hash = _hash_bearer_token(token)
+    def create_user(self, *, user_id: str, display_name: str | None = None) -> dict[str, Any]:
+        owner = _validate_owner_id(user_id)
         with self._connect() as conn:
             conn.execute(
                 """
                 INSERT INTO users (id, display_name)
                 VALUES (?, ?)
-                ON CONFLICT(id) DO UPDATE SET display_name = excluded.display_name
+                ON CONFLICT(id) DO UPDATE SET
+                    display_name = COALESCE(excluded.display_name, users.display_name),
+                    disabled_at = NULL
+                """,
+                (owner, display_name),
+            )
+            self._ensure_default_project(conn, owner)
+            row = conn.execute(
+                "SELECT id, display_name, created_at, disabled_at FROM users WHERE id = ?",
+                (owner,),
+            ).fetchone()
+        if row is None:
+            raise RuntimeError("user could not be created")
+        return self._user_from_row(row)
+
+    def list_users(self) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, display_name, created_at, disabled_at
+                FROM users
+                ORDER BY id ASC
+                """
+            ).fetchall()
+        return [self._user_from_row(row) for row in rows]
+
+    def create_auth_token(
+        self,
+        *,
+        owner_id: str,
+        token: str,
+        display_name: str | None = None,
+        token_display_name: str | None = None,
+        expires_at: str | None = None,
+    ) -> dict[str, Any]:
+        owner = _validate_owner_id(owner_id)
+        token_hash = _hash_bearer_token(token)
+        token_id = _new_token_id()
+        token_name = token_display_name
+        token_prefix = _token_prefix(token)
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO users (id, display_name)
+                VALUES (?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    display_name = COALESCE(excluded.display_name, users.display_name)
                 """,
                 (owner, display_name),
             )
             self._ensure_default_project(conn, owner)
             conn.execute(
                 """
-                INSERT INTO auth_tokens (token_hash, owner_id)
-                VALUES (?, ?)
-                ON CONFLICT(token_hash) DO UPDATE SET owner_id = excluded.owner_id,
+                INSERT INTO auth_tokens
+                    (token_hash, token_id, owner_id, display_name, token_prefix, expires_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(token_hash) DO UPDATE SET
+                    token_id = COALESCE(auth_tokens.token_id, excluded.token_id),
+                    owner_id = excluded.owner_id,
+                    display_name = excluded.display_name,
+                    token_prefix = excluded.token_prefix,
+                    expires_at = excluded.expires_at,
                     revoked_at = NULL
                 """,
-                (token_hash, owner),
+                (token_hash, token_id, owner, token_name, token_prefix, expires_at),
             )
+            row = conn.execute(
+                """
+                SELECT token_id, owner_id, display_name, token_prefix, created_at,
+                       expires_at, revoked_at
+                FROM auth_tokens
+                WHERE token_hash = ?
+                """,
+                (token_hash,),
+            ).fetchone()
+        if row is None:
+            raise RuntimeError("auth token could not be created")
+        return self._token_from_row(row)
 
     def owner_for_token(self, token: str) -> str | None:
         token_hash = _hash_bearer_token(token)
@@ -326,6 +405,61 @@ class SQLiteMetadataStore:
                 (token_hash,),
             ).fetchone()
         return str(row["owner_id"]) if row is not None else None
+
+    def list_auth_tokens(self, *, owner_id: str) -> list[dict[str, Any]]:
+        owner = _validate_owner_id(owner_id)
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT token_id, owner_id, display_name, token_prefix, created_at,
+                       expires_at, revoked_at
+                FROM auth_tokens
+                WHERE owner_id = ?
+                ORDER BY created_at DESC, token_id ASC
+                """,
+                (owner,),
+            ).fetchall()
+        return [self._token_from_row(row) for row in rows]
+
+    def revoke_auth_token(self, token_id_or_prefix: str) -> dict[str, Any] | None:
+        handle = _validate_token_lookup(token_id_or_prefix)
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT token_hash, token_id, owner_id, display_name, token_prefix,
+                       created_at, expires_at, revoked_at
+                FROM auth_tokens
+                WHERE token_id = ?
+                   OR token_id LIKE ?
+                   OR token_prefix = ?
+                ORDER BY token_id ASC
+                """,
+                (handle, f"{handle}%", handle),
+            ).fetchall()
+            if not rows:
+                return None
+            token_ids = {str(row["token_id"]) for row in rows}
+            if len(token_ids) > 1:
+                raise ValueError("token identifier is ambiguous")
+            token_hash = str(rows[0]["token_hash"])
+            conn.execute(
+                """
+                UPDATE auth_tokens
+                SET revoked_at = CURRENT_TIMESTAMP
+                WHERE token_hash = ?
+                """,
+                (token_hash,),
+            )
+            row = conn.execute(
+                """
+                SELECT token_id, owner_id, display_name, token_prefix, created_at,
+                       expires_at, revoked_at
+                FROM auth_tokens
+                WHERE token_hash = ?
+                """,
+                (token_hash,),
+            ).fetchone()
+        return self._token_from_row(row) if row is not None else None
 
     def ensure_default_project(self, owner_id: str | None) -> dict[str, Any]:
         owner = _validate_owner_id(owner_id) if owner_id is not None else None
@@ -390,6 +524,25 @@ class SQLiteMetadataStore:
                 (user, user),
             )
             self._upsert_project_membership(conn, project, user, normalized_role)
+
+    def list_project_members(self, *, project_id: str) -> list[dict[str, Any]]:
+        project = _validate_project_id(project_id)
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT project_memberships.project_id, project_memberships.user_id,
+                       project_memberships.role, project_memberships.created_at,
+                       project_memberships.updated_at, users.display_name
+                FROM project_memberships
+                JOIN projects ON projects.id = project_memberships.project_id
+                JOIN users ON users.id = project_memberships.user_id
+                WHERE project_memberships.project_id = ?
+                  AND projects.archived_at IS NULL
+                ORDER BY project_memberships.role ASC, project_memberships.user_id ASC
+                """,
+                (project,),
+            ).fetchall()
+        return [self._project_member_from_row(row) for row in rows]
 
     def project_has_role(self, *, project_id: str, user_id: str | None, role: str) -> bool:
         project = _validate_project_id(project_id)
@@ -1069,6 +1222,53 @@ class SQLiteMetadataStore:
             "role": row["role"] if "role" in row.keys() else None,
         }
 
+    def _user_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "id": str(row["id"]),
+            "display_name": row["display_name"],
+            "created_at": str(row["created_at"]),
+            "disabled_at": row["disabled_at"],
+        }
+
+    def _token_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "token_id": str(row["token_id"]),
+            "owner_id": str(row["owner_id"]),
+            "display_name": row["display_name"],
+            "token_prefix": row["token_prefix"],
+            "created_at": str(row["created_at"]),
+            "expires_at": row["expires_at"],
+            "revoked_at": row["revoked_at"],
+        }
+
+    def _project_member_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "project_id": str(row["project_id"]),
+            "user_id": str(row["user_id"]),
+            "role": str(row["role"]),
+            "created_at": str(row["created_at"]),
+            "updated_at": str(row["updated_at"]),
+            "display_name": row["display_name"],
+        }
+
+    def _migrate_auth_token_ids(self, conn: sqlite3.Connection) -> None:
+        rows = conn.execute(
+            """
+            SELECT token_hash FROM auth_tokens
+            WHERE token_id IS NULL
+            """
+        ).fetchall()
+        for row in rows:
+            token_hash = str(row["token_hash"])
+            conn.execute(
+                """
+                UPDATE auth_tokens
+                SET token_id = ?
+                WHERE token_hash = ?
+                """,
+                (_token_id_from_hash(token_hash), token_hash),
+            )
+
     def _migrate_default_projects(self, conn: sqlite3.Connection) -> None:
         local_project = self._ensure_default_project(conn, None)
         owner_rows = conn.execute("SELECT id FROM users").fetchall()
@@ -1137,6 +1337,29 @@ def _hash_bearer_token(token: str) -> str:
     if not isinstance(token, str) or not token:
         raise ValueError("bearer token must be a non-empty string")
     return "sha256:" + hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _new_token_id() -> str:
+    return f"tok_{secrets.token_hex(16)}"
+
+
+def _token_id_from_hash(token_hash: str) -> str:
+    value = str(token_hash)
+    return "tok_" + uuid.uuid5(uuid.NAMESPACE_URL, f"ai-memory-hub:{value}").hex
+
+
+def _token_prefix(token: str) -> str:
+    value = str(token)
+    return value[:12]
+
+
+def _validate_token_lookup(token_id_or_prefix: str) -> str:
+    value = str(token_id_or_prefix).strip()
+    if not value:
+        raise ValueError("token identifier must be non-empty")
+    if len(value) > 128:
+        raise ValueError("token identifier exceeds max length 128")
+    return value
 
 
 def _default_project_id(owner_id: str) -> str:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import secrets
 import sys
 from pathlib import Path
 from typing import Any, Sequence
@@ -135,6 +136,68 @@ def build_parser() -> argparse.ArgumentParser:
     fact_supersede.add_argument("fact_id", help="Fact id to supersede.")
     fact_supersede.add_argument("superseded_by", help="Replacement fact id.")
 
+    admin = subparsers.add_parser("admin", help="Manage local users, tokens, and projects.")
+    _add_common_options(admin)
+    admin_subparsers = admin.add_subparsers(
+        dest="admin_resource", required=True, parser_class=CLIArgumentParser
+    )
+
+    admin_user = admin_subparsers.add_parser("user", help="Manage users/principals.")
+    _add_common_options(admin_user)
+    admin_user_subparsers = admin_user.add_subparsers(
+        dest="admin_action", required=True, parser_class=CLIArgumentParser
+    )
+    admin_user_create = admin_user_subparsers.add_parser("create", help="Create or update a user.")
+    _add_common_options(admin_user_create)
+    admin_user_create.add_argument("user_id", help="User/principal id.")
+    admin_user_create.add_argument("--display-name", default=None, help="Optional display name.")
+    admin_user_list = admin_user_subparsers.add_parser("list", help="List users/principals.")
+    _add_common_options(admin_user_list)
+
+    admin_token = admin_subparsers.add_parser("token", help="Manage bearer tokens.")
+    _add_common_options(admin_token)
+    admin_token_subparsers = admin_token.add_subparsers(
+        dest="admin_action", required=True, parser_class=CLIArgumentParser
+    )
+    admin_token_create = admin_token_subparsers.add_parser("create", help="Issue a bearer token.")
+    _add_common_options(admin_token_create)
+    admin_token_create.add_argument("--user", required=True, help="User/principal id.")
+    admin_token_create.add_argument("--display-name", default=None, help="Optional token display name.")
+    admin_token_list = admin_token_subparsers.add_parser("list", help="List tokens for a user.")
+    _add_common_options(admin_token_list)
+    admin_token_list.add_argument("--user", required=True, help="User/principal id.")
+    admin_token_revoke = admin_token_subparsers.add_parser("revoke", help="Revoke a bearer token.")
+    _add_common_options(admin_token_revoke)
+    admin_token_revoke.add_argument("token_id", help="Token id, or an unambiguous token id prefix.")
+
+    admin_project = admin_subparsers.add_parser("project", help="Manage project workspaces.")
+    _add_common_options(admin_project)
+    admin_project_subparsers = admin_project.add_subparsers(
+        dest="admin_action", required=True, parser_class=CLIArgumentParser
+    )
+    admin_project_create = admin_project_subparsers.add_parser("create", help="Create a project.")
+    _add_common_options(admin_project_create)
+    admin_project_create.add_argument("project_id", help="Project id.")
+    admin_project_create.add_argument("--owner", required=True, help="Owner user/principal id.")
+    admin_project_create.add_argument("--name", default=None, help="Project display name.")
+    admin_project_create.add_argument("--description", default=None, help="Optional project description.")
+    admin_project_list = admin_project_subparsers.add_parser("list", help="List projects.")
+    _add_common_options(admin_project_list)
+    admin_project_list.add_argument("--user", default=None, help="Only list projects visible to this user.")
+    admin_project_member = admin_project_subparsers.add_parser("member", help="Manage project members.")
+    _add_common_options(admin_project_member)
+    admin_member_subparsers = admin_project_member.add_subparsers(
+        dest="admin_member_action", required=True, parser_class=CLIArgumentParser
+    )
+    admin_member_add = admin_member_subparsers.add_parser("add", help="Add or update a project member.")
+    _add_common_options(admin_member_add)
+    admin_member_add.add_argument("project_id", help="Project id.")
+    admin_member_add.add_argument("--user", required=True, help="User/principal id.")
+    admin_member_add.add_argument("--role", required=True, choices=["reader", "writer", "admin"])
+    admin_member_list = admin_member_subparsers.add_parser("list", help="List project members.")
+    _add_common_options(admin_member_list)
+    admin_member_list.add_argument("project_id", help="Project id.")
+
     return parser
 
 
@@ -203,6 +266,8 @@ def _dispatch(args: argparse.Namespace) -> int:
         return _profile_get(args)
     if args.command == "fact-supersede":
         return _fact_supersede(args)
+    if args.command == "admin":
+        return _admin(args)
     raise ValueError(f"unknown command: {args.command}")
 
 
@@ -375,9 +440,150 @@ def _fact_supersede(args: argparse.Namespace) -> int:
     return EXIT_OK if result["status"] == "ok" else EXIT_COMMAND_FAILURE
 
 
+def _admin(args: argparse.Namespace) -> int:
+    if args.admin_resource == "user":
+        if args.admin_action == "create":
+            return _admin_user_create(args)
+        if args.admin_action == "list":
+            return _admin_user_list(args)
+    if args.admin_resource == "token":
+        if args.admin_action == "create":
+            return _admin_token_create(args)
+        if args.admin_action == "list":
+            return _admin_token_list(args)
+        if args.admin_action == "revoke":
+            return _admin_token_revoke(args)
+    if args.admin_resource == "project":
+        if args.admin_action == "create":
+            return _admin_project_create(args)
+        if args.admin_action == "list":
+            return _admin_project_list(args)
+        if args.admin_action == "member":
+            if args.admin_member_action == "add":
+                return _admin_project_member_add(args)
+            if args.admin_member_action == "list":
+                return _admin_project_member_list(args)
+    raise ValueError("unknown admin command")
+
+
+def _admin_user_create(args: argparse.Namespace) -> int:
+    store = _admin_metadata_store(args)
+    create_user = _require_store_method(store, "create_user")
+    user = create_user(user_id=args.user_id, display_name=args.display_name)
+    result = _envelope(status="ok", user=user)
+    _emit_result(args, result, text_formatter=lambda item: _format_user_text(item["user"]))
+    return EXIT_OK
+
+
+def _admin_user_list(args: argparse.Namespace) -> int:
+    store = _admin_metadata_store(args)
+    list_users = _require_store_method(store, "list_users")
+    result = _envelope(status="ok", results=list_users())
+    _emit_result(args, result, text_formatter=_format_users_text)
+    return EXIT_OK
+
+
+def _admin_token_create(args: argparse.Namespace) -> int:
+    store = _admin_metadata_store(args)
+    create_auth_token = _require_store_method(store, "create_auth_token")
+    token = _generate_bearer_token()
+    token_record = create_auth_token(
+        owner_id=args.user,
+        token=token,
+        token_display_name=args.display_name,
+    )
+    result = _envelope(status="ok", token=token, token_record=token_record)
+    _emit_result(args, result, text_formatter=_format_token_create_text)
+    return EXIT_OK
+
+
+def _admin_token_list(args: argparse.Namespace) -> int:
+    store = _admin_metadata_store(args)
+    list_auth_tokens = _require_store_method(store, "list_auth_tokens")
+    result = _envelope(status="ok", results=list_auth_tokens(owner_id=args.user))
+    _emit_result(args, result, text_formatter=_format_tokens_text)
+    return EXIT_OK
+
+
+def _admin_token_revoke(args: argparse.Namespace) -> int:
+    store = _admin_metadata_store(args)
+    revoke_auth_token = _require_store_method(store, "revoke_auth_token")
+    token_record = revoke_auth_token(args.token_id)
+    if token_record is None:
+        result = _envelope(
+            status="not_found",
+            id=args.token_id,
+            error_code="not_found",
+            error_message="token not found",
+        )
+        _emit_result(args, result, text_formatter=lambda item: item["error_message"])
+        return EXIT_COMMAND_FAILURE
+    result = _envelope(status="ok", token_record=token_record)
+    _emit_result(args, result, text_formatter=lambda item: f"revoked {item['token_record']['token_id']}")
+    return EXIT_OK
+
+
+def _admin_project_create(args: argparse.Namespace) -> int:
+    store = _admin_metadata_store(args)
+    create_project = _require_store_method(store, "create_project")
+    project = create_project(
+        project_id=args.project_id,
+        owner_id=args.owner,
+        name=args.name,
+        description=args.description,
+    )
+    result = _envelope(status="ok", project=project)
+    _emit_result(args, result, text_formatter=lambda item: _format_project_text(item["project"]))
+    return EXIT_OK
+
+
+def _admin_project_list(args: argparse.Namespace) -> int:
+    store = _admin_metadata_store(args)
+    list_projects = _require_store_method(store, "list_projects")
+    result = _envelope(status="ok", results=list_projects(user_id=args.user))
+    _emit_result(args, result, text_formatter=_format_projects_text)
+    return EXIT_OK
+
+
+def _admin_project_member_add(args: argparse.Namespace) -> int:
+    store = _admin_metadata_store(args)
+    add_project_member = _require_store_method(store, "add_project_member")
+    add_project_member(project_id=args.project_id, user_id=args.user, role=args.role)
+    result = _envelope(
+        status="ok",
+        member={"project_id": args.project_id, "user_id": args.user, "role": args.role},
+    )
+    _emit_result(args, result, text_formatter=lambda item: _format_project_member_text(item["member"]))
+    return EXIT_OK
+
+
+def _admin_project_member_list(args: argparse.Namespace) -> int:
+    store = _admin_metadata_store(args)
+    list_project_members = _require_store_method(store, "list_project_members")
+    result = _envelope(status="ok", results=list_project_members(project_id=args.project_id))
+    _emit_result(args, result, text_formatter=_format_project_members_text)
+    return EXIT_OK
+
+
 def _configure_memory_runtime(config_path: str | None) -> mvp_ingestion.RuntimeDependencies:
     config = load_config(config_path)
     return mvp_ingestion.configure_runtime(config=config)
+
+
+def _admin_metadata_store(args: argparse.Namespace) -> Any:
+    runtime = _configure_memory_runtime(args.config)
+    return runtime.metadata_store
+
+
+def _require_store_method(store: Any, name: str) -> Any:
+    method = getattr(store, name, None)
+    if method is None:
+        raise RuntimeError(f"metadata store does not support admin method: {name}")
+    return method
+
+
+def _generate_bearer_token() -> str:
+    return "amh_" + secrets.token_urlsafe(32)
 
 
 def _read_payload(path: str) -> Any:
@@ -536,6 +742,66 @@ def _format_profile_text(result: dict[str, Any]) -> str:
         if isinstance(fact, dict):
             lines.append(f"- {fact['id']} {fact['predicate']}: {fact['object']}")
     return "\n".join(lines)
+
+
+def _format_user_text(user: dict[str, Any]) -> str:
+    display = f" display_name={user.get('display_name')}" if user.get("display_name") else ""
+    return f"user {user.get('id')}{display}"
+
+
+def _format_users_text(result: dict[str, Any]) -> str:
+    lines = [_format_user_text(user) for user in result.get("results", []) if isinstance(user, dict)]
+    return "\n".join(lines) if lines else "no users"
+
+
+def _format_token_create_text(result: dict[str, Any]) -> str:
+    record = result.get("token_record", {})
+    return "\n".join(
+        [
+            f"token_id: {record.get('token_id')}",
+            f"owner_id: {record.get('owner_id')}",
+            f"token: {result.get('token')}",
+        ]
+    )
+
+
+def _format_tokens_text(result: dict[str, Any]) -> str:
+    lines = []
+    for token in result.get("results", []):
+        if not isinstance(token, dict):
+            continue
+        revoked = " revoked" if token.get("revoked_at") else ""
+        name = f" {token.get('display_name')}" if token.get("display_name") else ""
+        prefix = f" prefix={token.get('token_prefix')}" if token.get("token_prefix") else ""
+        lines.append(f"- {token.get('token_id')}{name}{prefix}{revoked}")
+    return "\n".join(lines) if lines else "no tokens"
+
+
+def _format_project_text(project: dict[str, Any]) -> str:
+    role = f" role={project.get('role')}" if project.get("role") else ""
+    return f"project {project.get('id')} owner={project.get('owner_id')} name={project.get('name')}{role}"
+
+
+def _format_projects_text(result: dict[str, Any]) -> str:
+    lines = [
+        _format_project_text(project)
+        for project in result.get("results", [])
+        if isinstance(project, dict)
+    ]
+    return "\n".join(lines) if lines else "no projects"
+
+
+def _format_project_member_text(member: dict[str, Any]) -> str:
+    return f"{member.get('project_id')} {member.get('user_id')} role={member.get('role')}"
+
+
+def _format_project_members_text(result: dict[str, Any]) -> str:
+    lines = [
+        "- " + _format_project_member_text(member)
+        for member in result.get("results", [])
+        if isinstance(member, dict)
+    ]
+    return "\n".join(lines) if lines else "no members"
 
 
 def _capabilities(store: Any) -> dict[str, Any]:

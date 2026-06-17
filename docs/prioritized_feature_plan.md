@@ -10,8 +10,8 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P0 | Storage abstraction baseline: capabilities, schema checks, dimensions, fallback, dry-run, Postgres/PGVector | Implemented | `storage_agnostic_byoa_plan.md` |
 | P0 | Retrieval precision: threshold, hybrid search, metadata rerank | Implemented | `improvements/retrieval_precision_plan.md` |
 | P0 | MCP protocol compliance: initialize instructions, schemas, pagination, logging, completion when client UX needs it | Partial | `mcp_utility_compliance_plan.md`, `mcp_plan.md` |
-| P0 | Bearer-token auth and per-user memory isolation | Planned | `bearer_api_key_auth_plan.md` |
-| P0 | Project workspaces and shared collaboration boundaries | Planned | `project_workspace_collaboration_plan.md` |
+| P0 | Bearer-token auth and per-user memory isolation | Partial | `bearer_api_key_auth_plan.md` |
+| P0 | Project workspaces and shared collaboration boundaries | Partial | `project_workspace_collaboration_plan.md` |
 | P0 | MCP client feedback: response shape clarity, fact freshness, and source quality | Implemented | `improvements/client_feedback_improvement_plan.md` |
 | P0 | Advanced search filters for ask, facts, and profile queries | Planned | `improvements/client_feedback_improvement_plan.md` |
 | P0 | Conversation summary metadata and profile views | Partial | `improvements/client_feedback_improvement_plan.md` |
@@ -122,7 +122,7 @@ Implementation sequence:
 
 - [x] Add `api.auth: bearer_token` alongside existing `none` mode.
 - [x] Store users and token hashes in the metadata database, not in config files.
-- [ ] Add admin CLI commands to create users, issue tokens, list tokens, and
+- [x] Add admin CLI commands to create users, issue tokens, list tokens, and
       revoke tokens.
 - [x] Accept tokens through `Authorization: Bearer <token>` for HTTP API and MCP.
 - [x] Map each token to a server-side user/principal; scopes remain planned.
@@ -169,6 +169,8 @@ Implementation sequence:
 - [x] Add optional `project_id` to HTTP and MCP tool schemas.
 - [x] Keep project and membership administration in CLI/API flows first, not
       agent-facing MCP tools.
+- [x] Add admin CLI commands to create/list projects and add/list project
+      members.
 
 Acceptance criteria:
 
