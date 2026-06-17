@@ -375,6 +375,8 @@ Plan:
 - Add filter smoke coverage after the base collection is stable.
 - Run Bruno against the Postgres/PGVector stack locally and in CI.
   Done for the initial workflow.
+- Verify the unauthenticated smoke collection with the real Bruno CLI locally.
+  Done.
 
 ## Closed: Bulk Conversation Insert
 

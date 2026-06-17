@@ -58,13 +58,21 @@ jobs:
       - name: Install Python dependencies
         run: uv sync --dev --extra postgres
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
           node-version: "24"
+          cache: pnpm
+          cache-dependency-path: tests/bruno/pnpm-lock.yaml
 
       - name: Install Bruno CLI
-        run: npm install -g @usebruno/cli
+        working-directory: tests/bruno
+        run: pnpm install --frozen-lockfile
 
       - name: Validate Bruno test files
         run: |
@@ -96,15 +104,15 @@ jobs:
           exit 1
 
       - name: Run Bruno collection
-        working-directory: tests/bruno/collections/ai-memory-hub-integration
+        working-directory: tests/bruno
         run: |
-          mkdir -p ../../reports
-          bru run \
+          mkdir -p reports
+          pnpm exec bru run collections/ai-memory-hub-integration \
             --global-env ci \
-            --workspace-path ../.. \
+            --workspace-path . \
             --tags smoke \
             --env-var run_id="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
-            --reporter-html ../../reports/bruno-integration-report.html \
+            --reporter-html reports/bruno-integration-report.html \
             --sandbox developer \
             --noproxy
 
@@ -160,15 +168,15 @@ jobs:
           exit 1
 
       - name: Run Bruno auth/project collection
-        working-directory: tests/bruno/collections/ai-memory-hub-integration
+        working-directory: tests/bruno
         run: |
-          mkdir -p ../../reports
-          bru run \
+          mkdir -p reports
+          pnpm exec bru run collections/ai-memory-hub-integration \
             --global-env ci \
-            --workspace-path ../.. \
+            --workspace-path . \
             --tags auth \
             --env-var run_id="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-auth" \
-            --reporter-html ../../reports/bruno-auth-project-report.html \
+            --reporter-html reports/bruno-auth-project-report.html \
             --sandbox developer \
             --noproxy
 

@@ -17,7 +17,7 @@ Bruno coverage remains planned.
 ## Goals
 
 - Provide a local test collection that contributors can run from Bruno Desktop
-  or `bru run`.
+  or the repo-local Bruno CLI dependency.
 - Verify the public API and MCP contracts against a running server instead of
   in-process test clients only.
 - Exercise the real persistence path: MCP/API request -> ingestion -> metadata
@@ -111,7 +111,8 @@ The authenticated profile covers:
 - [x] A non-member is denied access to the shared project.
 
 This setup should use admin CLI commands or a small CI seed script before
-`bru run`; token values must be injected at runtime and never committed.
+`pnpm exec bru run`; token values must be injected at runtime and never
+committed.
 
 ### OAuth Guard
 
@@ -154,14 +155,14 @@ docker compose up --build
 Then run Bruno:
 
 ```bash
-cd tests/bruno/collections/ai-memory-hub-integration
-bru run --global-env local --workspace-path ../.. --sandbox developer --noproxy
+cd tests/bruno
+pnpm exec bru run collections/ai-memory-hub-integration --global-env local --workspace-path . --sandbox developer --noproxy
 ```
 
 Use tags to keep local runs focused:
 
 ```bash
-bru run --global-env local --workspace-path ../.. --tags smoke,mcp --sandbox developer --noproxy
+pnpm exec bru run collections/ai-memory-hub-integration --global-env local --workspace-path . --tags smoke,mcp --sandbox developer --noproxy
 ```
 
 ## CI Workflow
@@ -178,13 +179,13 @@ Add a dedicated GitHub Actions job after the collection is stable locally:
    - `providers.vector_db: pgvector`
    - deterministic local embeddings
 5. Wait for `/ready`.
-6. Install Node.js and `@usebruno/cli`.
+6. Install Node.js, pnpm, and the local `tests/bruno` package dependencies.
 7. Run:
 
 ```bash
-bru run \
+pnpm exec bru run collections/ai-memory-hub-integration \
   --global-env ci \
-  --workspace-path ../.. \
+  --workspace-path . \
   --tags smoke,api,mcp \
   --env-var run_id="${GITHUB_RUN_ID}" \
   --reporter-html ../../reports/bruno-integration-report.html \
@@ -222,6 +223,8 @@ portable for local users.
   cleanup.
 - [x] No bearer tokens, API keys, DSNs with credentials, conversations, or
   embeddings are printed in CI logs beyond safe synthetic test data.
+- [x] The unauthenticated smoke collection has been verified with the real Bruno
+  CLI locally.
 
 ## Rollout
 
@@ -237,5 +240,7 @@ portable for local users.
    Done.
 5. Add an OAuth fail-fast guard until resource-server mode is implemented.
    Done.
-6. Add focused filter smoke tests.
-7. Promote the Bruno lane to required CI only after several stable runs.
+6. Verify the unauthenticated smoke collection with the real Bruno CLI locally.
+   Done.
+7. Add focused filter smoke tests.
+8. Promote the Bruno lane to required CI only after several stable runs.

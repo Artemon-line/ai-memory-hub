@@ -51,6 +51,11 @@ coverage.xml
 .pytest_cache/
 cover/
 
+# Node / pnpm dependencies
+node_modules/
+tests/bruno/node_modules/
+.pnpm-store/
+
 # Translations
 *.mo
 *.pot

@@ -316,6 +316,7 @@ and storage adapter details.
 - [x] Add bearer-token and project-workspace smoke tests after CI token/project
       seeding is scripted.
 - [x] Add an OAuth resource-server fail-fast guard until OAuth is implemented.
+- [x] Verify the unauthenticated smoke collection with the real Bruno CLI locally.
 - [ ] Promote to required CI only after repeated stable runs.
 
 ## P1: CLI Foundation And Commands

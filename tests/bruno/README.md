@@ -23,14 +23,14 @@ docker compose up --build
 Then run the collection from the repository root:
 
 ```bash
-cd tests/bruno/collections/ai-memory-hub-integration
-bru run --global-env local --workspace-path ../.. --sandbox developer --noproxy
+cd tests/bruno
+pnpm exec bru run collections/ai-memory-hub-integration --global-env local --workspace-path . --sandbox developer --noproxy
 ```
 
 Run only the MCP smoke requests:
 
 ```bash
-bru run --global-env local --workspace-path ../.. --tags mcp --sandbox developer --noproxy
+pnpm exec bru run collections/ai-memory-hub-integration --global-env local --workspace-path . --tags mcp --sandbox developer --noproxy
 ```
 
 Run the bearer auth and shared-project cases against an auth-enabled server:
@@ -38,8 +38,8 @@ Run the bearer auth and shared-project cases against an auth-enabled server:
 ```bash
 uv run python tests/bruno/seed_auth.py
 uv run aim serve --config tests/bruno/config.auth.ci.yaml --host 127.0.0.1 --port 8000
-cd tests/bruno/collections/ai-memory-hub-integration
-bru run --global-env local --workspace-path ../.. --tags auth --env-var run_id="$(date +%s)" --sandbox developer --noproxy
+cd tests/bruno
+pnpm exec bru run collections/ai-memory-hub-integration --global-env local --workspace-path . --tags auth --env-var run_id="$(date +%s)" --sandbox developer --noproxy
 ```
 
 The OAuth case is currently a CI guard that confirms `api.auth:
@@ -49,7 +49,7 @@ not implemented yet.
 Override the run id when you want stable test data:
 
 ```bash
-bru run --global-env local --workspace-path ../.. --env-var run_id="$(date +%s)" --sandbox developer --noproxy
+pnpm exec bru run collections/ai-memory-hub-integration --global-env local --workspace-path . --env-var run_id="$(date +%s)" --sandbox developer --noproxy
 ```
 
 ## Scope

@@ -1,4 +1,8 @@
+---
 extends: default
+
+ignore: |
+  tests/bruno/pnpm-lock.yaml
 
 rules:
   # Allow YAML without '---' at the top
