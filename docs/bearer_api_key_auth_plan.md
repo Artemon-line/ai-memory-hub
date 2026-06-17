@@ -62,6 +62,8 @@ Implemented:
 Not implemented yet:
 
 - [ ] Admin CLI/API commands for user and token management.
+- [ ] Project workspace membership for shared collaboration. See
+      `project_workspace_collaboration_plan.md`.
 - [ ] MCP OAuth protected resource metadata.
 - [ ] MCP `WWW-Authenticate` challenges with `resource_metadata` and scope hints.
 - [ ] OAuth access-token validation with audience/resource binding.

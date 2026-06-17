@@ -530,4 +530,5 @@ tests/          unit, integration, and end-to-end tests
 - [Observability, logging, and telemetry plan](observability_logging_telemetry_plan.md)
 - [Recurring codebase cleanup plan](recurring_codebase_cleanup_plan.md)
 - [Bearer/API-key auth plan](bearer_api_key_auth_plan.md)
+- [Project workspace collaboration plan](project_workspace_collaboration_plan.md)
 - [Improvement plans](improvements.md)

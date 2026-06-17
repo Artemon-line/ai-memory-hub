@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 import uuid
@@ -8,6 +7,18 @@ from typing import Any, Callable
 
 from memory.backend.contracts import ProviderCapabilities
 from memory.backend.errors import SchemaVersionError
+from memory.backend.metadata_store import (
+    LOCAL_DEFAULT_PROJECT_ID,
+    PROJECT_ROLE_ADMIN,
+    PROJECT_ROLE_ORDER,
+    _default_project_id,
+    _hash_bearer_token,
+    _owner_id_from_payload,
+    _stamp_project_id,
+    _validate_owner_id,
+    _validate_project_id,
+    _validate_project_role,
+)
 
 CREATE_CONVERSATIONS_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS conversations (
@@ -15,7 +26,8 @@ CREATE TABLE IF NOT EXISTS conversations (
     source TEXT NOT NULL,
     timestamp TEXT NOT NULL,
     title TEXT NULL,
-    conversation_hash TEXT NULL UNIQUE,
+    conversation_hash TEXT NULL,
+    project_id TEXT NULL,
     upstream_thread_id TEXT NULL,
     payload JSONB NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -57,6 +69,43 @@ CREATE INDEX IF NOT EXISTS idx_auth_tokens_owner
 ON auth_tokens(owner_id)
 WHERE revoked_at IS NULL
 """
+CREATE_PROJECTS_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS projects (
+    id TEXT PRIMARY KEY,
+    owner_id TEXT NULL REFERENCES users(id),
+    name TEXT NOT NULL,
+    description TEXT NULL,
+    is_default BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    archived_at TIMESTAMPTZ NULL
+)
+"""
+CREATE_PROJECT_MEMBERSHIPS_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS project_memberships (
+    project_id TEXT NOT NULL REFERENCES projects(id),
+    user_id TEXT NOT NULL REFERENCES users(id),
+    role TEXT NOT NULL CHECK(role IN ('admin', 'writer', 'reader')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY(project_id, user_id)
+)
+"""
+CREATE_DEFAULT_PROJECT_OWNER_INDEX_SQL = """
+CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_default_owner
+ON projects(owner_id)
+WHERE is_default = TRUE AND owner_id IS NOT NULL
+"""
+CREATE_DEFAULT_PROJECT_LOCAL_INDEX_SQL = """
+CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_default_local
+ON projects(is_default)
+WHERE is_default = TRUE AND owner_id IS NULL
+"""
+CREATE_CONVERSATION_PROJECT_HASH_INDEX_SQL = """
+CREATE UNIQUE INDEX IF NOT EXISTS idx_conversations_project_hash
+ON conversations(project_id, conversation_hash)
+WHERE conversation_hash IS NOT NULL
+"""
 CREATE_FACTS_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS facts (
     id TEXT PRIMARY KEY,
@@ -67,6 +116,7 @@ CREATE TABLE IF NOT EXISTS facts (
     confidence TEXT NOT NULL,
     source_conversation_id TEXT NOT NULL,
     owner_id TEXT NULL,
+    project_id TEXT NULL,
     source_message_indexes JSONB NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL,
@@ -93,25 +143,25 @@ ON CONFLICT (id) DO NOTHING
 """
 
 INSERT_CONVERSATION_SQL = """
-INSERT INTO conversations (id, source, timestamp, title, conversation_hash, upstream_thread_id, payload)
-VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb)
+INSERT INTO conversations (id, source, timestamp, title, conversation_hash, project_id, upstream_thread_id, payload)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
 ON CONFLICT (id) DO UPDATE
 SET source = EXCLUDED.source,
     timestamp = EXCLUDED.timestamp,
     title = EXCLUDED.title,
     conversation_hash = EXCLUDED.conversation_hash,
+    project_id = EXCLUDED.project_id,
     upstream_thread_id = EXCLUDED.upstream_thread_id,
     payload = EXCLUDED.payload
 """
 
 INSERT_NEW_CONVERSATION_SQL = """
-INSERT INTO conversations (id, source, timestamp, title, conversation_hash, upstream_thread_id, payload)
-VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb)
+INSERT INTO conversations (id, source, timestamp, title, conversation_hash, project_id, upstream_thread_id, payload)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
 """
 
 GET_CONVERSATION_SQL = "SELECT payload::text FROM conversations WHERE id = %s"
 GET_MANY_CONVERSATIONS_SQL = "SELECT id, payload::text FROM conversations WHERE id = ANY(%s)"
-GET_CONVERSATION_BY_HASH_SQL = "SELECT payload::text FROM conversations WHERE conversation_hash = %s"
 GET_CONVERSATION_BY_UPSTREAM_THREAD_SQL = """
 SELECT payload::text FROM conversations
 WHERE source = %s AND upstream_thread_id = %s
@@ -154,13 +204,21 @@ class PostgresMetadataStore:
         with self._connect() as conn:
             with conn.cursor() as cur:
                 cur.execute(CREATE_CONVERSATIONS_TABLE_SQL)
-                cur.execute("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS conversation_hash TEXT UNIQUE")
+                cur.execute("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS conversation_hash TEXT NULL")
+                cur.execute("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS project_id TEXT NULL")
                 cur.execute("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS upstream_thread_id TEXT NULL")
+                cur.execute("ALTER TABLE conversations DROP CONSTRAINT IF EXISTS conversations_conversation_hash_key")
+                cur.execute("DROP INDEX IF EXISTS idx_conversations_conversation_hash")
+                cur.execute(CREATE_CONVERSATION_PROJECT_HASH_INDEX_SQL)
                 cur.execute(CREATE_UPSTREAM_THREAD_INDEX_SQL)
                 cur.execute(CREATE_SCHEMA_VERSION_TABLE_SQL)
                 cur.execute(CREATE_USERS_TABLE_SQL)
                 cur.execute(CREATE_AUTH_TOKENS_TABLE_SQL)
                 cur.execute(CREATE_AUTH_TOKENS_OWNER_INDEX_SQL)
+                cur.execute(CREATE_PROJECTS_TABLE_SQL)
+                cur.execute(CREATE_PROJECT_MEMBERSHIPS_TABLE_SQL)
+                cur.execute(CREATE_DEFAULT_PROJECT_OWNER_INDEX_SQL)
+                cur.execute(CREATE_DEFAULT_PROJECT_LOCAL_INDEX_SQL)
                 cur.execute(CREATE_FACTS_TABLE_SQL)
                 cur.execute("ALTER TABLE facts ADD COLUMN IF NOT EXISTS superseded_at TIMESTAMPTZ NULL")
                 cur.execute("ALTER TABLE facts ADD COLUMN IF NOT EXISTS source_quality TEXT NULL")
@@ -169,8 +227,10 @@ class PostgresMetadataStore:
                 cur.execute("ALTER TABLE facts ADD COLUMN IF NOT EXISTS object_raw TEXT NULL")
                 cur.execute("ALTER TABLE facts ADD COLUMN IF NOT EXISTS object_normalized TEXT NULL")
                 cur.execute("ALTER TABLE facts ADD COLUMN IF NOT EXISTS owner_id TEXT NULL")
+                cur.execute("ALTER TABLE facts ADD COLUMN IF NOT EXISTS project_id TEXT NULL")
                 cur.execute(CREATE_FACTS_INDEX_SQL)
                 cur.execute(SEED_SCHEMA_VERSION_SQL, (1, self._schema_version_seed))
+                self._migrate_default_projects(cur)
 
     def _read_schema_version(self) -> int:
         with self._connect() as conn:
@@ -201,6 +261,7 @@ class PostgresMetadataStore:
                         str(conversation_json.get("timestamp", "")),
                         conversation_json.get("title"),
                         self._conversation_hash(conversation_json),
+                        self._project_id(conversation_json),
                         self._upstream_thread_id(conversation_json),
                         payload,
                     ),
@@ -222,6 +283,7 @@ class PostgresMetadataStore:
                     """,
                     (owner, display_name),
                 )
+                self._ensure_default_project(cur, owner)
                 cur.execute(
                     """
                     INSERT INTO auth_tokens (token_hash, owner_id)
@@ -251,6 +313,129 @@ class PostgresMetadataStore:
                 row = cur.fetchone()
         return str(row[0]) if row is not None else None
 
+    def ensure_default_project(self, owner_id: str | None) -> dict[str, Any]:
+        owner = _validate_owner_id(owner_id) if owner_id is not None else None
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                project_id = self._ensure_default_project(cur, owner)
+                project = self._get_project_row(cur, project_id)
+        if project is None:
+            raise RuntimeError("default project could not be resolved")
+        return project
+
+    def create_project(
+        self,
+        *,
+        project_id: str,
+        owner_id: str,
+        name: str | None = None,
+        description: str | None = None,
+        is_default: bool = False,
+    ) -> dict[str, Any]:
+        project = _validate_project_id(project_id)
+        owner = _validate_owner_id(owner_id)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO users (id, display_name)
+                    VALUES (%s, %s)
+                    ON CONFLICT (id) DO NOTHING
+                    """,
+                    (owner, owner),
+                )
+                cur.execute(
+                    """
+                    INSERT INTO projects (id, owner_id, name, description, is_default)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (id) DO UPDATE
+                    SET owner_id = EXCLUDED.owner_id,
+                        name = EXCLUDED.name,
+                        description = EXCLUDED.description,
+                        is_default = EXCLUDED.is_default,
+                        updated_at = NOW()
+                    """,
+                    (project, owner, name or project, description, bool(is_default)),
+                )
+                self._upsert_project_membership(cur, project, owner, PROJECT_ROLE_ADMIN)
+                row = self._get_project_row(cur, project)
+        if row is None:
+            raise RuntimeError("project could not be created")
+        return row
+
+    def add_project_member(self, *, project_id: str, user_id: str, role: str) -> None:
+        project = _validate_project_id(project_id)
+        user = _validate_owner_id(user_id)
+        normalized_role = _validate_project_role(role)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO users (id, display_name)
+                    VALUES (%s, %s)
+                    ON CONFLICT (id) DO NOTHING
+                    """,
+                    (user, user),
+                )
+                self._upsert_project_membership(cur, project, user, normalized_role)
+
+    def project_has_role(self, *, project_id: str, user_id: str | None, role: str) -> bool:
+        project = _validate_project_id(project_id)
+        required = _validate_project_role(role)
+        if user_id is None:
+            return project == LOCAL_DEFAULT_PROJECT_ID
+        user = _validate_owner_id(user_id)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT project_memberships.role
+                    FROM project_memberships
+                    JOIN projects ON projects.id = project_memberships.project_id
+                    WHERE project_memberships.project_id = %s
+                      AND project_memberships.user_id = %s
+                      AND projects.archived_at IS NULL
+                    """,
+                    (project, user),
+                )
+                row = cur.fetchone()
+        if row is None:
+            return False
+        return PROJECT_ROLE_ORDER[str(row[0])] >= PROJECT_ROLE_ORDER[required]
+
+    def list_projects(self, *, user_id: str | None = None) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                if user_id is None:
+                    cur.execute(
+                        """
+                        SELECT id, owner_id, name, description, is_default,
+                               created_at::text, updated_at::text, archived_at::text, NULL::text AS role
+                        FROM projects
+                        WHERE id = %s AND archived_at IS NULL
+                        ORDER BY is_default DESC, name ASC
+                        """,
+                        (LOCAL_DEFAULT_PROJECT_ID,),
+                    )
+                else:
+                    user = _validate_owner_id(user_id)
+                    cur.execute(
+                        """
+                        SELECT projects.id, projects.owner_id, projects.name,
+                               projects.description, projects.is_default,
+                               projects.created_at::text, projects.updated_at::text,
+                               projects.archived_at::text, project_memberships.role
+                        FROM projects
+                        JOIN project_memberships ON project_memberships.project_id = projects.id
+                        WHERE project_memberships.user_id = %s
+                          AND projects.archived_at IS NULL
+                        ORDER BY projects.is_default DESC, projects.name ASC
+                        """,
+                        (user,),
+                    )
+                rows = cur.fetchall()
+        return [self._project_from_row(row) for row in rows]
+
     def insert_new(self, conversation_json: dict[str, Any]) -> tuple[str, bool]:
         memory_id = self._validate_memory_id(conversation_json["id"])
         payload = json.dumps(conversation_json, separators=(",", ":"), ensure_ascii=False)
@@ -266,6 +451,7 @@ class PostgresMetadataStore:
                             str(conversation_json.get("timestamp", "")),
                             conversation_json.get("title"),
                             conversation_hash,
+                            self._project_id(conversation_json),
                             self._upstream_thread_id(conversation_json),
                             payload,
                         ),
@@ -275,6 +461,7 @@ class PostgresMetadataStore:
                 exc,
                 memory_id=memory_id,
                 conversation_hash=conversation_hash,
+                project_id=self._project_id(conversation_json),
             )
         return memory_id, True
 
@@ -309,19 +496,24 @@ class PostgresMetadataStore:
             result[str(row[0])] = json.loads(str(row[1]))
         return result
 
-    def search_text(self, query: str, limit: int = 50) -> list[dict[str, Any]]:
+    def search_text(
+        self, query: str, limit: int = 50, project_id: str | None = None
+    ) -> list[dict[str, Any]]:
         tokens = _keyword_tokens(query)
         if not tokens:
             return []
-        clauses = " AND ".join(["payload::text ILIKE %s"] * len(tokens))
+        clauses = ["payload::text ILIKE %s"] * len(tokens)
         params = [f"%{token}%" for token in tokens]
+        if project_id is not None:
+            clauses.append("project_id = %s")
+            params.append(project_id)
         params.append(int(limit))
         with self._connect() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     f"""
                     SELECT payload::text FROM conversations
-                    WHERE {clauses}
+                    WHERE {' AND '.join(clauses)}
                     ORDER BY created_at DESC
                     LIMIT %s
                     """,
@@ -342,14 +534,14 @@ class PostgresMetadataStore:
                         """
                         INSERT INTO facts (
                             id, subject, predicate, object, qualifiers, confidence,
-                            source_conversation_id, owner_id, source_message_indexes,
+                            source_conversation_id, owner_id, project_id, source_message_indexes,
                             created_at, updated_at, superseded_by, superseded_at,
                             source_quality, confidence_reason, last_confirmed_at,
                             object_raw, object_normalized, deleted_at
                         )
                         VALUES (
-                            %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s::jsonb, %s,
-                            %s, %s, %s, %s, %s, %s, %s, %s, %s
+                            %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s::jsonb,
+                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                         )
                         ON CONFLICT (id) DO UPDATE
                         SET subject = EXCLUDED.subject,
@@ -359,6 +551,7 @@ class PostgresMetadataStore:
                             confidence = EXCLUDED.confidence,
                             source_conversation_id = EXCLUDED.source_conversation_id,
                             owner_id = EXCLUDED.owner_id,
+                            project_id = EXCLUDED.project_id,
                             source_message_indexes = EXCLUDED.source_message_indexes,
                             updated_at = EXCLUDED.updated_at,
                             superseded_by = EXCLUDED.superseded_by,
@@ -379,6 +572,7 @@ class PostgresMetadataStore:
         subject: str | None = None,
         predicate: str | None = None,
         include_superseded: bool = False,
+        project_id: str | None = None,
     ) -> list[dict[str, Any]]:
         clauses = ["deleted_at IS NULL"]
         params: list[Any] = []
@@ -388,6 +582,9 @@ class PostgresMetadataStore:
         if predicate is not None:
             clauses.append("predicate = %s")
             params.append(predicate)
+        if project_id is not None:
+            clauses.append("project_id = %s")
+            params.append(project_id)
         if not include_superseded:
             clauses.append("superseded_by IS NULL")
         with self._connect() as conn:
@@ -395,7 +592,7 @@ class PostgresMetadataStore:
                 cur.execute(
                     f"""
                     SELECT id, subject, predicate, object, qualifiers::text, confidence,
-                           source_conversation_id, owner_id, source_message_indexes::text,
+                           source_conversation_id, owner_id, project_id, source_message_indexes::text,
                            created_at::text, updated_at::text, superseded_by,
                            superseded_at::text, source_quality, confidence_reason,
                            last_confirmed_at::text, object_raw, object_normalized,
@@ -409,39 +606,75 @@ class PostgresMetadataStore:
                 rows = cur.fetchall()
         return [self._fact_from_row(row) for row in rows]
 
-    def profile_get(self, subject: str = "user") -> dict[str, Any]:
-        return {"subject": subject, "facts": self.search_facts(subject=subject)}
+    def profile_get(
+        self, subject: str = "user", project_id: str | None = None
+    ) -> dict[str, Any]:
+        return {"subject": subject, "facts": self.search_facts(subject=subject, project_id=project_id)}
 
-    def supersede_fact(self, fact_id: str, superseded_by: str) -> bool:
+    def supersede_fact(
+        self, fact_id: str, superseded_by: str, project_id: str | None = None
+    ) -> bool:
+        clauses = ["id = %s", "deleted_at IS NULL"]
+        params: list[Any] = [superseded_by, fact_id]
+        if project_id is not None:
+            clauses.append("project_id = %s")
+            params.append(project_id)
         with self._connect() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    """
+                    f"""
                     UPDATE facts
                     SET superseded_by = %s, superseded_at = NOW(), updated_at = NOW()
-                    WHERE id = %s AND deleted_at IS NULL
+                    WHERE {' AND '.join(clauses)}
                     """,
-                    (superseded_by, fact_id),
+                    tuple(params),
                 )
                 return cur.rowcount > 0
 
-    def get_by_conversation_hash(self, conversation_hash: str | None) -> dict[str, Any] | None:
+    def get_by_conversation_hash(
+        self, conversation_hash: str | None, project_id: str | None = None
+    ) -> dict[str, Any] | None:
         if not conversation_hash:
             return None
         with self._connect() as conn:
             with conn.cursor() as cur:
-                cur.execute(GET_CONVERSATION_BY_HASH_SQL, (conversation_hash,))
+                if project_id is None:
+                    cur.execute(
+                        "SELECT payload::text FROM conversations WHERE conversation_hash = %s",
+                        (conversation_hash,),
+                    )
+                else:
+                    cur.execute(
+                        """
+                        SELECT payload::text FROM conversations
+                        WHERE conversation_hash = %s AND project_id = %s
+                        """,
+                        (conversation_hash, project_id),
+                    )
                 row = cur.fetchone()
         if row is None:
             return None
         return json.loads(str(row[0]))
 
     def get_by_upstream_thread(
-        self, source: str, upstream_thread_id: str
+        self, source: str, upstream_thread_id: str, project_id: str | None = None
     ) -> dict[str, Any] | None:
+        clauses = ["source = %s", "upstream_thread_id = %s"]
+        params: list[Any] = [source, upstream_thread_id]
+        if project_id is not None:
+            clauses.append("project_id = %s")
+            params.append(project_id)
         with self._connect() as conn:
             with conn.cursor() as cur:
-                cur.execute(GET_CONVERSATION_BY_UPSTREAM_THREAD_SQL, (source, upstream_thread_id))
+                cur.execute(
+                    f"""
+                    SELECT payload::text FROM conversations
+                    WHERE {' AND '.join(clauses)}
+                    ORDER BY created_at ASC
+                    LIMIT 1
+                    """,
+                    tuple(params),
+                )
                 row = cur.fetchone()
         if row is None:
             return None
@@ -482,6 +715,13 @@ class PostgresMetadataStore:
             return str(value) if value is not None else None
         return None
 
+    def _project_id(self, conversation_json: dict[str, Any]) -> str | None:
+        metadata = conversation_json.get("metadata", {})
+        if isinstance(metadata, dict):
+            value = metadata.get("project_id")
+            return str(value) if value is not None else None
+        return None
+
     def _upstream_thread_id(self, conversation_json: dict[str, Any]) -> str | None:
         metadata = conversation_json.get("metadata", {})
         if isinstance(metadata, dict):
@@ -497,13 +737,19 @@ class PostgresMetadataStore:
         return exc.__class__.__name__ == "UniqueViolation"
 
     def _handle_insert_new_error(
-        self, exc: Exception, *, memory_id: str, conversation_hash: str | None
+        self,
+        exc: Exception,
+        *,
+        memory_id: str,
+        conversation_hash: str | None,
+        project_id: str | None,
     ) -> tuple[str, bool]:
         if not self._is_unique_violation(exc):
             raise exc
         return self._resolve_insert_new_conflict(
             memory_id=memory_id,
             conversation_hash=conversation_hash,
+            project_id=project_id,
             cause=exc,
         )
 
@@ -519,6 +765,7 @@ class PostgresMetadataStore:
             WHERE subject = %s
               AND predicate = %s
               AND owner_id IS NOT DISTINCT FROM %s
+              AND project_id IS NOT DISTINCT FROM %s
               AND superseded_by IS NULL
               AND deleted_at IS NULL
               AND lower(object) LIKE %s
@@ -530,6 +777,7 @@ class PostgresMetadataStore:
                 str(fact["subject"]),
                 str(fact["predicate"]),
                 fact.get("owner_id"),
+                fact.get("project_id"),
                 f"%{str(corrects).lower()}%",
             ),
         )
@@ -545,6 +793,7 @@ class PostgresMetadataStore:
               AND predicate = %s
               AND object = %s
               AND owner_id IS NOT DISTINCT FROM %s
+              AND project_id IS NOT DISTINCT FROM %s
               AND superseded_by IS NULL
               AND deleted_at IS NULL
             """,
@@ -555,6 +804,7 @@ class PostgresMetadataStore:
                 str(fact["predicate"]),
                 str(fact["object"]),
                 fact.get("owner_id"),
+                fact.get("project_id"),
             ),
         )
 
@@ -568,6 +818,7 @@ class PostgresMetadataStore:
             str(fact.get("confidence", "medium")),
             str(fact["source_conversation_id"]),
             fact.get("owner_id"),
+            fact.get("project_id"),
             json.dumps(fact.get("source_message_indexes", []), separators=(",", ":")),
             str(fact["created_at"]),
             str(fact["updated_at"]),
@@ -582,11 +833,13 @@ class PostgresMetadataStore:
         )
 
     def _fact_from_row(self, row: Any) -> dict[str, Any]:
+        row = tuple(row)
         if len(row) == 18:
-            if row[7] is None:
-                row = (*row, None)
-            else:
-                row = (*row[:7], None, *row[7:])
+            row = (*row[:8], None, *row[8:], None)
+        elif len(row) == 19:
+            row = (*row, None)
+        elif len(row) != 20:
+            raise ValueError("unsupported fact row shape")
         return {
             "id": str(row[0]),
             "subject": str(row[1]),
@@ -596,17 +849,18 @@ class PostgresMetadataStore:
             "confidence": str(row[5]),
             "source_conversation_id": str(row[6]),
             "owner_id": row[7],
-            "source_message_indexes": json.loads(str(row[8])),
-            "created_at": str(row[9]),
-            "updated_at": str(row[10]),
-            "superseded_by": row[11],
-            "superseded_at": row[12],
-            "source_quality": row[13],
-            "confidence_reason": row[14],
-            "last_confirmed_at": row[15],
-            "object_raw": row[16],
-            "object_normalized": row[17],
-            "deleted_at": row[18],
+            "project_id": row[8],
+            "source_message_indexes": json.loads(str(row[9])),
+            "created_at": str(row[10]),
+            "updated_at": str(row[11]),
+            "superseded_by": row[12],
+            "superseded_at": row[13],
+            "source_quality": row[14],
+            "confidence_reason": row[15],
+            "last_confirmed_at": row[16],
+            "object_raw": row[17],
+            "object_normalized": row[18],
+            "deleted_at": row[19],
         }
 
     def _resolve_insert_new_conflict(
@@ -614,16 +868,139 @@ class PostgresMetadataStore:
         *,
         memory_id: str,
         conversation_hash: str | None,
+        project_id: str | None,
         cause: Exception,
     ) -> tuple[str, bool]:
-        existing = self.get_by_conversation_hash(conversation_hash)
+        existing = self._get_by_conversation_hash_for_conflict(
+            conversation_hash, project_id=project_id
+        )
         if existing is None:
             existing = self.get(memory_id)
         if existing is None:
             raise cause
         if self._conversation_hash(existing) != conversation_hash:
             raise ValueError("unauthorized_update: conversation id already exists") from cause
+        if self._project_id(existing) != project_id:
+            raise ValueError("unauthorized_update: conversation id already exists") from cause
         return str(existing["id"]), False
+
+    def _get_by_conversation_hash_for_conflict(
+        self, conversation_hash: str | None, *, project_id: str | None
+    ) -> dict[str, Any] | None:
+        try:
+            return self.get_by_conversation_hash(conversation_hash, project_id=project_id)
+        except TypeError:
+            return self.get_by_conversation_hash(conversation_hash)
+
+    def _ensure_default_project(self, cur: Any, owner_id: str | None) -> str:
+        if owner_id is None:
+            cur.execute(
+                """
+                INSERT INTO projects (id, owner_id, name, is_default)
+                VALUES (%s, NULL, %s, TRUE)
+                ON CONFLICT (id) DO UPDATE SET is_default = TRUE, updated_at = NOW()
+                """,
+                (LOCAL_DEFAULT_PROJECT_ID, "Local Default"),
+            )
+            return LOCAL_DEFAULT_PROJECT_ID
+
+        cur.execute(
+            """
+            INSERT INTO users (id, display_name)
+            VALUES (%s, %s)
+            ON CONFLICT (id) DO NOTHING
+            """,
+            (owner_id, owner_id),
+        )
+        cur.execute(
+            """
+            SELECT id FROM projects
+            WHERE owner_id = %s AND is_default = TRUE AND archived_at IS NULL
+            LIMIT 1
+            """,
+            (owner_id,),
+        )
+        row = cur.fetchone()
+        if row is not None:
+            project_id = str(row[0])
+        else:
+            project_id = _default_project_id(owner_id)
+            cur.execute(
+                """
+                INSERT INTO projects (id, owner_id, name, is_default)
+                VALUES (%s, %s, %s, TRUE)
+                ON CONFLICT (id) DO UPDATE SET is_default = TRUE, updated_at = NOW()
+                """,
+                (project_id, owner_id, "Private Default"),
+            )
+        self._upsert_project_membership(cur, project_id, owner_id, PROJECT_ROLE_ADMIN)
+        return project_id
+
+    def _upsert_project_membership(
+        self, cur: Any, project_id: str, user_id: str, role: str
+    ) -> None:
+        cur.execute(
+            """
+            INSERT INTO project_memberships (project_id, user_id, role)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (project_id, user_id) DO UPDATE
+            SET role = EXCLUDED.role,
+                updated_at = NOW()
+            """,
+            (project_id, user_id, role),
+        )
+
+    def _get_project_row(self, cur: Any, project_id: str) -> dict[str, Any] | None:
+        cur.execute(
+            """
+            SELECT id, owner_id, name, description, is_default,
+                   created_at::text, updated_at::text, archived_at::text, NULL::text AS role
+            FROM projects
+            WHERE id = %s AND archived_at IS NULL
+            """,
+            (project_id,),
+        )
+        row = cur.fetchone()
+        return self._project_from_row(row) if row is not None else None
+
+    def _project_from_row(self, row: Any) -> dict[str, Any]:
+        return {
+            "id": str(row[0]),
+            "owner_id": row[1],
+            "name": str(row[2]),
+            "description": row[3],
+            "is_default": bool(row[4]),
+            "created_at": str(row[5]),
+            "updated_at": str(row[6]),
+            "archived_at": row[7],
+            "role": row[8],
+        }
+
+    def _migrate_default_projects(self, cur: Any) -> None:
+        local_project = self._ensure_default_project(cur, None)
+        cur.execute("SELECT id FROM users")
+        for row in cur.fetchall():
+            self._ensure_default_project(cur, str(row[0]))
+
+        cur.execute("SELECT id, payload::text FROM conversations WHERE project_id IS NULL")
+        for row in cur.fetchall():
+            payload = json.loads(str(row[1]))
+            owner_id = _owner_id_from_payload(payload)
+            project_id = self._ensure_default_project(cur, owner_id) if owner_id else local_project
+            _stamp_project_id(payload, project_id)
+            cur.execute(
+                "UPDATE conversations SET project_id = %s, payload = %s::jsonb WHERE id = %s",
+                (project_id, json.dumps(payload, separators=(",", ":"), ensure_ascii=False), str(row[0])),
+            )
+
+        cur.execute("SELECT id, owner_id FROM facts WHERE project_id IS NULL")
+        for row in cur.fetchall():
+            owner_id = str(row[1]) if row[1] is not None else None
+            project_id = self._ensure_default_project(cur, owner_id) if owner_id else local_project
+            cur.execute(
+                "UPDATE facts SET project_id = %s WHERE id = %s",
+                (project_id, str(row[0])),
+            )
 
 
 def _keyword_tokens(query: str) -> list[str]:
@@ -632,18 +1009,3 @@ def _keyword_tokens(query: str) -> list[str]:
         for token in re.findall(r"[A-Za-z0-9][A-Za-z0-9_-]*", query)
         if len(token) >= 2
     ][:8]
-
-
-def _hash_bearer_token(token: str) -> str:
-    if not isinstance(token, str) or not token:
-        raise ValueError("bearer token must be a non-empty string")
-    return "sha256:" + hashlib.sha256(token.encode("utf-8")).hexdigest()
-
-
-def _validate_owner_id(owner_id: str) -> str:
-    value = str(owner_id).strip()
-    if not value:
-        raise ValueError("owner_id must be non-empty")
-    if len(value) > 128:
-        raise ValueError("owner_id exceeds max length 128")
-    return value

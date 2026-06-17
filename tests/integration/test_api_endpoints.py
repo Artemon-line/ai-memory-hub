@@ -3,6 +3,12 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from memory.api.server import create_app
+from memory.backend.metadata_store import (
+    PROJECT_ROLE_READER,
+    PROJECT_ROLE_WRITER,
+    SQLiteMetadataStore,
+)
+from memory.backend.vector_store import InMemoryVectorStore
 from memory.ingestion import mvp_ingestion
 from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
 
@@ -108,6 +114,43 @@ def _auth_client() -> tuple[TestClient, StubMetadataStore]:
     return TestClient(app), store
 
 
+def _sqlite_auth_client(tmp_path) -> tuple[TestClient, SQLiteMetadataStore]:
+    store = SQLiteMetadataStore(tmp_path / "metadata.sqlite3")
+    store.create_auth_token(owner_id="owner-a", token="token-a")
+    store.create_auth_token(owner_id="owner-b", token="token-b")
+    store.create_auth_token(owner_id="owner-c", token="token-c")
+    store.create_auth_token(owner_id="owner-d", token="token-d")
+    store.create_project(
+        project_id="shared-321",
+        owner_id="owner-a",
+        name="Shared 321",
+    )
+    store.add_project_member(
+        project_id="shared-321", user_id="owner-b", role=PROJECT_ROLE_WRITER
+    )
+    store.add_project_member(
+        project_id="shared-321", user_id="owner-d", role=PROJECT_ROLE_READER
+    )
+    runtime = mvp_ingestion.RuntimeDependencies(
+        embedding_provider=StubEmbedder(),
+        metadata_store=store,
+        vector_store=InMemoryVectorStore(dimension=1),
+        health_state={"mode": "ok", "vector_fallback_active": False},
+    )
+    agent = MVPIngestionAgent(
+        config={"providers": {"agent": "mvp"}, "interfaces": {"api": "true"}},
+        runtime=runtime,
+    )
+    app = create_app(
+        config={
+            "api": {"auth": "bearer_token"},
+            "providers": {"embeddings": "local", "vector_db": "in_memory"},
+        },
+        ingestion_agent=agent,
+    )
+    return TestClient(app), store
+
+
 def test_memory_insert_200() -> None:
     client = _client()
     response = client.post("/memory/insert", json=_conversation())
@@ -186,6 +229,59 @@ def test_bearer_auth_stamps_owner_and_isolates_memory() -> None:
     assert retrieve_cross.status_code == 404
     assert "blue Gibson" in ask_a.json()["answer"]
     assert "red Fender" in ask_b.json()["answer"]
+
+
+def test_bearer_auth_allows_shared_project_collaboration(tmp_path) -> None:
+    client, store = _sqlite_auth_client(tmp_path)
+    owner_a_headers = {"Authorization": "Bearer token-a"}
+    owner_b_headers = {"Authorization": "Bearer token-b"}
+    owner_c_headers = {"Authorization": "Bearer token-c"}
+    owner_d_headers = {"Authorization": "Bearer token-d"}
+    private_payload = _conversation()
+    private_payload["messages"] = [
+        {"role": "user", "text": "Jane private note mentions cobalt."}
+    ]
+    shared_payload = _conversation()
+    shared_payload["id"] = "11111111-1111-4111-8111-111111111111"
+    shared_payload["project_id"] = "shared-321"
+    shared_payload["messages"] = [
+        {"role": "user", "text": "Shared project 321 codename is Velvet Lantern."}
+    ]
+
+    private_insert = client.post(
+        "/memory/insert", json=private_payload, headers=owner_a_headers
+    )
+    shared_insert = client.post(
+        "/memory/insert", json=shared_payload, headers=owner_a_headers
+    )
+    owner_b_shared_search = client.post(
+        "/memory/search",
+        json={"query": "Velvet Lantern", "project_id": "shared-321"},
+        headers=owner_b_headers,
+    )
+    owner_b_default_search = client.post(
+        "/memory/search", json={"query": "cobalt"}, headers=owner_b_headers
+    )
+    owner_c_shared_search = client.post(
+        "/memory/search",
+        json={"query": "Velvet Lantern", "project_id": "shared-321"},
+        headers=owner_c_headers,
+    )
+    reader_write = client.post(
+        "/memory/insert",
+        json={**_conversation(), "project_id": "shared-321"},
+        headers=owner_d_headers,
+    )
+
+    assert private_insert.status_code == 200
+    assert shared_insert.status_code == 200
+    assert store.get(shared_payload["id"])["metadata"]["project_id"] == "shared-321"
+    assert owner_b_shared_search.status_code == 200
+    assert owner_b_shared_search.json()["results"][0]["id"] == shared_payload["id"]
+    assert owner_b_default_search.status_code == 200
+    assert owner_b_default_search.json()["results"] == []
+    assert owner_c_shared_search.status_code == 403
+    assert reader_write.status_code == 403
 
 
 def test_memory_insert_400_on_invalid_schema() -> None:

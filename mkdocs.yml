@@ -35,6 +35,7 @@ nav:
       - MCP Authorization Compliance Plan: docs/bearer_api_key_auth_plan.md
   - Implementation Plans:
       - Prioritized Feature Plan: docs/prioritized_feature_plan.md
+      - Project Workspace Collaboration Plan: docs/project_workspace_collaboration_plan.md
       - Deterministic Ingestion Plan: docs/deterministic_ingestion_plan.md
       - Token Budget Plan: docs/token_budget_plan.md
       - CLI Implementation Plan: docs/cli_implementation_plan.md

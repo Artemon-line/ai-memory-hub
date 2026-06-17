@@ -520,6 +520,43 @@ def test_sqlite_insert_does_not_replace_on_conversation_hash_conflict(
     assert store.get(first["id"]) == first
 
 
+def test_sqlite_conversation_hash_dedupes_within_project_only(tmp_path: Path) -> None:
+    store = SQLiteMetadataStore(tmp_path / "metadata.sqlite3")
+    store.create_project(project_id="project-a", owner_id="owner-a", name="Project A")
+    store.create_project(project_id="project-b", owner_id="owner-a", name="Project B")
+    first = {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "source": "manual",
+        "timestamp": "2026-01-01T00:00:00Z",
+        "messages": [{"role": "user", "text": "first", "hash": "sha256:" + ("1" * 64)}],
+        "metadata": {
+            "project_id": "project-a",
+            "imported_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-01T00:00:00Z",
+            "conversation_hash": "sha256:" + ("a" * 64),
+        },
+    }
+    same_hash_other_project = {
+        **first,
+        "id": "22222222-2222-4222-8222-222222222222",
+        "messages": [{"role": "user", "text": "second", "hash": "sha256:" + ("2" * 64)}],
+        "metadata": {**first["metadata"], "project_id": "project-b"},
+    }
+    same_hash_same_project = {
+        **first,
+        "id": "33333333-3333-4333-8333-333333333333",
+        "messages": [{"role": "user", "text": "third", "hash": "sha256:" + ("3" * 64)}],
+    }
+
+    store.insert(first)
+    store.insert(same_hash_other_project)
+    with pytest.raises(sqlite3.IntegrityError):
+        store.insert(same_hash_same_project)
+
+    assert store.get(first["id"])["metadata"]["project_id"] == "project-a"
+    assert store.get(same_hash_other_project["id"])["metadata"]["project_id"] == "project-b"
+
+
 def test_sqlite_insert_new_deduplicates_same_id_same_hash(tmp_path: Path) -> None:
     store = SQLiteMetadataStore(tmp_path / "metadata.sqlite3")
     payload = {
@@ -866,33 +903,13 @@ def test_postgres_fact_row_mapping_includes_freshness_and_source_quality() -> No
     }
 
     row = store._fact_row(fact)
-    loaded = store._fact_from_row(
-        (
-            row[0],
-            row[1],
-            row[2],
-            row[3],
-            row[4],
-            row[5],
-            row[6],
-            row[7],
-            row[8],
-            row[9],
-            row[10],
-            row[11],
-            row[12],
-            row[13],
-            row[14],
-            row[15],
-            row[16],
-            row[17],
-        )
-    )
+    loaded = store._fact_from_row(row)
 
     assert loaded["source_quality"] == "direct_user_statement"
     assert loaded["confidence_reason"] == "Extracted from a direct user statement."
     assert loaded["last_confirmed_at"] == "2026-01-02T00:00:00Z"
     assert loaded["superseded_at"] == "2026-01-03T00:00:00Z"
+    assert loaded["project_id"] is None
     assert loaded["object_raw"] == "aniversary"
     assert loaded["object_normalized"] == "anniversary"
 

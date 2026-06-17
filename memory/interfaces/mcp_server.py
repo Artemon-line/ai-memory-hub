@@ -33,6 +33,7 @@ SERVER_INSTRUCTIONS = (
     "Save one complete conversation per insert; do not split one thread into bulk items. "
     "Include metadata.summary as a short factual retrieval hint when available, while "
     "still preserving all source messages. "
+    "Pass project_id when saving to or reading from a shared project; omit it for the default private project. "
     "memory_search supports source, date_from, date_to, and tags filters when narrowing recall."
 )
 
@@ -47,17 +48,18 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "Insert a conversation into memory. Pass `conversation_json` as a nested JSON object, "
         "omit `id` unless it is a valid UUID, use message `text` or `content` fields, "
         "include the whole conversation in one object rather than splitting it into batches, "
-        "and optionally include a short factual `metadata.summary` retrieval hint."
+        "optionally include a short factual `metadata.summary` retrieval hint, "
+        "and optionally pass `project_id` for a shared workspace."
     ),
     "memory_search": (
         "Search existing memory by text query. Optional filters: source, date_from, date_to, tags. "
-        "Use limit and cursor for paged results."
+        "Use project_id for a shared workspace. Use limit and cursor for paged results."
     ),
-    "memory_retrieve": "Retrieve a stored memory item by ID.",
-    "memory_ask": "Answer a question using stored memory search results.",
-    "memory_fact_search": "Search normalized extracted memory facts.",
-    "memory_profile_get": "Return active normalized facts for a subject.",
-    "memory_fact_supersede": "Mark one normalized fact as superseded by another fact.",
+    "memory_retrieve": "Retrieve a stored memory item by ID, optionally within a project_id.",
+    "memory_ask": "Answer a question using stored memory search results, optionally within a project_id.",
+    "memory_fact_search": "Search normalized extracted memory facts, optionally within a project_id.",
+    "memory_profile_get": "Return active normalized facts for a subject, optionally within a project_id.",
+    "memory_fact_supersede": "Mark one normalized fact as superseded by another fact within a project_id.",
 }
 
 CONVERSATION_JSON_TOOL_META: dict[str, Any] = {
@@ -522,7 +524,9 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
         return _envelope(status="ok", valid=True)
 
     async def memory_insert(
-        conversation_json: ConversationJsonArg, ctx: FastMCPContext | None = None
+        conversation_json: ConversationJsonArg,
+        project_id: str | None = None,
+        ctx: FastMCPContext | None = None,
     ) -> dict[str, Any]:
         if not isinstance(conversation_json, dict):
             return _envelope(
@@ -569,7 +573,9 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 error_message=str(exc),
             )
         try:
-            result = await agent.ingest_messages(normalized, owner_id=owner_id())
+            result = await agent.ingest_messages(
+                normalized, owner_id=owner_id(), project_id=project_id
+            )
         except Exception as exc:
             logger.exception("MCP memory_insert failed")
             await _emit_mcp_tool_log(
@@ -596,6 +602,7 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
         date_to: str | None = None,
         tags: list[str] | None = None,
         result_mode: str = "chunks",
+        project_id: str | None = None,
         ctx: FastMCPContext | None = None,
     ) -> dict[str, Any]:
         if not isinstance(query, str) or not query.strip():
@@ -633,6 +640,7 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 top_k=100,
                 result_mode=result_mode,
                 owner_id=owner_id(),
+                project_id=project_id,
             )
             matches = result.get("results", [])
             if not isinstance(matches, list):
@@ -677,7 +685,7 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
         return _with_envelope_defaults(result)
 
     async def memory_retrieve(
-        id: str, ctx: FastMCPContext | None = None
+        id: str, project_id: str | None = None, ctx: FastMCPContext | None = None
     ) -> dict[str, Any]:
         if not isinstance(id, str) or not id.strip():
             return _envelope(
@@ -685,7 +693,7 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 error_code="invalid_input",
                 error_message="id must be a non-empty string",
             )
-        memory = await agent.retrieve(id, owner_id=owner_id())
+        memory = await agent.retrieve(id, owner_id=owner_id(), project_id=project_id)
 
         if memory is None:
             return _envelope(
@@ -702,6 +710,7 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
         top_k: int = 5,
         max_context_tokens: int | None = None,
         result_mode: str = "chunks",
+        project_id: str | None = None,
         ctx: FastMCPContext | None = None,
     ) -> dict[str, Any]:
         if not isinstance(question, str) or not question.strip():
@@ -768,6 +777,7 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 max_context_tokens=max_context_tokens,
                 result_mode=result_mode,
                 owner_id=owner_id(),
+                project_id=project_id,
             )
         except Exception as exc:
             logger.exception("MCP memory_ask failed")
@@ -789,6 +799,7 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
         subject: str | None = None,
         predicate: str | None = None,
         include_superseded: bool = False,
+        project_id: str | None = None,
         ctx: FastMCPContext | None = None,
     ) -> dict[str, Any]:
         result = await agent.fact_search(
@@ -796,21 +807,29 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
             predicate=unwrap_array(predicate),
             include_superseded=bool(include_superseded),
             owner_id=owner_id(),
+            project_id=project_id,
         )
         await _emit_mcp_tool_log(ctx, tool_name="memory_fact_search", status="ok")
         return _with_envelope_defaults(result)
 
     async def memory_profile_get(
-        subject: str = "user", ctx: FastMCPContext | None = None
+        subject: str = "user",
+        project_id: str | None = None,
+        ctx: FastMCPContext | None = None,
     ) -> dict[str, Any]:
         result = await agent.profile_get(
-            subject=str(unwrap_array(subject) or "user"), owner_id=owner_id()
+            subject=str(unwrap_array(subject) or "user"),
+            owner_id=owner_id(),
+            project_id=project_id,
         )
         await _emit_mcp_tool_log(ctx, tool_name="memory_profile_get", status="ok")
         return _with_envelope_defaults(result)
 
     async def memory_fact_supersede(
-        fact_id: str, superseded_by: str, ctx: FastMCPContext | None = None
+        fact_id: str,
+        superseded_by: str,
+        project_id: str | None = None,
+        ctx: FastMCPContext | None = None,
     ) -> dict[str, Any]:
         if not isinstance(fact_id, str) or not fact_id.strip():
             return _envelope(
@@ -825,7 +844,10 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 error_message="superseded_by must be a non-empty string",
             )
         result = await agent.fact_supersede(
-            fact_id=fact_id, superseded_by=superseded_by, owner_id=owner_id()
+            fact_id=fact_id,
+            superseded_by=superseded_by,
+            owner_id=owner_id(),
+            project_id=project_id,
         )
         await _emit_mcp_tool_log(ctx, tool_name="memory_fact_supersede", status="ok")
         return _with_envelope_defaults(result)

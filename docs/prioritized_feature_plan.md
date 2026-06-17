@@ -11,6 +11,7 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P0 | Retrieval precision: threshold, hybrid search, metadata rerank | Implemented | `improvements/retrieval_precision_plan.md` |
 | P0 | MCP protocol compliance: initialize instructions, schemas, pagination, logging, completion when client UX needs it | Partial | `mcp_utility_compliance_plan.md`, `mcp_plan.md` |
 | P0 | Bearer-token auth and per-user memory isolation | Planned | `bearer_api_key_auth_plan.md` |
+| P0 | Project workspaces and shared collaboration boundaries | Planned | `project_workspace_collaboration_plan.md` |
 | P0 | MCP client feedback: response shape clarity, fact freshness, and source quality | Implemented | `improvements/client_feedback_improvement_plan.md` |
 | P0 | Advanced search filters for ask, facts, and profile queries | Planned | `improvements/client_feedback_improvement_plan.md` |
 | P0 | Conversation summary metadata and profile views | Partial | `improvements/client_feedback_improvement_plan.md` |
@@ -144,6 +145,37 @@ Acceptance criteria:
 - Existing no-auth local tests continue to pass.
 - Client request shape is compatible with future MCP OAuth: `Authorization:
   Bearer <token>`.
+
+## P0: Project Workspaces And Shared Collaboration
+
+Use `project_workspace_collaboration_plan.md` as the source of truth.
+
+Bearer auth gives AMH a server-side actor. Project workspaces add the missing
+collaboration boundary: users keep a private default memory space, but can also
+join shared projects where selected conversations and facts are visible to other
+members.
+
+Implementation sequence:
+
+- [x] Keep `owner_id` as the server-stamped actor/audit field.
+- [x] Add `project_id` as the memory workspace boundary for conversations,
+      facts, and vector metadata.
+- [x] Add `projects` and `project_memberships` metadata tables.
+- [x] Auto-create one default private project per user.
+- [x] Resolve omitted `project_id` values to the authenticated user's default
+      private project.
+- [x] Validate project membership before every read, write, ask, retrieve,
+      profile, and fact supersession operation.
+- [x] Add optional `project_id` to HTTP and MCP tool schemas.
+- [x] Keep project and membership administration in CLI/API flows first, not
+      agent-facing MCP tools.
+
+Acceptance criteria:
+
+- Existing single-user behavior remains private by default.
+- Two users who share a project can collaborate in that project's memory.
+- Users cannot read or write memory in projects where they are not members.
+- Duplicate conversation hashes dedupe within a project, not globally.
 
 ## P0: MCP Client Feedback Improvements
 

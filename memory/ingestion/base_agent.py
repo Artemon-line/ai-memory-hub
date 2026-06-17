@@ -14,7 +14,11 @@ class BaseIngestionAgent(ABC):
 
     @abstractmethod
     async def ingest_messages(
-        self, conversation_json: Dict[str, Any], *, owner_id: str | None = None
+        self,
+        conversation_json: Dict[str, Any],
+        *,
+        owner_id: str | None = None,
+        project_id: str | None = None,
     ) -> Dict[str, Any]:
         """Ingest a pre-formatted conversation JSON object."""
 
@@ -31,11 +35,12 @@ class BaseIngestionAgent(ABC):
         top_k: int = 5,
         result_mode: str = "chunks",
         owner_id: str | None = None,
+        project_id: str | None = None,
     ) -> Dict[str, Any]:
         raise NotImplementedError("search is not implemented")
 
     async def retrieve(
-        self, memory_id: str, *, owner_id: str | None = None
+        self, memory_id: str, *, owner_id: str | None = None, project_id: str | None = None
     ) -> Optional[Dict[str, Any]]:
         raise NotImplementedError("retrieve is not implemented")
 
@@ -47,6 +52,7 @@ class BaseIngestionAgent(ABC):
         max_context_tokens: int | None = None,
         result_mode: str = "chunks",
         owner_id: str | None = None,
+        project_id: str | None = None,
     ) -> Dict[str, Any]:
         raise NotImplementedError("ask is not implemented")
 
@@ -60,16 +66,26 @@ class BaseIngestionAgent(ABC):
         predicate: str | None = None,
         include_superseded: bool = False,
         owner_id: str | None = None,
+        project_id: str | None = None,
     ) -> Dict[str, Any]:
         raise NotImplementedError("fact_search is not implemented")
 
     async def profile_get(
-        self, *, subject: str = "user", owner_id: str | None = None
+        self,
+        *,
+        subject: str = "user",
+        owner_id: str | None = None,
+        project_id: str | None = None,
     ) -> Dict[str, Any]:
         raise NotImplementedError("profile_get is not implemented")
 
     async def fact_supersede(
-        self, *, fact_id: str, superseded_by: str, owner_id: str | None = None
+        self,
+        *,
+        fact_id: str,
+        superseded_by: str,
+        owner_id: str | None = None,
+        project_id: str | None = None,
     ) -> Dict[str, Any]:
         raise NotImplementedError("fact_supersede is not implemented")
 

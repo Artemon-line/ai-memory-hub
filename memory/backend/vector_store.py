@@ -55,6 +55,7 @@ class LanceDBVectorStore:
         schema = pa.schema(
             [
                 pa.field("memory_id", pa.string()),
+                pa.field("project_id", pa.string()),
                 pa.field("chunk_id", pa.string()),
                 pa.field("chunk_index", pa.int64()),
                 pa.field("message_hash", pa.string()),
@@ -76,7 +77,16 @@ class LanceDBVectorStore:
             vector_field = existing_schema.field("vector")
             vector_type = vector_field.type
             field_names = set(existing_schema.names)
-            required_fields = {"memory_id", "chunk_id", "chunk_index", "message_hash", "role", "text", "vector"}
+            required_fields = {
+                "memory_id",
+                "project_id",
+                "chunk_id",
+                "chunk_index",
+                "message_hash",
+                "role",
+                "text",
+                "vector",
+            }
             if (
                 required_fields.issubset(field_names)
                 and isinstance(vector_type, pa.FixedSizeListType)
@@ -98,6 +108,7 @@ class LanceDBVectorStore:
             rows.append(
                 {
                     "memory_id": metadata_id,
+                    "project_id": str(item.get("project_id", "")),
                     "chunk_id": str(item.get("chunk_id") or f"{metadata_id}:{int(item['chunk_index'])}"),
                     "chunk_index": int(item["chunk_index"]),
                     "message_hash": str(item.get("message_hash", "")),
@@ -121,6 +132,7 @@ class LanceDBVectorStore:
             normalized.append(
                 {
                     "memory_id": str(row.get("memory_id", "")),
+                    "project_id": str(row.get("project_id", "")),
                     "chunk_id": str(row.get("chunk_id", "")),
                     "chunk_index": int(row.get("chunk_index", 0)),
                     "message_hash": str(row.get("message_hash", "")),
@@ -199,6 +211,7 @@ class InMemoryVectorStore:
             self._rows.append(
                 {
                     "memory_id": metadata_id,
+                    "project_id": str(item.get("project_id", "")),
                     "chunk_id": str(item.get("chunk_id") or f"{metadata_id}:{int(item['chunk_index'])}"),
                     "chunk_index": int(item["chunk_index"]),
                     "message_hash": str(item.get("message_hash", "")),
@@ -221,6 +234,7 @@ class InMemoryVectorStore:
             output.append(
                 {
                     "memory_id": str(row["memory_id"]),
+                    "project_id": str(row.get("project_id", "")),
                     "chunk_id": str(row.get("chunk_id", "")),
                     "chunk_index": int(row["chunk_index"]),
                     "message_hash": str(row.get("message_hash", "")),
@@ -337,6 +351,7 @@ class PGVectorStore:
                     f"""
                     CREATE TABLE IF NOT EXISTS {self.table_name} (
                         memory_id TEXT NOT NULL,
+                        project_id TEXT NOT NULL DEFAULT '',
                         chunk_id TEXT NOT NULL,
                         chunk_index INTEGER NOT NULL,
                         message_hash TEXT NOT NULL DEFAULT '',
@@ -347,6 +362,7 @@ class PGVectorStore:
                     )
                     """
                 )
+                cur.execute(f"ALTER TABLE {self.table_name} ADD COLUMN IF NOT EXISTS project_id TEXT NOT NULL DEFAULT ''")
                 cur.execute(
                     f"""
                     CREATE INDEX IF NOT EXISTS idx_{self.table_name}_hnsw
@@ -370,13 +386,14 @@ class PGVectorStore:
         return version
 
     def insert(self, metadata_id: str, embeddings: list[dict[str, Any]], replace: bool = False) -> None:
-        rows: list[tuple[str, str, int, str, str, str, str]] = []
+        rows: list[tuple[str, str, str, int, str, str, str, str]] = []
         for item in embeddings:
             vector = [float(v) for v in item["vector"]]
             self._validate_dimension(vector, operation="insert")
             rows.append(
                 (
                     metadata_id,
+                    str(item.get("project_id", "")),
                     str(item.get("chunk_id") or f"{metadata_id}:{int(item['chunk_index'])}"),
                     int(item["chunk_index"]),
                     str(item.get("message_hash", "")),
@@ -393,10 +410,11 @@ class PGVectorStore:
                     cur.execute(
                         f"""
                         INSERT INTO {self.table_name}
-                            (memory_id, chunk_id, chunk_index, message_hash, role, text, vector)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s::vector)
+                            (memory_id, project_id, chunk_id, chunk_index, message_hash, role, text, vector)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s::vector)
                         ON CONFLICT (memory_id, chunk_id) DO UPDATE
-                        SET chunk_index = EXCLUDED.chunk_index,
+                        SET project_id = EXCLUDED.project_id,
+                            chunk_index = EXCLUDED.chunk_index,
                             message_hash = EXCLUDED.message_hash,
                             role = EXCLUDED.role,
                             text = EXCLUDED.text,
@@ -411,7 +429,7 @@ class PGVectorStore:
             with conn.cursor() as cur:
                 cur.execute(
                     f"""
-                    SELECT memory_id, chunk_id, chunk_index, message_hash, role, text,
+                    SELECT memory_id, chunk_id, project_id, chunk_index, message_hash, role, text,
                            vector {self._operator} %s::vector AS distance
                     FROM {self.table_name}
                     ORDER BY vector {self._operator} %s::vector
@@ -420,18 +438,26 @@ class PGVectorStore:
                     (_vector_literal(query_vector), _vector_literal(query_vector), int(top_k)),
                 )
                 rows = cur.fetchall()
-        return [
-            {
-                "memory_id": str(row[0]),
-                "chunk_id": str(row[1]),
-                "chunk_index": int(row[2]),
-                "message_hash": str(row[3]),
-                "role": str(row[4]),
-                "text": str(row[5]),
-                "score": float(row[6]),
-            }
-            for row in rows
-        ]
+        return [self._search_row(row) for row in rows]
+
+    def _search_row(self, row: Any) -> dict[str, Any]:
+        if len(row) == 7:
+            memory_id, chunk_id, chunk_index, message_hash, role, text, score = row
+            project_id = ""
+        else:
+            memory_id, chunk_id, project_id, chunk_index, message_hash, role, text, score = row
+        result = {
+            "memory_id": str(memory_id),
+            "chunk_id": str(chunk_id),
+            "chunk_index": int(chunk_index),
+            "message_hash": str(message_hash),
+            "role": str(role),
+            "text": str(text),
+            "score": float(score),
+        }
+        if project_id:
+            result["project_id"] = str(project_id)
+        return result
 
     def delete(self, ids: list[str]) -> None:
         if not ids:

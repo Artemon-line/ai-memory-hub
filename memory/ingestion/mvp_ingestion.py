@@ -13,7 +13,15 @@ from uuid import uuid4
 from memory.backend.dry_run import DryRunMetadataStore, DryRunVectorStore
 from memory.backend.errors import SchemaVersionError, VectorDimensionError
 from memory.backend.log_safety import redact_secrets
-from memory.backend.metadata_store import SQLiteMetadataStore
+from memory.backend.metadata_store import (
+    LOCAL_DEFAULT_PROJECT_ID,
+    PROJECT_ROLE_READER,
+    PROJECT_ROLE_WRITER,
+    SQLiteMetadataStore,
+    _default_project_id,
+    _validate_owner_id,
+    _validate_project_id,
+)
 from memory.backend.postgres_metadata_store import PostgresMetadataStore
 from memory.backend.vector_store import InMemoryVectorStore, LanceDBVectorStore, PGVectorStore
 from memory.config import HubConfig, load_config, parse_config
@@ -462,7 +470,7 @@ def _attach_index_chunks(obj: dict[str, Any], chunks: list[dict[str, Any]]) -> N
     ]
 
 
-def embed_chunks(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def embed_chunks(chunks: list[dict[str, Any]], *, project_id: str | None = None) -> list[dict[str, Any]]:
     runtime = _runtime()
     texts = [chunk["text"] for chunk in chunks]
     vectors = runtime.embedding_provider.embed_texts(texts)
@@ -476,6 +484,7 @@ def embed_chunks(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "chunk_id": chunk.get("chunk_id"),
                 "chunk_index": chunk["chunk_index"],
                 "conversation_id": chunk.get("conversation_id"),
+                "project_id": project_id,
                 "message_hash": chunk.get("message_hash"),
                 "index_state": "indexed",
                 "role": chunk["role"],
@@ -496,21 +505,26 @@ def store_vectors(metadata_id: str, embeddings: list[dict[str, Any]], replace: b
     runtime.vector_store.insert(metadata_id, embeddings, replace=replace)
 
 
-def _lookup_by_conversation_hash(conversation_hash: str) -> dict[str, Any] | None:
+def _lookup_by_conversation_hash(
+    conversation_hash: str, *, project_id: str | None = None
+) -> dict[str, Any] | None:
     store = _runtime().metadata_store
     if hasattr(store, "get_by_conversation_hash"):
-        return store.get_by_conversation_hash(conversation_hash)
+        return store.get_by_conversation_hash(conversation_hash, project_id=project_id)
     for attr in ("by_id", "rows"):
         rows = getattr(store, attr, None)
         if isinstance(rows, dict):
             for conversation in rows.values():
-                if _conversation_hash(conversation) == conversation_hash:
+                if (
+                    _conversation_hash(conversation) == conversation_hash
+                    and _conversation_project_matches(conversation, project_id)
+                ):
                     return conversation
     return None
 
 
 def _lookup_same_thread(
-    incoming: dict[str, Any], *, owner_id: str | None = None
+    incoming: dict[str, Any], *, owner_id: str | None = None, project_id: str | None = None
 ) -> dict[str, Any] | None:
     if not _runtime().allow_trusted_appends:
         return None
@@ -519,7 +533,7 @@ def _lookup_same_thread(
     if memory_id:
         existing = store.get(memory_id) if hasattr(store, "get") else None
         if isinstance(existing, dict):
-            return existing if _conversation_owner_matches(existing, owner_id) else None
+            return existing if _conversation_allowed(existing, owner_id, project_id) else None
 
     metadata = incoming.get("metadata", {})
     upstream_thread_id = (
@@ -528,8 +542,8 @@ def _lookup_same_thread(
     if isinstance(upstream_thread_id, str) and upstream_thread_id:
         source = str(incoming.get("source", ""))
         if hasattr(store, "get_by_upstream_thread"):
-            candidate = store.get_by_upstream_thread(source, upstream_thread_id)
-            if isinstance(candidate, dict) and _conversation_owner_matches(candidate, owner_id):
+            candidate = store.get_by_upstream_thread(source, upstream_thread_id, project_id=project_id)
+            if isinstance(candidate, dict) and _conversation_allowed(candidate, owner_id, project_id):
                 return candidate
             return None
         for attr in ("by_id", "rows"):
@@ -543,7 +557,7 @@ def _lookup_same_thread(
                         and conversation_metadata.get("upstream_thread_id")
                         == upstream_thread_id
                     ):
-                        if _conversation_owner_matches(conversation, owner_id):
+                        if _conversation_allowed(conversation, owner_id, project_id):
                             return conversation
     return None
 
@@ -600,10 +614,18 @@ def _stamp_owner(conversation: dict[str, Any], *, owner_id: str | None) -> None:
     metadata["owner_id"] = _validate_owner_id(owner_id)
 
 
+def _stamp_project(conversation: dict[str, Any], *, project_id: str) -> None:
+    metadata = conversation.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+        conversation["metadata"] = metadata
+    metadata["project_id"] = _validate_project_id(project_id)
+
+
 def _scope_conversation_hash(
-    conversation: dict[str, Any], *, owner_id: str | None
+    conversation: dict[str, Any], *, project_id: str | None
 ) -> None:
-    if owner_id is None:
+    if project_id is None:
         return
     metadata = conversation.get("metadata", {})
     if not isinstance(metadata, dict):
@@ -611,7 +633,7 @@ def _scope_conversation_hash(
     conversation_hash = metadata.get("conversation_hash")
     if not isinstance(conversation_hash, str):
         return
-    digest = hashlib.sha256(f"{owner_id}\n{conversation_hash}".encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(f"{project_id}\n{conversation_hash}".encode("utf-8")).hexdigest()
     metadata["conversation_hash"] = f"sha256:{digest}"
 
 
@@ -631,6 +653,35 @@ def _conversation_owner_matches(conversation: Any, owner_id: str | None) -> bool
     return _owner_id_from_conversation(conversation) == owner_id
 
 
+def _project_id_from_conversation(conversation: Any) -> str | None:
+    if not isinstance(conversation, dict):
+        return None
+    metadata = conversation.get("metadata", {})
+    if not isinstance(metadata, dict):
+        return None
+    value = metadata.get("project_id")
+    return str(value) if value is not None else None
+
+
+def _conversation_project_matches(conversation: Any, project_id: str | None) -> bool:
+    if project_id is None:
+        return True
+    conversation_project_id = _project_id_from_conversation(conversation)
+    if conversation_project_id is None and project_id == LOCAL_DEFAULT_PROJECT_ID:
+        return True
+    return conversation_project_id == project_id
+
+
+def _conversation_allowed(
+    conversation: Any, owner_id: str | None, project_id: str | None
+) -> bool:
+    if project_id is not None:
+        return _conversation_project_matches(conversation, project_id)
+    return _conversation_owner_matches(conversation, owner_id) and _conversation_project_matches(
+        conversation, project_id
+    )
+
+
 def _fact_owner_matches(fact: Any, owner_id: str | None) -> bool:
     if owner_id is None:
         return True
@@ -639,13 +690,45 @@ def _fact_owner_matches(fact: Any, owner_id: str | None) -> bool:
     return str(fact.get("owner_id", "")) == owner_id
 
 
-def _validate_owner_id(owner_id: str) -> str:
-    value = str(owner_id).strip()
-    if not value:
-        raise ValueError("owner_id must be non-empty")
-    if len(value) > 128:
-        raise ValueError("owner_id exceeds max length 128")
-    return value
+def _fact_project_matches(fact: Any, project_id: str | None) -> bool:
+    if project_id is None:
+        return True
+    if not isinstance(fact, dict):
+        return False
+    fact_project_id = fact.get("project_id")
+    if fact_project_id is None and project_id == LOCAL_DEFAULT_PROJECT_ID:
+        return True
+    return str(fact_project_id) == project_id
+
+
+def _fact_allowed(fact: Any, owner_id: str | None, project_id: str | None) -> bool:
+    if project_id is not None:
+        return _fact_project_matches(fact, project_id)
+    return _fact_owner_matches(fact, owner_id) and _fact_project_matches(fact, project_id)
+
+
+def _resolve_project(
+    *,
+    owner_id: str | None,
+    project_id: str | None,
+    required_role: str,
+) -> str:
+    store = _runtime().metadata_store
+    if project_id is None:
+        if hasattr(store, "ensure_default_project"):
+            project = store.ensure_default_project(owner_id)
+            return str(project["id"])
+        return _default_project_id(owner_id) if owner_id is not None else LOCAL_DEFAULT_PROJECT_ID
+
+    project = _validate_project_id(project_id)
+    if owner_id is None:
+        if project != LOCAL_DEFAULT_PROJECT_ID:
+            raise PermissionError("project access denied")
+        return project
+    if hasattr(store, "project_has_role"):
+        if not store.project_has_role(project_id=project, user_id=owner_id, role=required_role):
+            raise PermissionError("project access denied")
+    return project
 
 
 def _detect_new_messages(
@@ -896,13 +979,18 @@ def ingest_messages(
     *,
     strict_transcript: bool = False,
     owner_id: str | None = None,
+    project_id: str | None = None,
 ) -> dict[str, Any]:
+    effective_project_id = _resolve_project(
+        owner_id=owner_id, project_id=project_id, required_role=PROJECT_ROLE_WRITER
+    )
     # 0. Normalize
     conversation_json = normalize_conversation_json(
         conversation_json, strict_transcript=strict_transcript
     )
     _stamp_owner(conversation_json, owner_id=owner_id)
-    _scope_conversation_hash(conversation_json, owner_id=owner_id)
+    _stamp_project(conversation_json, project_id=effective_project_id)
+    _scope_conversation_hash(conversation_json, project_id=effective_project_id)
 
     # 1. Validate JSON against schema
     validate_json(conversation_json)
@@ -911,9 +999,9 @@ def ingest_messages(
     enrich_topics(conversation_json)
 
     conversation_hash = conversation_json["metadata"]["conversation_hash"]
-    duplicate = _lookup_by_conversation_hash(conversation_hash)
+    duplicate = _lookup_by_conversation_hash(conversation_hash, project_id=effective_project_id)
     duplicate_metadata_id = None
-    if duplicate is not None and _conversation_owner_matches(duplicate, owner_id):
+    if duplicate is not None and _conversation_allowed(duplicate, owner_id, effective_project_id):
         duplicate_metadata_id = str(duplicate["id"])
         # We proceed to re-index even if it's a duplicate by hash,
         # to ensure the vector store is in sync with the metadata.
@@ -923,7 +1011,9 @@ def ingest_messages(
     store = _runtime().metadata_store
     if hasattr(store, "get"):
         existing_by_id = store.get(str(conversation_json.get("id", "")))
-    if existing_by_id is not None and not _conversation_owner_matches(existing_by_id, owner_id):
+    if existing_by_id is not None and not _conversation_allowed(
+        existing_by_id, owner_id, effective_project_id
+    ):
         raise ValueError("unauthorized_update: conversation id already exists")
     if existing_by_id is not None and not _runtime().allow_trusted_appends:
         # If it's a duplicate by ID but not by hash, it's an unauthorized update.
@@ -931,7 +1021,9 @@ def ingest_messages(
         if _conversation_hash(existing_by_id) != conversation_hash:
             raise ValueError("unauthorized_update: conversation id already exists")
 
-    same_thread = _lookup_same_thread(conversation_json, owner_id=owner_id)
+    same_thread = _lookup_same_thread(
+        conversation_json, owner_id=owner_id, project_id=effective_project_id
+    )
     if same_thread is not None:
         new_messages = _detect_new_messages(same_thread, conversation_json)
         if not new_messages:
@@ -961,7 +1053,7 @@ def ingest_messages(
         if new_messages or chunks:
             store.insert(updated)
         try:
-            embeddings = embed_chunks(chunks)
+            embeddings = embed_chunks(chunks, project_id=effective_project_id)
             store_vectors(str(updated["id"]), embeddings, replace=(start_index == 0))
             _mark_chunks_indexed(str(updated["id"]), chunks)
         except Exception:
@@ -996,7 +1088,7 @@ def ingest_messages(
 
     # 5. Embed and write vectors
     try:
-        embeddings = embed_chunks(chunks)
+        embeddings = embed_chunks(chunks, project_id=effective_project_id)
         store_vectors(metadata_id, embeddings, replace=not inserted)
         _mark_chunks_indexed(metadata_id, chunks)
     except Exception:
@@ -1048,9 +1140,13 @@ def search(
     top_k: int = 5,
     result_mode: str = "chunks",
     owner_id: str | None = None,
+    project_id: str | None = None,
 ) -> dict[str, Any]:
     _validate_result_mode(result_mode)
     runtime = _runtime()
+    effective_project_id = _resolve_project(
+        owner_id=owner_id, project_id=project_id, required_role=PROJECT_ROLE_READER
+    )
     query_vector = runtime.embedding_provider.embed_texts([query])[0]
     candidate_multiplier = max(
         1, int(getattr(runtime, "retrieval_candidate_multiplier", _SEARCH_CANDIDATE_MULTIPLIER))
@@ -1065,6 +1161,7 @@ def search(
         enabled=runtime.retrieval_keyword_enabled,
         limit=runtime.retrieval_keyword_candidate_limit,
         owner_id=owner_id,
+        project_id=effective_project_id,
     )
     ids.extend(str(conversation["id"]) for conversation in keyword_conversations if "id" in conversation)
     ids = _unique_strings(ids)
@@ -1079,7 +1176,7 @@ def search(
         memory_id = str(match["memory_id"])
         score = float(match["score"])
         conversation = conversations.get(memory_id)
-        if not _conversation_owner_matches(conversation, owner_id):
+        if not _conversation_allowed(conversation, owner_id, effective_project_id):
             continue
         row = {
             "id": memory_id,
@@ -1103,7 +1200,7 @@ def search(
         memory_id = str(conversation.get("id", ""))
         if not memory_id:
             continue
-        if not _conversation_owner_matches(conversation, owner_id):
+        if not _conversation_allowed(conversation, owner_id, effective_project_id):
             continue
         row = _keyword_result_row(
             conversation,
@@ -1216,14 +1313,19 @@ def _keyword_conversations(
     enabled: bool,
     limit: int,
     owner_id: str | None = None,
+    project_id: str | None = None,
 ) -> list[dict[str, Any]]:
     if not enabled:
         return []
     if hasattr(metadata_store, "search_text"):
+        try:
+            candidates = metadata_store.search_text(query, limit=limit, project_id=project_id)
+        except TypeError:
+            candidates = metadata_store.search_text(query, limit=limit)
         return [
             item
-            for item in metadata_store.search_text(query, limit=limit)
-            if isinstance(item, dict) and _conversation_owner_matches(item, owner_id)
+            for item in candidates
+            if isinstance(item, dict) and _conversation_allowed(item, owner_id, project_id)
         ]
     rows = getattr(metadata_store, "by_id", None) or getattr(metadata_store, "rows", None)
     if not isinstance(rows, dict):
@@ -1235,7 +1337,7 @@ def _keyword_conversations(
     for conversation in rows.values():
         if not isinstance(conversation, dict):
             continue
-        if not _conversation_owner_matches(conversation, owner_id):
+        if not _conversation_allowed(conversation, owner_id, project_id):
             continue
         text = _conversation_search_text(conversation).lower()
         if all(token in text for token in tokens):
@@ -1369,10 +1471,15 @@ def _unique_strings(values: list[str]) -> list[str]:
     return output
 
 
-def retrieve(memory_id: str, *, owner_id: str | None = None) -> dict[str, Any] | None:
+def retrieve(
+    memory_id: str, *, owner_id: str | None = None, project_id: str | None = None
+) -> dict[str, Any] | None:
     runtime = _runtime()
+    effective_project_id = _resolve_project(
+        owner_id=owner_id, project_id=project_id, required_role=PROJECT_ROLE_READER
+    )
     conversation = runtime.metadata_store.get(memory_id)
-    if not _conversation_owner_matches(conversation, owner_id):
+    if not _conversation_allowed(conversation, owner_id, effective_project_id):
         return None
     return conversation
 
@@ -1383,16 +1490,28 @@ def ask(
     max_context_tokens: int | None = None,
     result_mode: str = "chunks",
     owner_id: str | None = None,
+    project_id: str | None = None,
 ) -> dict[str, Any]:
     _validate_result_mode(result_mode)
+    effective_project_id = _resolve_project(
+        owner_id=owner_id, project_id=project_id, required_role=PROJECT_ROLE_READER
+    )
     fact_answer = _answer_from_facts(
-        question, top_k=top_k, result_mode=result_mode, owner_id=owner_id
+        question,
+        top_k=top_k,
+        result_mode=result_mode,
+        owner_id=owner_id,
+        project_id=effective_project_id,
     )
     if fact_answer is not None:
         return fact_answer
 
     search_result = _search_for_ask(
-        question=question, top_k=top_k, result_mode=result_mode, owner_id=owner_id
+        question=question,
+        top_k=top_k,
+        result_mode=result_mode,
+        owner_id=owner_id,
+        project_id=effective_project_id,
     )
     matches = search_result.get("results", [])
     if not matches:
@@ -1458,9 +1577,16 @@ def _search_for_ask(
     top_k: int,
     result_mode: str,
     owner_id: str | None = None,
+    project_id: str | None = None,
 ) -> dict[str, Any]:
     try:
-        return search(query=question, top_k=top_k, result_mode=result_mode, owner_id=owner_id)
+        return search(
+            query=question,
+            top_k=top_k,
+            result_mode=result_mode,
+            owner_id=owner_id,
+            project_id=project_id,
+        )
     except TypeError:
         if result_mode != "chunks":
             raise
@@ -1906,6 +2032,7 @@ def _fact(
         "last_confirmed_at": now,
         "source_conversation_id": source_id,
         "owner_id": _owner_id_from_conversation(conversation),
+        "project_id": _project_id_from_conversation(conversation),
         "source_message_indexes": [message_index],
         "created_at": now,
         "updated_at": now,
@@ -1926,6 +2053,7 @@ def _answer_from_facts(
     top_k: int,
     result_mode: str,
     owner_id: str | None = None,
+    project_id: str | None = None,
 ) -> dict[str, Any] | None:
     query = _fact_query(question)
     if query is None:
@@ -1934,6 +2062,7 @@ def _answer_from_facts(
         subject=query.get("subject") if query.get("subject") == "user" else None,
         predicate=query.get("predicate"),
         owner_id=owner_id,
+        project_id=project_id,
     )
     facts = _filter_facts_for_question(facts, question, query)
     active = [fact for fact in facts if not fact.get("superseded_by") and not fact.get("deleted_at")]
@@ -1962,6 +2091,7 @@ def _answer_from_facts(
             top_k=top_k,
             result_mode=result_mode,
             owner_id=owner_id,
+            project_id=project_id,
         )
         results = search_result.get("results", [])
         if isinstance(results, list):
@@ -2086,11 +2216,21 @@ def _search_facts(
     subject: str | None = None,
     predicate: str | None = None,
     owner_id: str | None = None,
+    project_id: str | None = None,
 ) -> list[dict[str, Any]]:
     store = _runtime().metadata_store
     if hasattr(store, "search_facts"):
-        facts = store.search_facts(subject=subject, predicate=predicate, include_superseded=False)
-        return [fact for fact in facts if _fact_owner_matches(fact, owner_id)]
+        facts = store.search_facts(
+            subject=subject,
+            predicate=predicate,
+            include_superseded=False,
+            project_id=project_id,
+        )
+        return [
+            fact
+            for fact in facts
+            if _fact_allowed(fact, owner_id, project_id)
+        ]
     facts = getattr(store, "_facts", [])
     if not isinstance(facts, list):
         return []
@@ -2100,7 +2240,7 @@ def _search_facts(
         if isinstance(fact, dict)
         and (subject is None or str(fact.get("subject")) == subject)
         and (predicate is None or str(fact.get("predicate")) == predicate)
-        and _fact_owner_matches(fact, owner_id)
+        and _fact_allowed(fact, owner_id, project_id)
         and not fact.get("superseded_by")
         and not fact.get("deleted_at")
     ]
@@ -2112,13 +2252,24 @@ def fact_search(
     predicate: str | None = None,
     include_superseded: bool = False,
     owner_id: str | None = None,
+    project_id: str | None = None,
 ) -> dict[str, Any]:
+    effective_project_id = _resolve_project(
+        owner_id=owner_id, project_id=project_id, required_role=PROJECT_ROLE_READER
+    )
     store = _runtime().metadata_store
     if hasattr(store, "search_facts"):
         facts = store.search_facts(
-            subject=subject, predicate=predicate, include_superseded=include_superseded
+            subject=subject,
+            predicate=predicate,
+            include_superseded=include_superseded,
+            project_id=effective_project_id,
         )
-        facts = [fact for fact in facts if _fact_owner_matches(fact, owner_id)]
+        facts = [
+            fact
+            for fact in facts
+            if _fact_allowed(fact, owner_id, effective_project_id)
+        ]
     else:
         facts = getattr(store, "_facts", [])
         if not isinstance(facts, list):
@@ -2128,34 +2279,49 @@ def fact_search(
             if isinstance(fact, dict)
             and (subject is None or str(fact.get("subject")) == subject)
             and (predicate is None or str(fact.get("predicate")) == predicate)
-            and _fact_owner_matches(fact, owner_id)
+            and _fact_allowed(fact, owner_id, effective_project_id)
             and (include_superseded or not fact.get("superseded_by"))
             and not fact.get("deleted_at")
         ]
     return {"status": "ok", "results": [_public_fact(fact) for fact in facts]}
 
 
-def profile_get(subject: str = "user", *, owner_id: str | None = None) -> dict[str, Any]:
+def profile_get(
+    subject: str = "user", *, owner_id: str | None = None, project_id: str | None = None
+) -> dict[str, Any]:
     return {
         "status": "ok",
         "subject": subject,
-        "facts": fact_search(subject=subject, owner_id=owner_id)["results"],
+        "facts": fact_search(subject=subject, owner_id=owner_id, project_id=project_id)["results"],
     }
 
 
 def fact_supersede(
-    fact_id: str, superseded_by: str, *, owner_id: str | None = None
+    fact_id: str,
+    superseded_by: str,
+    *,
+    owner_id: str | None = None,
+    project_id: str | None = None,
 ) -> dict[str, Any]:
-    existing = fact_search(include_superseded=True, owner_id=owner_id)["results"]
-    if owner_id is not None and not any(fact.get("id") == fact_id for fact in existing):
+    effective_project_id = _resolve_project(
+        owner_id=owner_id, project_id=project_id, required_role=PROJECT_ROLE_WRITER
+    )
+    existing = fact_search(
+        include_superseded=True, owner_id=owner_id, project_id=effective_project_id
+    )["results"]
+    if not any(fact.get("id") == fact_id for fact in existing):
         return {"status": "not_found", "id": fact_id, "superseded_by": superseded_by}
     store = _runtime().metadata_store
     if hasattr(store, "supersede_fact"):
-        updated = store.supersede_fact(fact_id, superseded_by)
+        updated = store.supersede_fact(fact_id, superseded_by, project_id=effective_project_id)
     else:
         updated = False
         for fact in getattr(store, "_facts", []):
-            if isinstance(fact, dict) and fact.get("id") == fact_id:
+            if (
+                isinstance(fact, dict)
+                and fact.get("id") == fact_id
+                and _fact_project_matches(fact, effective_project_id)
+            ):
                 now = _utc_now_iso()
                 fact["superseded_by"] = superseded_by
                 fact["superseded_at"] = now

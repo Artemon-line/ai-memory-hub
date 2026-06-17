@@ -18,10 +18,12 @@ class SearchRequest(BaseModel):
     query: str
     top_k: int = Field(default=5, ge=1, le=100)
     result_mode: str = "chunks"
+    project_id: str | None = None
 
 
 class RetrieveRequest(BaseModel):
     id: str
+    project_id: str | None = None
 
 
 class AskRequest(BaseModel):
@@ -29,21 +31,25 @@ class AskRequest(BaseModel):
     top_k: int = Field(default=5, ge=1, le=100)
     max_context_tokens: int | None = Field(default=None, ge=1)
     result_mode: str = "chunks"
+    project_id: str | None = None
 
 
 class FactSearchRequest(BaseModel):
     subject: str | None = None
     predicate: str | None = None
     include_superseded: bool = False
+    project_id: str | None = None
 
 
 class ProfileGetRequest(BaseModel):
     subject: str = "user"
+    project_id: str | None = None
 
 
 class FactSupersedeRequest(BaseModel):
     fact_id: str
     superseded_by: str
+    project_id: str | None = None
 
 
 def _register_health_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
@@ -74,30 +80,51 @@ def _register_api_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
         conversation_json: dict[str, Any], request: Request
     ) -> dict[str, Any]:
         try:
+            conversation_json = dict(conversation_json)
+            project_id = _pop_insert_project_id(conversation_json)
+            metadata = conversation_json.get("metadata")
+            if isinstance(metadata, dict):
+                value = metadata.get("project_id")
+                project_id = str(value) if value is not None else project_id
             return redact_content_hashes(
-                await agent.ingest_messages(conversation_json, owner_id=owner_id(request))
+                await agent.ingest_messages(
+                    conversation_json,
+                    owner_id=owner_id(request),
+                    project_id=project_id,
+                )
             )
         except jsonschema.ValidationError as exc:
             raise HTTPException(status_code=400, detail=exc.message) from exc
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     app.post("/memory/insert")(memory_insert)
 
     async def memory_search(payload: SearchRequest, request: Request) -> dict[str, Any]:
-        return redact_content_hashes(
-            await agent.search(
-                payload.query,
-                top_k=payload.top_k,
-                result_mode=payload.result_mode,
-                owner_id=owner_id(request),
+        try:
+            return redact_content_hashes(
+                await agent.search(
+                    payload.query,
+                    top_k=payload.top_k,
+                    result_mode=payload.result_mode,
+                    owner_id=owner_id(request),
+                    project_id=payload.project_id,
+                )
             )
-        )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
 
     app.post("/memory/search")(memory_search)
 
     async def memory_retrieve(payload: RetrieveRequest, request: Request) -> dict[str, Any]:
-        conversation = await agent.retrieve(payload.id, owner_id=owner_id(request))
+        try:
+            conversation = await agent.retrieve(
+                payload.id, owner_id=owner_id(request), project_id=payload.project_id
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
         if conversation is None:
             raise HTTPException(status_code=404, detail="memory not found")
         return {"status": "ok", "memory": redact_content_hashes(conversation)}
@@ -105,53 +132,84 @@ def _register_api_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
     app.post("/memory/retrieve")(memory_retrieve)
 
     async def memory_ask(payload: AskRequest, request: Request) -> dict[str, Any]:
-        return redact_content_hashes(
-            await agent.ask(
-                payload.question,
-                top_k=payload.top_k,
-                max_context_tokens=payload.max_context_tokens,
-                result_mode=payload.result_mode,
-                owner_id=owner_id(request),
+        try:
+            return redact_content_hashes(
+                await agent.ask(
+                    payload.question,
+                    top_k=payload.top_k,
+                    max_context_tokens=payload.max_context_tokens,
+                    result_mode=payload.result_mode,
+                    owner_id=owner_id(request),
+                    project_id=payload.project_id,
+                )
             )
-        )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
 
     app.post("/memory/ask")(memory_ask)
 
     async def memory_fact_search(
         payload: FactSearchRequest, request: Request
     ) -> dict[str, Any]:
-        return redact_content_hashes(
-            await agent.fact_search(
-                subject=payload.subject,
-                predicate=payload.predicate,
-                include_superseded=payload.include_superseded,
-                owner_id=owner_id(request),
+        try:
+            return redact_content_hashes(
+                await agent.fact_search(
+                    subject=payload.subject,
+                    predicate=payload.predicate,
+                    include_superseded=payload.include_superseded,
+                    owner_id=owner_id(request),
+                    project_id=payload.project_id,
+                )
             )
-        )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
 
     app.post("/memory/facts/search")(memory_fact_search)
 
     async def memory_profile_get(
         payload: ProfileGetRequest, request: Request
     ) -> dict[str, Any]:
-        return redact_content_hashes(
-            await agent.profile_get(subject=payload.subject, owner_id=owner_id(request))
-        )
+        try:
+            return redact_content_hashes(
+                await agent.profile_get(
+                    subject=payload.subject,
+                    owner_id=owner_id(request),
+                    project_id=payload.project_id,
+                )
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
 
     app.post("/memory/profile/get")(memory_profile_get)
 
     async def memory_fact_supersede(
         payload: FactSupersedeRequest, request: Request
     ) -> dict[str, Any]:
-        return redact_content_hashes(
-            await agent.fact_supersede(
-                fact_id=payload.fact_id,
-                superseded_by=payload.superseded_by,
-                owner_id=owner_id(request),
+        try:
+            return redact_content_hashes(
+                await agent.fact_supersede(
+                    fact_id=payload.fact_id,
+                    superseded_by=payload.superseded_by,
+                    owner_id=owner_id(request),
+                    project_id=payload.project_id,
+                )
             )
-        )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
 
     app.post("/memory/facts/supersede")(memory_fact_supersede)
+
+
+def _pop_insert_project_id(conversation_json: dict[str, Any]) -> str | None:
+    value = conversation_json.pop("project_id", None)
+    if value is None:
+        return None
+    metadata = conversation_json.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+        conversation_json["metadata"] = metadata
+    metadata["project_id"] = str(value)
+    return str(value)
 
 
 def create_app(

@@ -32,6 +32,9 @@ Observed improvement themes:
 - General delete/update tools are intentionally not part of the agent-facing MCP surface. Administrative memory hiding or cleanup should be CLI/API-only and gated by local/admin controls.
 - Auth and per-user isolation are required before LAN, Raspberry Pi, multi-user,
   or admin UI deployments are recommended.
+- Shared project workspaces should extend bearer-token isolation without
+  replacing `owner_id`: the actor remains server-stamped, while `project_id`
+  becomes the memory collaboration boundary.
 
 ## P0: Response Shape Clarity
 
@@ -199,6 +202,46 @@ Acceptance criteria:
 - Tokens are shown once at creation and only hashes are stored.
 - `auth=none` remains available for CI and loopback-only local testing.
 
+## P0: Project Workspaces And Shared Collaboration
+
+Source feedback:
+
+- Per-user isolation protects private memory, but collaboration needs an
+  explicit shared workspace.
+- A user may belong to multiple projects and choose when to save a conversation
+  to a shared project instead of their private memory.
+- Shared memory should not blur audit identity: AMH still needs to know which
+  user inserted or corrected each conversation or fact.
+
+Current status:
+
+- Bearer auth maps tokens to server-side users.
+- Conversations and facts are already stamped with `owner_id`.
+- Shared project membership is implemented in SQLite and Postgres metadata
+  stores, with project-scoped reads/writes in HTTP and MCP memory operations.
+
+Implementation sequence:
+
+- [x] Add `projects` and `project_memberships` to the metadata stores.
+- [x] Auto-create a private default project for every user.
+- [x] Add `project_id` to conversations, facts, and vector metadata.
+- [x] Treat omitted `project_id` as the authenticated user's private default
+  project.
+- [x] Keep `owner_id` as the actor/audit field and never trust client-supplied
+  owner metadata.
+- [x] Validate project membership before insert, search, retrieve, ask, fact
+  search, profile lookup, and fact supersession.
+- [x] Add optional `project_id` to HTTP and MCP tool schemas.
+- [x] Keep project creation, membership, and role changes in admin CLI/API flows
+  before exposing any agent-facing MCP project administration.
+
+Acceptance criteria:
+
+- Existing users get private memory by default.
+- Jane and Carl can both access shared project `321` when both have membership.
+- Jane cannot access Carl's private project or unrelated project `234`.
+- Duplicate conversation hashes dedupe inside one project, not globally.
+
 ## P2: Admin-Only Mutation Workflows
 
 Source feedback:
@@ -332,7 +375,7 @@ Acceptance criteria:
 
 ## Priority Mapping
 
-- P0: bearer auth/user isolation, response shape clarity, fact freshness, source-quality explanation, advanced filters, and conversation summary metadata/profile views.
+- P0: bearer auth/user isolation, project workspaces, response shape clarity, fact freshness, source-quality explanation, advanced filters, and conversation summary metadata/profile views.
 - P1: fact text normalization, answer polish, auto-tagging, and conversation threading.
 - P2: admin-only mutation workflows and generated topic/project summaries.
 

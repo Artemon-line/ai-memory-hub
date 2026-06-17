@@ -11,6 +11,16 @@ from typing import Any
 from memory.backend.contracts import ProviderCapabilities
 from memory.backend.errors import NotSupportedError
 
+LOCAL_DEFAULT_PROJECT_ID = "local-default"
+PROJECT_ROLE_ADMIN = "admin"
+PROJECT_ROLE_WRITER = "writer"
+PROJECT_ROLE_READER = "reader"
+PROJECT_ROLE_ORDER = {
+    PROJECT_ROLE_READER: 1,
+    PROJECT_ROLE_WRITER: 2,
+    PROJECT_ROLE_ADMIN: 3,
+}
+
 
 class SQLiteMetadataStore:
     schema_version: int = 1
@@ -21,6 +31,7 @@ class SQLiteMetadataStore:
     _MIGRATION_COLUMNS = {
         ("conversations", "conversation_hash"): "TEXT",
         ("conversations", "upstream_thread_id"): "TEXT",
+        ("conversations", "project_id"): "TEXT",
         ("facts", "source_quality"): "TEXT",
         ("facts", "confidence_reason"): "TEXT",
         ("facts", "last_confirmed_at"): "TEXT",
@@ -28,6 +39,7 @@ class SQLiteMetadataStore:
         ("facts", "object_raw"): "TEXT",
         ("facts", "object_normalized"): "TEXT",
         ("facts", "owner_id"): "TEXT",
+        ("facts", "project_id"): "TEXT",
     }
 
     def __init__(self, db_path: str | Path):
@@ -50,6 +62,7 @@ class SQLiteMetadataStore:
                     timestamp TEXT NOT NULL,
                     title TEXT,
                     conversation_hash TEXT,
+                    project_id TEXT,
                     upstream_thread_id TEXT,
                     payload TEXT NOT NULL,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -58,6 +71,7 @@ class SQLiteMetadataStore:
             )
             self._ensure_column(conn, "conversations", "conversation_hash", "TEXT")
             self._ensure_column(conn, "conversations", "upstream_thread_id", "TEXT")
+            self._ensure_column(conn, "conversations", "project_id", "TEXT")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS users (
@@ -82,6 +96,49 @@ class SQLiteMetadataStore:
             )
             conn.execute(
                 """
+                CREATE TABLE IF NOT EXISTS projects (
+                    id TEXT PRIMARY KEY,
+                    owner_id TEXT,
+                    name TEXT NOT NULL,
+                    description TEXT,
+                    is_default INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    archived_at TEXT,
+                    FOREIGN KEY(owner_id) REFERENCES users(id)
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS project_memberships (
+                    project_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    role TEXT NOT NULL CHECK(role IN ('admin', 'writer', 'reader')),
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY(project_id, user_id),
+                    FOREIGN KEY(project_id) REFERENCES projects(id),
+                    FOREIGN KEY(user_id) REFERENCES users(id)
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_default_owner
+                ON projects(owner_id)
+                WHERE is_default = 1 AND owner_id IS NOT NULL
+                """
+            )
+            conn.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_default_local
+                ON projects(is_default)
+                WHERE is_default = 1 AND owner_id IS NULL
+                """
+            )
+            conn.execute(
+                """
                 CREATE INDEX IF NOT EXISTS idx_auth_tokens_owner
                 ON auth_tokens(owner_id)
                 WHERE revoked_at IS NULL
@@ -89,8 +146,13 @@ class SQLiteMetadataStore:
             )
             conn.execute(
                 """
-                CREATE UNIQUE INDEX IF NOT EXISTS idx_conversations_conversation_hash
-                ON conversations(conversation_hash)
+                DROP INDEX IF EXISTS idx_conversations_conversation_hash
+                """
+            )
+            conn.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_conversations_project_hash
+                ON conversations(project_id, conversation_hash)
                 WHERE conversation_hash IS NOT NULL
                 """
             )
@@ -139,6 +201,7 @@ class SQLiteMetadataStore:
                     confidence TEXT NOT NULL,
                     source_conversation_id TEXT NOT NULL,
                     owner_id TEXT,
+                    project_id TEXT,
                     source_message_indexes TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
@@ -161,6 +224,7 @@ class SQLiteMetadataStore:
                 ("object_raw", "TEXT"),
                 ("object_normalized", "TEXT"),
                 ("owner_id", "TEXT"),
+                ("project_id", "TEXT"),
             ):
                 self._ensure_column(conn, "facts", column, declaration)
             conn.execute(
@@ -170,6 +234,7 @@ class SQLiteMetadataStore:
                 WHERE deleted_at IS NULL
                 """
             )
+            self._migrate_default_projects(conn)
 
     def _ensure_column(
         self, conn: sqlite3.Connection, table: str, column: str, declaration: str
@@ -187,19 +252,22 @@ class SQLiteMetadataStore:
         timestamp = str(conversation_json.get("timestamp", ""))
         title = conversation_json.get("title")
         self._validate_field_lengths(source=source, timestamp=timestamp, title=title)
+        project_id = self._ensure_payload_project(conversation_json)
         conversation_hash = self._conversation_hash(conversation_json)
         upstream_thread_id = self._upstream_thread_id(conversation_json)
         payload = json.dumps(conversation_json, separators=(",", ":"), ensure_ascii=False)
         with self._connect() as conn:
+            self._ensure_project_for_payload(conn, conversation_json)
             conn.execute(
                 """
-                INSERT INTO conversations (id, source, timestamp, title, conversation_hash, upstream_thread_id, payload)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO conversations (id, source, timestamp, title, conversation_hash, project_id, upstream_thread_id, payload)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     source = excluded.source,
                     timestamp = excluded.timestamp,
                     title = excluded.title,
                     conversation_hash = excluded.conversation_hash,
+                    project_id = excluded.project_id,
                     upstream_thread_id = excluded.upstream_thread_id,
                     payload = excluded.payload
                 """,
@@ -209,6 +277,7 @@ class SQLiteMetadataStore:
                     timestamp,
                     title,
                     conversation_hash,
+                    project_id,
                     upstream_thread_id,
                     payload,
                 ),
@@ -230,6 +299,7 @@ class SQLiteMetadataStore:
                 """,
                 (owner, display_name),
             )
+            self._ensure_default_project(conn, owner)
             conn.execute(
                 """
                 INSERT INTO auth_tokens (token_hash, owner_id)
@@ -257,21 +327,134 @@ class SQLiteMetadataStore:
             ).fetchone()
         return str(row["owner_id"]) if row is not None else None
 
+    def ensure_default_project(self, owner_id: str | None) -> dict[str, Any]:
+        owner = _validate_owner_id(owner_id) if owner_id is not None else None
+        with self._connect() as conn:
+            project_id = self._ensure_default_project(conn, owner)
+            project = self._get_project_row(conn, project_id)
+        if project is None:
+            raise RuntimeError("default project could not be resolved")
+        return project
+
+    def create_project(
+        self,
+        *,
+        project_id: str,
+        owner_id: str,
+        name: str | None = None,
+        description: str | None = None,
+        is_default: bool = False,
+    ) -> dict[str, Any]:
+        project = _validate_project_id(project_id)
+        owner = _validate_owner_id(owner_id)
+        role = PROJECT_ROLE_ADMIN
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO users (id, display_name)
+                VALUES (?, ?)
+                ON CONFLICT(id) DO NOTHING
+                """,
+                (owner, owner),
+            )
+            conn.execute(
+                """
+                INSERT INTO projects (id, owner_id, name, description, is_default)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    owner_id = excluded.owner_id,
+                    name = excluded.name,
+                    description = excluded.description,
+                    is_default = excluded.is_default,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (project, owner, name or project, description, 1 if is_default else 0),
+            )
+            self._upsert_project_membership(conn, project, owner, role)
+            row = self._get_project_row(conn, project)
+        if row is None:
+            raise RuntimeError("project could not be created")
+        return row
+
+    def add_project_member(self, *, project_id: str, user_id: str, role: str) -> None:
+        project = _validate_project_id(project_id)
+        user = _validate_owner_id(user_id)
+        normalized_role = _validate_project_role(role)
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO users (id, display_name)
+                VALUES (?, ?)
+                ON CONFLICT(id) DO NOTHING
+                """,
+                (user, user),
+            )
+            self._upsert_project_membership(conn, project, user, normalized_role)
+
+    def project_has_role(self, *, project_id: str, user_id: str | None, role: str) -> bool:
+        project = _validate_project_id(project_id)
+        required = _validate_project_role(role)
+        if user_id is None:
+            return project == LOCAL_DEFAULT_PROJECT_ID
+        user = _validate_owner_id(user_id)
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT role FROM project_memberships
+                JOIN projects ON projects.id = project_memberships.project_id
+                WHERE project_memberships.project_id = ?
+                  AND project_memberships.user_id = ?
+                  AND projects.archived_at IS NULL
+                """,
+                (project, user),
+            ).fetchone()
+        if row is None:
+            return False
+        return PROJECT_ROLE_ORDER[str(row["role"])] >= PROJECT_ROLE_ORDER[required]
+
+    def list_projects(self, *, user_id: str | None = None) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            if user_id is None:
+                rows = conn.execute(
+                    """
+                    SELECT * FROM projects
+                    WHERE id = ? AND archived_at IS NULL
+                    ORDER BY is_default DESC, name ASC
+                    """,
+                    (LOCAL_DEFAULT_PROJECT_ID,),
+                ).fetchall()
+            else:
+                user = _validate_owner_id(user_id)
+                rows = conn.execute(
+                    """
+                    SELECT projects.*, project_memberships.role
+                    FROM projects
+                    JOIN project_memberships ON project_memberships.project_id = projects.id
+                    WHERE project_memberships.user_id = ?
+                      AND projects.archived_at IS NULL
+                    ORDER BY projects.is_default DESC, projects.name ASC
+                    """,
+                    (user,),
+                ).fetchall()
+        return [self._project_from_row(row) for row in rows]
+
     def insert_new(self, conversation_json: dict[str, Any]) -> tuple[str, bool]:
         memory_id = self._validate_memory_id(conversation_json["id"])
         source = str(conversation_json.get("source", ""))
         timestamp = str(conversation_json.get("timestamp", ""))
         title = conversation_json.get("title")
         self._validate_field_lengths(source=source, timestamp=timestamp, title=title)
+        project_id = self._ensure_payload_project(conversation_json)
         conversation_hash = self._conversation_hash(conversation_json)
         upstream_thread_id = self._upstream_thread_id(conversation_json)
         payload = json.dumps(conversation_json, separators=(",", ":"), ensure_ascii=False)
         try:
             with self._connect() as conn:
+                self._ensure_project_for_payload(conn, conversation_json)
                 conn.execute(
                     """
-                    INSERT INTO conversations (id, source, timestamp, title, conversation_hash, upstream_thread_id, payload)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO conversations (id, source, timestamp, title, conversation_hash, project_id, upstream_thread_id, payload)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         memory_id,
@@ -279,6 +462,7 @@ class SQLiteMetadataStore:
                         timestamp,
                         title,
                         conversation_hash,
+                        project_id,
                         upstream_thread_id,
                         payload,
                     ),
@@ -288,6 +472,7 @@ class SQLiteMetadataStore:
             return self._resolve_insert_new_conflict(
                 memory_id=memory_id,
                 conversation_hash=conversation_hash,
+                project_id=project_id,
             )
         return memory_id, True
 
@@ -297,30 +482,46 @@ class SQLiteMetadataStore:
         _ = new_messages
         return self.insert(conversation_json)
 
-    def get_by_conversation_hash(self, conversation_hash: str | None) -> dict[str, Any] | None:
+    def get_by_conversation_hash(
+        self, conversation_hash: str | None, project_id: str | None = None
+    ) -> dict[str, Any] | None:
         if not conversation_hash:
             return None
         with self._connect() as conn:
-            row = conn.execute(
-                "SELECT payload FROM conversations WHERE conversation_hash = ?",
-                (conversation_hash,),
-            ).fetchone()
+            if project_id is None:
+                row = conn.execute(
+                    "SELECT payload FROM conversations WHERE conversation_hash = ?",
+                    (conversation_hash,),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    """
+                    SELECT payload FROM conversations
+                    WHERE conversation_hash = ? AND project_id = ?
+                    """,
+                    (conversation_hash, project_id),
+                ).fetchone()
         if row is None:
             return None
         return json.loads(str(row["payload"]))
 
     def get_by_upstream_thread(
-        self, source: str, upstream_thread_id: str
+        self, source: str, upstream_thread_id: str, project_id: str | None = None
     ) -> dict[str, Any] | None:
+        clauses = ["source = ?", "upstream_thread_id = ?"]
+        params: list[Any] = [source, upstream_thread_id]
+        if project_id is not None:
+            clauses.append("project_id = ?")
+            params.append(project_id)
         with self._connect() as conn:
             row = conn.execute(
-                """
+                f"""
                 SELECT payload FROM conversations
-                WHERE source = ? AND upstream_thread_id = ?
+                WHERE {' AND '.join(clauses)}
                 ORDER BY created_at ASC
                 LIMIT 1
                 """,
-                (source, upstream_thread_id),
+                params,
             ).fetchone()
         if row is None:
             return None
@@ -391,18 +592,23 @@ class SQLiteMetadataStore:
             result[str(row["id"])] = json.loads(str(row["payload"]))
         return result
 
-    def search_text(self, query: str, limit: int = 50) -> list[dict[str, Any]]:
+    def search_text(
+        self, query: str, limit: int = 50, project_id: str | None = None
+    ) -> list[dict[str, Any]]:
         tokens = _keyword_tokens(query)
         if not tokens:
             return []
-        clauses = " AND ".join(["lower(payload) LIKE ?"] * len(tokens))
+        clauses = ["lower(payload) LIKE ?"] * len(tokens)
         params = [f"%{token}%" for token in tokens]
+        if project_id is not None:
+            clauses.append("project_id = ?")
+            params.append(project_id)
         params.append(int(limit))
         with self._connect() as conn:
             rows = conn.execute(
                 f"""
                 SELECT payload FROM conversations
-                WHERE {clauses}
+                WHERE {' AND '.join(clauses)}
                 ORDER BY created_at DESC
                 LIMIT ?
                 """,
@@ -421,12 +627,12 @@ class SQLiteMetadataStore:
                     """
                     INSERT INTO facts (
                         id, subject, predicate, object, qualifiers, confidence,
-                        source_conversation_id, owner_id, source_message_indexes,
+                        source_conversation_id, owner_id, project_id, source_message_indexes,
                         created_at, updated_at, superseded_by, superseded_at,
                         source_quality, confidence_reason, last_confirmed_at,
                         object_raw, object_normalized, deleted_at
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(id) DO UPDATE SET
                         subject = excluded.subject,
                         predicate = excluded.predicate,
@@ -435,6 +641,7 @@ class SQLiteMetadataStore:
                         confidence = excluded.confidence,
                         source_conversation_id = excluded.source_conversation_id,
                         owner_id = excluded.owner_id,
+                        project_id = excluded.project_id,
                         source_message_indexes = excluded.source_message_indexes,
                         updated_at = excluded.updated_at,
                         superseded_by = excluded.superseded_by,
@@ -455,6 +662,7 @@ class SQLiteMetadataStore:
         subject: str | None = None,
         predicate: str | None = None,
         include_superseded: bool = False,
+        project_id: str | None = None,
     ) -> list[dict[str, Any]]:
         clauses = ["deleted_at IS NULL"]
         params: list[Any] = []
@@ -464,6 +672,9 @@ class SQLiteMetadataStore:
         if predicate is not None:
             clauses.append("predicate = ?")
             params.append(predicate)
+        if project_id is not None:
+            clauses.append("project_id = ?")
+            params.append(project_id)
         if not include_superseded:
             clauses.append("superseded_by IS NULL")
         with self._connect() as conn:
@@ -477,18 +688,29 @@ class SQLiteMetadataStore:
             ).fetchall()
         return [self._fact_from_row(row) for row in rows]
 
-    def profile_get(self, subject: str = "user") -> dict[str, Any]:
-        return {"subject": subject, "facts": self.search_facts(subject=subject)}
+    def profile_get(
+        self, subject: str = "user", project_id: str | None = None
+    ) -> dict[str, Any]:
+        return {"subject": subject, "facts": self.search_facts(subject=subject, project_id=project_id)}
 
-    def supersede_fact(self, fact_id: str, superseded_by: str) -> bool:
+    def supersede_fact(
+        self, fact_id: str, superseded_by: str, project_id: str | None = None
+    ) -> bool:
+        clauses = ["id = ?", "deleted_at IS NULL"]
+        params: list[Any] = [superseded_by]
+        if project_id is not None:
+            clauses.append("project_id = ?")
+        params.append(fact_id)
+        if project_id is not None:
+            params.append(project_id)
         with self._connect() as conn:
             cursor = conn.execute(
-                """
+                f"""
                 UPDATE facts
                 SET superseded_by = ?, superseded_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-                WHERE id = ? AND deleted_at IS NULL
+                WHERE {' AND '.join(clauses)}
                 """,
-                (superseded_by, fact_id),
+                params,
             )
             return cursor.rowcount > 0
 
@@ -515,16 +737,19 @@ class SQLiteMetadataStore:
                 timestamp = str(conversation_json.get("timestamp", ""))
                 title = conversation_json.get("title")
                 self._validate_field_lengths(source=source, timestamp=timestamp, title=title)
+                project_id = self._ensure_payload_project(conversation_json)
+                self._ensure_project_for_payload(conn, conversation_json)
                 payload = json.dumps(conversation_json, separators=(",", ":"), ensure_ascii=False)
                 conn.execute(
                     """
-                    INSERT INTO conversations (id, source, timestamp, title, conversation_hash, upstream_thread_id, payload)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO conversations (id, source, timestamp, title, conversation_hash, project_id, upstream_thread_id, payload)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(id) DO UPDATE SET
                         source = excluded.source,
                         timestamp = excluded.timestamp,
                         title = excluded.title,
                         conversation_hash = excluded.conversation_hash,
+                        project_id = excluded.project_id,
                         upstream_thread_id = excluded.upstream_thread_id,
                         payload = excluded.payload
                     """,
@@ -534,6 +759,7 @@ class SQLiteMetadataStore:
                         timestamp,
                         title,
                         self._conversation_hash(conversation_json),
+                        project_id,
                         self._upstream_thread_id(conversation_json),
                         payload,
                     ),
@@ -579,15 +805,39 @@ class SQLiteMetadataStore:
             return str(value) if value is not None else None
         return None
 
+    def _project_id(self, conversation_json: dict[str, Any]) -> str | None:
+        metadata = conversation_json.get("metadata", {})
+        if isinstance(metadata, dict):
+            value = metadata.get("project_id")
+            return str(value) if value is not None else None
+        return None
+
+    def _ensure_payload_project(self, conversation_json: dict[str, Any]) -> str:
+        project_id = self._project_id(conversation_json)
+        if project_id is not None:
+            return _validate_project_id(project_id)
+        owner_id = _owner_id_from_payload(conversation_json)
+        project_id = _default_project_id(owner_id) if owner_id else LOCAL_DEFAULT_PROJECT_ID
+        _stamp_project_id(conversation_json, project_id)
+        return project_id
+
+    def _ensure_project_for_payload(
+        self, conn: sqlite3.Connection, conversation_json: dict[str, Any]
+    ) -> None:
+        owner_id = _owner_id_from_payload(conversation_json)
+        self._ensure_default_project(conn, owner_id)
+
     def _resolve_insert_new_conflict(
-        self, *, memory_id: str, conversation_hash: str | None
+        self, *, memory_id: str, conversation_hash: str | None, project_id: str | None
     ) -> tuple[str, bool]:
-        existing = self.get_by_conversation_hash(conversation_hash)
+        existing = self.get_by_conversation_hash(conversation_hash, project_id=project_id)
         if existing is None:
             existing = self.get(memory_id)
         if existing is None:
             raise sqlite3.IntegrityError("conversation insert conflict could not be resolved")
         if self._conversation_hash(existing) != conversation_hash:
+            raise ValueError("unauthorized_update: conversation id already exists")
+        if self._project_id(existing) != project_id:
             raise ValueError("unauthorized_update: conversation id already exists")
         return str(existing["id"]), False
 
@@ -605,6 +855,7 @@ class SQLiteMetadataStore:
             WHERE subject = ?
               AND predicate = ?
               AND (owner_id IS ? OR owner_id = ?)
+              AND (project_id IS ? OR project_id = ?)
               AND superseded_by IS NULL
               AND deleted_at IS NULL
               AND lower(object) LIKE ?
@@ -617,6 +868,8 @@ class SQLiteMetadataStore:
                 str(fact["predicate"]),
                 fact.get("owner_id"),
                 fact.get("owner_id"),
+                fact.get("project_id"),
+                fact.get("project_id"),
                 f"%{str(corrects).lower()}%",
             ),
         )
@@ -634,6 +887,7 @@ class SQLiteMetadataStore:
               AND predicate = ?
               AND object = ?
               AND (owner_id IS ? OR owner_id = ?)
+              AND (project_id IS ? OR project_id = ?)
               AND superseded_by IS NULL
               AND deleted_at IS NULL
             """,
@@ -645,6 +899,8 @@ class SQLiteMetadataStore:
                 str(fact["object"]),
                 fact.get("owner_id"),
                 fact.get("owner_id"),
+                fact.get("project_id"),
+                fact.get("project_id"),
             ),
         )
 
@@ -658,6 +914,7 @@ class SQLiteMetadataStore:
             str(fact.get("confidence", "medium")),
             str(fact["source_conversation_id"]),
             fact.get("owner_id"),
+            fact.get("project_id"),
             json.dumps(fact.get("source_message_indexes", []), separators=(",", ":")),
             str(fact["created_at"]),
             str(fact["updated_at"]),
@@ -681,6 +938,7 @@ class SQLiteMetadataStore:
             "confidence": str(row["confidence"]),
             "source_conversation_id": str(row["source_conversation_id"]),
             "owner_id": row["owner_id"],
+            "project_id": row["project_id"],
             "source_message_indexes": json.loads(str(row["source_message_indexes"])),
             "created_at": str(row["created_at"]),
             "updated_at": str(row["updated_at"]),
@@ -712,7 +970,7 @@ class SQLiteMetadataStore:
                 VALUES (?, ?, ?, ?, ?)
                 """,
                 (conversation_id, index, role, text, message_hash),
-            )
+        )
         for chunk in self._index_chunks(conversation_json):
             conn.execute(
                 """
@@ -729,6 +987,120 @@ class SQLiteMetadataStore:
                     str(chunk["text"]),
                     str(chunk.get("index_state", "pending_index")),
                 ),
+            )
+
+    def _ensure_default_project(self, conn: sqlite3.Connection, owner_id: str | None) -> str:
+        if owner_id is None:
+            project_id = LOCAL_DEFAULT_PROJECT_ID
+            conn.execute(
+                """
+                INSERT INTO projects (id, owner_id, name, is_default)
+                VALUES (?, NULL, ?, 1)
+                ON CONFLICT(id) DO UPDATE SET is_default = 1, updated_at = CURRENT_TIMESTAMP
+                """,
+                (project_id, "Local Default"),
+            )
+            return project_id
+
+        conn.execute(
+            """
+            INSERT INTO users (id, display_name)
+            VALUES (?, ?)
+            ON CONFLICT(id) DO NOTHING
+            """,
+            (owner_id, owner_id),
+        )
+        row = conn.execute(
+            """
+            SELECT id FROM projects
+            WHERE owner_id = ? AND is_default = 1 AND archived_at IS NULL
+            LIMIT 1
+            """,
+            (owner_id,),
+        ).fetchone()
+        if row is not None:
+            project_id = str(row["id"])
+        else:
+            project_id = _default_project_id(owner_id)
+            conn.execute(
+                """
+                INSERT INTO projects (id, owner_id, name, is_default)
+                VALUES (?, ?, ?, 1)
+                ON CONFLICT(id) DO UPDATE SET is_default = 1, updated_at = CURRENT_TIMESTAMP
+                """,
+                (project_id, owner_id, "Private Default"),
+            )
+        self._upsert_project_membership(conn, project_id, owner_id, PROJECT_ROLE_ADMIN)
+        return project_id
+
+    def _upsert_project_membership(
+        self, conn: sqlite3.Connection, project_id: str, user_id: str, role: str
+    ) -> None:
+        conn.execute(
+            """
+            INSERT INTO project_memberships (project_id, user_id, role)
+            VALUES (?, ?, ?)
+            ON CONFLICT(project_id, user_id) DO UPDATE SET
+                role = excluded.role,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (project_id, user_id, role),
+        )
+
+    def _get_project_row(
+        self, conn: sqlite3.Connection, project_id: str
+    ) -> dict[str, Any] | None:
+        row = conn.execute(
+            "SELECT * FROM projects WHERE id = ? AND archived_at IS NULL",
+            (project_id,),
+        ).fetchone()
+        return self._project_from_row(row) if row is not None else None
+
+    def _project_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "id": str(row["id"]),
+            "owner_id": row["owner_id"],
+            "name": str(row["name"]),
+            "description": row["description"],
+            "is_default": bool(row["is_default"]),
+            "created_at": str(row["created_at"]),
+            "updated_at": str(row["updated_at"]),
+            "archived_at": row["archived_at"],
+            "role": row["role"] if "role" in row.keys() else None,
+        }
+
+    def _migrate_default_projects(self, conn: sqlite3.Connection) -> None:
+        local_project = self._ensure_default_project(conn, None)
+        owner_rows = conn.execute("SELECT id FROM users").fetchall()
+        for row in owner_rows:
+            self._ensure_default_project(conn, str(row["id"]))
+
+        conversation_rows = conn.execute(
+            "SELECT id, payload FROM conversations WHERE project_id IS NULL"
+        ).fetchall()
+        for row in conversation_rows:
+            payload = json.loads(str(row["payload"]))
+            owner_id = _owner_id_from_payload(payload)
+            project_id = self._ensure_default_project(conn, owner_id) if owner_id else local_project
+            _stamp_project_id(payload, project_id)
+            conn.execute(
+                "UPDATE conversations SET project_id = ?, payload = ? WHERE id = ?",
+                (
+                    project_id,
+                    json.dumps(payload, separators=(",", ":"), ensure_ascii=False),
+                    str(row["id"]),
+                ),
+            )
+
+        fact_rows = conn.execute(
+            "SELECT id, owner_id FROM facts WHERE project_id IS NULL"
+        ).fetchall()
+        for row in fact_rows:
+            owner_id = str(row["owner_id"]) if row["owner_id"] is not None else None
+            project_id = self._ensure_default_project(conn, owner_id) if owner_id else local_project
+            conn.execute(
+                "UPDATE facts SET project_id = ? WHERE id = ?",
+                (project_id, str(row["id"])),
             )
 
     def _index_chunks(self, conversation_json: dict[str, Any]) -> list[dict[str, Any]]:
@@ -767,6 +1139,11 @@ def _hash_bearer_token(token: str) -> str:
     return "sha256:" + hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
+def _default_project_id(owner_id: str) -> str:
+    digest = hashlib.sha256(owner_id.encode("utf-8")).hexdigest()[:32]
+    return f"private-{digest}"
+
+
 def _validate_owner_id(owner_id: str) -> str:
     value = str(owner_id).strip()
     if not value:
@@ -774,3 +1151,37 @@ def _validate_owner_id(owner_id: str) -> str:
     if len(value) > 128:
         raise ValueError("owner_id exceeds max length 128")
     return value
+
+
+def _validate_project_id(project_id: str) -> str:
+    value = str(project_id).strip()
+    if not value:
+        raise ValueError("project_id must be non-empty")
+    if len(value) > 128:
+        raise ValueError("project_id exceeds max length 128")
+    return value
+
+
+def _validate_project_role(role: str) -> str:
+    value = str(role).strip().lower()
+    if value not in PROJECT_ROLE_ORDER:
+        raise ValueError("project role must be one of: admin, writer, reader")
+    return value
+
+
+def _owner_id_from_payload(payload: Any) -> str | None:
+    if not isinstance(payload, dict):
+        return None
+    metadata = payload.get("metadata", {})
+    if not isinstance(metadata, dict):
+        return None
+    value = metadata.get("owner_id")
+    return str(value) if value is not None else None
+
+
+def _stamp_project_id(payload: dict[str, Any], project_id: str) -> None:
+    metadata = payload.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+        payload["metadata"] = metadata
+    metadata["project_id"] = project_id

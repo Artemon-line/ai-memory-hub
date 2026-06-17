@@ -22,11 +22,17 @@ class MVPIngestionAgent(BaseIngestionAgent):
         mvp_ingestion.configure_runtime(runtime=runtime, config=config)
 
     async def ingest_messages(
-        self, conversation_json: Dict[str, Any], *, owner_id: str | None = None
+        self,
+        conversation_json: Dict[str, Any],
+        *,
+        owner_id: str | None = None,
+        project_id: str | None = None,
     ) -> Dict[str, Any]:
         payload = self.preprocess_messages(conversation_json)
         try:
-            result = mvp_ingestion.ingest_messages(payload, owner_id=owner_id)
+            result = mvp_ingestion.ingest_messages(
+                payload, owner_id=owner_id, project_id=project_id
+            )
         except jsonschema.ValidationError:
             raise
         return self.postprocess_result(result)
@@ -38,15 +44,20 @@ class MVPIngestionAgent(BaseIngestionAgent):
         top_k: int = 5,
         result_mode: str = "chunks",
         owner_id: str | None = None,
+        project_id: str | None = None,
     ) -> Dict[str, Any]:
         return mvp_ingestion.search(
-            query=query, top_k=top_k, result_mode=result_mode, owner_id=owner_id
+            query=query,
+            top_k=top_k,
+            result_mode=result_mode,
+            owner_id=owner_id,
+            project_id=project_id,
         )
 
     async def retrieve(
-        self, memory_id: str, *, owner_id: str | None = None
+        self, memory_id: str, *, owner_id: str | None = None, project_id: str | None = None
     ) -> Optional[Dict[str, Any]]:
-        return mvp_ingestion.retrieve(memory_id, owner_id=owner_id)
+        return mvp_ingestion.retrieve(memory_id, owner_id=owner_id, project_id=project_id)
 
     async def ask(
         self,
@@ -56,6 +67,7 @@ class MVPIngestionAgent(BaseIngestionAgent):
         max_context_tokens: int | None = None,
         result_mode: str = "chunks",
         owner_id: str | None = None,
+        project_id: str | None = None,
     ) -> Dict[str, Any]:
         return mvp_ingestion.ask(
             question=question,
@@ -63,6 +75,7 @@ class MVPIngestionAgent(BaseIngestionAgent):
             max_context_tokens=max_context_tokens,
             result_mode=result_mode,
             owner_id=owner_id,
+            project_id=project_id,
         )
 
     async def health(self) -> Dict[str, Any]:
@@ -75,26 +88,40 @@ class MVPIngestionAgent(BaseIngestionAgent):
         predicate: str | None = None,
         include_superseded: bool = False,
         owner_id: str | None = None,
+        project_id: str | None = None,
     ) -> Dict[str, Any]:
         return mvp_ingestion.fact_search(
             subject=subject,
             predicate=predicate,
             include_superseded=include_superseded,
             owner_id=owner_id,
+            project_id=project_id,
         )
 
     async def profile_get(
-        self, *, subject: str = "user", owner_id: str | None = None
+        self,
+        *,
+        subject: str = "user",
+        owner_id: str | None = None,
+        project_id: str | None = None,
     ) -> Dict[str, Any]:
-        return mvp_ingestion.profile_get(subject=subject, owner_id=owner_id)
+        return mvp_ingestion.profile_get(
+            subject=subject, owner_id=owner_id, project_id=project_id
+        )
 
     async def fact_supersede(
-        self, *, fact_id: str, superseded_by: str, owner_id: str | None = None
+        self,
+        *,
+        fact_id: str,
+        superseded_by: str,
+        owner_id: str | None = None,
+        project_id: str | None = None,
     ) -> Dict[str, Any]:
         return mvp_ingestion.fact_supersede(
             fact_id=fact_id,
             superseded_by=superseded_by,
             owner_id=owner_id,
+            project_id=project_id,
         )
 
     async def authenticate_bearer_token(self, token: str) -> str | None:

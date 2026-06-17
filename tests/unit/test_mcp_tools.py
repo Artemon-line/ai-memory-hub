@@ -203,6 +203,26 @@ async def test_mcp_tool_handlers_insert_search_retrieve() -> None:
 
 
 @pytest.mark.asyncio
+async def test_mcp_tool_handlers_accept_project_id_argument() -> None:
+    runtime = _runtime()
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=runtime)
+    handlers = build_tool_handlers(agent)
+    payload = _conversation()
+    payload["messages"] = [{"role": "user", "text": "shared workspace note"}]
+
+    insert_result = await handlers["memory_insert"](payload, project_id="local-default")
+    search_result = await handlers["memory_search"](
+        "shared workspace", top_k=5, project_id="local-default"
+    )
+
+    assert insert_result["status"] == "ok"
+    stored = runtime.metadata_store.get(insert_result["id"])
+    assert stored["metadata"]["project_id"] == "local-default"
+    assert search_result["status"] == "ok"
+    assert search_result["results"][0]["id"] == insert_result["id"]
+
+
+@pytest.mark.asyncio
 async def test_mcp_fact_tools_return_profile_facts() -> None:
     runtime = _runtime()
     agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=runtime)
