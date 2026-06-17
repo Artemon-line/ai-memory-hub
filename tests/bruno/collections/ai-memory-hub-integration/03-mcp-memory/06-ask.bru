@@ -1,0 +1,57 @@
+meta {
+  name: MCP ask memory
+  type: http
+  seq: 25
+  tags: [
+    smoke
+    mcp
+  ]
+}
+
+post {
+  url: {{mcp_url}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Accept: application/json, text/event-stream
+  Mcp-Session-Id: {{mcp_session_id}}
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 6,
+    "method": "tools/call",
+    "params": {
+      "name": "memory_ask",
+      "arguments": {
+        "question": "What did the Bruno MCP integration memory {{run_id}} confirm?",
+        "top_k": 100,
+        "source": "bruno-mcp",
+        "tags": ["bruno", "mcp"]
+      }
+    }
+  }
+}
+
+tests {
+  const { toolPayload } = require("./scripts/mcp.js");
+
+  test("mcp ask cites inserted memory", function() {
+    expect(res.status).to.equal(200);
+    const payload = toolPayload(res.body);
+    expect(payload.status).to.equal("ok");
+    expect(payload.answer).to.be.a("string");
+    expect(payload.citations).to.be.an("array").that.is.not.empty;
+    const citationIds = payload.citations.map((item) => item.id);
+    expect(citationIds).to.include(bru.getVar("mcp_memory_id"));
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 15000
+}

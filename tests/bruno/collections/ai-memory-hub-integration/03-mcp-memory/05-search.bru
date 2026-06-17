@@ -1,0 +1,57 @@
+meta {
+  name: MCP search memory
+  type: http
+  seq: 24
+  tags: [
+    smoke
+    mcp
+  ]
+}
+
+post {
+  url: {{mcp_url}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Accept: application/json, text/event-stream
+  Mcp-Session-Id: {{mcp_session_id}}
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 5,
+    "method": "tools/call",
+    "params": {
+      "name": "memory_search",
+      "arguments": {
+        "query": "Bruno MCP integration {{run_id}}",
+        "top_k": 100,
+        "limit": 100,
+        "source": "bruno-mcp",
+        "tags": ["bruno", "mcp"]
+      }
+    }
+  }
+}
+
+tests {
+  const { toolPayload } = require("./scripts/mcp.js");
+
+  test("mcp search finds inserted memory", function() {
+    expect(res.status).to.equal(200);
+    const payload = toolPayload(res.body);
+    expect(payload.status).to.equal("ok");
+    expect(payload.results).to.be.an("array").that.is.not.empty;
+    const ids = payload.results.map((item) => item.id);
+    expect(ids).to.include(bru.getVar("mcp_memory_id"));
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 15000
+}

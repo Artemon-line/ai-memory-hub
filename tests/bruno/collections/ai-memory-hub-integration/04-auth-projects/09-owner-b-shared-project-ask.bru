@@ -1,0 +1,44 @@
+meta {
+  name: Owner B can ask shared project
+  type: http
+  seq: 38
+  tags: [
+    auth
+    project
+  ]
+}
+
+post {
+  url: {{base_url}}/memory/ask
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{owner_b_token}}
+}
+
+body:json {
+  {
+    "question": "What is the Bruno shared project codename {{run_id}}?",
+    "project_id": "{{shared_project_id}}",
+    "top_k": 100,
+    "source": "bruno-auth",
+    "tags": ["bruno", "shared"]
+  }
+}
+
+tests {
+  test("owner b ask cites shared project memory", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.status).to.equal("ok");
+    const ids = res.body.citations.map((item) => item.id);
+    expect(ids).to.include(bru.getVar("shared_project_memory_id"));
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 15000
+}

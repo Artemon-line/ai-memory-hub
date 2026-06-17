@@ -1,0 +1,50 @@
+meta {
+  name: MCP tools list
+  type: http
+  seq: 21
+  tags: [
+    smoke
+    mcp
+  ]
+}
+
+post {
+  url: {{mcp_url}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Accept: application/json, text/event-stream
+  Mcp-Session-Id: {{mcp_session_id}}
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "tools/list",
+    "params": {}
+  }
+}
+
+tests {
+  const { eventPayload } = require("./scripts/mcp.js");
+
+  test("mcp tools list includes core tools", function() {
+    expect(res.status).to.equal(200);
+    const payload = eventPayload(res.body);
+    const names = payload.result.tools.map((tool) => tool.name);
+    expect(names).to.include("memory_validate");
+    expect(names).to.include("memory_insert");
+    expect(names).to.include("memory_search");
+    expect(names).to.include("memory_retrieve");
+    expect(names).to.include("memory_ask");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 15000
+}

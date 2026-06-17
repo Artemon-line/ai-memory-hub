@@ -344,6 +344,38 @@ Acceptance criteria:
 - Agents can fetch compact profile or project summaries without reading every raw
   chunk once generated summaries are implemented.
 
+## P0: Bruno Integration Test Layer
+
+Source feedback:
+
+- Local MCP/API debugging benefits from a runnable black-box test collection
+  that contributors can execute without writing Python.
+- CI failures are easier to inspect when public API/MCP smoke tests produce a
+  human-readable report artifact.
+
+Decision:
+
+- Add Bruno as a local and CI integration layer for a running ai-memory-hub
+  server. Initial unauthenticated health, API, and MCP smoke coverage is
+  implemented under `tests/bruno`.
+- Keep Bruno focused on public API/MCP contract coverage and persistence through
+  the configured DB/vector stores.
+- Keep pytest as the source of truth for detailed validation, storage adapter
+  behavior, auth edge cases, and ranking internals.
+
+Plan:
+
+- Track remaining work in `../bruno_integration_test_plan.md`.
+- Start with unauthenticated health, API memory flow, and MCP memory flow.
+  Done.
+- Add bearer-token/project smoke coverage after the base collection is stable.
+  Done.
+- Add an OAuth resource-server fail-fast guard while OAuth remains planned.
+  Done.
+- Add filter smoke coverage after the base collection is stable.
+- Run Bruno against the Postgres/PGVector stack locally and in CI.
+  Done for the initial workflow.
+
 ## Closed: Bulk Conversation Insert
 
 Source feedback:

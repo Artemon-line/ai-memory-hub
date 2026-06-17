@@ -1,0 +1,14 @@
+{
+  "version": "1",
+  "name": "ai-memory-hub-integration",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ],
+  "scripts": {
+    "additionalContextRoots": [
+      "./scripts"
+    ]
+  }
+}

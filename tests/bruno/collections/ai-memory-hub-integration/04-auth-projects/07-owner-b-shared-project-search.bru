@@ -1,0 +1,44 @@
+meta {
+  name: Owner B can search shared project
+  type: http
+  seq: 36
+  tags: [
+    auth
+    project
+  ]
+}
+
+post {
+  url: {{base_url}}/memory/search
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{owner_b_token}}
+}
+
+body:json {
+  {
+    "query": "saffron-lantern {{run_id}}",
+    "project_id": "{{shared_project_id}}",
+    "top_k": 100,
+    "source": "bruno-auth",
+    "tags": ["bruno", "shared"]
+  }
+}
+
+tests {
+  test("owner b sees shared project memory", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.status).to.equal("ok");
+    const ids = res.body.results.map((item) => item.id);
+    expect(ids).to.include(bru.getVar("shared_project_memory_id"));
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 15000
+}

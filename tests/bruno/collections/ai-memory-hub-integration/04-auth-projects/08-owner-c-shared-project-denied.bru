@@ -1,0 +1,42 @@
+meta {
+  name: Owner C cannot search unrelated shared project
+  type: http
+  seq: 37
+  tags: [
+    auth
+    project
+  ]
+}
+
+post {
+  url: {{base_url}}/memory/search
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{owner_c_token}}
+}
+
+body:json {
+  {
+    "query": "saffron-lantern {{run_id}}",
+    "project_id": "{{shared_project_id}}",
+    "top_k": 5,
+    "source": "bruno-auth",
+    "tags": ["bruno", "shared"]
+  }
+}
+
+tests {
+  test("owner c is denied shared project access", function() {
+    expect(res.status).to.equal(403);
+    expect(res.body.detail).to.equal("project access denied");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 15000
+}

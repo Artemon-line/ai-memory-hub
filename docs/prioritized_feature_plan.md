@@ -17,6 +17,7 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P0 | Conversation summary metadata and profile views | Partial | `improvements/client_feedback_improvement_plan.md` |
 | P0 | MCP client smoke coverage for Codex, Gemini, Copilot, Claude, opencode | Implemented | `mcp_client_smoke_plan.md` |
 | P0 | Weekly scheduled real-client MCP smoke coverage | Implemented | `real_client_mcp_smoke_plan.md` |
+| P0 | Bruno black-box API/MCP integration test layer | Partial | `bruno_integration_test_plan.md` |
 | P1 | CLI foundation and command contract | Implemented | `cli_implementation_plan.md` |
 | P1 | CLI `ingest`, `search`, `retrieve`, and `ask` commands | Implemented | `cli_implementation_plan.md` |
 | P1 | CLI `serve` command for container/runtime entrypoint | Implemented | `cli_implementation_plan.md`, `release_container_docs_plan.md` |
@@ -294,6 +295,28 @@ Implementation sequence:
 - [x] Start with Claude Code and Copilot CLI because they expose clear base-URL/provider environment variables.
 - [x] Validate Codex, opencode, and Gemini headless command status before wiring them into strict CI.
 - [x] Keep real-client smoke tests out of default PR gating until they are stable enough.
+
+## P0: Bruno Black-Box API/MCP Integration Test Layer
+
+Use `bruno_integration_test_plan.md` as the source of truth.
+
+Bruno should provide a local and CI-friendly black-box smoke layer for the live
+HTTP API and streamable HTTP MCP endpoint. It should prove the public contract
+works against a running server and configured metadata/vector stores, while
+pytest remains the source of truth for internal behavior, boundary conditions,
+and storage adapter details.
+
+- [x] Add a committed Bruno workspace under `tests/bruno`.
+- [x] Cover `/health`, `/ready`, API insert/search/ask, MCP initialize,
+      `tools/list`, `memory_validate`, `memory_insert`, `memory_search`, and
+      `memory_ask`.
+- [x] Run against the reusable Postgres/PGVector local stack.
+- [x] Add a GitHub Actions lane that installs `@usebruno/cli`, runs `bru run`,
+      and uploads an HTML report artifact.
+- [x] Add bearer-token and project-workspace smoke tests after CI token/project
+      seeding is scripted.
+- [x] Add an OAuth resource-server fail-fast guard until OAuth is implemented.
+- [ ] Promote to required CI only after repeated stable runs.
 
 ## P1: CLI Foundation And Commands
 

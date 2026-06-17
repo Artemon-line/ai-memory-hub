@@ -1,0 +1,56 @@
+meta {
+  name: API insert memory
+  type: http
+  seq: 10
+  tags: [
+    smoke
+    api
+  ]
+}
+
+post {
+  url: {{base_url}}/memory/insert
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "source": "bruno-api",
+    "timestamp": "2026-06-17T00:00:00Z",
+    "messages": [
+      {
+        "role": "user",
+        "text": "Bruno API integration memory {{run_id}} stores public API contract coverage."
+      },
+      {
+        "role": "assistant",
+        "text": "Bruno API integration response {{run_id}} confirms search and ask retrieval."
+      }
+    ],
+    "metadata": {
+      "summary": "Bruno API integration smoke conversation {{run_id}}.",
+      "tags": ["bruno", "integration", "api"],
+      "run_id": "{{run_id}}"
+    }
+  }
+}
+
+tests {
+  test("api insert succeeds", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.status).to.equal("ok");
+    expect(res.body.id).to.be.a("string");
+    expect(res.body.embedded_chunks).to.be.greaterThan(0);
+  });
+  bru.setVar("api_memory_id", res.body.id);
+}
+
+settings {
+  encodeUrl: true
+  timeout: 15000
+}

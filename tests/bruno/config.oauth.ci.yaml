@@ -1,0 +1,24 @@
+providers:
+  embeddings: local
+  embedding_model: local-hash
+  embedding_dimension: 32
+  metadata_db: sqlite
+  vector_db: memory
+  agent: mvp
+
+interfaces:
+  api: true
+  mcp: true
+
+paths:
+  data_dir: ./.bruno-oauth-ci-data
+  logs_dir: ./.bruno-oauth-ci-logs
+
+schema:
+  file: ./memory/schema/conversation.schema.json
+
+api:
+  host: 127.0.0.1
+  port: 8000
+  auth: oauth_resource_server
+  api_key: ""

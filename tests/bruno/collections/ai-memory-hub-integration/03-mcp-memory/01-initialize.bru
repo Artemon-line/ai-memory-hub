@@ -1,0 +1,56 @@
+meta {
+  name: MCP initialize
+  type: http
+  seq: 20
+  tags: [
+    smoke
+    mcp
+  ]
+}
+
+post {
+  url: {{mcp_url}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Accept: application/json, text/event-stream
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2025-06-18",
+      "capabilities": {},
+      "clientInfo": {
+        "name": "bruno-integration",
+        "version": "0.1.0"
+      }
+    }
+  }
+}
+
+tests {
+  const { eventPayload, responseHeader } = require("./scripts/mcp.js");
+
+  test("mcp initialize succeeds", function() {
+    expect(res.status).to.equal(200);
+    const payload = eventPayload(res.body);
+    expect(payload.result).to.be.an("object");
+    expect(payload.result.instructions).to.be.a("string");
+  });
+
+  const sessionId = responseHeader(res.headers, "mcp-session-id");
+  expect(sessionId, "mcp-session-id response header").to.be.a("string");
+  bru.setVar("mcp_session_id", sessionId);
+}
+
+settings {
+  encodeUrl: true
+  timeout: 15000
+}

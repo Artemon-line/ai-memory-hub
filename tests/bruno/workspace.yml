@@ -1,0 +1,4 @@
+name: ai-memory-hub
+collections:
+  - name: ai-memory-hub-integration
+    path: collections/ai-memory-hub-integration

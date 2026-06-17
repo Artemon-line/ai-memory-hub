@@ -1,0 +1,37 @@
+name: ci
+variables:
+  - name: base_url
+    value: http://127.0.0.1:8000
+    enabled: true
+    secret: false
+    type: text
+  - name: mcp_url
+    value: http://127.0.0.1:8000/mcp/
+    enabled: true
+    secret: false
+    type: text
+  - name: run_id
+    value: ci
+    enabled: true
+    secret: false
+    type: text
+  - name: owner_a_token
+    value: bruno-owner-a-token
+    enabled: true
+    secret: false
+    type: text
+  - name: owner_b_token
+    value: bruno-owner-b-token
+    enabled: true
+    secret: false
+    type: text
+  - name: owner_c_token
+    value: bruno-owner-c-token
+    enabled: true
+    secret: false
+    type: text
+  - name: shared_project_id
+    value: bruno-shared-project
+    enabled: true
+    secret: false
+    type: text

@@ -1,0 +1,199 @@
+name: bruno-integration
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/bruno-integration.yml"
+      - "memory/**"
+      - "tests/bruno/**"
+      - "pyproject.toml"
+      - "uv.lock"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/bruno-integration.yml"
+      - "memory/**"
+      - "tests/bruno/**"
+      - "pyproject.toml"
+      - "uv.lock"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bruno-integration:
+    name: Bruno API/MCP Integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: memory
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U test -d memory"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Install Python dependencies
+        run: uv sync --dev --extra postgres
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Install Bruno CLI
+        run: npm install -g @usebruno/cli
+
+      - name: Validate Bruno test files
+        run: |
+          uv run python tests/bruno/validate_files.py
+          uv run python -m ruff check tests/bruno/seed_auth.py tests/bruno/validate_files.py
+
+      - name: Start ai-memory-hub
+        run: |
+          uv run aim serve \
+            --config tests/bruno/config.ci.yaml \
+            --host 127.0.0.1 \
+            --port 8000 \
+            > bruno-server.log 2>&1 &
+          echo "$!" > bruno-server.pid
+
+      - name: Wait for readiness
+        run: |
+          for i in {1..30}; do
+            if curl --max-time 5 -fsS http://127.0.0.1:8000/ready; then
+              exit 0
+            fi
+            if ! kill -0 "$(cat bruno-server.pid)" 2>/dev/null; then
+              cat bruno-server.log
+              exit 1
+            fi
+            sleep 2
+          done
+          cat bruno-server.log
+          exit 1
+
+      - name: Run Bruno collection
+        working-directory: tests/bruno/collections/ai-memory-hub-integration
+        run: |
+          mkdir -p ../../reports
+          bru run \
+            --global-env ci \
+            --workspace-path ../.. \
+            --tags smoke \
+            --env-var run_id="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --reporter-html ../../reports/bruno-integration-report.html \
+            --sandbox developer \
+            --noproxy
+
+      - name: Stop unauthenticated ai-memory-hub
+        run: |
+          if [ -f bruno-server.pid ]; then
+            kill "$(cat bruno-server.pid)" 2>/dev/null || true
+            rm bruno-server.pid
+          fi
+          sleep 2
+
+      - name: Verify OAuth mode fails explicitly
+        run: |
+          set +e
+          uv run aim serve \
+            --config tests/bruno/config.oauth.ci.yaml \
+            --host 127.0.0.1 \
+            --port 8010 \
+            > bruno-oauth-server.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo "oauth_resource_server unexpectedly started"
+            exit 1
+          fi
+          grep -q "api.auth=oauth_resource_server is not implemented yet" bruno-oauth-server.log
+
+      - name: Seed bearer auth users and shared project
+        run: uv run python tests/bruno/seed_auth.py
+
+      - name: Start authenticated ai-memory-hub
+        run: |
+          uv run aim serve \
+            --config tests/bruno/config.auth.ci.yaml \
+            --host 127.0.0.1 \
+            --port 8000 \
+            > bruno-auth-server.log 2>&1 &
+          echo "$!" > bruno-auth-server.pid
+
+      - name: Wait for authenticated readiness
+        run: |
+          for i in {1..30}; do
+            if curl --max-time 5 -fsS http://127.0.0.1:8000/ready; then
+              exit 0
+            fi
+            if ! kill -0 "$(cat bruno-auth-server.pid)" 2>/dev/null; then
+              cat bruno-auth-server.log
+              exit 1
+            fi
+            sleep 2
+          done
+          cat bruno-auth-server.log
+          exit 1
+
+      - name: Run Bruno auth/project collection
+        working-directory: tests/bruno/collections/ai-memory-hub-integration
+        run: |
+          mkdir -p ../../reports
+          bru run \
+            --global-env ci \
+            --workspace-path ../.. \
+            --tags auth \
+            --env-var run_id="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-auth" \
+            --reporter-html ../../reports/bruno-auth-project-report.html \
+            --sandbox developer \
+            --noproxy
+
+      - name: Capture server logs
+        if: always()
+        run: |
+          mkdir -p tests/bruno/reports
+          cp bruno-server.log tests/bruno/reports/bruno-server.log || true
+          cp bruno-auth-server.log tests/bruno/reports/bruno-auth-server.log || true
+          cp bruno-oauth-server.log tests/bruno/reports/bruno-oauth-server.log || true
+
+      - name: Upload Bruno report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bruno-integration-report
+          path: tests/bruno/reports
+          if-no-files-found: error
+
+      - name: Stop ai-memory-hub
+        if: always()
+        run: |
+          if [ -f bruno-server.pid ]; then
+            kill "$(cat bruno-server.pid)" 2>/dev/null || true
+          fi
+          if [ -f bruno-auth-server.pid ]; then
+            kill "$(cat bruno-auth-server.pid)" 2>/dev/null || true
+          fi

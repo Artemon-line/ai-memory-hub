@@ -1,0 +1,36 @@
+meta {
+  name: Health and readiness
+  type: http
+  seq: 1
+  tags: [
+    smoke
+    health
+  ]
+}
+
+get {
+  url: {{base_url}}/health
+  body: none
+  auth: none
+}
+
+script:pre-request {
+  const configured = bru.getVar("run_id");
+  if (!configured || configured === "local" || configured === "ci") {
+    const generated = `${configured || "local"}-${Date.now()}`;
+    bru.setVar("run_id", generated);
+  }
+}
+
+tests {
+  test("health returns ok", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.status).to.equal("ok");
+    expect(res.body.health).to.be.an("object");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 10000
+}

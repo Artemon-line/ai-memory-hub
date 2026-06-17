@@ -518,6 +518,11 @@ Container CI verifies Hadolint, image build, packaged `aim serve` startup,
 `/ready`, MCP initialize at `/mcp/`, arbitrary non-root UID behavior, and
 writable runtime paths.
 
+A Bruno integration layer provides black-box local and CI smoke tests for the
+live API/MCP surface against a running server and configured metadata/vector
+stores. See the
+[Bruno integration test plan](bruno_integration_test_plan.md).
+
 ## Project Structure
 
 ```text
@@ -545,6 +550,7 @@ tests/          unit, integration, and end-to-end tests
 - [Agent integration](agents.md)
 - [Roadmap](roadmap.md)
 - [Release, container, and docs publishing plan](release_container_docs_plan.md)
+- [Bruno integration test plan](bruno_integration_test_plan.md)
 - [Observability, logging, and telemetry plan](observability_logging_telemetry_plan.md)
 - [Recurring codebase cleanup plan](recurring_codebase_cleanup_plan.md)
 - [Bearer/API-key auth plan](bearer_api_key_auth_plan.md)

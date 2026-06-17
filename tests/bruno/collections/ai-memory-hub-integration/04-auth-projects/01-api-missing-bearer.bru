@@ -1,0 +1,39 @@
+meta {
+  name: API missing bearer is rejected
+  type: http
+  seq: 30
+  tags: [
+    auth
+    owner
+  ]
+}
+
+post {
+  url: {{base_url}}/memory/search
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "query": "Bruno auth missing bearer"
+  }
+}
+
+tests {
+  const { responseHeader } = require("./scripts/mcp.js");
+
+  test("api rejects missing bearer token", function() {
+    expect(res.status).to.equal(401);
+    expect(responseHeader(res.headers, "www-authenticate")).to.contain("Bearer");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 15000
+}

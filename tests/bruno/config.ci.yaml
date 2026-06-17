@@ -1,0 +1,50 @@
+providers:
+  embeddings: local
+  embedding_model: local-hash
+  embedding_dimension: 32
+  metadata_db: postgres
+  metadata_dsn: postgresql://test:test@127.0.0.1:5432/memory
+  vector_db: pgvector
+  agent: mvp
+
+storage:
+  dry_run: false
+  vector:
+    allow_fallback: false
+
+retrieval:
+  vector_score_threshold: 7.5
+  keyword_enabled: true
+  keyword_candidate_limit: 50
+  keyword_weight: 0.25
+  metadata_weight: 0.15
+  candidate_multiplier: 3
+
+chunking:
+  strategy: message
+  max_tokens: 800
+  overlap_tokens: 80
+
+interfaces:
+  api: true
+  mcp: true
+
+paths:
+  data_dir: ./.bruno-ci-data
+  logs_dir: ./.bruno-ci-logs
+
+schema:
+  file: ./memory/schema/conversation.schema.json
+
+api:
+  host: 127.0.0.1
+  port: 8000
+  auth: none
+  api_key: ""
+
+mcp:
+  host: 127.0.0.1
+  port: 8765
+
+ask:
+  max_context_tokens: 2000

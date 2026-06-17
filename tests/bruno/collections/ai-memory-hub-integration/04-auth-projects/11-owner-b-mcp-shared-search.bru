@@ -1,0 +1,59 @@
+meta {
+  name: Owner B MCP search shared project
+  type: http
+  seq: 40
+  tags: [
+    auth
+    project
+    mcp-auth
+  ]
+}
+
+post {
+  url: {{mcp_url}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Accept: application/json, text/event-stream
+  Authorization: Bearer {{owner_b_token}}
+  Mcp-Session-Id: {{owner_b_mcp_session_id}}
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 11,
+    "method": "tools/call",
+    "params": {
+      "name": "memory_search",
+      "arguments": {
+        "query": "saffron-lantern {{run_id}}",
+        "project_id": "{{shared_project_id}}",
+        "top_k": 100,
+        "limit": 100,
+        "source": "bruno-auth",
+        "tags": ["bruno", "shared"]
+      }
+    }
+  }
+}
+
+tests {
+  const { toolPayload } = require("./scripts/mcp.js");
+
+  test("owner b mcp search sees shared project memory", function() {
+    expect(res.status).to.equal(200);
+    const payload = toolPayload(res.body);
+    expect(payload.status).to.equal("ok");
+    const ids = payload.results.map((item) => item.id);
+    expect(ids).to.include(bru.getVar("shared_project_memory_id"));
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 15000
+}

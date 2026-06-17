@@ -1,0 +1,57 @@
+meta {
+  name: Owner B MCP initialize with bearer
+  type: http
+  seq: 39
+  tags: [
+    auth
+    project
+    mcp-auth
+  ]
+}
+
+post {
+  url: {{mcp_url}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Accept: application/json, text/event-stream
+  Authorization: Bearer {{owner_b_token}}
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 10,
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2025-06-18",
+      "capabilities": {},
+      "clientInfo": {
+        "name": "bruno-auth-project",
+        "version": "0.1.0"
+      }
+    }
+  }
+}
+
+tests {
+  const { eventPayload, responseHeader } = require("./scripts/mcp.js");
+
+  test("owner b mcp initialize succeeds with bearer", function() {
+    expect(res.status).to.equal(200);
+    const payload = eventPayload(res.body);
+    expect(payload.result.instructions).to.be.a("string");
+  });
+
+  const sessionId = responseHeader(res.headers, "mcp-session-id");
+  expect(sessionId, "mcp-session-id response header").to.be.a("string");
+  bru.setVar("owner_b_mcp_session_id", sessionId);
+}
+
+settings {
+  encodeUrl: true
+  timeout: 15000
+}

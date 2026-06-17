@@ -1,0 +1,53 @@
+meta {
+  name: Owner A shared project insert
+  type: http
+  seq: 35
+  tags: [
+    auth
+    project
+  ]
+}
+
+post {
+  url: {{base_url}}/memory/insert
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{owner_a_token}}
+}
+
+body:json {
+  {
+    "project_id": "{{shared_project_id}}",
+    "source": "bruno-auth",
+    "timestamp": "2026-06-17T00:00:00Z",
+    "messages": [
+      {
+        "role": "user",
+        "text": "Bruno shared project memory {{run_id}} says the shared codename is saffron-lantern."
+      }
+    ],
+    "metadata": {
+      "summary": "Bruno shared project auth memory {{run_id}}.",
+      "tags": ["bruno", "auth", "shared"],
+      "run_id": "{{run_id}}"
+    }
+  }
+}
+
+tests {
+  test("owner a inserts into shared project", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.status).to.equal("ok");
+    expect(res.body.id).to.be.a("string");
+    bru.setVar("shared_project_memory_id", res.body.id);
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 15000
+}
