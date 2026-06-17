@@ -45,6 +45,10 @@ class MVPIngestionAgent(BaseIngestionAgent):
         result_mode: str = "chunks",
         owner_id: str | None = None,
         project_id: str | None = None,
+        source: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        tags: list[str] | tuple[str, ...] | None = None,
     ) -> Dict[str, Any]:
         return mvp_ingestion.search(
             query=query,
@@ -52,6 +56,10 @@ class MVPIngestionAgent(BaseIngestionAgent):
             result_mode=result_mode,
             owner_id=owner_id,
             project_id=project_id,
+            source=source,
+            date_from=date_from,
+            date_to=date_to,
+            tags=tags,
         )
 
     async def retrieve(
@@ -68,6 +76,10 @@ class MVPIngestionAgent(BaseIngestionAgent):
         result_mode: str = "chunks",
         owner_id: str | None = None,
         project_id: str | None = None,
+        source: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        tags: list[str] | tuple[str, ...] | None = None,
     ) -> Dict[str, Any]:
         return mvp_ingestion.ask(
             question=question,
@@ -76,6 +88,10 @@ class MVPIngestionAgent(BaseIngestionAgent):
             result_mode=result_mode,
             owner_id=owner_id,
             project_id=project_id,
+            source=source,
+            date_from=date_from,
+            date_to=date_to,
+            tags=tags,
         )
 
     async def health(self) -> Dict[str, Any]:
@@ -89,6 +105,14 @@ class MVPIngestionAgent(BaseIngestionAgent):
         include_superseded: bool = False,
         owner_id: str | None = None,
         project_id: str | None = None,
+        source: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        confidence: str | None = None,
+        status: str | None = None,
+        source_quality: str | None = None,
+        freshness_from: str | None = None,
+        freshness_to: str | None = None,
     ) -> Dict[str, Any]:
         return mvp_ingestion.fact_search(
             subject=subject,
@@ -96,6 +120,14 @@ class MVPIngestionAgent(BaseIngestionAgent):
             include_superseded=include_superseded,
             owner_id=owner_id,
             project_id=project_id,
+            source=source,
+            date_from=date_from,
+            date_to=date_to,
+            confidence=confidence,
+            status=status,
+            source_quality=source_quality,
+            freshness_from=freshness_from,
+            freshness_to=freshness_to,
         )
 
     async def profile_get(
@@ -104,9 +136,29 @@ class MVPIngestionAgent(BaseIngestionAgent):
         subject: str = "user",
         owner_id: str | None = None,
         project_id: str | None = None,
+        source: str | None = None,
+        predicate: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        confidence: str | None = None,
+        status: str | None = None,
+        source_quality: str | None = None,
+        freshness_from: str | None = None,
+        freshness_to: str | None = None,
     ) -> Dict[str, Any]:
         return mvp_ingestion.profile_get(
-            subject=subject, owner_id=owner_id, project_id=project_id
+            subject=subject,
+            owner_id=owner_id,
+            project_id=project_id,
+            source=source,
+            predicate=predicate,
+            date_from=date_from,
+            date_to=date_to,
+            confidence=confidence,
+            status=status,
+            source_quality=source_quality,
+            freshness_from=freshness_from,
+            freshness_to=freshness_to,
         )
 
     async def fact_supersede(

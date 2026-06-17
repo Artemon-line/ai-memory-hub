@@ -106,6 +106,77 @@ class RuntimeDependencies:
     fact_extractor: Any | None = None
 
 
+@dataclass(frozen=True)
+class ConversationFilters:
+    source: str | None = None
+    date_from: str | None = None
+    date_to: str | None = None
+    tags: tuple[str, ...] = ()
+
+    @classmethod
+    def from_options(
+        cls,
+        *,
+        source: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        tags: Sequence[str] | None = None,
+    ) -> "ConversationFilters":
+        return cls(
+            source=str(source) if source else None,
+            date_from=str(date_from) if date_from else None,
+            date_to=str(date_to) if date_to else None,
+            tags=tuple(str(tag) for tag in tags or () if str(tag)),
+        )
+
+    @property
+    def has_filters(self) -> bool:
+        return bool(self.source or self.date_from or self.date_to or self.tags)
+
+
+@dataclass(frozen=True)
+class FactFilters:
+    source: str | None = None
+    date_from: str | None = None
+    date_to: str | None = None
+    confidence: str | None = None
+    status: str = "active"
+    source_quality: str | None = None
+    freshness_from: str | None = None
+    freshness_to: str | None = None
+
+    @classmethod
+    def from_options(
+        cls,
+        *,
+        source: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        confidence: str | None = None,
+        status: str | None = None,
+        source_quality: str | None = None,
+        freshness_from: str | None = None,
+        freshness_to: str | None = None,
+    ) -> "FactFilters":
+        normalized_status = str(status or "active").lower()
+        if normalized_status not in {"active", "superseded", "all"}:
+            raise ValueError("status must be one of: active, superseded, all")
+        return cls(
+            source=str(source) if source else None,
+            date_from=str(date_from) if date_from else None,
+            date_to=str(date_to) if date_to else None,
+            confidence=str(confidence) if confidence else None,
+            status=normalized_status,
+            source_quality=str(source_quality) if source_quality else None,
+            freshness_from=str(freshness_from) if freshness_from else None,
+            freshness_to=str(freshness_to) if freshness_to else None,
+        )
+
+    @property
+    def include_superseded(self) -> bool:
+        return self.status in {"superseded", "all"}
+
+
 _RUNTIME: RuntimeDependencies | None = None
 _SEARCH_CANDIDATE_MULTIPLIER = 3
 _CONVERSATION_GROUP_SCORE_WINDOW = 0.25
@@ -682,6 +753,28 @@ def _conversation_allowed(
     )
 
 
+def _conversation_matches_filters(conversation: Any, filters: ConversationFilters) -> bool:
+    if not isinstance(conversation, dict):
+        return False
+    if filters.source and str(conversation.get("source", "")) != filters.source:
+        return False
+    if not _datetime_in_range(
+        str(conversation.get("timestamp", "")),
+        date_from=filters.date_from,
+        date_to=filters.date_to,
+        field_name="conversation.timestamp",
+    ):
+        return False
+    if not filters.tags:
+        return True
+    metadata = conversation.get("metadata", {})
+    conversation_tags = metadata.get("tags", []) if isinstance(metadata, dict) else []
+    if not isinstance(conversation_tags, list):
+        return False
+    tag_set = {str(tag) for tag in conversation_tags if isinstance(tag, str)}
+    return set(filters.tags).issubset(tag_set)
+
+
 def _fact_owner_matches(fact: Any, owner_id: str | None) -> bool:
     if owner_id is None:
         return True
@@ -943,6 +1036,43 @@ def _validate_datetime_string(value: Any, *, field_name: str) -> str:
     return value
 
 
+def _parse_filter_datetime(value: str | None, *, field_name: str) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError(f"{field_name} must be an ISO-8601 datetime") from exc
+    return _aware_utc(parsed)
+
+
+def _aware_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def _datetime_in_range(
+    value: str | None,
+    *,
+    date_from: str | None,
+    date_to: str | None,
+    field_name: str,
+) -> bool:
+    lower = _parse_filter_datetime(date_from, field_name="date_from")
+    upper = _parse_filter_datetime(date_to, field_name="date_to")
+    if lower is None and upper is None:
+        return True
+    if not value:
+        return False
+    parsed = _parse_filter_datetime(value, field_name=field_name)
+    if parsed is None:
+        return False
+    if lower is not None and parsed < lower:
+        return False
+    return not (upper is not None and parsed > upper)
+
+
 def _normalize_text(text: Any, *, index: int) -> str:
     if not isinstance(text, str):
         raise ValueError(f"messages[{index}].text must be a string")
@@ -1141,8 +1271,15 @@ def search(
     result_mode: str = "chunks",
     owner_id: str | None = None,
     project_id: str | None = None,
+    source: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    tags: Sequence[str] | None = None,
 ) -> dict[str, Any]:
     _validate_result_mode(result_mode)
+    filters = ConversationFilters.from_options(
+        source=source, date_from=date_from, date_to=date_to, tags=tags
+    )
     runtime = _runtime()
     effective_project_id = _resolve_project(
         owner_id=owner_id, project_id=project_id, required_role=PROJECT_ROLE_READER
@@ -1151,7 +1288,7 @@ def search(
     candidate_multiplier = max(
         1, int(getattr(runtime, "retrieval_candidate_multiplier", _SEARCH_CANDIDATE_MULTIPLIER))
     )
-    candidate_k = max(top_k, min(top_k * candidate_multiplier, 100))
+    candidate_k = 100 if filters.has_filters else max(top_k, min(top_k * candidate_multiplier, 100))
     matches = runtime.vector_store.search(query_vector, top_k=candidate_k)
 
     ids = [str(match["memory_id"]) for match in matches]
@@ -1162,6 +1299,7 @@ def search(
         limit=runtime.retrieval_keyword_candidate_limit,
         owner_id=owner_id,
         project_id=effective_project_id,
+        filters=filters,
     )
     ids.extend(str(conversation["id"]) for conversation in keyword_conversations if "id" in conversation)
     ids = _unique_strings(ids)
@@ -1177,6 +1315,8 @@ def search(
         score = float(match["score"])
         conversation = conversations.get(memory_id)
         if not _conversation_allowed(conversation, owner_id, effective_project_id):
+            continue
+        if not _conversation_matches_filters(conversation, filters):
             continue
         row = {
             "id": memory_id,
@@ -1201,6 +1341,8 @@ def search(
         if not memory_id:
             continue
         if not _conversation_allowed(conversation, owner_id, effective_project_id):
+            continue
+        if not _conversation_matches_filters(conversation, filters):
             continue
         row = _keyword_result_row(
             conversation,
@@ -1314,9 +1456,11 @@ def _keyword_conversations(
     limit: int,
     owner_id: str | None = None,
     project_id: str | None = None,
+    filters: ConversationFilters | None = None,
 ) -> list[dict[str, Any]]:
     if not enabled:
         return []
+    filters = filters or ConversationFilters()
     if hasattr(metadata_store, "search_text"):
         try:
             candidates = metadata_store.search_text(query, limit=limit, project_id=project_id)
@@ -1326,6 +1470,7 @@ def _keyword_conversations(
             item
             for item in candidates
             if isinstance(item, dict) and _conversation_allowed(item, owner_id, project_id)
+            and _conversation_matches_filters(item, filters)
         ]
     rows = getattr(metadata_store, "by_id", None) or getattr(metadata_store, "rows", None)
     if not isinstance(rows, dict):
@@ -1338,6 +1483,8 @@ def _keyword_conversations(
         if not isinstance(conversation, dict):
             continue
         if not _conversation_allowed(conversation, owner_id, project_id):
+            continue
+        if not _conversation_matches_filters(conversation, filters):
             continue
         text = _conversation_search_text(conversation).lower()
         if all(token in text for token in tokens):
@@ -1491,8 +1638,15 @@ def ask(
     result_mode: str = "chunks",
     owner_id: str | None = None,
     project_id: str | None = None,
+    source: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    tags: Sequence[str] | None = None,
 ) -> dict[str, Any]:
     _validate_result_mode(result_mode)
+    filters = ConversationFilters.from_options(
+        source=source, date_from=date_from, date_to=date_to, tags=tags
+    )
     effective_project_id = _resolve_project(
         owner_id=owner_id, project_id=project_id, required_role=PROJECT_ROLE_READER
     )
@@ -1502,6 +1656,7 @@ def ask(
         result_mode=result_mode,
         owner_id=owner_id,
         project_id=effective_project_id,
+        filters=filters,
     )
     if fact_answer is not None:
         return fact_answer
@@ -1512,6 +1667,7 @@ def ask(
         result_mode=result_mode,
         owner_id=owner_id,
         project_id=effective_project_id,
+        filters=filters,
     )
     matches = search_result.get("results", [])
     if not matches:
@@ -1578,7 +1734,9 @@ def _search_for_ask(
     result_mode: str,
     owner_id: str | None = None,
     project_id: str | None = None,
+    filters: ConversationFilters | None = None,
 ) -> dict[str, Any]:
+    filters = filters or ConversationFilters()
     try:
         return search(
             query=question,
@@ -1586,6 +1744,10 @@ def _search_for_ask(
             result_mode=result_mode,
             owner_id=owner_id,
             project_id=project_id,
+            source=filters.source,
+            date_from=filters.date_from,
+            date_to=filters.date_to,
+            tags=filters.tags,
         )
     except TypeError:
         if result_mode != "chunks":
@@ -2054,7 +2216,9 @@ def _answer_from_facts(
     result_mode: str,
     owner_id: str | None = None,
     project_id: str | None = None,
+    filters: ConversationFilters | None = None,
 ) -> dict[str, Any] | None:
+    filters = filters or ConversationFilters()
     query = _fact_query(question)
     if query is None:
         return None
@@ -2063,6 +2227,7 @@ def _answer_from_facts(
         predicate=query.get("predicate"),
         owner_id=owner_id,
         project_id=project_id,
+        conversation_filters=filters,
     )
     facts = _filter_facts_for_question(facts, question, query)
     active = [fact for fact in facts if not fact.get("superseded_by") and not fact.get("deleted_at")]
@@ -2092,6 +2257,7 @@ def _answer_from_facts(
             result_mode=result_mode,
             owner_id=owner_id,
             project_id=project_id,
+            filters=filters,
         )
         results = search_result.get("results", [])
         if isinstance(results, list):
@@ -2217,19 +2383,24 @@ def _search_facts(
     predicate: str | None = None,
     owner_id: str | None = None,
     project_id: str | None = None,
+    conversation_filters: ConversationFilters | None = None,
+    fact_filters: FactFilters | None = None,
 ) -> list[dict[str, Any]]:
     store = _runtime().metadata_store
+    conversation_filters = conversation_filters or ConversationFilters()
+    fact_filters = fact_filters or FactFilters()
     if hasattr(store, "search_facts"):
         facts = store.search_facts(
             subject=subject,
             predicate=predicate,
-            include_superseded=False,
+            include_superseded=fact_filters.include_superseded,
             project_id=project_id,
         )
         return [
             fact
             for fact in facts
             if _fact_allowed(fact, owner_id, project_id)
+            and _fact_matches_filters(fact, conversation_filters, fact_filters)
         ]
     facts = getattr(store, "_facts", [])
     if not isinstance(facts, list):
@@ -2241,9 +2412,52 @@ def _search_facts(
         and (subject is None or str(fact.get("subject")) == subject)
         and (predicate is None or str(fact.get("predicate")) == predicate)
         and _fact_allowed(fact, owner_id, project_id)
-        and not fact.get("superseded_by")
+        and _fact_matches_filters(fact, conversation_filters, fact_filters)
         and not fact.get("deleted_at")
     ]
+
+
+def _fact_matches_filters(
+    fact: dict[str, Any],
+    conversation_filters: ConversationFilters,
+    fact_filters: FactFilters,
+) -> bool:
+    if fact_filters.status == "active" and fact.get("superseded_by"):
+        return False
+    if fact_filters.status == "superseded" and not fact.get("superseded_by"):
+        return False
+    if fact_filters.confidence and str(fact.get("confidence")) != fact_filters.confidence:
+        return False
+    if fact_filters.source_quality and str(fact.get("source_quality")) != fact_filters.source_quality:
+        return False
+    if not _datetime_in_range(
+        str(fact.get("created_at", "")),
+        date_from=fact_filters.date_from,
+        date_to=fact_filters.date_to,
+        field_name="fact.created_at",
+    ):
+        return False
+    freshness = fact.get("last_confirmed_at") or fact.get("updated_at") or fact.get("created_at")
+    if not _datetime_in_range(
+        str(freshness or ""),
+        date_from=fact_filters.freshness_from,
+        date_to=fact_filters.freshness_to,
+        field_name="fact.last_confirmed_at",
+    ):
+        return False
+    if conversation_filters.has_filters or fact_filters.source:
+        source_filters = conversation_filters
+        if fact_filters.source and fact_filters.source != conversation_filters.source:
+            source_filters = ConversationFilters.from_options(
+                source=fact_filters.source,
+                date_from=conversation_filters.date_from,
+                date_to=conversation_filters.date_to,
+                tags=conversation_filters.tags,
+            )
+        conversation = _runtime().metadata_store.get(str(fact.get("source_conversation_id", "")))
+        if not _conversation_matches_filters(conversation, source_filters):
+            return False
+    return True
 
 
 def fact_search(
@@ -2253,7 +2467,25 @@ def fact_search(
     include_superseded: bool = False,
     owner_id: str | None = None,
     project_id: str | None = None,
+    source: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    confidence: str | None = None,
+    status: str | None = None,
+    source_quality: str | None = None,
+    freshness_from: str | None = None,
+    freshness_to: str | None = None,
 ) -> dict[str, Any]:
+    fact_filters = FactFilters.from_options(
+        source=source,
+        date_from=date_from,
+        date_to=date_to,
+        confidence=confidence,
+        status=status or ("all" if include_superseded else "active"),
+        source_quality=source_quality,
+        freshness_from=freshness_from,
+        freshness_to=freshness_to,
+    )
     effective_project_id = _resolve_project(
         owner_id=owner_id, project_id=project_id, required_role=PROJECT_ROLE_READER
     )
@@ -2262,13 +2494,14 @@ def fact_search(
         facts = store.search_facts(
             subject=subject,
             predicate=predicate,
-            include_superseded=include_superseded,
+            include_superseded=fact_filters.include_superseded,
             project_id=effective_project_id,
         )
         facts = [
             fact
             for fact in facts
             if _fact_allowed(fact, owner_id, effective_project_id)
+            and _fact_matches_filters(fact, ConversationFilters(), fact_filters)
         ]
     else:
         facts = getattr(store, "_facts", [])
@@ -2280,19 +2513,44 @@ def fact_search(
             and (subject is None or str(fact.get("subject")) == subject)
             and (predicate is None or str(fact.get("predicate")) == predicate)
             and _fact_allowed(fact, owner_id, effective_project_id)
-            and (include_superseded or not fact.get("superseded_by"))
+            and _fact_matches_filters(fact, ConversationFilters(), fact_filters)
             and not fact.get("deleted_at")
         ]
     return {"status": "ok", "results": [_public_fact(fact) for fact in facts]}
 
 
 def profile_get(
-    subject: str = "user", *, owner_id: str | None = None, project_id: str | None = None
+    subject: str = "user",
+    *,
+    owner_id: str | None = None,
+    project_id: str | None = None,
+    source: str | None = None,
+    predicate: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    confidence: str | None = None,
+    status: str | None = None,
+    source_quality: str | None = None,
+    freshness_from: str | None = None,
+    freshness_to: str | None = None,
 ) -> dict[str, Any]:
     return {
         "status": "ok",
         "subject": subject,
-        "facts": fact_search(subject=subject, owner_id=owner_id, project_id=project_id)["results"],
+        "facts": fact_search(
+            subject=subject,
+            predicate=predicate,
+            owner_id=owner_id,
+            project_id=project_id,
+            source=source,
+            date_from=date_from,
+            date_to=date_to,
+            confidence=confidence,
+            status=status,
+            source_quality=source_quality,
+            freshness_from=freshness_from,
+            freshness_to=freshness_to,
+        )["results"],
     }
 
 

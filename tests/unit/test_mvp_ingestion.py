@@ -441,6 +441,35 @@ def test_search_metadata_rerank_prefers_matching_tags() -> None:
     assert "_ranking_score" not in search_result["results"][0]
 
 
+def test_ask_applies_conversation_filters_before_answering() -> None:
+    _configure_stubs(retrieval_vector_score_threshold=0.0)
+    codex = _valid_conversation()
+    codex["source"] = "codex"
+    codex["messages"] = [{"role": "user", "text": "The release codename is Amber."}]
+    codex["metadata"]["tags"] = ["release"]
+    opencode = _valid_conversation()
+    opencode["id"] = "22222222-2222-4222-8222-222222222222"
+    opencode["source"] = "opencode"
+    opencode["timestamp"] = "2026-01-02T00:00:00Z"
+    opencode["messages"] = [{"role": "user", "text": "The release codename is Cobalt."}]
+    opencode["metadata"]["tags"] = ["release", "shared"]
+    mvp_ingestion.ingest_messages(codex)
+    mvp_ingestion.ingest_messages(opencode)
+
+    result = mvp_ingestion.ask(
+        "What is the release codename?",
+        top_k=5,
+        source="opencode",
+        date_from="2026-01-02T00:00:00Z",
+        tags=["shared"],
+    )
+
+    assert result["status"] == "ok"
+    assert [row["id"] for row in result["results"]] == [opencode["id"]]
+    assert "Cobalt" in result["answer"]
+    assert "Amber" not in result["answer"]
+
+
 def test_group_conversation_results_keeps_nearby_chunks_together() -> None:
     rows = [
         {"id": "conversation-a", "score": 0.01, "chunk_index": 0, "text": "a0"},
@@ -655,6 +684,49 @@ def test_fact_correction_supersedes_old_fact() -> None:
     assert result["facts"][0]["source_quality"] == "corrected_by_user"
     assert result["facts"][0]["confidence_reason"] == "Extracted from a direct user correction."
     assert result["evidence"][0]["source_quality"] == "corrected_by_user"
+
+
+def test_fact_and_profile_filters_cover_status_quality_and_freshness() -> None:
+    _configure_stubs()
+    first = _valid_conversation()
+    first["id"] = "11111111-1111-4111-8111-111111111111"
+    first["messages"] = [
+        {"role": "user", "text": "I own a Gibson Special with P90 pickups, cherry."}
+    ]
+    second = _valid_conversation()
+    second["id"] = "22222222-2222-4222-8222-222222222222"
+    second["timestamp"] = "2026-01-02T00:00:00Z"
+    second["messages"] = [
+        {"role": "user", "text": "Actually, my Gibson Special is TV yellow, not cherry."}
+    ]
+    third = _valid_conversation()
+    third["id"] = "33333333-3333-4333-8333-333333333333"
+    third["source"] = "assistant"
+    third["timestamp"] = "2026-01-03T00:00:00Z"
+    third["messages"] = [{"role": "assistant", "text": "The creator is Ada Lovelace."}]
+    mvp_ingestion.ingest_messages(first)
+    mvp_ingestion.ingest_messages(second)
+    mvp_ingestion.ingest_messages(third)
+
+    superseded = mvp_ingestion.fact_search(
+        subject="user", predicate="owns_guitar", status="superseded"
+    )
+    profile = mvp_ingestion.profile_get(
+        "user",
+        predicate="owns_guitar",
+        source_quality="corrected_by_user",
+        freshness_from="2026-01-02T00:00:00Z",
+    )
+    assistant_facts = mvp_ingestion.fact_search(
+        source="assistant",
+        source_quality="assistant_statement",
+        date_from="2026-01-03T00:00:00Z",
+    )
+
+    assert len(superseded["results"]) == 1
+    assert superseded["results"][0]["superseded_by"]
+    assert [fact["object"] for fact in profile["facts"]] == ["Gibson Special is TV yellow"]
+    assert assistant_facts["results"][0]["predicate"] == "creator"
 
 
 def test_conflicting_active_facts_return_conflict_basis() -> None:

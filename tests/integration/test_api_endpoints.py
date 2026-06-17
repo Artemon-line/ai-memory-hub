@@ -328,6 +328,29 @@ def test_memory_ask() -> None:
     assert body["citations"][0]["text"] == body["results"][0]["text"]
 
 
+def test_memory_ask_accepts_conversation_filters() -> None:
+    client = _client()
+    first = _conversation()
+    second = _conversation()
+    second["id"] = "22222222-2222-4222-8222-222222222222"
+    second["source"] = "opencode"
+    second["timestamp"] = "2026-01-02T00:00:00Z"
+    second["messages"] = [{"role": "user", "text": "hello from opencode"}]
+    second["metadata"] = {"imported_at": "2026-01-02T00:00:00Z", "tags": ["shared"]}
+    client.post("/memory/insert", json=first)
+    client.post("/memory/insert", json=second)
+
+    ask = client.post(
+        "/memory/ask",
+        json={"question": "hello", "top_k": 5, "source": "opencode", "tags": ["shared"]},
+    )
+
+    assert ask.status_code == 200
+    body = ask.json()
+    assert body["status"] == "ok"
+    assert [row["id"] for row in body["results"]] == [second["id"]]
+
+
 def test_memory_ask_accepts_context_budget() -> None:
     client = _client()
     payload = _conversation()

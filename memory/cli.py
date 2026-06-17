@@ -15,7 +15,6 @@ from memory.config import HubConfig, load_config
 from memory.importers import get_importer
 from memory.ingestion import mvp_ingestion
 from memory.ingestion.tokenizer import tokenizer_diagnostics
-from memory.interfaces.mcp_server import _apply_search_filters
 
 EXIT_OK = 0
 EXIT_COMMAND_FAILURE = 1
@@ -100,6 +99,10 @@ def build_parser() -> argparse.ArgumentParser:
     ask.add_argument("question", help="Question to answer.")
     ask.add_argument("--top-k", type=int, default=5, help="Number of memories to retrieve.")
     ask.add_argument("--max-context-tokens", type=int, default=None, help="Optional context token budget.")
+    ask.add_argument("--source", default=None, help="Filter context by conversation source.")
+    ask.add_argument("--date-from", default=None, help="Filter context from this ISO-8601 timestamp.")
+    ask.add_argument("--date-to", default=None, help="Filter context through this ISO-8601 timestamp.")
+    ask.add_argument("--tags", action="append", default=None, help="Require a tag. Repeat for multiple tags.")
     ask.add_argument(
         "--result-mode",
         choices=["chunks", "compact", "conversations"],
@@ -126,10 +129,12 @@ def build_parser() -> argparse.ArgumentParser:
     fact_search.add_argument("--subject", default=None, help="Filter by fact subject.")
     fact_search.add_argument("--predicate", default=None, help="Filter by fact predicate.")
     fact_search.add_argument("--include-superseded", action="store_true", help="Include superseded facts.")
+    _add_fact_filter_options(fact_search, include_predicate=False)
 
     profile_get = subparsers.add_parser("profile-get", help="Review active profile facts for a subject.")
     _add_common_options(profile_get)
     profile_get.add_argument("--subject", default="user", help="Profile subject to review.")
+    _add_fact_filter_options(profile_get, include_predicate=True)
 
     fact_supersede = subparsers.add_parser("fact-supersede", help="Mark a fact as superseded.")
     _add_common_options(fact_supersede)
@@ -206,6 +211,19 @@ def _add_common_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
     parser.add_argument("--quiet", action="store_true", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
     parser.add_argument("--verbose", action="store_true", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
+
+
+def _add_fact_filter_options(parser: argparse.ArgumentParser, *, include_predicate: bool) -> None:
+    if include_predicate:
+        parser.add_argument("--predicate", default=None, help="Filter by fact predicate.")
+    parser.add_argument("--source", default=None, help="Filter by source conversation.")
+    parser.add_argument("--date-from", default=None, help="Filter facts created from this ISO-8601 timestamp.")
+    parser.add_argument("--date-to", default=None, help="Filter facts created through this ISO-8601 timestamp.")
+    parser.add_argument("--confidence", default=None, help="Filter by fact confidence.")
+    parser.add_argument("--status", choices=["active", "superseded", "all"], default=None, help="Filter by fact status.")
+    parser.add_argument("--source-quality", default=None, help="Filter by source quality.")
+    parser.add_argument("--freshness-from", default=None, help="Filter facts fresh from this ISO-8601 timestamp.")
+    parser.add_argument("--freshness-to", default=None, help="Filter facts fresh through this ISO-8601 timestamp.")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -321,11 +339,17 @@ def _import_conversations(args: argparse.Namespace) -> int:
 def _search(args: argparse.Namespace) -> int:
     _validate_top_k(args.top_k)
     _configure_memory_runtime(args.config)
-    retrieval_k = 100 if _has_search_filters(args) else args.top_k
     result = redact_content_hashes(
-        mvp_ingestion.search(args.query, top_k=retrieval_k, result_mode=args.result_mode)
+        mvp_ingestion.search(
+            args.query,
+            top_k=args.top_k,
+            result_mode=args.result_mode,
+            source=args.source,
+            date_from=args.date_from,
+            date_to=args.date_to,
+            tags=args.tags,
+        )
     )
-    result["results"] = _filter_search_results(result.get("results", []), args)[: args.top_k]
     _emit_result(args, result, text_formatter=_format_search_text)
     return EXIT_OK
 
@@ -353,6 +377,10 @@ def _ask(args: argparse.Namespace) -> int:
             top_k=args.top_k,
             max_context_tokens=args.max_context_tokens,
             result_mode=args.result_mode,
+            source=args.source,
+            date_from=args.date_from,
+            date_to=args.date_to,
+            tags=args.tags,
         )
     )
     _emit_result(args, result, text_formatter=_format_ask_text)
@@ -421,6 +449,14 @@ def _fact_search(args: argparse.Namespace) -> int:
         subject=args.subject,
         predicate=args.predicate,
         include_superseded=args.include_superseded,
+        source=args.source,
+        date_from=args.date_from,
+        date_to=args.date_to,
+        confidence=args.confidence,
+        status=args.status,
+        source_quality=args.source_quality,
+        freshness_from=args.freshness_from,
+        freshness_to=args.freshness_to,
     )
     _emit_result(args, redact_content_hashes(result), text_formatter=_format_fact_search_text)
     return EXIT_OK
@@ -428,7 +464,18 @@ def _fact_search(args: argparse.Namespace) -> int:
 
 def _profile_get(args: argparse.Namespace) -> int:
     _configure_memory_runtime(args.config)
-    result = mvp_ingestion.profile_get(subject=args.subject)
+    result = mvp_ingestion.profile_get(
+        subject=args.subject,
+        predicate=args.predicate,
+        source=args.source,
+        date_from=args.date_from,
+        date_to=args.date_to,
+        confidence=args.confidence,
+        status=args.status,
+        source_quality=args.source_quality,
+        freshness_from=args.freshness_from,
+        freshness_to=args.freshness_to,
+    )
     _emit_result(args, redact_content_hashes(result), text_formatter=_format_profile_text)
     return EXIT_OK
 
@@ -603,25 +650,6 @@ def _read_text(path: str) -> str:
 def _validate_top_k(value: int) -> None:
     if value < 1 or value > 100:
         raise ValueError("top_k must be an integer between 1 and 100")
-
-
-def _has_search_filters(args: argparse.Namespace) -> bool:
-    return bool(args.source or args.date_from or args.date_to or args.tags)
-
-
-def _filter_search_results(rows: Any, args: argparse.Namespace) -> list[dict[str, Any]]:
-    if not isinstance(rows, list):
-        return []
-    typed_rows = [row for row in rows if isinstance(row, dict)]
-    if not _has_search_filters(args):
-        return typed_rows
-    return _apply_search_filters(
-        typed_rows,
-        source=args.source,
-        date_from=args.date_from,
-        date_to=args.date_to,
-        tags=args.tags,
-    )
 
 
 def _emit_result(

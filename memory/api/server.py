@@ -19,6 +19,10 @@ class SearchRequest(BaseModel):
     top_k: int = Field(default=5, ge=1, le=100)
     result_mode: str = "chunks"
     project_id: str | None = None
+    source: str | None = None
+    date_from: str | None = None
+    date_to: str | None = None
+    tags: list[str] | None = None
 
 
 class RetrieveRequest(BaseModel):
@@ -32,6 +36,10 @@ class AskRequest(BaseModel):
     max_context_tokens: int | None = Field(default=None, ge=1)
     result_mode: str = "chunks"
     project_id: str | None = None
+    source: str | None = None
+    date_from: str | None = None
+    date_to: str | None = None
+    tags: list[str] | None = None
 
 
 class FactSearchRequest(BaseModel):
@@ -39,11 +47,28 @@ class FactSearchRequest(BaseModel):
     predicate: str | None = None
     include_superseded: bool = False
     project_id: str | None = None
+    source: str | None = None
+    date_from: str | None = None
+    date_to: str | None = None
+    confidence: str | None = None
+    status: str | None = None
+    source_quality: str | None = None
+    freshness_from: str | None = None
+    freshness_to: str | None = None
 
 
 class ProfileGetRequest(BaseModel):
     subject: str = "user"
     project_id: str | None = None
+    source: str | None = None
+    predicate: str | None = None
+    date_from: str | None = None
+    date_to: str | None = None
+    confidence: str | None = None
+    status: str | None = None
+    source_quality: str | None = None
+    freshness_from: str | None = None
+    freshness_to: str | None = None
 
 
 class FactSupersedeRequest(BaseModel):
@@ -111,10 +136,16 @@ def _register_api_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
                     result_mode=payload.result_mode,
                     owner_id=owner_id(request),
                     project_id=payload.project_id,
+                    source=payload.source,
+                    date_from=payload.date_from,
+                    date_to=payload.date_to,
+                    tags=payload.tags,
                 )
             )
         except PermissionError as exc:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     app.post("/memory/search")(memory_search)
 
@@ -141,10 +172,16 @@ def _register_api_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
                     result_mode=payload.result_mode,
                     owner_id=owner_id(request),
                     project_id=payload.project_id,
+                    source=payload.source,
+                    date_from=payload.date_from,
+                    date_to=payload.date_to,
+                    tags=payload.tags,
                 )
             )
         except PermissionError as exc:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     app.post("/memory/ask")(memory_ask)
 
@@ -159,10 +196,20 @@ def _register_api_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
                     include_superseded=payload.include_superseded,
                     owner_id=owner_id(request),
                     project_id=payload.project_id,
+                    source=payload.source,
+                    date_from=payload.date_from,
+                    date_to=payload.date_to,
+                    confidence=payload.confidence,
+                    status=payload.status,
+                    source_quality=payload.source_quality,
+                    freshness_from=payload.freshness_from,
+                    freshness_to=payload.freshness_to,
                 )
             )
         except PermissionError as exc:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     app.post("/memory/facts/search")(memory_fact_search)
 
@@ -175,10 +222,21 @@ def _register_api_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
                     subject=payload.subject,
                     owner_id=owner_id(request),
                     project_id=payload.project_id,
+                    source=payload.source,
+                    predicate=payload.predicate,
+                    date_from=payload.date_from,
+                    date_to=payload.date_to,
+                    confidence=payload.confidence,
+                    status=payload.status,
+                    source_quality=payload.source_quality,
+                    freshness_from=payload.freshness_from,
+                    freshness_to=payload.freshness_to,
                 )
             )
         except PermissionError as exc:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     app.post("/memory/profile/get")(memory_profile_get)
 

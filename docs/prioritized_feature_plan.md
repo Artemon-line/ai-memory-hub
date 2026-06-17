@@ -211,10 +211,10 @@ Implementation sequence:
 
 - [x] Document current `memory_search` filters in MCP tool descriptions and
       initialize instructions.
-- [ ] Add filter support to `memory_ask` where it can preserve answer quality.
-- [ ] Add fact/profile filters for source, predicate, date range, confidence,
+- [x] Add filter support to `memory_ask` where it can preserve answer quality.
+- [x] Add fact/profile filters for source, predicate, date range, confidence,
       active/superseded status, and freshness.
-- [ ] Add tests for filtered ask retrieval and fact/profile filter combinations.
+- [x] Add tests for filtered ask retrieval and fact/profile filter combinations.
 
 ## P0: Conversation Summary Metadata And Profile Views
 

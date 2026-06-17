@@ -282,14 +282,16 @@ Source feedback:
 
 Current status:
 
-- Source, date range, and tag filters already exist for `memory_search`.
+- Source, date range, and tag filters exist for `memory_search` and `memory_ask`.
+- Fact/profile review supports source, predicate, date range, confidence,
+  active/superseded/all status, source quality, and freshness filters.
 
 Implementation sequence:
 
 - [x] Document current filters in MCP tool descriptions and initialize instructions.
-- [ ] Add filter support to `memory_ask` where it can preserve answer quality.
-- [ ] Add fact/profile filters for source, predicate, date range, confidence, active/superseded status, and freshness.
-- [ ] Add tests for `memory_ask` filtered retrieval and fact/profile filter combinations.
+- [x] Add filter support to `memory_ask` where it can preserve answer quality.
+- [x] Add fact/profile filters for source, predicate, date range, confidence, active/superseded status, and freshness.
+- [x] Add tests for `memory_ask` filtered retrieval and fact/profile filter combinations.
 
 Acceptance criteria:
 

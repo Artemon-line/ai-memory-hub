@@ -433,6 +433,14 @@ async def test_mcp_tool_handlers_search_pagination_and_filters() -> None:
         for row in filtered_tags["results"]
     )
 
+    filtered_ask = await handlers["memory_ask"](
+        "hello", top_k=10, source="chatgpt", tags=["beta"]
+    )
+    assert filtered_ask["status"] == "ok"
+    assert [row["id"] for row in filtered_ask["results"]] == [
+        "2f39f5cc-6256-4ca9-a9b2-6211bc6e3702"
+    ]
+
     invalid_cursor = await handlers["memory_search"](
         "hello", cursor="not-a-number", limit=1, top_k=10
     )

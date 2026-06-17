@@ -36,6 +36,10 @@ class BaseIngestionAgent(ABC):
         result_mode: str = "chunks",
         owner_id: str | None = None,
         project_id: str | None = None,
+        source: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        tags: list[str] | tuple[str, ...] | None = None,
     ) -> Dict[str, Any]:
         raise NotImplementedError("search is not implemented")
 
@@ -53,6 +57,10 @@ class BaseIngestionAgent(ABC):
         result_mode: str = "chunks",
         owner_id: str | None = None,
         project_id: str | None = None,
+        source: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        tags: list[str] | tuple[str, ...] | None = None,
     ) -> Dict[str, Any]:
         raise NotImplementedError("ask is not implemented")
 
@@ -67,6 +75,14 @@ class BaseIngestionAgent(ABC):
         include_superseded: bool = False,
         owner_id: str | None = None,
         project_id: str | None = None,
+        source: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        confidence: str | None = None,
+        status: str | None = None,
+        source_quality: str | None = None,
+        freshness_from: str | None = None,
+        freshness_to: str | None = None,
     ) -> Dict[str, Any]:
         raise NotImplementedError("fact_search is not implemented")
 
@@ -76,6 +92,15 @@ class BaseIngestionAgent(ABC):
         subject: str = "user",
         owner_id: str | None = None,
         project_id: str | None = None,
+        source: str | None = None,
+        predicate: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        confidence: str | None = None,
+        status: str | None = None,
+        source_quality: str | None = None,
+        freshness_from: str | None = None,
+        freshness_to: str | None = None,
     ) -> Dict[str, Any]:
         raise NotImplementedError("profile_get is not implemented")
 

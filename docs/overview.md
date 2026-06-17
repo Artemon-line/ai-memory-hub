@@ -188,7 +188,8 @@ Fact review helpers:
 
 ```bash
 python -m memory.cli fact-search --subject user --json
-python -m memory.cli profile-get --subject user --json
+python -m memory.cli fact-search --source codex --status superseded --json
+python -m memory.cli profile-get --subject user --predicate owns_guitar --source-quality corrected_by_user --json
 python -m memory.cli fact-supersede <OLD_FACT_ID> <NEW_FACT_ID> --json
 ```
 
@@ -206,9 +207,9 @@ Core tools:
 - `memory_insert(conversation_json)`
 - `memory_search(query, top_k=5, limit, cursor, source, date_from, date_to, tags)`
 - `memory_retrieve(id)`
-- `memory_ask(question, top_k=5, max_context_tokens=None, result_mode="chunks")`
-- `memory_fact_search(subject=None, predicate=None, include_superseded=False)`
-- `memory_profile_get(subject="user")`
+- `memory_ask(question, top_k=5, max_context_tokens=None, result_mode="chunks", source, date_from, date_to, tags, project_id)`
+- `memory_fact_search(subject=None, predicate=None, include_superseded=False, source, date_from, date_to, confidence, status, source_quality, freshness_from, freshness_to, project_id)`
+- `memory_profile_get(subject="user", predicate, source, date_from, date_to, confidence, status, source_quality, freshness_from, freshness_to, project_id)`
 - `memory_fact_supersede(fact_id, superseded_by)`
 
 `memory_insert` accepts one complete conversation object. There is intentionally

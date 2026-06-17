@@ -51,10 +51,11 @@ def test_tokenizer_check_encoding_override(capsys, monkeypatch) -> None:
 
 def test_fact_search_cli_json(capsys, monkeypatch) -> None:
     monkeypatch.setattr(cli, "_configure_memory_runtime", lambda config_path: None)
-    monkeypatch.setattr(
-        cli.mvp_ingestion,
-        "fact_search",
-        lambda **kwargs: {
+    captured = {}
+
+    def fake_fact_search(**kwargs):
+        captured.update(kwargs)
+        return {
             "status": "ok",
             "results": [
                 {
@@ -64,23 +65,41 @@ def test_fact_search_cli_json(capsys, monkeypatch) -> None:
                     "object": "Tyran",
                 }
             ],
-        },
-    )
+        }
 
-    exit_code = cli.main(["fact-search", "--subject", "user", "--json"])
+    monkeypatch.setattr(cli.mvp_ingestion, "fact_search", fake_fact_search)
+
+    exit_code = cli.main(
+        [
+            "fact-search",
+            "--subject",
+            "user",
+            "--predicate",
+            "profile_name",
+            "--source-quality",
+            "direct_user_statement",
+            "--status",
+            "active",
+            "--json",
+        ]
+    )
 
     assert exit_code == 0
     assert json.loads(capsys.readouterr().out)["results"][0]["id"] == "fact-1"
+    assert captured["predicate"] == "profile_name"
+    assert captured["source_quality"] == "direct_user_statement"
+    assert captured["status"] == "active"
 
 
 def test_profile_get_cli_text(capsys, monkeypatch) -> None:
     monkeypatch.setattr(cli, "_configure_memory_runtime", lambda config_path: None)
-    monkeypatch.setattr(
-        cli.mvp_ingestion,
-        "profile_get",
-        lambda subject: {
+    captured = {}
+
+    def fake_profile_get(**kwargs):
+        captured.update(kwargs)
+        return {
             "status": "ok",
-            "subject": subject,
+            "subject": kwargs["subject"],
             "facts": [
                 {
                     "id": "fact-1",
@@ -88,10 +107,11 @@ def test_profile_get_cli_text(capsys, monkeypatch) -> None:
                     "object": "Tyran",
                 }
             ],
-        },
-    )
+        }
 
-    exit_code = cli.main(["profile-get", "--subject", "user"])
+    monkeypatch.setattr(cli.mvp_ingestion, "profile_get", fake_profile_get)
+
+    exit_code = cli.main(["profile-get", "--subject", "user", "--predicate", "profile_name"])
 
     output = capsys.readouterr().out
     assert exit_code == 0
@@ -272,19 +292,14 @@ def test_search_cli_validates_top_k(capsys, monkeypatch) -> None:
 
 def test_search_cli_applies_source_filter(capsys, monkeypatch) -> None:
     monkeypatch.setattr(cli, "_configure_memory_runtime", lambda config_path: None)
-    monkeypatch.setattr(
-        cli.mvp_ingestion,
-        "search",
-        lambda query, top_k, result_mode: {
+    captured = {}
+
+    def fake_search(query, **kwargs):
+        captured["query"] = query
+        captured.update(kwargs)
+        return {
             "status": "ok",
             "results": [
-                {
-                    "id": "memory-a",
-                    "score": 0.1,
-                    "chunk_index": 0,
-                    "text": "hello",
-                    "conversation": {"source": "codex", "timestamp": "2026-01-01T00:00:00Z", "metadata": {}},
-                },
                 {
                     "id": "memory-b",
                     "score": 0.2,
@@ -293,14 +308,17 @@ def test_search_cli_applies_source_filter(capsys, monkeypatch) -> None:
                     "conversation": {"source": "opencode", "timestamp": "2026-01-01T00:00:00Z", "metadata": {}},
                 },
             ],
-        },
-    )
+        }
+
+    monkeypatch.setattr(cli.mvp_ingestion, "search", fake_search)
 
     exit_code = cli.main(["search", "hello", "--source", "opencode", "--json"])
 
     body = json.loads(capsys.readouterr().out)
     assert exit_code == 0
     assert [row["id"] for row in body["results"]] == ["memory-b"]
+    assert captured["query"] == "hello"
+    assert captured["source"] == "opencode"
 
 
 def test_retrieve_cli_not_found_json(capsys, monkeypatch) -> None:
@@ -320,7 +338,7 @@ def test_ask_cli_prints_answer_and_citations(capsys, monkeypatch) -> None:
     monkeypatch.setattr(
         cli.mvp_ingestion,
         "ask",
-        lambda question, top_k, max_context_tokens, result_mode: {
+        lambda question, top_k, max_context_tokens, result_mode, **kwargs: {
             "status": "ok",
             "answer": "Based on stored memory.",
             "citations": [{"id": "memory-1", "chunk_index": 0}],

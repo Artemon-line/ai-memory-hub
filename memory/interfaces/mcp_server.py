@@ -34,7 +34,9 @@ SERVER_INSTRUCTIONS = (
     "Include metadata.summary as a short factual retrieval hint when available, while "
     "still preserving all source messages. "
     "Pass project_id when saving to or reading from a shared project; omit it for the default private project. "
-    "memory_search supports source, date_from, date_to, and tags filters when narrowing recall."
+    "memory_search and memory_ask support source, date_from, date_to, and tags filters when narrowing recall. "
+    "memory_fact_search and memory_profile_get support source, predicate, date range, confidence, status, "
+    "source_quality, and freshness filters."
 )
 
 
@@ -56,9 +58,18 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "Use project_id for a shared workspace. Use limit and cursor for paged results."
     ),
     "memory_retrieve": "Retrieve a stored memory item by ID, optionally within a project_id.",
-    "memory_ask": "Answer a question using stored memory search results, optionally within a project_id.",
-    "memory_fact_search": "Search normalized extracted memory facts, optionally within a project_id.",
-    "memory_profile_get": "Return active normalized facts for a subject, optionally within a project_id.",
+    "memory_ask": (
+        "Answer a question using stored memory and facts. Optional filters: source, date_from, "
+        "date_to, tags, and project_id."
+    ),
+    "memory_fact_search": (
+        "Search normalized extracted memory facts. Optional filters: source, subject, predicate, "
+        "date_from, date_to, confidence, status, source_quality, freshness_from, freshness_to, and project_id."
+    ),
+    "memory_profile_get": (
+        "Return normalized facts for a subject. Optional filters: source, predicate, date_from, "
+        "date_to, confidence, status, source_quality, freshness_from, freshness_to, and project_id."
+    ),
     "memory_fact_supersede": "Mark one normalized fact as superseded by another fact within a project_id.",
 }
 
@@ -641,18 +652,15 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 result_mode=result_mode,
                 owner_id=owner_id(),
                 project_id=project_id,
+                source=unwrap_array(source),
+                date_from=unwrap_array(date_from),
+                date_to=unwrap_array(date_to),
+                tags=unwrap_array(tags),
             )
             matches = result.get("results", [])
             if not isinstance(matches, list):
                 matches = []
-            filtered = _apply_search_filters(
-                [row for row in matches if isinstance(row, dict)],
-                source=source,
-                date_from=date_from,
-                date_to=date_to,
-                tags=unwrap_array(tags),
-            )
-            sorted_rows = _deterministic_sort(filtered)
+            sorted_rows = _deterministic_sort([row for row in matches if isinstance(row, dict)])
             try:
                 paged_rows, next_cursor = _paginate(
                     sorted_rows, limit=limit, cursor=cursor
@@ -666,6 +674,12 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
             result["results"] = paged_rows
             result["results"] = redact_content_hashes(result["results"])
             result["cursor"] = next_cursor
+        except ValueError as exc:
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message=str(exc),
+            )
         except Exception as exc:
             logger.exception("MCP memory_search failed")
             await _emit_mcp_tool_log(
@@ -710,6 +724,10 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
         top_k: int = 5,
         max_context_tokens: int | None = None,
         result_mode: str = "chunks",
+        source: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        tags: list[str] | None = None,
         project_id: str | None = None,
         ctx: FastMCPContext | None = None,
     ) -> dict[str, Any]:
@@ -778,6 +796,16 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 result_mode=result_mode,
                 owner_id=owner_id(),
                 project_id=project_id,
+                source=unwrap_array(source),
+                date_from=unwrap_array(date_from),
+                date_to=unwrap_array(date_to),
+                tags=unwrap_array(tags),
+            )
+        except ValueError as exc:
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message=str(exc),
             )
         except Exception as exc:
             logger.exception("MCP memory_ask failed")
@@ -799,29 +827,77 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
         subject: str | None = None,
         predicate: str | None = None,
         include_superseded: bool = False,
+        source: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        confidence: str | None = None,
+        status: str | None = None,
+        source_quality: str | None = None,
+        freshness_from: str | None = None,
+        freshness_to: str | None = None,
         project_id: str | None = None,
         ctx: FastMCPContext | None = None,
     ) -> dict[str, Any]:
-        result = await agent.fact_search(
-            subject=unwrap_array(subject),
-            predicate=unwrap_array(predicate),
-            include_superseded=bool(include_superseded),
-            owner_id=owner_id(),
-            project_id=project_id,
-        )
+        try:
+            result = await agent.fact_search(
+                subject=unwrap_array(subject),
+                predicate=unwrap_array(predicate),
+                include_superseded=bool(include_superseded),
+                owner_id=owner_id(),
+                project_id=project_id,
+                source=unwrap_array(source),
+                date_from=unwrap_array(date_from),
+                date_to=unwrap_array(date_to),
+                confidence=unwrap_array(confidence),
+                status=unwrap_array(status),
+                source_quality=unwrap_array(source_quality),
+                freshness_from=unwrap_array(freshness_from),
+                freshness_to=unwrap_array(freshness_to),
+            )
+        except ValueError as exc:
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message=str(exc),
+            )
         await _emit_mcp_tool_log(ctx, tool_name="memory_fact_search", status="ok")
         return _with_envelope_defaults(result)
 
     async def memory_profile_get(
         subject: str = "user",
+        predicate: str | None = None,
+        source: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        confidence: str | None = None,
+        status: str | None = None,
+        source_quality: str | None = None,
+        freshness_from: str | None = None,
+        freshness_to: str | None = None,
         project_id: str | None = None,
         ctx: FastMCPContext | None = None,
     ) -> dict[str, Any]:
-        result = await agent.profile_get(
-            subject=str(unwrap_array(subject) or "user"),
-            owner_id=owner_id(),
-            project_id=project_id,
-        )
+        try:
+            result = await agent.profile_get(
+                subject=str(unwrap_array(subject) or "user"),
+                owner_id=owner_id(),
+                project_id=project_id,
+                predicate=unwrap_array(predicate),
+                source=unwrap_array(source),
+                date_from=unwrap_array(date_from),
+                date_to=unwrap_array(date_to),
+                confidence=unwrap_array(confidence),
+                status=unwrap_array(status),
+                source_quality=unwrap_array(source_quality),
+                freshness_from=unwrap_array(freshness_from),
+                freshness_to=unwrap_array(freshness_to),
+            )
+        except ValueError as exc:
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message=str(exc),
+            )
         await _emit_mcp_tool_log(ctx, tool_name="memory_profile_get", status="ok")
         return _with_envelope_defaults(result)
 
