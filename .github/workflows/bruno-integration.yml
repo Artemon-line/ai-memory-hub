@@ -104,15 +104,15 @@ jobs:
           exit 1
 
       - name: Run Bruno collection
-        working-directory: tests/bruno
+        working-directory: tests/bruno/collections/ai-memory-hub-integration
         run: |
-          mkdir -p reports
-          pnpm exec bru run collections/ai-memory-hub-integration \
+          mkdir -p ../../reports
+          pnpm --dir ../.. exec bru run \
             --global-env ci \
-            --workspace-path . \
+            --workspace-path ../.. \
             --tags smoke \
             --env-var run_id="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
-            --reporter-html reports/bruno-integration-report.html \
+            --reporter-html ../../reports/bruno-integration-report.html \
             --sandbox developer \
             --noproxy
 
@@ -168,15 +168,15 @@ jobs:
           exit 1
 
       - name: Run Bruno auth/project collection
-        working-directory: tests/bruno
+        working-directory: tests/bruno/collections/ai-memory-hub-integration
         run: |
-          mkdir -p reports
-          pnpm exec bru run collections/ai-memory-hub-integration \
+          mkdir -p ../../reports
+          pnpm --dir ../.. exec bru run \
             --global-env ci \
-            --workspace-path . \
+            --workspace-path ../.. \
             --tags auth \
             --env-var run_id="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-auth" \
-            --reporter-html reports/bruno-auth-project-report.html \
+            --reporter-html ../../reports/bruno-auth-project-report.html \
             --sandbox developer \
             --noproxy
 

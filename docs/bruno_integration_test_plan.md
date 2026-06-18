@@ -155,14 +155,14 @@ docker compose up --build
 Then run Bruno:
 
 ```bash
-cd tests/bruno
-pnpm exec bru run collections/ai-memory-hub-integration --global-env local --workspace-path . --sandbox developer --noproxy
+cd tests/bruno/collections/ai-memory-hub-integration
+pnpm --dir ../.. exec bru run --global-env local --workspace-path ../.. --sandbox developer --noproxy
 ```
 
 Use tags to keep local runs focused:
 
 ```bash
-pnpm exec bru run collections/ai-memory-hub-integration --global-env local --workspace-path . --tags smoke,mcp --sandbox developer --noproxy
+pnpm --dir ../.. exec bru run --global-env local --workspace-path ../.. --tags smoke,mcp --sandbox developer --noproxy
 ```
 
 ## CI Workflow
@@ -183,9 +183,10 @@ Add a dedicated GitHub Actions job after the collection is stable locally:
 7. Run:
 
 ```bash
-pnpm exec bru run collections/ai-memory-hub-integration \
+cd tests/bruno/collections/ai-memory-hub-integration
+pnpm --dir ../.. exec bru run \
   --global-env ci \
-  --workspace-path . \
+  --workspace-path ../.. \
   --tags smoke,api,mcp \
   --env-var run_id="${GITHUB_RUN_ID}" \
   --reporter-html ../../reports/bruno-integration-report.html \

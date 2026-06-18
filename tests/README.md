@@ -107,14 +107,14 @@ uv run aim serve --config examples/container/config.yaml --host 127.0.0.1 --port
 In another shell, run the smoke collection:
 
 ```bash
-cd tests/bruno
-pnpm exec bru run collections/ai-memory-hub-integration --global-env local --workspace-path . --tags smoke --env-var run_id="$(date +%s)" --sandbox developer --noproxy
+cd tests/bruno/collections/ai-memory-hub-integration
+pnpm --dir ../.. exec bru run --global-env local --workspace-path ../.. --tags smoke --env-var run_id="$(date +%s)" --sandbox developer --noproxy
 ```
 
 Run only the MCP smoke requests:
 
 ```bash
-pnpm exec bru run collections/ai-memory-hub-integration --global-env local --workspace-path . --tags mcp --env-var run_id="$(date +%s)" --sandbox developer --noproxy
+pnpm --dir ../.. exec bru run --global-env local --workspace-path ../.. --tags mcp --env-var run_id="$(date +%s)" --sandbox developer --noproxy
 ```
 
 ## Bruno Auth And Shared Project Tests
@@ -149,8 +149,8 @@ uv run aim serve --config tests/bruno/config.auth.ci.yaml --host 127.0.0.1 --por
 Run the auth/project Bruno suite:
 
 ```bash
-cd tests/bruno
-pnpm exec bru run collections/ai-memory-hub-integration --global-env local --workspace-path . --tags auth --env-var run_id="$(date +%s)" --sandbox developer --noproxy
+cd tests/bruno/collections/ai-memory-hub-integration
+pnpm --dir ../.. exec bru run --global-env local --workspace-path ../.. --tags auth --env-var run_id="$(date +%s)" --sandbox developer --noproxy
 ```
 
 Clean up:
