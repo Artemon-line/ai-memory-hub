@@ -42,9 +42,8 @@ cd tests/bruno/collections/ai-memory-hub-integration
 pnpm exec bru run --global-env local --workspace-path ../.. --tags auth --env-var run_id="$(date +%s)" --sandbox developer --noproxy
 ```
 
-The OAuth case is currently a CI guard that confirms `api.auth:
-oauth_resource_server` fails explicitly because OAuth resource-server mode is
-not implemented yet.
+The OAuth case is a CI guard that starts `api.auth: oauth_resource_server` and
+checks the protected-resource metadata endpoint.
 
 Override the run id when you want stable test data:
 
@@ -71,7 +70,7 @@ The executable P0 slice covers:
 - private owner isolation
 - shared-project API search/ask across two project members
 - shared-project MCP search with bearer auth
-- OAuth resource-server fail-fast guard in CI
+- OAuth resource-server protected-resource metadata guard in CI
 
 Detailed validation, auth edge cases, storage adapter behavior, and ranking
 internals remain covered by pytest.

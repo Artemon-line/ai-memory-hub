@@ -21,3 +21,8 @@ api:
   host: 127.0.0.1
   port: 8000
   auth: oauth_resource_server
+  public_base_url: https://memory.example.test
+  oauth:
+    authorization_servers:
+      - https://auth.example.test
+    jwt_secret: bruno-oauth-ci-secret

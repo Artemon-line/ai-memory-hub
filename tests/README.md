@@ -161,12 +161,6 @@ docker rm -f aim-bruno-pgvector
 
 ## OAuth Guard
 
-OAuth resource-server mode is not implemented yet. The GitHub workflow verifies
-that `api.auth: oauth_resource_server` fails explicitly with:
-
-```text
-api.auth=oauth_resource_server is not implemented yet
-```
-
-Replace this guard with live OAuth protected-resource metadata and token
-validation tests when OAuth is implemented.
+The GitHub workflow starts `api.auth: oauth_resource_server` with
+`tests/bruno/config.oauth.ci.yaml` and verifies the protected-resource metadata
+endpoint. OAuth token validation edge cases are covered by pytest.
