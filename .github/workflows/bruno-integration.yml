@@ -184,6 +184,11 @@ jobs:
         if: always()
         run: |
           mkdir -p tests/bruno/reports
+          {
+            echo "run_id=${GITHUB_RUN_ID}"
+            echo "run_attempt=${GITHUB_RUN_ATTEMPT}"
+            echo "sha=${GITHUB_SHA}"
+          } > tests/bruno/reports/diagnostics.txt
           cp bruno-server.log tests/bruno/reports/bruno-server.log || true
           cp bruno-auth-server.log tests/bruno/reports/bruno-auth-server.log || true
           cp bruno-oauth-server.log tests/bruno/reports/bruno-oauth-server.log || true
