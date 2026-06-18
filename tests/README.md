@@ -108,13 +108,13 @@ In another shell, run the smoke collection:
 
 ```bash
 cd tests/bruno/collections/ai-memory-hub-integration
-pnpm --dir ../.. exec bru run --global-env local --workspace-path ../.. --tags smoke --env-var run_id="$(date +%s)" --sandbox developer --noproxy
+pnpm exec bru run --global-env local --workspace-path ../.. --tags smoke --env-var run_id="$(date +%s)" --sandbox developer --noproxy
 ```
 
 Run only the MCP smoke requests:
 
 ```bash
-pnpm --dir ../.. exec bru run --global-env local --workspace-path ../.. --tags mcp --env-var run_id="$(date +%s)" --sandbox developer --noproxy
+pnpm exec bru run --global-env local --workspace-path ../.. --tags mcp --env-var run_id="$(date +%s)" --sandbox developer --noproxy
 ```
 
 ## Bruno Auth And Shared Project Tests
@@ -150,7 +150,7 @@ Run the auth/project Bruno suite:
 
 ```bash
 cd tests/bruno/collections/ai-memory-hub-integration
-pnpm --dir ../.. exec bru run --global-env local --workspace-path ../.. --tags auth --env-var run_id="$(date +%s)" --sandbox developer --noproxy
+pnpm exec bru run --global-env local --workspace-path ../.. --tags auth --env-var run_id="$(date +%s)" --sandbox developer --noproxy
 ```
 
 Clean up:

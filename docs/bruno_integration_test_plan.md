@@ -156,13 +156,13 @@ Then run Bruno:
 
 ```bash
 cd tests/bruno/collections/ai-memory-hub-integration
-pnpm --dir ../.. exec bru run --global-env local --workspace-path ../.. --sandbox developer --noproxy
+pnpm exec bru run --global-env local --workspace-path ../.. --sandbox developer --noproxy
 ```
 
 Use tags to keep local runs focused:
 
 ```bash
-pnpm --dir ../.. exec bru run --global-env local --workspace-path ../.. --tags smoke,mcp --sandbox developer --noproxy
+pnpm exec bru run --global-env local --workspace-path ../.. --tags smoke,mcp --sandbox developer --noproxy
 ```
 
 ## CI Workflow
@@ -184,7 +184,7 @@ Add a dedicated GitHub Actions job after the collection is stable locally:
 
 ```bash
 cd tests/bruno/collections/ai-memory-hub-integration
-pnpm --dir ../.. exec bru run \
+pnpm exec bru run \
   --global-env ci \
   --workspace-path ../.. \
   --tags smoke,api,mcp \

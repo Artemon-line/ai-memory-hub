@@ -107,7 +107,7 @@ jobs:
         working-directory: tests/bruno/collections/ai-memory-hub-integration
         run: |
           mkdir -p ../../reports
-          pnpm --dir ../.. exec bru run \
+          pnpm exec bru run \
             --global-env ci \
             --workspace-path ../.. \
             --tags smoke \
@@ -171,7 +171,7 @@ jobs:
         working-directory: tests/bruno/collections/ai-memory-hub-integration
         run: |
           mkdir -p ../../reports
-          pnpm --dir ../.. exec bru run \
+          pnpm exec bru run \
             --global-env ci \
             --workspace-path ../.. \
             --tags auth \
