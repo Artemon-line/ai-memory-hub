@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import logging
+import os
+import secrets
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -131,11 +134,52 @@ class MCPConfig(BaseModel):
     list_page_size: int | None = Field(default=100, ge=1)
 
 
+class APITokenConfig(BaseModel):
+    hash_secret_env: str = "AMH_TOKEN_HASH_SECRET"
+    default_expiry_days: int = Field(default=365, ge=1)
+
+
+class OAuthConfig(BaseModel):
+    authorization_servers: list[str] = Field(default_factory=list)
+    resource: str = ""
+    issuer: str = ""
+    audience: str = ""
+    jwt_secret: str = ""
+    jwt_secret_env: str = "AMH_OAUTH_JWT_SECRET"
+    scopes_supported: list[str] = Field(
+        default_factory=lambda: ["memory:read", "memory:write", "memory:admin"]
+    )
+
+    @field_validator("authorization_servers")
+    @classmethod
+    def validate_authorization_servers(cls, values: list[str]) -> list[str]:
+        for value in values:
+            _validate_absolute_uri(value, field_name="api.oauth.authorization_servers")
+        return values
+
+    @field_validator("resource")
+    @classmethod
+    def validate_resource(cls, value: str) -> str:
+        if value:
+            _validate_absolute_uri(value, field_name="api.oauth.resource")
+        return value
+
+    @field_validator("scopes_supported")
+    @classmethod
+    def validate_scopes_supported(cls, values: list[str]) -> list[str]:
+        normalized = [value.strip() for value in values if value.strip()]
+        if not normalized:
+            raise ValueError("api.oauth.scopes_supported must not be empty")
+        return normalized
+
+
 class APIConfig(BaseModel):
     host: str = "127.0.0.1"
     port: int = 8000
     auth: str = "none"
-    api_key: str = ""
+    public_base_url: str = ""
+    token: APITokenConfig = Field(default_factory=APITokenConfig)
+    oauth: OAuthConfig = Field(default_factory=OAuthConfig)
 
     @field_validator("auth")
     @classmethod
@@ -146,6 +190,31 @@ class APIConfig(BaseModel):
                 "api.auth must be one of: none, bearer_token, oauth_resource_server"
             )
         return value
+
+    @field_validator("public_base_url")
+    @classmethod
+    def validate_public_base_url(cls, value: str) -> str:
+        if value:
+            _validate_absolute_uri(value, field_name="api.public_base_url")
+        return value.rstrip("/")
+
+    @model_validator(mode="after")
+    def validate_auth_settings(self) -> "APIConfig":
+        if self.auth == "none" and self.host not in {"127.0.0.1", "localhost", "::1"}:
+            logger.warning("api.auth=none is configured with non-loopback host %s", self.host)
+        if self.auth == "oauth_resource_server":
+            if not self.public_base_url:
+                raise ValueError("api.public_base_url is required for oauth_resource_server")
+            if not self.oauth.authorization_servers:
+                raise ValueError(
+                    "api.oauth.authorization_servers is required for oauth_resource_server"
+                )
+            if not self.oauth.jwt_secret and not self.oauth.jwt_secret_env:
+                raise ValueError(
+                    "api.oauth.jwt_secret or api.oauth.jwt_secret_env is required for "
+                    "oauth_resource_server"
+                )
+        return self
 
 
 class HubConfig(BaseModel):
@@ -195,3 +264,29 @@ def normalize_config(config: HubConfig | dict[str, Any] | None) -> HubConfig:
     if isinstance(config, dict):
         return parse_config(config)
     return load_config()
+
+
+def ensure_token_hash_secret(config: HubConfig) -> str | None:
+    if config.api.auth != "bearer_token":
+        return None
+    env_name = config.api.token.hash_secret_env
+    existing = os.environ.get(env_name)
+    if existing:
+        return existing
+    secret_path = Path(config.paths.data_dir) / ".token_hash_secret"
+    secret_path.parent.mkdir(parents=True, exist_ok=True)
+    if secret_path.exists():
+        secret = secret_path.read_text(encoding="utf-8").strip()
+    else:
+        secret = secrets.token_urlsafe(48)
+        secret_path.write_text(secret + "\n", encoding="utf-8")
+    os.environ[env_name] = secret
+    return secret
+
+
+def _validate_absolute_uri(value: str, *, field_name: str) -> None:
+    parsed = urlparse(value)
+    if not parsed.scheme or not parsed.netloc:
+        raise ValueError(f"{field_name} must be an absolute URI")
+    if parsed.fragment:
+        raise ValueError(f"{field_name} must not include a fragment")

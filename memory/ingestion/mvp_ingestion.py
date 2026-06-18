@@ -24,7 +24,7 @@ from memory.backend.metadata_store import (
 )
 from memory.backend.postgres_metadata_store import PostgresMetadataStore
 from memory.backend.vector_store import InMemoryVectorStore, LanceDBVectorStore, PGVectorStore
-from memory.config import HubConfig, load_config, parse_config
+from memory.config import HubConfig, ensure_token_hash_secret, load_config, parse_config
 from memory.ingestion.tokenizer import (
     count_tokens,
     split_token_windows,
@@ -293,6 +293,7 @@ def build_runtime(
     cfg = (
         parse_config(config) if isinstance(config, dict) else (config or load_config())
     )
+    ensure_token_hash_secret(cfg)
     set_schema_path(cfg.schema_config.file)
     try:
         validate_schema_compatibility(load_schema())
@@ -541,7 +542,9 @@ def _attach_index_chunks(obj: dict[str, Any], chunks: list[dict[str, Any]]) -> N
     ]
 
 
-def embed_chunks(chunks: list[dict[str, Any]], *, project_id: str | None = None) -> list[dict[str, Any]]:
+def embed_chunks(
+    chunks: list[dict[str, Any]], *, project_id: str | None = None, owner_id: str | None = None
+) -> list[dict[str, Any]]:
     runtime = _runtime()
     texts = [chunk["text"] for chunk in chunks]
     vectors = runtime.embedding_provider.embed_texts(texts)
@@ -556,6 +559,7 @@ def embed_chunks(chunks: list[dict[str, Any]], *, project_id: str | None = None)
                 "chunk_index": chunk["chunk_index"],
                 "conversation_id": chunk.get("conversation_id"),
                 "project_id": project_id,
+                "owner_id": owner_id,
                 "message_hash": chunk.get("message_hash"),
                 "index_state": "indexed",
                 "role": chunk["role"],
@@ -1183,7 +1187,9 @@ def ingest_messages(
         if new_messages or chunks:
             store.insert(updated)
         try:
-            embeddings = embed_chunks(chunks, project_id=effective_project_id)
+            embeddings = embed_chunks(
+                chunks, project_id=effective_project_id, owner_id=owner_id
+            )
             store_vectors(str(updated["id"]), embeddings, replace=(start_index == 0))
             _mark_chunks_indexed(str(updated["id"]), chunks)
         except Exception:
@@ -1218,7 +1224,7 @@ def ingest_messages(
 
     # 5. Embed and write vectors
     try:
-        embeddings = embed_chunks(chunks, project_id=effective_project_id)
+        embeddings = embed_chunks(chunks, project_id=effective_project_id, owner_id=owner_id)
         store_vectors(metadata_id, embeddings, replace=not inserted)
         _mark_chunks_indexed(metadata_id, chunks)
     except Exception:
@@ -2589,13 +2595,33 @@ def fact_supersede(
 
 
 def authenticate_bearer_token(token: str) -> str | None:
+    context = authenticate_bearer_token_context(token)
+    return str(context["owner_id"]) if context is not None else None
+
+
+def authenticate_bearer_token_context(token: str) -> dict[str, object] | None:
     store = _runtime().metadata_store
+    if hasattr(store, "auth_context_for_token"):
+        context = store.auth_context_for_token(token)
+        if context is not None:
+            return context
     if hasattr(store, "owner_for_token"):
-        return store.owner_for_token(token)
+        owner_id = store.owner_for_token(token)
+        if owner_id is not None:
+            return {
+                "owner_id": str(owner_id),
+                "token_id": None,
+                "scopes": ["memory:read", "memory:write"],
+            }
     auth_tokens = getattr(store, "auth_tokens", None)
     if isinstance(auth_tokens, dict):
         owner_id = auth_tokens.get(token)
-        return str(owner_id) if owner_id is not None else None
+        if owner_id is not None:
+            return {
+                "owner_id": str(owner_id),
+                "token_id": None,
+                "scopes": ["memory:read", "memory:write"],
+            }
     return None
 
 

@@ -56,6 +56,7 @@ class LanceDBVectorStore:
             [
                 pa.field("memory_id", pa.string()),
                 pa.field("project_id", pa.string()),
+                pa.field("owner_id", pa.string()),
                 pa.field("chunk_id", pa.string()),
                 pa.field("chunk_index", pa.int64()),
                 pa.field("message_hash", pa.string()),
@@ -80,6 +81,7 @@ class LanceDBVectorStore:
             required_fields = {
                 "memory_id",
                 "project_id",
+                "owner_id",
                 "chunk_id",
                 "chunk_index",
                 "message_hash",
@@ -109,6 +111,7 @@ class LanceDBVectorStore:
                 {
                     "memory_id": metadata_id,
                     "project_id": str(item.get("project_id", "")),
+                    "owner_id": str(item.get("owner_id", "")),
                     "chunk_id": str(item.get("chunk_id") or f"{metadata_id}:{int(item['chunk_index'])}"),
                     "chunk_index": int(item["chunk_index"]),
                     "message_hash": str(item.get("message_hash", "")),
@@ -133,6 +136,7 @@ class LanceDBVectorStore:
                 {
                     "memory_id": str(row.get("memory_id", "")),
                     "project_id": str(row.get("project_id", "")),
+                    "owner_id": str(row.get("owner_id", "")),
                     "chunk_id": str(row.get("chunk_id", "")),
                     "chunk_index": int(row.get("chunk_index", 0)),
                     "message_hash": str(row.get("message_hash", "")),
@@ -212,6 +216,7 @@ class InMemoryVectorStore:
                 {
                     "memory_id": metadata_id,
                     "project_id": str(item.get("project_id", "")),
+                    "owner_id": str(item.get("owner_id", "")),
                     "chunk_id": str(item.get("chunk_id") or f"{metadata_id}:{int(item['chunk_index'])}"),
                     "chunk_index": int(item["chunk_index"]),
                     "message_hash": str(item.get("message_hash", "")),
@@ -235,6 +240,7 @@ class InMemoryVectorStore:
                 {
                     "memory_id": str(row["memory_id"]),
                     "project_id": str(row.get("project_id", "")),
+                    "owner_id": str(row.get("owner_id", "")),
                     "chunk_id": str(row.get("chunk_id", "")),
                     "chunk_index": int(row["chunk_index"]),
                     "message_hash": str(row.get("message_hash", "")),
@@ -352,6 +358,7 @@ class PGVectorStore:
                     CREATE TABLE IF NOT EXISTS {self.table_name} (
                         memory_id TEXT NOT NULL,
                         project_id TEXT NOT NULL DEFAULT '',
+                        owner_id TEXT NOT NULL DEFAULT '',
                         chunk_id TEXT NOT NULL,
                         chunk_index INTEGER NOT NULL,
                         message_hash TEXT NOT NULL DEFAULT '',
@@ -363,6 +370,7 @@ class PGVectorStore:
                     """
                 )
                 cur.execute(f"ALTER TABLE {self.table_name} ADD COLUMN IF NOT EXISTS project_id TEXT NOT NULL DEFAULT ''")
+                cur.execute(f"ALTER TABLE {self.table_name} ADD COLUMN IF NOT EXISTS owner_id TEXT NOT NULL DEFAULT ''")
                 cur.execute(
                     f"""
                     CREATE INDEX IF NOT EXISTS idx_{self.table_name}_hnsw
@@ -386,7 +394,7 @@ class PGVectorStore:
         return version
 
     def insert(self, metadata_id: str, embeddings: list[dict[str, Any]], replace: bool = False) -> None:
-        rows: list[tuple[str, str, str, int, str, str, str, str]] = []
+        rows: list[tuple[str, str, str, str, int, str, str, str, str]] = []
         for item in embeddings:
             vector = [float(v) for v in item["vector"]]
             self._validate_dimension(vector, operation="insert")
@@ -394,6 +402,7 @@ class PGVectorStore:
                 (
                     metadata_id,
                     str(item.get("project_id", "")),
+                    str(item.get("owner_id", "")),
                     str(item.get("chunk_id") or f"{metadata_id}:{int(item['chunk_index'])}"),
                     int(item["chunk_index"]),
                     str(item.get("message_hash", "")),
@@ -410,10 +419,11 @@ class PGVectorStore:
                     cur.execute(
                         f"""
                         INSERT INTO {self.table_name}
-                            (memory_id, project_id, chunk_id, chunk_index, message_hash, role, text, vector)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s::vector)
+                            (memory_id, project_id, owner_id, chunk_id, chunk_index, message_hash, role, text, vector)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::vector)
                         ON CONFLICT (memory_id, chunk_id) DO UPDATE
                         SET project_id = EXCLUDED.project_id,
+                            owner_id = EXCLUDED.owner_id,
                             chunk_index = EXCLUDED.chunk_index,
                             message_hash = EXCLUDED.message_hash,
                             role = EXCLUDED.role,
@@ -429,7 +439,7 @@ class PGVectorStore:
             with conn.cursor() as cur:
                 cur.execute(
                     f"""
-                    SELECT memory_id, chunk_id, project_id, chunk_index, message_hash, role, text,
+                    SELECT memory_id, chunk_id, project_id, owner_id, chunk_index, message_hash, role, text,
                            vector {self._operator} %s::vector AS distance
                     FROM {self.table_name}
                     ORDER BY vector {self._operator} %s::vector
@@ -444,8 +454,12 @@ class PGVectorStore:
         if len(row) == 7:
             memory_id, chunk_id, chunk_index, message_hash, role, text, score = row
             project_id = ""
-        else:
+            owner_id = ""
+        elif len(row) == 8:
             memory_id, chunk_id, project_id, chunk_index, message_hash, role, text, score = row
+            owner_id = ""
+        else:
+            memory_id, chunk_id, project_id, owner_id, chunk_index, message_hash, role, text, score = row
         result = {
             "memory_id": str(memory_id),
             "chunk_id": str(chunk_id),
@@ -457,6 +471,8 @@ class PGVectorStore:
         }
         if project_id:
             result["project_id"] = str(project_id)
+        if owner_id:
+            result["owner_id"] = str(owner_id)
         return result
 
     def delete(self, ids: list[str]) -> None:

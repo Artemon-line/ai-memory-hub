@@ -178,3 +178,6 @@ class MVPIngestionAgent(BaseIngestionAgent):
 
     async def authenticate_bearer_token(self, token: str) -> str | None:
         return mvp_ingestion.authenticate_bearer_token(token)
+
+    async def authenticate_bearer_token_context(self, token: str) -> dict[str, object] | None:
+        return mvp_ingestion.authenticate_bearer_token_context(token)

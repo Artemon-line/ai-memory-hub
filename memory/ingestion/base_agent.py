@@ -116,3 +116,13 @@ class BaseIngestionAgent(ABC):
 
     async def authenticate_bearer_token(self, token: str) -> str | None:
         raise NotImplementedError("authenticate_bearer_token is not implemented")
+
+    async def authenticate_bearer_token_context(self, token: str) -> dict[str, object] | None:
+        owner_id = await self.authenticate_bearer_token(token)
+        if owner_id is None:
+            return None
+        return {
+            "owner_id": owner_id,
+            "token_id": None,
+            "scopes": ["memory:read", "memory:write"],
+        }

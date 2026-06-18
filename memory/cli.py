@@ -845,7 +845,7 @@ def _capabilities(store: Any) -> dict[str, Any]:
 
 def _redact_config(config: HubConfig) -> dict[str, Any]:
     data = config.model_dump(by_alias=True)
-    for section, key in (("openai", "api_key"), ("api", "api_key"), ("providers", "metadata_dsn")):
+    for section, key in (("openai", "api_key"), ("providers", "metadata_dsn")):
         value = data.get(section, {}).get(key)
         if value:
             data[section][key] = "***"

@@ -1,0 +1,32 @@
+interfaces:
+  api: true
+  mcp: true
+
+paths:
+  data_dir: ./data
+  logs_dir: ./logs
+
+providers:
+  embeddings: local
+  vector_db: in_memory
+  metadata_db: sqlite
+
+api:
+  host: 127.0.0.1
+  port: 8000
+  auth: oauth_resource_server
+  public_base_url: https://memory.example.com
+  oauth:
+    authorization_servers:
+      - https://auth.example.com
+    resource: https://memory.example.com/mcp
+    issuer: https://auth.example.com
+    jwt_secret_env: AMH_OAUTH_JWT_SECRET
+    scopes_supported:
+      - memory:read
+      - memory:write
+      - memory:admin
+
+mcp:
+  host: 127.0.0.1
+  port: 8765

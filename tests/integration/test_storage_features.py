@@ -151,10 +151,17 @@ def test_sqlite_admin_user_token_and_project_management(tmp_path: Path) -> None:
     )
     assert token["token_id"].startswith("tok_")
     assert token["token_prefix"] == "amh_secret_v"
+    assert token["scopes"] == ["memory:read", "memory:write"]
+    assert token["last_used_at"] is None
     assert "token_hash" not in token
     assert store.owner_for_token("amh_secret_value") == "jane"
     listed_tokens = store.list_auth_tokens(owner_id="jane")
-    assert listed_tokens == [token]
+    assert listed_tokens[0]["last_used_at"] is not None
+    listed_without_last_used = {
+        key: value for key, value in listed_tokens[0].items() if key != "last_used_at"
+    }
+    token_without_last_used = {key: value for key, value in token.items() if key != "last_used_at"}
+    assert listed_without_last_used == token_without_last_used
     assert "token_hash" not in listed_tokens[0]
     assert project["id"] == "shared-321"
     assert "shared-321" in {row["id"] for row in store.list_projects(user_id="carl")}
@@ -400,6 +407,22 @@ def test_log_redaction_for_dsn_and_keyvalue_secrets() -> None:
     assert "abc123" not in redacted
     assert "xyz" not in redacted
     assert "***" in redacted
+
+
+def test_log_redaction_for_bearer_headers_and_token_query_strings() -> None:
+    message = (
+        "Authorization: Bearer header-secret "
+        "GET /memory/search?access_token=query-secret&token=second-secret&q=hello"
+    )
+
+    redacted = redact_secrets(message)
+
+    assert "header-secret" not in redacted
+    assert "query-secret" not in redacted
+    assert "second-secret" not in redacted
+    assert "Authorization: Bearer ***" in redacted
+    assert "access_token=***" in redacted
+    assert "token=***" in redacted
 
 
 def test_fallback_logging_redacts_exception_secrets(

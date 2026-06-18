@@ -65,11 +65,12 @@ Not implemented yet:
       management.
 - [x] Project workspace membership for shared collaboration. See
       `project_workspace_collaboration_plan.md`.
-- [ ] MCP OAuth protected resource metadata.
-- [ ] MCP `WWW-Authenticate` challenges with `resource_metadata` and scope hints.
-- [ ] OAuth access-token validation with audience/resource binding.
-- [ ] Scope checks for read/write/admin operations.
-- [ ] Tests for HTTP API and `/mcp/`.
+- [x] MCP OAuth protected resource metadata.
+- [x] MCP `WWW-Authenticate` challenges with `resource_metadata` and scope hints.
+- [x] OAuth access-token validation with audience/resource binding for configured
+      HS256 JWTs.
+- [x] Scope checks for read/write route groups.
+- [x] Tests for HTTP API and `/mcp/`.
 
 ## Threat Model
 
@@ -101,39 +102,39 @@ when supported the implementation should conform to the MCP authorization spec.
 
 Server-side requirements that affect ai-memory-hub:
 
-- [ ] Treat the MCP server as an OAuth resource server.
-- [ ] Accept access tokens through `Authorization: Bearer <access-token>`.
-- [ ] Require authorization on every HTTP request to protected MCP endpoints.
-- [ ] Do not accept access tokens in URI query strings.
-- [ ] Validate tokens before processing MCP requests.
-- [ ] Validate that presented tokens were issued for this MCP server as the
+- [x] Treat the MCP server as an OAuth resource server.
+- [x] Accept access tokens through `Authorization: Bearer <access-token>`.
+- [x] Require authorization on every HTTP request to protected MCP endpoints.
+- [x] Do not accept access tokens in URI query strings.
+- [x] Validate tokens before processing MCP requests.
+- [x] Validate that presented tokens were issued for this MCP server as the
       intended resource/audience.
-- [ ] Do not pass inbound MCP access tokens through to downstream services.
-- [ ] Return `401 Unauthorized` for missing, invalid, or expired tokens.
-- [ ] Return `403 Forbidden` for valid tokens with insufficient scope.
-- [ ] Include `WWW-Authenticate: Bearer ...` challenges for auth failures.
-- [ ] Expose OAuth Protected Resource Metadata.
-- [ ] Include a `resource_metadata` URL in `WWW-Authenticate` challenges.
-- [ ] Prefer including a `scope` parameter in challenges so clients can request
+- [x] Do not pass inbound MCP access tokens through to downstream services.
+- [x] Return `401 Unauthorized` for missing, invalid, or expired tokens.
+- [x] Return `403 Forbidden` for valid tokens with insufficient scope.
+- [x] Include `WWW-Authenticate: Bearer ...` challenges for auth failures.
+- [x] Expose OAuth Protected Resource Metadata.
+- [x] Include a `resource_metadata` URL in `WWW-Authenticate` challenges.
+- [x] Prefer including a `scope` parameter in challenges so clients can request
       least-privilege access.
 
 Discovery requirements:
 
-- [ ] Serve protected resource metadata at well-known URIs:
+- [x] Serve protected resource metadata at well-known URIs:
   - `/.well-known/oauth-protected-resource`
   - `/.well-known/oauth-protected-resource/mcp` when `/mcp` identifies the MCP
     resource.
-- [ ] Metadata includes `authorization_servers` with at least one configured
+- [x] Metadata includes `authorization_servers` with at least one configured
       authorization server.
-- [ ] Metadata includes the MCP server resource identifier.
-- [ ] Metadata advertises supported scopes.
+- [x] Metadata includes the MCP server resource identifier.
+- [x] Metadata advertises supported scopes.
 
 Client-facing compatibility requirements:
 
-- [ ] The canonical MCP resource URI is configurable because loopback,
+- [x] The canonical MCP resource URI is configurable because loopback,
       reverse-proxy, LAN, and HTTPS deployments have different public URLs.
-- [ ] The canonical URI must be absolute and must not include a fragment.
-- [ ] Use the most specific stable MCP URI when the path matters, for example
+- [x] The canonical URI must be absolute and must not include a fragment.
+- [x] Use the most specific stable MCP URI when the path matters, for example
       `https://memory.example.com/mcp`.
 
 ## Auth Modes
@@ -194,15 +195,15 @@ Implementation sequence:
 - [x] Add config validation:
   - [x] allowed `api.auth` values: `none`, `bearer_token`,
     `oauth_resource_server`
-  - [ ] `bearer_token` requires a token hash secret from environment or a
+  - [x] `bearer_token` requires a token hash secret from environment or a
     generated local secret file outside the repo
-  - [ ] warn when `auth=none` is used with a non-loopback bind address
+  - [x] warn when `auth=none` is used with a non-loopback bind address
 - [x] Add metadata-store tables/records for auth:
   - [x] `users`
   - [x] `auth_tokens`
   - [x] token hash, token id, token prefix, display name, created/expires/revoked
         timestamps
-  - [ ] scopes and last-used timestamps
+  - [x] scopes and last-used timestamps
   - [x] store only token hashes, never raw tokens
 - [x] Add admin CLI commands:
   - [x] `aim admin user create <user_id> [--display-name ...]`
@@ -214,41 +215,41 @@ Implementation sequence:
 - [x] Add HTTP auth middleware:
   - [x] parse `Authorization: Bearer <token>`
   - [x] reject missing/invalid/revoked/expired tokens with `401`
-  - [ ] reject insufficient scope with `403`
+  - [x] reject insufficient scope with `403`
   - [x] keep `/health` and `/ready` public
   - [x] protect `/memory/*` and `/mcp/*`
   - [x] reject or ignore tokens in query strings
-- [ ] Add request principal context:
-  - [ ] `user_id`
-  - [ ] token id
-  - [ ] scopes
-  - [ ] auth mode
+- [x] Add request principal context:
+  - [x] `user_id`
+  - [x] token id
+  - [x] scopes
+  - [x] auth mode
 - [x] Add per-user ownership:
   - [x] stamp new conversations with server-side `owner_id`
   - [x] stamp extracted facts with `owner_id`
   - [x] do not trust client-supplied `metadata.owner_id`
   - [x] filter search/retrieve/ask/fact/profile operations by `owner_id`
   - [x] prevent direct retrieval of another user's memory by id
-- [ ] Add vector isolation:
-  - [ ] include `owner_id` in vector rows where provider supports metadata
+- [x] Add vector isolation:
+  - [x] include `owner_id` in vector rows where provider supports metadata
   - [x] for providers without vector-side filters, filter candidates after
         metadata lookup before returning or answering
   - [x] add tests proving no cross-user leakage through vector candidates
-- [ ] Add scopes:
-  - [ ] `memory:read` for search/retrieve/ask/fact search/profile
-  - [ ] `memory:write` for validate/insert/fact supersession
-  - [ ] `memory:admin` for future admin UI/API
-- [ ] Add redaction:
-  - [ ] redact `Authorization: Bearer ...` in logs and errors
-  - [ ] avoid returning token hashes
-  - [ ] never log raw generated tokens
+- [x] Add scopes:
+  - [x] `memory:read` for search/retrieve/ask/fact search/profile
+  - [x] `memory:write` for validate/insert/fact supersession
+  - [x] `memory:admin` for future admin UI/API
+- [x] Add redaction:
+  - [x] redact `Authorization: Bearer ...` in logs and errors
+  - [x] avoid returning token hashes
+  - [x] never log raw generated tokens
 - [x] Add tests:
   - [x] no-auth mode still passes existing tests
   - [x] bearer mode rejects missing/invalid/revoked/expired token
   - [x] bearer mode accepts valid token
   - [x] user A cannot search/retrieve/ask user B memory
   - [x] user A cannot access user B facts/profile
-  - [ ] insufficient scope returns `403`
+  - [x] insufficient scope returns `403`
   - [x] admin CLI creates and revokes tokens
 
 Acceptance criteria:
@@ -275,19 +276,23 @@ one practical provider without hardcoding the project to a specific IdP:
 
 Required validation:
 
-- [ ] Signature or introspection validity.
-- [ ] Expiration.
-- [ ] Issuer, when configured.
-- [ ] Audience/resource matches the configured MCP resource URI.
-- [ ] Required scopes for the requested route or MCP operation.
+- [x] Signature validity for configured HS256 JWTs.
+- [x] Expiration.
+- [x] Issuer, when configured.
+- [x] Audience/resource matches the configured MCP resource URI.
+- [x] Required scopes for protected HTTP route groups and MCP access.
+
+Current limitation: JWKS and introspection adapters are still planned. The first
+implementation validates HS256 JWTs using `api.oauth.jwt_secret` or
+`api.oauth.jwt_secret_env`.
 
 Do not:
 
-- [ ] Accept arbitrary third-party access tokens.
-- [ ] Accept tokens missing this MCP server in their audience/resource claim.
-- [ ] Forward inbound MCP access tokens to OpenAI, Ollama, databases, vector
+- [x] Accept arbitrary third-party access tokens.
+- [x] Accept tokens missing this MCP server in their audience/resource claim.
+- [x] Forward inbound MCP access tokens to OpenAI, Ollama, databases, vector
       stores, or other upstream APIs.
-- [ ] Put tokens in query strings, logs, traces, or MCP tool payloads.
+- [x] Put tokens in query strings, logs, traces, or MCP tool payloads.
 
 Recommended initial scopes:
 
@@ -305,15 +310,15 @@ Scope failures:
 
 ### Phase 1: Config Validation
 
-- [ ] Add `APIConfig.auth` validator:
-  - allowed: `none`, `oauth_resource_server`
-- [ ] Add model validators:
+- [x] Add `APIConfig.auth` validator:
+  - allowed: `none`, `bearer_token`, `oauth_resource_server`
+- [x] Add model validators:
   - if `auth=oauth_resource_server`, `public_base_url` and at least one
     authorization server must be configured
   - if `oauth.resource` is set, it must be an absolute URI with no fragment
   - `auth=none` is allowed but should warn when binding to non-loopback hosts
-- [ ] Remove or deprecate `api.api_key` from the plan and docs.
-- [ ] Add tests in `tests/unit/test_config.py`.
+- [x] Remove or deprecate `api.api_key` from code and docs.
+- [x] Add tests in `tests/unit/test_config.py`.
 
 ### Phase 2: Auth Middleware
 
@@ -327,14 +332,14 @@ Add `memory/api/auth.py`:
 
 Tasks:
 
-- [ ] Install middleware in `create_app()` before routes are used.
-- [ ] Protect mounted MCP app path `/mcp`.
-- [ ] Keep auth logic independent from ingestion code.
-- [ ] Return HTTP auth failures before MCP handling.
-- [ ] Return `WWW-Authenticate` on protected-path `401` responses.
-- [ ] Keep `/health`, `/ready`, and protected-resource metadata public.
-- [ ] Ignore or reject query-string tokens.
-- [ ] Do not support `X-API-Key`.
+- [x] Install middleware in `create_app()` before routes are used.
+- [x] Protect mounted MCP app path `/mcp`.
+- [x] Keep auth logic independent from ingestion code.
+- [x] Return HTTP auth failures before MCP handling.
+- [x] Return `WWW-Authenticate` on protected-path `401` responses.
+- [x] Keep `/health`, `/ready`, and protected-resource metadata public.
+- [x] Ignore or reject query-string tokens.
+- [x] Do not support `X-API-Key`.
 
 ### Phase 3: Protected Resource Metadata
 
@@ -345,17 +350,17 @@ Add endpoints:
 
 Metadata fields:
 
-- [ ] Resource identifier for the MCP server.
-- [ ] `authorization_servers`.
-- [ ] `scopes_supported`.
-- [ ] Optional service documentation URLs if useful.
+- [x] Resource identifier for the MCP server.
+- [x] `authorization_servers`.
+- [x] `scopes_supported`.
+- [x] Optional service documentation URLs if useful.
 
 Tasks:
 
-- [ ] Generate metadata from config.
-- [ ] Add tests for root metadata.
-- [ ] Add tests for `/mcp` path metadata.
-- [ ] Ensure metadata responses do not expose secrets.
+- [x] Generate metadata from config.
+- [x] Add tests for root metadata.
+- [x] Add tests for `/mcp` path metadata.
+- [x] Ensure metadata responses do not expose secrets.
 
 ### Phase 4: OAuth Token Validation
 
@@ -369,19 +374,19 @@ Add a token-validator abstraction:
 
 Tasks:
 
-- [ ] Validate signature or introspection result.
-- [ ] Validate expiration.
-- [ ] Validate issuer when configured.
-- [ ] Validate audience/resource against configured MCP resource URI.
-- [ ] Validate scopes for protected route or MCP operation.
-- [ ] Reject token passthrough; inbound tokens are only for authorizing
+- [x] Validate signature for configured HS256 JWTs.
+- [x] Validate expiration.
+- [x] Validate issuer when configured.
+- [x] Validate audience/resource against configured MCP resource URI.
+- [x] Validate scopes for protected route groups and MCP access.
+- [x] Reject token passthrough; inbound tokens are only for authorizing
       ai-memory-hub.
 
 ### Phase 5: Scope Mapping
 
 Initial route and MCP operation mapping:
 
-- [ ] `memory:read`:
+- [x] `memory:read`:
   - `/memory/search`
   - `/memory/retrieve`
   - `/memory/ask`
@@ -389,19 +394,19 @@ Initial route and MCP operation mapping:
   - `/memory/profile/get`
   - MCP resource reads
   - MCP search, retrieve, ask, fact search, and profile tools
-- [ ] `memory:write`:
+- [x] `memory:write`:
   - `/memory/insert`
   - `/memory/facts/supersede`
   - MCP validate, insert, and fact supersession tools
-- [ ] `memory:admin`:
+- [x] `memory:admin`:
   - future protected observability, debug, config, or maintenance endpoints
 
 When scope is insufficient:
 
-- [ ] Return `403`.
-- [ ] Include `WWW-Authenticate: Bearer error="insufficient_scope"`.
-- [ ] Include the minimum required `scope` value.
-- [ ] Include `resource_metadata`.
+- [x] Return `403`.
+- [x] Include `WWW-Authenticate: Bearer error="insufficient_scope"`.
+- [x] Include the minimum required `scope` value.
+- [x] Include `resource_metadata`.
 
 ### Phase 6: MCP Client Compatibility
 
@@ -427,10 +432,10 @@ to loopback.
 
 Add a separate OAuth/proxy example instead of a shared-secret LAN example:
 
-- [ ] Example reverse proxy with TLS.
-- [ ] Example `api.auth: oauth_resource_server` config.
-- [ ] Example protected resource metadata config.
-- [ ] Example JWKS or introspection validator config.
+- [x] Example reverse proxy with TLS.
+- [x] Example `api.auth: oauth_resource_server` config.
+- [x] Example protected resource metadata config.
+- [x] Example JWKS or introspection validator config.
 
 Do not document unauthenticated `0.0.0.0:8000` as a recommended mode.
 
@@ -438,36 +443,36 @@ Do not document unauthenticated `0.0.0.0:8000` as a recommended mode.
 
 HTTP API tests:
 
-- [ ] `auth=none` allows `/memory/search` in test config.
-- [ ] `auth=none` with non-loopback bind emits a warning.
-- [ ] `/health` remains public.
-- [ ] `/ready` remains public.
-- [ ] Protected resource metadata remains public and secret-free.
+- [x] `auth=none` allows `/memory/search` in test config.
+- [x] `auth=none` with non-loopback bind emits a warning.
+- [x] `/health` remains public.
+- [x] `/ready` remains public.
+- [x] Protected resource metadata remains public and secret-free.
 
 MCP tests:
 
-- [ ] `/mcp/` initialize rejects missing Bearer token when OAuth auth is enabled.
-- [ ] `/mcp/` initialize accepts valid Bearer auth.
-- [ ] `/mcp/` tools/list accepts valid Bearer auth and session id.
-- [ ] Auth rejection happens before tool execution.
-- [ ] Query-string tokens are rejected or ignored.
-- [ ] `WWW-Authenticate` includes `resource_metadata`.
+- [x] `/mcp/` initialize rejects missing Bearer token when OAuth auth is enabled.
+- [x] `/mcp/` initialize accepts valid Bearer auth.
+- [x] `/mcp/` tools/list accepts valid Bearer auth and session id.
+- [x] Auth rejection happens before tool execution.
+- [x] Query-string tokens are rejected or ignored.
+- [x] `WWW-Authenticate` includes `resource_metadata`.
 
 OAuth resource-server tests:
 
-- [ ] Valid token with correct audience/resource succeeds.
-- [ ] Valid token with wrong audience/resource fails with `401`.
-- [ ] Expired token fails with `401`.
-- [ ] Valid token without required scope fails with `403`.
-- [ ] Insufficient-scope response includes `error="insufficient_scope"` and
+- [x] Valid token with correct audience/resource succeeds.
+- [x] Valid token with wrong audience/resource fails with `401`.
+- [x] Expired token fails with `401`.
+- [x] Valid token without required scope fails with `403`.
+- [x] Insufficient-scope response includes `error="insufficient_scope"` and
       required `scope`.
-- [ ] Inbound access token is not forwarded to provider calls.
+- [x] Inbound access token is not forwarded to provider calls.
 
 Security tests:
 
-- [ ] Token never appears in logs.
-- [ ] Redaction catches `Authorization: Bearer <value>`.
-- [ ] Query-string token attempts do not leak through access logs.
+- [x] Token never appears in logs.
+- [x] Redaction catches `Authorization: Bearer <value>`.
+- [x] Query-string token attempts do not leak through access logs.
 
 ### Phase 9: Documentation
 

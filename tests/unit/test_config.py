@@ -1,8 +1,9 @@
+import logging
 from pathlib import Path
 
 import pytest
 
-from memory.config import HubConfig, load_config, parse_config
+from memory.config import HubConfig, ensure_token_hash_secret, load_config, parse_config
 
 
 def test_load_config_default():
@@ -114,3 +115,85 @@ def test_chunking_config_defaults_and_validation():
 
     with pytest.raises(ValueError, match="chunking.overlap_tokens"):
         parse_config({"chunking": {"max_tokens": 8, "overlap_tokens": 8}})
+
+
+def test_oauth_resource_server_config_requires_public_metadata() -> None:
+    with pytest.raises(ValueError, match="api.public_base_url"):
+        parse_config({"api": {"auth": "oauth_resource_server"}})
+
+    with pytest.raises(ValueError, match="authorization_servers"):
+        parse_config(
+            {
+                "api": {
+                    "auth": "oauth_resource_server",
+                    "public_base_url": "https://memory.example.com",
+                    "oauth": {"jwt_secret": "secret"},
+                }
+            }
+        )
+
+
+def test_oauth_resource_server_config_derives_valid_defaults() -> None:
+    config = parse_config(
+        {
+            "api": {
+                "auth": "oauth_resource_server",
+                "public_base_url": "https://memory.example.com/",
+                "oauth": {
+                    "authorization_servers": ["https://auth.example.com"],
+                    "jwt_secret": "secret",
+                },
+            }
+        }
+    )
+
+    assert config.api.public_base_url == "https://memory.example.com"
+    assert config.api.oauth.scopes_supported == [
+        "memory:read",
+        "memory:write",
+        "memory:admin",
+    ]
+
+
+def test_oauth_resource_uri_rejects_fragments() -> None:
+    with pytest.raises(ValueError, match="api.oauth.resource"):
+        parse_config(
+            {
+                "api": {
+                    "auth": "oauth_resource_server",
+                    "public_base_url": "https://memory.example.com",
+                    "oauth": {
+                        "authorization_servers": ["https://auth.example.com"],
+                        "resource": "https://memory.example.com/mcp#frag",
+                        "jwt_secret": "secret",
+                    },
+                }
+            }
+        )
+
+
+def test_auth_none_warns_on_non_loopback_bind(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level(logging.WARNING, logger="memory.config"):
+        config = parse_config({"api": {"auth": "none", "host": "0.0.0.0"}})
+
+    assert config.api.auth == "none"
+    assert "api.auth=none is configured with non-loopback host 0.0.0.0" in caplog.text
+
+
+def test_bearer_token_auth_generates_token_hash_secret(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv("AMH_TOKEN_HASH_SECRET", raising=False)
+    config = parse_config(
+        {
+            "api": {"auth": "bearer_token"},
+            "paths": {"data_dir": str(tmp_path)},
+        }
+    )
+
+    secret = ensure_token_hash_secret(config)
+
+    secret_path = tmp_path / ".token_hash_secret"
+    assert secret
+    assert secret_path.read_text(encoding="utf-8").strip() == secret
+    assert secret == ensure_token_hash_secret(config)

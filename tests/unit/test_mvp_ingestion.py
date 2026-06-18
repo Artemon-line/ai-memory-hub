@@ -111,7 +111,7 @@ def _configure_stubs(
 def test_ingest_messages_success() -> None:
     metadata, vectors = _configure_stubs()
 
-    result = mvp_ingestion.ingest_messages(_valid_conversation())
+    result = mvp_ingestion.ingest_messages(_valid_conversation(), owner_id="owner-a")
 
     assert result == {
         "status": "ok",
@@ -123,6 +123,7 @@ def test_ingest_messages_success() -> None:
     }
     assert "d9fd4c95-9cb3-4fd5-b967-3027f8863210" in metadata.by_id
     assert len(vectors.rows) == 2
+    assert {row["owner_id"] for row in vectors.rows} == {"owner-a"}
     stored = metadata.by_id["d9fd4c95-9cb3-4fd5-b967-3027f8863210"]
     assert stored["messages"][0]["hash"].startswith("sha256:")
     assert stored["metadata"]["conversation_hash"].startswith("sha256:")

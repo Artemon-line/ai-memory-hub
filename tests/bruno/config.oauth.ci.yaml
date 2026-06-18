@@ -21,4 +21,3 @@ api:
   host: 127.0.0.1
   port: 8000
   auth: oauth_resource_server
-  api_key: ""

@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
+import json
+import logging
+import time
+
 from fastapi.testclient import TestClient
 
 from memory.api.server import create_app
@@ -9,6 +16,7 @@ from memory.backend.metadata_store import (
     SQLiteMetadataStore,
 )
 from memory.backend.vector_store import InMemoryVectorStore
+from memory.config import ensure_token_hash_secret, parse_config
 from memory.ingestion import mvp_ingestion
 from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
 
@@ -114,12 +122,76 @@ def _auth_client() -> tuple[TestClient, StubMetadataStore]:
     return TestClient(app), store
 
 
+def _oauth_client() -> TestClient:
+    runtime = _runtime()
+    agent = MVPIngestionAgent(
+        config={"providers": {"agent": "mvp"}, "interfaces": {"api": "true"}},
+        runtime=runtime,
+    )
+    app = create_app(
+        config={
+            "api": {
+                "auth": "oauth_resource_server",
+                "public_base_url": "https://memory.example.com",
+                "oauth": {
+                    "authorization_servers": ["https://auth.example.com"],
+                    "issuer": "https://auth.example.com",
+                    "jwt_secret": "test-secret",
+                },
+            },
+            "providers": {"embeddings": "local", "vector_db": "in_memory"},
+        },
+        ingestion_agent=agent,
+    )
+    return TestClient(app)
+
+
+def _oauth_token(**claims: object) -> str:
+    now = int(time.time())
+    payload = {
+        "sub": "owner-a",
+        "iss": "https://auth.example.com",
+        "aud": "https://memory.example.com/mcp",
+        "exp": now + 300,
+        "scope": "memory:read memory:write",
+        **claims,
+    }
+    return _sign_hs256(payload, "test-secret")
+
+
+def _sign_hs256(payload: dict[str, object], secret: str) -> str:
+    header = {"alg": "HS256", "typ": "JWT"}
+    header_part = _base64url_json(header)
+    payload_part = _base64url_json(payload)
+    signing_input = f"{header_part}.{payload_part}".encode("ascii")
+    signature = hmac.new(secret.encode("utf-8"), signing_input, hashlib.sha256).digest()
+    return f"{header_part}.{payload_part}.{_base64url(signature)}"
+
+
+def _base64url_json(payload: dict[str, object]) -> str:
+    raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return _base64url(raw)
+
+
+def _base64url(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
 def _sqlite_auth_client(tmp_path) -> tuple[TestClient, SQLiteMetadataStore]:
+    config = parse_config(
+        {
+            "api": {"auth": "bearer_token"},
+            "paths": {"data_dir": str(tmp_path / "data")},
+            "providers": {"embeddings": "local", "vector_db": "in_memory"},
+        }
+    )
+    ensure_token_hash_secret(config)
     store = SQLiteMetadataStore(tmp_path / "metadata.sqlite3")
     store.create_auth_token(owner_id="owner-a", token="token-a")
     store.create_auth_token(owner_id="owner-b", token="token-b")
     store.create_auth_token(owner_id="owner-c", token="token-c")
     store.create_auth_token(owner_id="owner-d", token="token-d")
+    store.create_auth_token(owner_id="owner-a", token="token-read", scopes=["memory:read"])
     store.create_project(
         project_id="shared-321",
         owner_id="owner-a",
@@ -142,13 +214,31 @@ def _sqlite_auth_client(tmp_path) -> tuple[TestClient, SQLiteMetadataStore]:
         runtime=runtime,
     )
     app = create_app(
-        config={
-            "api": {"auth": "bearer_token"},
-            "providers": {"embeddings": "local", "vector_db": "in_memory"},
-        },
+        config=config,
         ingestion_agent=agent,
     )
     return TestClient(app), store
+
+
+def test_bearer_auth_enforces_stored_token_scopes(tmp_path) -> None:
+    client, _ = _sqlite_auth_client(tmp_path)
+    read_only_headers = {"Authorization": "Bearer token-read"}
+
+    search = client.post(
+        "/memory/search",
+        json={"query": "hello"},
+        headers=read_only_headers,
+    )
+    insert = client.post(
+        "/memory/insert",
+        json=_conversation(),
+        headers=read_only_headers,
+    )
+
+    assert search.status_code == 200
+    assert insert.status_code == 403
+    assert 'error="insufficient_scope"' in insert.headers["www-authenticate"]
+    assert 'scope="memory:write"' in insert.headers["www-authenticate"]
 
 
 def test_memory_insert_200() -> None:
@@ -190,6 +280,147 @@ def test_bearer_auth_rejects_missing_and_invalid_tokens() -> None:
     assert invalid.status_code == 401
     assert mcp_missing.status_code == 401
     assert missing.headers["www-authenticate"].startswith("Bearer")
+
+
+def test_oauth_protected_resource_metadata_is_public_and_secret_free() -> None:
+    client = _oauth_client()
+
+    root_response = client.get("/.well-known/oauth-protected-resource")
+    response = client.get("/.well-known/oauth-protected-resource/mcp")
+
+    assert root_response.status_code == 200
+    assert root_response.json()["resource"] == "https://memory.example.com/mcp"
+    assert response.status_code == 200
+    body = response.json()
+    assert body["resource"] == "https://memory.example.com/mcp"
+    assert body["authorization_servers"] == ["https://auth.example.com"]
+    assert "memory:read" in body["scopes_supported"]
+    assert "test-secret" not in str(body)
+
+
+def test_oauth_auth_rejects_missing_wrong_audience_and_query_tokens(
+    caplog,
+) -> None:
+    client = _oauth_client()
+    wrong_audience = _oauth_token(aud="https://other.example.com/mcp")
+    expired = _oauth_token(exp=int(time.time()) - 1)
+    query_token_value = _oauth_token()
+
+    missing = client.post("/memory/search", json={"query": "hello"})
+    wrong = client.post(
+        "/memory/search",
+        json={"query": "hello"},
+        headers={"Authorization": f"Bearer {wrong_audience}"},
+    )
+    with caplog.at_level(logging.INFO):
+        query_token = client.post(
+            f"/memory/search?access_token={query_token_value}",
+            json={"query": "hello"},
+        )
+    expired_response = client.post(
+        "/memory/search",
+        json={"query": "hello"},
+        headers={"Authorization": f"Bearer {expired}"},
+    )
+
+    for response in (missing, wrong, query_token, expired_response):
+        assert response.status_code == 401
+        challenge = response.headers["www-authenticate"]
+        assert 'resource_metadata="https://memory.example.com/.well-known/oauth-protected-resource"' in challenge
+        assert "memory:read" in challenge
+    assert wrong_audience not in str(wrong.json())
+    assert query_token_value not in caplog.text
+    assert wrong_audience not in caplog.text
+
+
+def test_oauth_auth_accepts_valid_token_and_enforces_scopes() -> None:
+    client = _oauth_client()
+    read_token = _oauth_token(scope="memory:read")
+    full_token = _oauth_token()
+
+    read_response = client.post(
+        "/memory/search",
+        json={"query": "hello"},
+        headers={"Authorization": f"Bearer {read_token}"},
+    )
+    write_response = client.post(
+        "/memory/insert",
+        json=_conversation(),
+        headers={"Authorization": f"Bearer {read_token}"},
+    )
+    full_response = client.post(
+        "/memory/insert",
+        json=_conversation(),
+        headers={"Authorization": f"Bearer {full_token}"},
+    )
+
+    assert read_response.status_code == 200
+    assert write_response.status_code == 403
+    challenge = write_response.headers["www-authenticate"]
+    assert 'error="insufficient_scope"' in challenge
+    assert 'scope="memory:write"' in challenge
+    assert full_response.status_code == 200
+
+
+def test_oauth_auth_protects_mcp_initialize() -> None:
+    initialize_payload = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "pytest", "version": "0.1"},
+        },
+    }
+
+    with _oauth_client() as client:
+        missing = client.post("/mcp/", json=initialize_payload)
+        valid = client.post(
+            "/mcp/",
+            json=initialize_payload,
+            headers={
+                "Accept": "application/json, text/event-stream",
+                "Authorization": f"Bearer {_oauth_token(scope='memory:read')}",
+            },
+        )
+
+    assert missing.status_code == 401
+    assert "/.well-known/oauth-protected-resource/mcp" in missing.headers["www-authenticate"]
+    assert valid.status_code == 200
+    assert valid.headers.get("mcp-session-id")
+
+
+def test_oauth_auth_accepts_mcp_tools_list_with_session() -> None:
+    initialize_payload = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "pytest", "version": "0.1"},
+        },
+    }
+    token = _oauth_token(scope="memory:read")
+    base_headers = {
+        "Accept": "application/json, text/event-stream",
+        "Authorization": f"Bearer {token}",
+    }
+
+    with _oauth_client() as client:
+        initialize = client.post("/mcp/", json=initialize_payload, headers=base_headers)
+        session_id = initialize.headers.get("mcp-session-id")
+        tools_list = client.post(
+            "/mcp/",
+            json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+            headers={**base_headers, "Mcp-Session-Id": session_id or ""},
+        )
+
+    assert initialize.status_code == 200
+    assert session_id
+    assert tools_list.status_code == 200
+    assert "memory_search" in tools_list.text
 
 
 def test_bearer_auth_stamps_owner_and_isolates_memory() -> None:

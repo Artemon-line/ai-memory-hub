@@ -14,7 +14,9 @@ from memory.backend.metadata_store import (
     _default_project_id,
     _hash_bearer_token,
     _new_token_id,
+    _normalize_token_scopes,
     _owner_id_from_payload,
+    _parse_token_scopes,
     _stamp_project_id,
     _token_id_from_hash,
     _token_prefix,
@@ -66,7 +68,9 @@ CREATE TABLE IF NOT EXISTS auth_tokens (
     owner_id TEXT NOT NULL REFERENCES users(id),
     display_name TEXT NULL,
     token_prefix TEXT NULL,
+    scopes JSONB NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_used_at TIMESTAMPTZ NULL,
     expires_at TIMESTAMPTZ NULL,
     revoked_at TIMESTAMPTZ NULL
 )
@@ -229,6 +233,8 @@ class PostgresMetadataStore:
                 cur.execute("ALTER TABLE auth_tokens ADD COLUMN IF NOT EXISTS token_id TEXT NULL")
                 cur.execute("ALTER TABLE auth_tokens ADD COLUMN IF NOT EXISTS display_name TEXT NULL")
                 cur.execute("ALTER TABLE auth_tokens ADD COLUMN IF NOT EXISTS token_prefix TEXT NULL")
+                cur.execute("ALTER TABLE auth_tokens ADD COLUMN IF NOT EXISTS scopes JSONB NULL")
+                cur.execute("ALTER TABLE auth_tokens ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMPTZ NULL")
                 cur.execute(CREATE_AUTH_TOKENS_OWNER_INDEX_SQL)
                 cur.execute(CREATE_AUTH_TOKENS_TOKEN_ID_INDEX_SQL)
                 cur.execute(CREATE_PROJECTS_TABLE_SQL)
@@ -334,12 +340,14 @@ class PostgresMetadataStore:
         display_name: str | None = None,
         token_display_name: str | None = None,
         expires_at: str | None = None,
+        scopes: list[str] | None = None,
     ) -> dict[str, Any]:
         owner = _validate_owner_id(owner_id)
         token_hash = _hash_bearer_token(token)
         token_id = _new_token_id()
         token_name = token_display_name
         token_prefix = _token_prefix(token)
+        scopes_json = json.dumps(_normalize_token_scopes(scopes), separators=(",", ":"))
         with self._connect() as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -355,22 +363,24 @@ class PostgresMetadataStore:
                 cur.execute(
                     """
                     INSERT INTO auth_tokens
-                        (token_hash, token_id, owner_id, display_name, token_prefix, expires_at)
-                    VALUES (%s, %s, %s, %s, %s, %s)
+                        (token_hash, token_id, owner_id, display_name, token_prefix, scopes, expires_at)
+                    VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s)
                     ON CONFLICT (token_hash) DO UPDATE SET
                         token_id = COALESCE(auth_tokens.token_id, EXCLUDED.token_id),
                         owner_id = EXCLUDED.owner_id,
                         display_name = EXCLUDED.display_name,
                         token_prefix = EXCLUDED.token_prefix,
+                        scopes = EXCLUDED.scopes,
                         expires_at = EXCLUDED.expires_at,
                         revoked_at = NULL
                     """,
-                    (token_hash, token_id, owner, token_name, token_prefix, expires_at),
+                    (token_hash, token_id, owner, token_name, token_prefix, scopes_json, expires_at),
                 )
                 cur.execute(
                     """
                     SELECT token_id, owner_id, display_name, token_prefix,
-                           created_at::text, expires_at::text, revoked_at::text
+                           created_at::text, expires_at::text, revoked_at::text,
+                           scopes::text, last_used_at::text
                     FROM auth_tokens
                     WHERE token_hash = %s
                     """,
@@ -382,12 +392,16 @@ class PostgresMetadataStore:
         return self._token_from_row(row)
 
     def owner_for_token(self, token: str) -> str | None:
+        context = self.auth_context_for_token(token)
+        return context["owner_id"] if context is not None else None
+
+    def auth_context_for_token(self, token: str) -> dict[str, Any] | None:
         token_hash = _hash_bearer_token(token)
         with self._connect() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT auth_tokens.owner_id
+                    SELECT auth_tokens.owner_id, auth_tokens.scopes::text, auth_tokens.token_id
                     FROM auth_tokens
                     JOIN users ON users.id = auth_tokens.owner_id
                     WHERE auth_tokens.token_hash = %s
@@ -398,7 +412,18 @@ class PostgresMetadataStore:
                     (token_hash,),
                 )
                 row = cur.fetchone()
-        return str(row[0]) if row is not None else None
+                if row is not None:
+                    cur.execute(
+                        "UPDATE auth_tokens SET last_used_at = NOW() WHERE token_hash = %s",
+                        (token_hash,),
+                    )
+        if row is None:
+            return None
+        return {
+            "owner_id": str(row[0]),
+            "scopes": _parse_token_scopes(row[1]),
+            "token_id": str(row[2]) if row[2] is not None else None,
+        }
 
     def list_auth_tokens(self, *, owner_id: str) -> list[dict[str, Any]]:
         owner = _validate_owner_id(owner_id)
@@ -407,7 +432,8 @@ class PostgresMetadataStore:
                 cur.execute(
                     """
                     SELECT token_id, owner_id, display_name, token_prefix,
-                           created_at::text, expires_at::text, revoked_at::text
+                           created_at::text, expires_at::text, revoked_at::text,
+                           scopes::text, last_used_at::text
                     FROM auth_tokens
                     WHERE owner_id = %s
                     ORDER BY created_at DESC, token_id ASC
@@ -424,7 +450,8 @@ class PostgresMetadataStore:
                 cur.execute(
                     """
                     SELECT token_hash, token_id, owner_id, display_name, token_prefix,
-                           created_at::text, expires_at::text, revoked_at::text
+                           created_at::text, expires_at::text, revoked_at::text,
+                           scopes::text, last_used_at::text
                     FROM auth_tokens
                     WHERE token_id = %s
                        OR token_id LIKE %s
@@ -451,7 +478,8 @@ class PostgresMetadataStore:
                 cur.execute(
                     """
                     SELECT token_id, owner_id, display_name, token_prefix,
-                           created_at::text, expires_at::text, revoked_at::text
+                           created_at::text, expires_at::text, revoked_at::text,
+                           scopes::text, last_used_at::text
                     FROM auth_tokens
                     WHERE token_hash = %s
                     """,
@@ -1161,6 +1189,8 @@ class PostgresMetadataStore:
             "created_at": str(row[4]),
             "expires_at": row[5],
             "revoked_at": row[6],
+            "scopes": _parse_token_scopes(row[7]),
+            "last_used_at": row[8],
         }
 
     def _project_member_from_row(self, row: Any) -> dict[str, Any]:

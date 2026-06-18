@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
+import os
 import re
 import secrets
 import sqlite3
@@ -36,6 +38,8 @@ class SQLiteMetadataStore:
         ("auth_tokens", "token_id"): "TEXT",
         ("auth_tokens", "token_prefix"): "TEXT",
         ("auth_tokens", "display_name"): "TEXT",
+        ("auth_tokens", "scopes"): "TEXT",
+        ("auth_tokens", "last_used_at"): "TEXT",
         ("facts", "source_quality"): "TEXT",
         ("facts", "confidence_reason"): "TEXT",
         ("facts", "last_confirmed_at"): "TEXT",
@@ -94,7 +98,9 @@ class SQLiteMetadataStore:
                     owner_id TEXT NOT NULL,
                     display_name TEXT,
                     token_prefix TEXT,
+                    scopes TEXT,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    last_used_at TEXT,
                     expires_at TEXT,
                     revoked_at TEXT,
                     FOREIGN KEY(owner_id) REFERENCES users(id)
@@ -104,6 +110,8 @@ class SQLiteMetadataStore:
             self._ensure_column(conn, "auth_tokens", "token_id", "TEXT")
             self._ensure_column(conn, "auth_tokens", "token_prefix", "TEXT")
             self._ensure_column(conn, "auth_tokens", "display_name", "TEXT")
+            self._ensure_column(conn, "auth_tokens", "scopes", "TEXT")
+            self._ensure_column(conn, "auth_tokens", "last_used_at", "TEXT")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS projects (
@@ -344,12 +352,14 @@ class SQLiteMetadataStore:
         display_name: str | None = None,
         token_display_name: str | None = None,
         expires_at: str | None = None,
+        scopes: list[str] | None = None,
     ) -> dict[str, Any]:
         owner = _validate_owner_id(owner_id)
         token_hash = _hash_bearer_token(token)
         token_id = _new_token_id()
         token_name = token_display_name
         token_prefix = _token_prefix(token)
+        scopes_json = json.dumps(_normalize_token_scopes(scopes), separators=(",", ":"))
         with self._connect() as conn:
             conn.execute(
                 """
@@ -364,22 +374,23 @@ class SQLiteMetadataStore:
             conn.execute(
                 """
                 INSERT INTO auth_tokens
-                    (token_hash, token_id, owner_id, display_name, token_prefix, expires_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                    (token_hash, token_id, owner_id, display_name, token_prefix, scopes, expires_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(token_hash) DO UPDATE SET
                     token_id = COALESCE(auth_tokens.token_id, excluded.token_id),
                     owner_id = excluded.owner_id,
                     display_name = excluded.display_name,
                     token_prefix = excluded.token_prefix,
+                    scopes = excluded.scopes,
                     expires_at = excluded.expires_at,
                     revoked_at = NULL
                 """,
-                (token_hash, token_id, owner, token_name, token_prefix, expires_at),
+                (token_hash, token_id, owner, token_name, token_prefix, scopes_json, expires_at),
             )
             row = conn.execute(
                 """
                 SELECT token_id, owner_id, display_name, token_prefix, created_at,
-                       expires_at, revoked_at
+                       expires_at, revoked_at, scopes, last_used_at
                 FROM auth_tokens
                 WHERE token_hash = ?
                 """,
@@ -390,11 +401,15 @@ class SQLiteMetadataStore:
         return self._token_from_row(row)
 
     def owner_for_token(self, token: str) -> str | None:
+        context = self.auth_context_for_token(token)
+        return context["owner_id"] if context is not None else None
+
+    def auth_context_for_token(self, token: str) -> dict[str, Any] | None:
         token_hash = _hash_bearer_token(token)
         with self._connect() as conn:
             row = conn.execute(
                 """
-                SELECT auth_tokens.owner_id
+                SELECT auth_tokens.owner_id, auth_tokens.scopes, auth_tokens.token_id
                 FROM auth_tokens
                 JOIN users ON users.id = auth_tokens.owner_id
                 WHERE auth_tokens.token_hash = ?
@@ -404,7 +419,18 @@ class SQLiteMetadataStore:
                 """,
                 (token_hash,),
             ).fetchone()
-        return str(row["owner_id"]) if row is not None else None
+            if row is not None:
+                conn.execute(
+                    "UPDATE auth_tokens SET last_used_at = CURRENT_TIMESTAMP WHERE token_hash = ?",
+                    (token_hash,),
+                )
+        if row is None:
+            return None
+        return {
+            "owner_id": str(row["owner_id"]),
+            "token_id": str(row["token_id"]) if row["token_id"] is not None else None,
+            "scopes": _parse_token_scopes(row["scopes"]),
+        }
 
     def list_auth_tokens(self, *, owner_id: str) -> list[dict[str, Any]]:
         owner = _validate_owner_id(owner_id)
@@ -412,7 +438,7 @@ class SQLiteMetadataStore:
             rows = conn.execute(
                 """
                 SELECT token_id, owner_id, display_name, token_prefix, created_at,
-                       expires_at, revoked_at
+                       expires_at, revoked_at, scopes, last_used_at
                 FROM auth_tokens
                 WHERE owner_id = ?
                 ORDER BY created_at DESC, token_id ASC
@@ -427,7 +453,7 @@ class SQLiteMetadataStore:
             rows = conn.execute(
                 """
                 SELECT token_hash, token_id, owner_id, display_name, token_prefix,
-                       created_at, expires_at, revoked_at
+                       created_at, expires_at, revoked_at, scopes, last_used_at
                 FROM auth_tokens
                 WHERE token_id = ?
                    OR token_id LIKE ?
@@ -453,7 +479,7 @@ class SQLiteMetadataStore:
             row = conn.execute(
                 """
                 SELECT token_id, owner_id, display_name, token_prefix, created_at,
-                       expires_at, revoked_at
+                       expires_at, revoked_at, scopes, last_used_at
                 FROM auth_tokens
                 WHERE token_hash = ?
                 """,
@@ -1239,6 +1265,8 @@ class SQLiteMetadataStore:
             "created_at": str(row["created_at"]),
             "expires_at": row["expires_at"],
             "revoked_at": row["revoked_at"],
+            "scopes": _parse_token_scopes(row["scopes"]),
+            "last_used_at": row["last_used_at"],
         }
 
     def _project_member_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
@@ -1336,6 +1364,10 @@ def _keyword_tokens(query: str) -> list[str]:
 def _hash_bearer_token(token: str) -> str:
     if not isinstance(token, str) or not token:
         raise ValueError("bearer token must be a non-empty string")
+    secret = os.environ.get("AMH_TOKEN_HASH_SECRET")
+    if secret:
+        digest = hmac.new(secret.encode("utf-8"), token.encode("utf-8"), hashlib.sha256).hexdigest()
+        return "hmac-sha256:" + digest
     return "sha256:" + hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
@@ -1351,6 +1383,28 @@ def _token_id_from_hash(token_hash: str) -> str:
 def _token_prefix(token: str) -> str:
     value = str(token)
     return value[:12]
+
+
+def _normalize_token_scopes(scopes: list[str] | None) -> list[str]:
+    values = scopes if scopes is not None else ["memory:read", "memory:write"]
+    normalized = sorted({str(scope).strip() for scope in values if str(scope).strip()})
+    if not normalized:
+        raise ValueError("token scopes must not be empty")
+    return normalized
+
+
+def _parse_token_scopes(value: Any) -> list[str]:
+    if value is None or value == "":
+        return ["memory:read", "memory:write"]
+    if isinstance(value, list):
+        return _normalize_token_scopes([str(item) for item in value])
+    try:
+        parsed = json.loads(str(value))
+    except json.JSONDecodeError:
+        return _normalize_token_scopes(str(value).split())
+    if isinstance(parsed, list):
+        return _normalize_token_scopes([str(item) for item in parsed])
+    return _normalize_token_scopes(str(parsed).split())
 
 
 def _validate_token_lookup(token_id_or_prefix: str) -> str:

@@ -6,9 +6,10 @@ import jsonschema
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from memory.auth import install_auth_middleware
+from memory.auth import install_auth_middleware, protected_resource_metadata
+from memory.backend.log_safety import install_secret_redaction_filter
 from memory.backend.redaction import redact_content_hashes
-from memory.config import HubConfig, normalize_config
+from memory.config import HubConfig, ensure_token_hash_secret, normalize_config
 from memory.ingestion.base_agent import BaseIngestionAgent
 from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
 from memory.interfaces.mcp_server import create_mcp_server
@@ -94,6 +95,17 @@ def _register_health_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
 
     app.get("/health")(health)
     app.get("/ready")(ready)
+
+
+def _register_protected_resource_metadata_routes(app: FastAPI, config: HubConfig) -> None:
+    async def root_metadata() -> dict[str, object]:
+        return protected_resource_metadata(config, resource_path="/mcp")
+
+    async def mcp_metadata() -> dict[str, object]:
+        return protected_resource_metadata(config, resource_path="/mcp")
+
+    app.get("/.well-known/oauth-protected-resource")(root_metadata)
+    app.get("/.well-known/oauth-protected-resource/mcp")(mcp_metadata)
 
 
 def _register_api_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
@@ -275,7 +287,9 @@ def create_app(
     config: HubConfig | dict[str, Any] | None = None,
     ingestion_agent: BaseIngestionAgent | None = None,
 ) -> FastAPI:
+    install_secret_redaction_filter()
     cfg = normalize_config(config)
+    ensure_token_hash_secret(cfg)
     mcp_app = None
     agent = ingestion_agent or MVPIngestionAgent(
         config=cfg
@@ -298,6 +312,7 @@ def create_app(
         app.mount("/mcp", mcp_app)
 
     _register_health_routes(app, agent)
+    _register_protected_resource_metadata_routes(app, cfg)
 
     # ⭐ Only enable API if config says so
     if cfg.interfaces.api:
