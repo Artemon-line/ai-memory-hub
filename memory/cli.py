@@ -766,6 +766,9 @@ def _format_fact_search_text(result: dict[str, Any]) -> str:
 
 def _format_profile_text(result: dict[str, Any]) -> str:
     lines = [f"subject: {result['subject']}"]
+    summary = result.get("summary")
+    if isinstance(summary, dict) and summary.get("text"):
+        lines.append(f"summary: {summary['text']}")
     for fact in result.get("facts", []):
         if isinstance(fact, dict):
             lines.append(f"- {fact['id']} {fact['predicate']}: {fact['object']}")

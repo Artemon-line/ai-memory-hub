@@ -100,6 +100,10 @@ def test_profile_get_cli_text(capsys, monkeypatch) -> None:
         return {
             "status": "ok",
             "subject": kwargs["subject"],
+            "summary": {
+                "text": "profile_name: Tyran",
+                "basis": "active_facts",
+            },
             "facts": [
                 {
                     "id": "fact-1",
@@ -116,6 +120,7 @@ def test_profile_get_cli_text(capsys, monkeypatch) -> None:
     output = capsys.readouterr().out
     assert exit_code == 0
     assert "subject: user" in output
+    assert "summary: profile_name: Tyran" in output
     assert "profile_name: Tyran" in output
 
 

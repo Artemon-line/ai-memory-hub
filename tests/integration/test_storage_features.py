@@ -36,6 +36,30 @@ def test_sqlite_capabilities_and_health(tmp_path: Path) -> None:
     assert health["schema_version"] == 1
 
 
+def test_sqlite_metadata_store_persists_generated_summaries_separately(tmp_path: Path) -> None:
+    store = SQLiteMetadataStore(tmp_path / "metadata.sqlite3")
+    summary = {
+        "id": "summary:abc123",
+        "type": "profile",
+        "target_id": "user",
+        "owner_id": "owner-a",
+        "project_id": "project-a",
+        "text": "profile_name: Tyran",
+        "basis": "active_facts",
+        "provenance_status": "fact_ids",
+        "filters": {"status": "active"},
+        "provenance": [{"fact_id": "fact-1"}],
+        "generated_at": "2026-01-01T00:00:00Z",
+    }
+
+    stored_id = store.upsert_generated_summary(summary)
+    loaded = store.get_generated_summary(stored_id)
+
+    assert stored_id == "summary:abc123"
+    assert loaded == summary
+    assert store.get("d9fd4c95-9cb3-4fd5-b967-3027f8863210") is None
+
+
 def test_sqlite_metadata_store_tracks_index_chunk_manifest(tmp_path: Path) -> None:
     store = SQLiteMetadataStore(tmp_path / "metadata.sqlite3")
     conversation = {

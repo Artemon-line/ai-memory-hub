@@ -264,6 +264,11 @@ Invalid explicit IDs still fail fast. If an agent supplies `id`, it must be a va
 search recall and metadata reranking, but answers still need support from raw
 messages or normalized facts.
 
+Use `memory_profile_get` when you need a compact profile view. It returns
+filtered normalized facts plus a `summary` object generated from active facts,
+freshness, source-quality counts, and compact fact provenance; the generated
+summary is stored separately from raw messages, chunks, and normalized facts.
+
 ## Storage Awareness For Agents
 
 Agents should not branch behavior based on the active storage backend. The configured providers

@@ -312,8 +312,12 @@ Current status:
 - Full `messages` are the source of truth.
 - `metadata.tags` and inferred topics already help retrieval/reranking.
 - `metadata.summary` is documented as a first-class ingestion hint.
-- Built-in generated conversation, profile, topic, and project summaries remain
-  planned after summary provenance is reliable.
+- `memory_profile_get` returns a compact generated profile summary built from
+  active facts, freshness fields, source-quality counts, and fact provenance.
+- Generated summaries are stored separately from raw chunks and normalized facts
+  in provenance-aware summary records.
+- Built-in generated conversation, topic, and project summaries remain planned
+  after summary provenance is reliable.
 
 Implementation sequence:
 
@@ -329,11 +333,11 @@ Implementation sequence:
   provenance.
 - [ ] Add server-generated per-conversation summaries after client-provided
   summaries have enough real usage examples.
-- [ ] Add a profile summary response that combines active facts, freshness, and
+- [x] Add a profile summary response that combines active facts, freshness, and
   compact provenance.
 - [ ] Add topic and project summaries after conversation summaries are reliable.
-- [ ] Keep generated summary storage separate from raw chunks and normalized facts.
-- [ ] Add tests showing generated summaries cite their source conversations or facts.
+- [x] Keep generated summary storage separate from raw chunks and normalized facts.
+- [x] Add tests showing generated summaries cite their source conversations or facts.
 
 Acceptance criteria:
 
@@ -341,8 +345,8 @@ Acceptance criteria:
 - Search can use the summary to find relevant conversations more reliably.
 - Answers still cite raw messages or normalized facts, not unsupported summary
   speculation.
-- Agents can fetch compact profile or project summaries without reading every raw
-  chunk once generated summaries are implemented.
+- Agents can fetch compact profile summaries without reading every raw chunk.
+- Agents can fetch compact project summaries once project summaries are implemented.
 
 ## P0: Bruno Integration Test Layer
 

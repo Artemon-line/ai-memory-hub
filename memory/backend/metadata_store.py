@@ -77,6 +77,31 @@ class SQLiteMetadataStore:
                 )
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS generated_summaries (
+                    id TEXT PRIMARY KEY,
+                    summary_type TEXT NOT NULL,
+                    target_id TEXT NOT NULL,
+                    owner_id TEXT,
+                    project_id TEXT,
+                    text TEXT NOT NULL,
+                    basis TEXT NOT NULL,
+                    provenance_status TEXT NOT NULL,
+                    filters TEXT NOT NULL,
+                    provenance TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    generated_at TEXT NOT NULL,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_generated_summaries_target
+                ON generated_summaries(summary_type, target_id, project_id)
+                """
+            )
             self._ensure_column(conn, "conversations", "conversation_hash", "TEXT")
             self._ensure_column(conn, "conversations", "upstream_thread_id", "TEXT")
             self._ensure_column(conn, "conversations", "project_id", "TEXT")
@@ -871,6 +896,58 @@ class SQLiteMetadataStore:
         self, subject: str = "user", project_id: str | None = None
     ) -> dict[str, Any]:
         return {"subject": subject, "facts": self.search_facts(subject=subject, project_id=project_id)}
+
+    def upsert_generated_summary(self, summary: dict[str, Any]) -> str:
+        summary_id = str(summary["id"])
+        summary_type = str(summary["type"])
+        target_id = str(summary["target_id"])
+        filters = summary.get("filters", {})
+        provenance = summary.get("provenance", [])
+        payload = json.dumps(summary, separators=(",", ":"), ensure_ascii=False)
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO generated_summaries (
+                    id, summary_type, target_id, owner_id, project_id, text, basis,
+                    provenance_status, filters, provenance, payload, generated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    text = excluded.text,
+                    basis = excluded.basis,
+                    provenance_status = excluded.provenance_status,
+                    filters = excluded.filters,
+                    provenance = excluded.provenance,
+                    payload = excluded.payload,
+                    generated_at = excluded.generated_at,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (
+                    summary_id,
+                    summary_type,
+                    target_id,
+                    summary.get("owner_id"),
+                    summary.get("project_id"),
+                    str(summary.get("text", "")),
+                    str(summary.get("basis", "")),
+                    str(summary.get("provenance_status", "")),
+                    json.dumps(filters, separators=(",", ":"), ensure_ascii=False),
+                    json.dumps(provenance, separators=(",", ":"), ensure_ascii=False),
+                    payload,
+                    str(summary.get("generated_at", "")),
+                ),
+            )
+        return summary_id
+
+    def get_generated_summary(self, summary_id: str) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT payload FROM generated_summaries WHERE id = ?",
+                (str(summary_id),),
+            ).fetchone()
+        if row is None:
+            return None
+        return json.loads(str(row["payload"]))
 
     def supersede_fact(
         self, fact_id: str, superseded_by: str, project_id: str | None = None

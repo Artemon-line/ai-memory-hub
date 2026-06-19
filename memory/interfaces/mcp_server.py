@@ -67,8 +67,9 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "date_from, date_to, confidence, status, source_quality, freshness_from, freshness_to, and project_id."
     ),
     "memory_profile_get": (
-        "Return normalized facts for a subject. Optional filters: source, predicate, date_from, "
-        "date_to, confidence, status, source_quality, freshness_from, freshness_to, and project_id."
+        "Return normalized facts plus a compact fact-based summary for a subject. Optional filters: "
+        "source, predicate, date_from, date_to, confidence, status, source_quality, freshness_from, "
+        "freshness_to, and project_id."
     ),
     "memory_fact_supersede": "Mark one normalized fact as superseded by another fact within a project_id.",
 }

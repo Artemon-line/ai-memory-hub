@@ -9,6 +9,12 @@ import pytest
 
 from memory.ingestion import mvp_ingestion
 from memory.ingestion import validate as ingestion_validate
+from memory.ingestion.summary_models import (
+    GeneratedSummary,
+    SummaryBasis,
+    SummaryProvenanceStatus,
+    SummaryType,
+)
 
 
 class StubEmbedder:
@@ -106,6 +112,57 @@ def _configure_stubs(
         )
     )
     return metadata, vectors
+
+
+def test_generated_summary_model_rejects_unknown_keys() -> None:
+    with pytest.raises(ValueError):
+        GeneratedSummary(
+            id="summary:test",
+            type="profile",
+            target_id="user",
+            text="profile_name: Tyran",
+            basis="active_facts",
+            provenance_status="fact_ids",
+            generated_at="2026-01-01T00:00:00Z",
+            unsupported_key=True,
+        )
+
+
+def test_generated_summary_model_dumps_enums_as_json_strings() -> None:
+    summary = GeneratedSummary(
+        id="summary:test",
+        type=SummaryType.PROFILE,
+        target_id="user",
+        text="profile_name: Tyran",
+        basis=SummaryBasis.ACTIVE_FACTS,
+        provenance_status=SummaryProvenanceStatus.FACT_IDS,
+        generated_at="2026-01-01T00:00:00Z",
+    )
+
+    payload = summary.model_dump(mode="json")
+
+    assert payload["type"] == "profile"
+    assert payload["basis"] == "active_facts"
+    assert payload["provenance_status"] == "fact_ids"
+
+
+def test_generated_summary_json_schema_exports_enum_values() -> None:
+    schema = GeneratedSummary.model_json_schema()
+    definitions = schema.get("$defs", {})
+
+    assert definitions["SummaryType"]["enum"] == [
+        "profile",
+        "conversation",
+        "topic",
+        "project",
+    ]
+    assert definitions["SummaryProvenanceStatus"]["enum"] == [
+        "fact_ids",
+        "conversation_ids",
+        "mixed",
+        "none",
+    ]
+    assert definitions["SummaryBasis"]["enum"] == ["active_facts"]
 
 
 def test_ingest_messages_success() -> None:
@@ -785,6 +842,25 @@ def test_profile_and_recurring_topic_facts_are_extracted() -> None:
     assert "recurring_topic" in predicates
     assert topic_fact["source_quality"] == "inferred_from_conversation"
     assert topic_fact["confidence_reason"] == "Inferred from recurring conversation topics."
+    assert profile["summary"]["basis"] == "active_facts"
+    assert "profile_name: Tyran" in profile["summary"]["text"]
+    assert profile["summary"]["active_fact_count"] == len(profile["facts"])
+    assert profile["summary"]["source_quality_counts"]["direct_user_statement"] == 2
+    assert profile["summary"]["source_quality_counts"]["inferred_from_conversation"] == 4
+    stored = getattr(mvp_ingestion._runtime().metadata_store, "_generated_summaries")
+    assert stored[profile["summary"]["id"]]["type"] == "profile"
+    assert stored[profile["summary"]["id"]]["provenance_status"] == "fact_ids"
+
+
+def test_profile_summary_handles_empty_filtered_view() -> None:
+    _configure_stubs()
+
+    profile = mvp_ingestion.profile_get("user", predicate="profile_name")
+
+    assert profile["facts"] == []
+    assert profile["summary"]["text"] == "No active profile facts match the requested filters."
+    assert profile["summary"]["active_fact_count"] == 0
+    assert profile["summary"]["filters"] == {"predicate": "profile_name", "status": "active"}
 
 
 def test_project_fact_questions_match_named_subjects() -> None:

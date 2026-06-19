@@ -14,7 +14,7 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P0 | Project workspaces and shared collaboration boundaries | Partial | `project_workspace_collaboration_plan.md` |
 | P0 | MCP client feedback: response shape clarity, fact freshness, and source quality | Implemented | `improvements/client_feedback_improvement_plan.md` |
 | P0 | Advanced search filters for ask, facts, and profile queries | Planned | `improvements/client_feedback_improvement_plan.md` |
-| P0 | Conversation summary metadata and profile views | Partial | `improvements/client_feedback_improvement_plan.md` |
+| P0 | Conversation summary metadata and profile views | Implemented | `improvements/client_feedback_improvement_plan.md` |
 | P0 | MCP client smoke coverage for Codex, Gemini, Copilot, Claude, opencode | Implemented | `mcp_client_smoke_plan.md` |
 | P0 | Weekly scheduled real-client MCP smoke coverage | Implemented | `real_client_mcp_smoke_plan.md` |
 | P0 | Bruno black-box API/MCP integration test layer | Partial | `bruno_integration_test_plan.md` |
@@ -239,8 +239,10 @@ Implementation sequence:
       evidence unless raw messages or facts support it.
 - [x] Add tests showing summary improves recall without replacing message
       provenance.
-- [ ] Add a profile summary response that combines active facts, freshness, and
+- [x] Add a profile summary response that combines active facts, freshness, and
       compact provenance.
+- [x] Keep generated summary storage separate from raw chunks and normalized
+      facts with provenance-aware generated summary records.
 - [ ] Add server-generated conversation, topic, and project summaries after
       summary provenance is reliable.
 

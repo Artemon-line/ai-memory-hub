@@ -25,6 +25,13 @@ from memory.backend.metadata_store import (
 from memory.backend.postgres_metadata_store import PostgresMetadataStore
 from memory.backend.vector_store import InMemoryVectorStore, LanceDBVectorStore, PGVectorStore
 from memory.config import HubConfig, ensure_token_hash_secret, load_config, parse_config
+from memory.ingestion.summary_models import (
+    GeneratedSummary,
+    GeneratedSummaryProvenance,
+    SummaryBasis,
+    SummaryProvenanceStatus,
+    SummaryType,
+)
 from memory.ingestion.tokenizer import (
     count_tokens,
     split_token_windows,
@@ -2540,23 +2547,45 @@ def profile_get(
     freshness_from: str | None = None,
     freshness_to: str | None = None,
 ) -> dict[str, Any]:
+    facts = fact_search(
+        subject=subject,
+        predicate=predicate,
+        owner_id=owner_id,
+        project_id=project_id,
+        source=source,
+        date_from=date_from,
+        date_to=date_to,
+        confidence=confidence,
+        status=status,
+        source_quality=source_quality,
+        freshness_from=freshness_from,
+        freshness_to=freshness_to,
+    )["results"]
+    effective_project_id = _resolve_project(
+        owner_id=owner_id, project_id=project_id, required_role=PROJECT_ROLE_READER
+    )
+    summary = _profile_summary(
+        subject=subject,
+        facts=facts,
+        owner_id=owner_id,
+        project_id=effective_project_id,
+        filters={
+            "predicate": predicate,
+            "source": source,
+            "date_from": date_from,
+            "date_to": date_to,
+            "confidence": confidence,
+            "status": status or "active",
+            "source_quality": source_quality,
+            "freshness_from": freshness_from,
+            "freshness_to": freshness_to,
+        },
+    )
     return {
         "status": "ok",
         "subject": subject,
-        "facts": fact_search(
-            subject=subject,
-            predicate=predicate,
-            owner_id=owner_id,
-            project_id=project_id,
-            source=source,
-            date_from=date_from,
-            date_to=date_to,
-            confidence=confidence,
-            status=status,
-            source_quality=source_quality,
-            freshness_from=freshness_from,
-            freshness_to=freshness_to,
-        )["results"],
+        "summary": summary,
+        "facts": facts,
     }
 
 
@@ -2645,6 +2674,140 @@ def _fact_answer_text(
         old = "; ".join(str(fact.get("object_normalized") or fact.get("object", "")) for fact in superseded)
         answer += f" Correction noted: earlier memory said {old}."
     return answer
+
+
+def _profile_summary(
+    *,
+    subject: str,
+    facts: list[dict[str, Any]],
+    owner_id: str | None,
+    project_id: str | None,
+    filters: dict[str, Any],
+) -> dict[str, Any]:
+    active_facts = [fact for fact in facts if not fact.get("superseded_by")]
+    freshest_at = _freshest_fact_timestamp(active_facts)
+    source_quality_counts = _count_values(active_facts, "source_quality")
+    confidence_counts = _count_values(active_facts, "confidence")
+    text = _profile_summary_text(active_facts)
+    summary = GeneratedSummary(
+        id=_generated_summary_id(
+            summary_type="profile",
+            target_id=subject,
+            project_id=project_id,
+            filters=filters,
+        ),
+        type=SummaryType.PROFILE,
+        target_id=subject,
+        project_id=project_id,
+        owner_id=owner_id,
+        text=text,
+        basis=SummaryBasis.ACTIVE_FACTS,
+        provenance_status=SummaryProvenanceStatus.FACT_IDS,
+        fact_count=len(facts),
+        active_fact_count=len(active_facts),
+        freshest_at=freshest_at,
+        source_quality_counts=source_quality_counts,
+        confidence_counts=confidence_counts,
+        filters={key: str(value) for key, value in filters.items() if value is not None},
+        provenance=[
+            GeneratedSummaryProvenance(
+                fact_id=_optional_string(fact.get("id")),
+                predicate=_optional_string(fact.get("predicate")),
+                source_conversation_id=_optional_string(fact.get("source_conversation_id")),
+                source_message_indexes=_source_message_indexes(fact),
+                last_confirmed_at=_optional_string(fact.get("last_confirmed_at")),
+            )
+            for fact in active_facts
+        ],
+        generated_at=_utc_now_iso(),
+    )
+    payload = summary.model_dump(mode="json")
+    _store_generated_summary(payload)
+    return payload
+
+
+def _profile_summary_text(facts: list[dict[str, Any]]) -> str:
+    if not facts:
+        return "No active profile facts match the requested filters."
+    lines: list[str] = []
+    for fact in facts[:12]:
+        predicate = str(fact.get("predicate", "fact"))
+        value = str(fact.get("object_normalized") or fact.get("object", ""))
+        if value:
+            lines.append(f"{predicate}: {value}")
+    remaining = len(facts) - len(lines)
+    if remaining > 0:
+        lines.append(f"{remaining} more active fact(s).")
+    return "; ".join(lines)
+
+
+def _freshest_fact_timestamp(facts: list[dict[str, Any]]) -> str | None:
+    timestamps = [
+        str(fact.get("last_confirmed_at") or fact.get("updated_at") or fact.get("created_at"))
+        for fact in facts
+        if fact.get("last_confirmed_at") or fact.get("updated_at") or fact.get("created_at")
+    ]
+    return max(timestamps) if timestamps else None
+
+
+def _count_values(facts: list[dict[str, Any]], key: str) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for fact in facts:
+        value = fact.get(key)
+        if value is None:
+            continue
+        text = str(value)
+        counts[text] = counts.get(text, 0) + 1
+    return counts
+
+
+def _optional_string(value: Any) -> str | None:
+    if value is None:
+        return None
+    return str(value)
+
+
+def _source_message_indexes(fact: dict[str, Any]) -> list[int]:
+    indexes = fact.get("source_message_indexes", [])
+    if not isinstance(indexes, list):
+        return []
+    parsed: list[int] = []
+    for index in indexes:
+        try:
+            parsed.append(int(index))
+        except (TypeError, ValueError):
+            continue
+    return parsed
+
+
+def _generated_summary_id(
+    *,
+    summary_type: str,
+    target_id: str,
+    project_id: str | None,
+    filters: dict[str, Any],
+) -> str:
+    material = json_dumps(
+        {
+            "type": summary_type,
+            "target_id": target_id,
+            "project_id": project_id,
+            "filters": {key: filters[key] for key in sorted(filters) if filters[key] is not None},
+        }
+    )
+    return f"summary:{hashlib.sha256(material.encode('utf-8')).hexdigest()[:32]}"
+
+
+def _store_generated_summary(summary: dict[str, Any]) -> None:
+    store = _runtime().metadata_store
+    if hasattr(store, "upsert_generated_summary"):
+        store.upsert_generated_summary(summary)
+        return
+    summaries = getattr(store, "_generated_summaries", {})
+    if not isinstance(summaries, dict):
+        summaries = {}
+    summaries[str(summary["id"])] = dict(summary)
+    setattr(store, "_generated_summaries", summaries)
 
 
 def _public_fact(fact: dict[str, Any]) -> dict[str, Any]:

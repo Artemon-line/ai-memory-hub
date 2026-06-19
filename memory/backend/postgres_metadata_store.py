@@ -46,6 +46,29 @@ ON conversations(source, upstream_thread_id)
 WHERE upstream_thread_id IS NOT NULL
 """
 
+CREATE_GENERATED_SUMMARIES_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS generated_summaries (
+    id TEXT PRIMARY KEY,
+    summary_type TEXT NOT NULL,
+    target_id TEXT NOT NULL,
+    owner_id TEXT NULL,
+    project_id TEXT NULL,
+    text TEXT NOT NULL,
+    basis TEXT NOT NULL,
+    provenance_status TEXT NOT NULL,
+    filters JSONB NOT NULL,
+    provenance JSONB NOT NULL,
+    payload JSONB NOT NULL,
+    generated_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)
+"""
+
+CREATE_GENERATED_SUMMARIES_TARGET_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_generated_summaries_target
+ON generated_summaries(summary_type, target_id, project_id)
+"""
+
 CREATE_SCHEMA_VERSION_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS schema_version (
     id SMALLINT PRIMARY KEY CHECK (id = 1),
@@ -227,6 +250,8 @@ class PostgresMetadataStore:
                 cur.execute("DROP INDEX IF EXISTS idx_conversations_conversation_hash")
                 cur.execute(CREATE_CONVERSATION_PROJECT_HASH_INDEX_SQL)
                 cur.execute(CREATE_UPSTREAM_THREAD_INDEX_SQL)
+                cur.execute(CREATE_GENERATED_SUMMARIES_TABLE_SQL)
+                cur.execute(CREATE_GENERATED_SUMMARIES_TARGET_INDEX_SQL)
                 cur.execute(CREATE_SCHEMA_VERSION_TABLE_SQL)
                 cur.execute(CREATE_USERS_TABLE_SQL)
                 cur.execute(CREATE_AUTH_TOKENS_TABLE_SQL)
@@ -806,6 +831,62 @@ class PostgresMetadataStore:
         self, subject: str = "user", project_id: str | None = None
     ) -> dict[str, Any]:
         return {"subject": subject, "facts": self.search_facts(subject=subject, project_id=project_id)}
+
+    def upsert_generated_summary(self, summary: dict[str, Any]) -> str:
+        summary_id = str(summary["id"])
+        payload = json.dumps(summary, separators=(",", ":"), ensure_ascii=False)
+        filters = json.dumps(summary.get("filters", {}), separators=(",", ":"), ensure_ascii=False)
+        provenance = json.dumps(summary.get("provenance", []), separators=(",", ":"), ensure_ascii=False)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO generated_summaries (
+                        id, summary_type, target_id, owner_id, project_id, text, basis,
+                        provenance_status, filters, provenance, payload, generated_at
+                    )
+                    VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb,
+                        %s::jsonb, %s
+                    )
+                    ON CONFLICT(id) DO UPDATE SET
+                        text = EXCLUDED.text,
+                        basis = EXCLUDED.basis,
+                        provenance_status = EXCLUDED.provenance_status,
+                        filters = EXCLUDED.filters,
+                        provenance = EXCLUDED.provenance,
+                        payload = EXCLUDED.payload,
+                        generated_at = EXCLUDED.generated_at,
+                        updated_at = NOW()
+                    """,
+                    (
+                        summary_id,
+                        str(summary["type"]),
+                        str(summary["target_id"]),
+                        summary.get("owner_id"),
+                        summary.get("project_id"),
+                        str(summary.get("text", "")),
+                        str(summary.get("basis", "")),
+                        str(summary.get("provenance_status", "")),
+                        filters,
+                        provenance,
+                        payload,
+                        str(summary.get("generated_at", "")),
+                    ),
+                )
+        return summary_id
+
+    def get_generated_summary(self, summary_id: str) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT payload::text FROM generated_summaries WHERE id = %s",
+                    (str(summary_id),),
+                )
+                row = cur.fetchone()
+        if row is None:
+            return None
+        return json.loads(str(row[0]))
 
     def supersede_fact(
         self, fact_id: str, superseded_by: str, project_id: str | None = None

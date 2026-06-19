@@ -51,7 +51,7 @@ tracked in the roadmap.
 | `POST` | `/memory/retrieve` | Retrieve a stored conversation by ID |
 | `POST` | `/memory/ask` | Build an answer from retrieved memory or facts |
 | `POST` | `/memory/facts/search` | Search normalized facts |
-| `POST` | `/memory/profile/get` | Return profile facts for a subject |
+| `POST` | `/memory/profile/get` | Return profile facts and a compact fact-based summary for a subject |
 | `POST` | `/memory/facts/supersede` | Mark a fact as superseded |
 | `GET` | `/health` | Liveness endpoint with redacted runtime health |
 | `GET` | `/ready` | Readiness endpoint for container orchestration |
@@ -211,6 +211,11 @@ Core tools:
 - `memory_fact_search(subject=None, predicate=None, include_superseded=False, source, date_from, date_to, confidence, status, source_quality, freshness_from, freshness_to, project_id)`
 - `memory_profile_get(subject="user", predicate, source, date_from, date_to, confidence, status, source_quality, freshness_from, freshness_to, project_id)`
 - `memory_fact_supersede(fact_id, superseded_by)`
+
+`memory_profile_get` returns `facts` plus a `summary` object. The summary is
+generated from active normalized facts and includes freshness, source-quality
+counts, filters, and compact fact provenance. Generated summaries are stored
+separately from raw chunks and normalized facts.
 
 `memory_insert` accepts one complete conversation object. There is intentionally
 no bulk MCP insert tool. Clients may include a short `metadata.summary`, but
