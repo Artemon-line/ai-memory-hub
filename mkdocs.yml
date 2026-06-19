@@ -35,6 +35,7 @@ nav:
       - MCP Authorization Compliance Plan: docs/bearer_api_key_auth_plan.md
   - Implementation Plans:
       - Prioritized Feature Plan: docs/prioritized_feature_plan.md
+      - Browser Extension Capture Plan: docs/browser_extension_capture_plan.md
       - Bruno Integration Test Plan: docs/bruno_integration_test_plan.md
       - Project Workspace Collaboration Plan: docs/project_workspace_collaboration_plan.md
       - Deterministic Ingestion Plan: docs/deterministic_ingestion_plan.md

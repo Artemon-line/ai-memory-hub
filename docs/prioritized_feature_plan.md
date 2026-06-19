@@ -23,7 +23,7 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P1 | CLI `serve` command for container/runtime entrypoint | Implemented | `cli_implementation_plan.md`, `release_container_docs_plan.md` |
 | P1 | Containerfile maintenance and container CI smoke tests | Implemented | `release_container_docs_plan.md` |
 | P1 | GitHub Pages documentation publishing from Markdown | Implemented | `release_container_docs_plan.md` |
-| P1 | Platform-specific importers | Planned here | This doc and `roadmap.md` |
+| P1 | Platform-specific importers and browser extension capture contract | Planned here | This doc, `roadmap.md`, and `browser_extension_capture_plan.md` |
 | P2 | Recurring codebase cleanup and engineering-health review | Planned | `recurring_codebase_cleanup_plan.md` |
 | P2 | Admin-only mutation workflows for local/API maintenance, not MCP | Planned | `improvements/client_feedback_improvement_plan.md` |
 | P2 | GitHub release and Docker Hub image publishing | Planned | `release_container_docs_plan.md` |
@@ -387,6 +387,21 @@ Implementation sequence:
 - [ ] Add Claude HTML export parser.
 - [ ] Add optional local log importers for VS Code Copilot, Ollama, LM Studio, and Llama Stack.
 - [x] Keep storage and ingestion unchanged by feeding all importers through the existing normalized schema path.
+
+## P1: Browser Extension Capture Contract
+
+Use `browser_extension_capture_plan.md` as the source of truth.
+
+- [ ] Keep browser extension implementations in separate repositories.
+- [ ] Treat existing `POST /memory/insert` as the normalized web-chat capture contract.
+- [ ] Document normalized extension payloads for ChatGPT, Microsoft Copilot,
+  Claude, Gemini, and similar web platforms.
+- [ ] Keep raw HTML, DOM snapshots, screenshots, and selector evidence out of
+  ai-memory-hub storage by default.
+- [ ] Add extension-shaped API contract tests before implementing extension repos.
+- [ ] Add explicit CORS allowlist config for browser extension origins.
+- [ ] Document bearer-token setup and trusted append behavior for repeated
+  captures of the same upstream thread.
 
 ## P2: GitHub Releases And Docker Hub Publishing
 

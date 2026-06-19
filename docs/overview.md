@@ -40,7 +40,10 @@ Conversation JSON
 The hub expects structured conversation JSON. Importers convert supported
 external formats into that shared schema before using the same ingestion path.
 Manual speaker-labelled transcripts are supported; export-specific parsers are
-tracked in the roadmap.
+tracked in the roadmap. Browser extension capture is planned as a separate
+extension-repo workflow that posts normalized web chat payloads to the existing
+insert API; see the
+[browser extension capture plan](browser_extension_capture_plan.md).
 
 ## API Endpoints
 
@@ -556,6 +559,7 @@ tests/          unit, integration, and end-to-end tests
 - [Roadmap](roadmap.md)
 - [Release, container, and docs publishing plan](release_container_docs_plan.md)
 - [Bruno integration test plan](bruno_integration_test_plan.md)
+- [Browser extension capture plan](browser_extension_capture_plan.md)
 - [Observability, logging, and telemetry plan](observability_logging_telemetry_plan.md)
 - [Recurring codebase cleanup plan](recurring_codebase_cleanup_plan.md)
 - [Bearer/API-key auth plan](bearer_api_key_auth_plan.md)

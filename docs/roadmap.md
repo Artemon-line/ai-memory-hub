@@ -11,6 +11,7 @@ Each phase ends with a **milestone** you can demo or ship.
 [Agent integration](agents.md) 
 [Deterministic ingestion plan](deterministic_ingestion_plan.md) 
 [Storage-agnostic BYOA plan](storage_agnostic_byoa_plan.md) 
+[Browser extension capture plan](browser_extension_capture_plan.md)
 [Project overview](../README.md)
 
 ---
@@ -39,6 +40,9 @@ When planning or estimating work, treat phases as **ordered capability layers**:
 - **Phase 1.5** promotes storage to a **first-class subsystem**: `VectorStore` interface → LanceDB/PGVector/in-memory providers → deterministic startup checks → fallback behavior.
 - **Phase 2** adds **platform-specific ingestion** (Gemini Takeout, Copilot workarounds, Claude HTML, local LLM logs);
 **schema and storage stay stable** if normalization boundaries are respected.
+- Browser extension capture is a planned Phase 2-compatible ingestion option:
+extension repos parse ChatGPT, Microsoft Copilot, Claude, Gemini, and similar
+web UIs, then post normalized payloads to `POST /memory/insert`.
 - **Phase 3** is **offline/batch intelligence** on top of stored chunks (summaries, clustering, timelines).
 - **Phase 4** is **presentation and distribution** (UI, SDKs, OpenAPI, pip).
 - **Phase 5** aligns with [agents.md](agents.md): external agent frameworks consume the same memory API/MCP backend with their choice of LanceDB, PGVector, or ephemeral in-memory vectors.
@@ -167,6 +171,15 @@ Copilot does not provide a structured export comparable to ChatGPT. Ingestion mu
 - [ ] Ollama conversation logs
 - [ ] LM Studio logs
 - [ ] Llama Stack logs
+
+### 2.5 Browser extension capture
+
+- [ ] Keep browser extension implementations in separate repos.
+- [ ] Have extensions parse platform web UIs and send normalized conversation
+  JSON to the existing `POST /memory/insert` API.
+- [ ] Do not parse raw HTML or DOM snapshots in the ai-memory-hub API layer.
+- [ ] Add API contract tests, CORS allowlist config, bearer-token guidance, and
+  trusted append guidance before recommending this path for daily use.
 
 **Milestone:** ai-memory-hub becomes a unified memory layer for all your AI tools, even those without official export formats.
 

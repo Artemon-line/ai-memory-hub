@@ -23,6 +23,7 @@ It is built for:
 - MCP-native workflows
 - Deterministic ingestion and retrieval
 - SQLite/LanceDB by default, Postgres/PGVector when you want it
+- Bring-your-own embedding model, local or hosted
 
 ## What It Does
 
@@ -32,6 +33,38 @@ It is built for:
 - Extracts useful profile/project facts for direct answers
 - Serves both FastAPI endpoints and an MCP server
 - Runs locally, in containers, or against Postgres/PGVector
+
+## Runtime Choices
+
+ai-memory-hub is the memory service. It stores conversations, builds embeddings
+for retrieval, and exposes HTTP/MCP APIs. It does not bundle a hosted embedding
+model or database service for you.
+
+You choose three things:
+
+| Choice | Local/default path | When to change it |
+| --- | --- | --- |
+| Embeddings | Deterministic local embeddings for smoke tests and demos | Use a real embedding model for useful semantic search, especially multilingual memory |
+| Metadata storage | SQLite | Use Postgres when you want a shared, multi-user, container, or durable server setup |
+| Vector storage | LanceDB, or in-memory in the simple container image | Use PGVector when you want Postgres to own both metadata and vectors |
+
+For multilingual chat history, choose an embedding model that supports the
+languages you actually use. The embedding provider/model and vector dimension
+must match the model you configure. Today the real embedding path is
+OpenAI-compatible: configure an OpenAI-compatible embedding endpoint through the
+OpenAI client, such as OpenAI itself or a local Ollama-compatible `/v1`
+endpoint. The deterministic local embedding mode is for smoke tests and demos,
+not production-quality semantic retrieval.
+
+Storage guidance:
+
+- Use SQLite + LanceDB for the fastest single-machine development setup.
+- Use Postgres metadata when multiple clients/users or long-running containers
+  need one shared database.
+- Use Postgres + PGVector when you want one database to store both conversation
+  metadata and vector indexes.
+- Use in-memory vectors only for tests, demos, and disposable container smoke
+  runs.
 
 ## Quick Start
 
@@ -102,6 +135,12 @@ cd examples/postgres/pgvector
 docker compose up --build
 ```
 
+That Compose stack uses Postgres for metadata and PGVector for vectors. The
+default checked-in config keeps embeddings deterministic and credential-free for
+local smoke testing. For real memory quality, switch the embedding provider to a
+real OpenAI-compatible local or hosted embedding model and set the matching
+embedding dimension.
+
 The Compose example is unauthenticated for local smoke testing. Before exposing
 it on a LAN, create a bearer token in the metadata database and change
 `api.auth` in the mounted config to `bearer_token`; clients then send
@@ -115,6 +154,7 @@ runbook in the checked-in Compose example directory for the exact commands.
 - [Agent integration](docs/agents.md)
 - [MCP plan](docs/mcp_plan.md)
 - [Real-client MCP smoke plan](docs/real_client_mcp_smoke_plan.md)
+- [Browser extension capture plan](docs/browser_extension_capture_plan.md)
 - [Roadmap](docs/roadmap.md)
 - [Improvements](docs/improvements.md)
 
