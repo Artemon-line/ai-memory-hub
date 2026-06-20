@@ -316,8 +316,8 @@ Current status:
   active facts, freshness fields, source-quality counts, and fact provenance.
 - Generated summaries are stored separately from raw chunks and normalized facts
   in provenance-aware summary records.
-- Built-in generated conversation, topic, and project summaries remain planned
-  after summary provenance is reliable.
+- Built-in generated conversation, topic, and project summaries are implemented
+  with provenance-aware generated summary records.
 
 Implementation sequence:
 
@@ -374,9 +374,10 @@ Plan:
   Done.
 - Add bearer-token/project smoke coverage after the base collection is stable.
   Done.
-- Add an OAuth resource-server fail-fast guard while OAuth remains planned.
+- Add an OAuth resource-server protected-resource metadata guard.
   Done.
 - Add filter smoke coverage after the base collection is stable.
+  Done.
 - Run Bruno against the Postgres/PGVector stack locally and in CI.
   Done for the initial workflow.
 - Verify the unauthenticated smoke collection with the real Bruno CLI locally.

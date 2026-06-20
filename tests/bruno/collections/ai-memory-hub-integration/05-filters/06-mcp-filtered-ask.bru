@@ -1,0 +1,60 @@
+meta {
+  name: MCP filtered ask
+  type: http
+  seq: 55
+  tags: [
+    smoke
+    mcp
+    filters
+  ]
+}
+
+post {
+  url: {{mcp_url}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Accept: application/json, text/event-stream
+  Mcp-Session-Id: {{mcp_session_id}}
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 51,
+    "method": "tools/call",
+    "params": {
+      "name": "memory_ask",
+      "arguments": {
+        "question": "What is the cobalt filter answer {{run_id}}?",
+        "top_k": 100,
+        "source": "bruno-filter-target",
+        "date_from": "2026-06-15T00:00:00Z",
+        "date_to": "2026-06-20T00:00:00Z",
+        "tags": ["target"]
+      }
+    }
+  }
+}
+
+tests {
+  const { toolPayload } = require("./scripts/mcp.js");
+
+  test("mcp filtered ask cites target and excludes distractor", function() {
+    expect(res.status).to.equal(200);
+    const payload = toolPayload(res.body);
+    expect(payload.status).to.equal("ok");
+    expect(payload.citations).to.be.an("array").that.is.not.empty;
+    const ids = payload.citations.map((item) => item.id);
+    expect(ids).to.include(bru.getVar("filter_target_id"));
+    expect(ids).to.not.include(bru.getVar("filter_distractor_id"));
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 15000
+}

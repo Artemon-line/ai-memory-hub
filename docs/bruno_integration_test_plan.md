@@ -9,10 +9,10 @@ pytest unit, integration, or end-to-end tests.
 
 ## Status
 
-Partial P0. The initial unauthenticated health, API memory, MCP memory, bearer
-auth owner isolation, shared project access, OAuth fail-fast guard, local
-workspace, CI config, and GitHub Actions workflow are implemented. Filter-specific
-Bruno coverage remains planned.
+P0 implemented. The initial unauthenticated health, API memory, MCP memory,
+bearer auth owner isolation, shared project access, OAuth protected-resource
+metadata guard, filter smoke coverage, local workspace, CI config, and GitHub
+Actions workflow are implemented.
 
 ## Goals
 
@@ -23,6 +23,8 @@ Bruno coverage remains planned.
 - Exercise the real persistence path: MCP/API request -> ingestion -> metadata
   DB -> vector store -> search/ask retrieval.
 - Produce a human-readable CI report artifact for API/MCP smoke failures.
+- Produce machine-readable JUnit results for GitHub Actions test summaries and
+  per-job result checks.
 - Keep the collection deterministic, secret-safe, and cheap enough for regular
   CI once stable.
 
@@ -116,22 +118,15 @@ committed.
 
 ### OAuth Guard
 
-OAuth resource-server mode is not implemented yet. The CI workflow includes a
-guard that starts ai-memory-hub with `api.auth: oauth_resource_server` and
-expects the current explicit startup failure:
-
-```text
-api.auth=oauth_resource_server is not implemented yet
-```
-
-Replace this guard with live OAuth protected-resource metadata and bearer-token
-validation requests when OAuth is implemented.
+The CI workflow starts ai-memory-hub with `api.auth: oauth_resource_server` and
+verifies the MCP protected-resource metadata endpoint. Detailed JWT validation
+coverage remains in pytest.
 
 ### Filter Flow
 
-- Insert conversations with source, date, and tags.
-- Verify API/MCP search filters narrow results.
-- Verify API/MCP ask filters narrow answer context.
+- [x] Insert conversations with source, date, and tags.
+- [x] Verify API/MCP search filters narrow results.
+- [x] Verify API/MCP ask filters narrow answer context.
 - Verify fact/profile filter smoke coverage only where the setup remains
   readable and deterministic. Detailed combinations remain in pytest.
 
@@ -190,11 +185,14 @@ pnpm exec bru run \
   --tags smoke,api,mcp \
   --env-var run_id="${GITHUB_RUN_ID}" \
   --reporter-html ../../reports/bruno-integration-report.html \
+  --reporter-junit ../../reports/bruno-integration-junit.xml \
   --sandbox developer \
   --noproxy
 ```
 
-8. Upload the HTML report as a workflow artifact.
+8. Publish the JUnit XML with
+   `EnricoMi/publish-unit-test-result-action@v2`.
+9. Upload the HTML and JUnit reports as workflow artifacts.
 
 Start as manual or non-blocking CI. Promote to required PR gating only after the
 job is stable and consistently faster than the acceptable CI budget.
@@ -217,7 +215,9 @@ portable for local users.
 - [x] `tests/bruno` contains a runnable Bruno workspace and collection.
 - [x] Local docs explain how to run the collection against `uv run aim serve` and
   the Postgres/PGVector Compose example.
-- [x] CI uploads a Bruno HTML report artifact.
+- [x] CI uploads Bruno HTML and JUnit report artifacts.
+- [x] CI publishes Bruno JUnit results through the GitHub Actions test report
+  check and job summary.
 - [x] The collection proves API insert/search/ask and MCP initialize/tools/list/tool
   calls against a live server.
 - [x] The collection uses unique run data and can be run repeatedly without manual
@@ -234,8 +234,8 @@ portable for local users.
    Done.
 2. Add a local docs section and runbook commands.
    Done.
-3. Add a GitHub Actions workflow that uploads the
-   report artifact.
+3. Add a GitHub Actions workflow that uploads HTML/JUnit report artifacts and
+   publishes JUnit test results.
    Done.
 4. Add authenticated bearer/project tests once token seeding is scripted.
    Done.
@@ -244,4 +244,5 @@ portable for local users.
 6. Verify the unauthenticated smoke collection with the real Bruno CLI locally.
    Done.
 7. Add focused filter smoke tests.
+   Done.
 8. Promote the Bruno lane to required CI only after several stable runs.

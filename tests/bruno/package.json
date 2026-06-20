@@ -5,6 +5,7 @@
   "packageManager": "pnpm@11.7.0",
   "scripts": {
     "auth": "cd collections/ai-memory-hub-integration && bru run --global-env local --workspace-path ../.. --tags auth --sandbox developer --noproxy",
+    "filters": "cd collections/ai-memory-hub-integration && bru run --global-env local --workspace-path ../.. --tags filters --sandbox developer --noproxy",
     "smoke": "cd collections/ai-memory-hub-integration && bru run --global-env local --workspace-path ../.. --tags smoke --sandbox developer --noproxy"
   },
   "devDependencies": {

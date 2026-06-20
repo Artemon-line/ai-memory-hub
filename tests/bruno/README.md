@@ -33,6 +33,12 @@ Run only the MCP smoke requests:
 pnpm exec bru run --global-env local --workspace-path ../.. --tags mcp --sandbox developer --noproxy
 ```
 
+Run only the source/date/tag filter smoke requests:
+
+```bash
+pnpm exec bru run --global-env local --workspace-path ../.. --tags filters --sandbox developer --noproxy
+```
+
 Run the bearer auth and shared-project cases against an auth-enabled server:
 
 ```bash
@@ -51,6 +57,13 @@ Override the run id when you want stable test data:
 pnpm exec bru run --global-env local --workspace-path ../.. --env-var run_id="$(date +%s)" --sandbox developer --noproxy
 ```
 
+## CI Reports
+
+The GitHub Actions Bruno workflow writes Bruno's native HTML and JUnit reports
+under `tests/bruno/reports`. CI uploads that directory as the
+`bruno-integration-report` artifact and publishes the JUnit XML through the
+GitHub test result check/job summary.
+
 ## Scope
 
 The executable P0 slice covers:
@@ -66,6 +79,7 @@ The executable P0 slice covers:
 - MCP `memory_insert`
 - MCP `memory_search`
 - MCP `memory_ask`
+- API/MCP source, date range, and tag filter smoke coverage
 - bearer-token missing-token rejection for API and MCP
 - private owner isolation
 - shared-project API search/ask across two project members

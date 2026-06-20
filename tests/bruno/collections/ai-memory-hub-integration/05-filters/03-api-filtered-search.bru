@@ -1,0 +1,47 @@
+meta {
+  name: API filtered search
+  type: http
+  seq: 52
+  tags: [
+    smoke
+    api
+    filters
+  ]
+}
+
+post {
+  url: {{base_url}}/memory/search
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "query": "cobalt filter key {{run_id}}",
+    "top_k": 100,
+    "source": "bruno-filter-target",
+    "date_from": "2026-06-15T00:00:00Z",
+    "date_to": "2026-06-20T00:00:00Z",
+    "tags": ["target"]
+  }
+}
+
+tests {
+  test("api filtered search includes target and excludes distractor", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.status).to.equal("ok");
+    expect(res.body.results).to.be.an("array").that.is.not.empty;
+    const ids = res.body.results.map((item) => item.id);
+    expect(ids).to.include(bru.getVar("filter_target_id"));
+    expect(ids).to.not.include(bru.getVar("filter_distractor_id"));
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 15000
+}

@@ -536,7 +536,9 @@ writable runtime paths.
 
 A Bruno integration layer provides black-box local and CI smoke tests for the
 live API/MCP surface against a running server and configured metadata/vector
-stores. See the
+stores. The Bruno lane uploads HTML and JUnit artifacts and publishes JUnit
+results through GitHub Actions test summaries. Pytest CI jobs also emit JUnit
+XML artifacts for unit/integration, E2E, and storage lanes. See the
 [Bruno integration test plan](bruno_integration_test_plan.md).
 
 ## Project Structure

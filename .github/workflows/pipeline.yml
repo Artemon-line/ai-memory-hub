@@ -6,6 +6,8 @@ on:
 
 permissions:
   contents: read
+  checks: write
+  issues: read
 
 jobs:
   test:
@@ -33,7 +35,32 @@ jobs:
       - name: Run unit and integration tests
         env:
           PYTHONHASHSEED: '0'
-        run: uv run pytest tests/unit tests/integration
+        run: |
+          mkdir -p reports/junit
+          uv run pytest tests/unit tests/integration \
+            --junitxml=reports/junit/pytest-unit-integration.xml
+
+      - name: Publish unit and integration test results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: >-
+          ${{
+            always() &&
+            hashFiles('reports/junit/*.xml') != '' &&
+            (github.event_name != 'pull_request' ||
+              github.event.pull_request.head.repo.full_name == github.repository)
+          }}
+        with:
+          files: reports/junit/*.xml
+          check_name: Unit and Integration Test Results
+          comment_mode: off
+
+      - name: Upload unit and integration test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pytest-unit-integration-report
+          path: reports/junit/*.xml
+          if-no-files-found: warn
 
   e2e:
     name: E2E Scenario (Ollama)
@@ -85,7 +112,32 @@ jobs:
         env:
           PYTHONHASHSEED: '0'
           AMH_OLLAMA_CHAT_MODEL: qwen2.5:0.5b
-        run: uv run pytest tests/e2e
+        run: |
+          mkdir -p reports/junit
+          uv run pytest tests/e2e \
+            --junitxml=reports/junit/pytest-e2e.xml
+
+      - name: Publish E2E test results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: >-
+          ${{
+            always() &&
+            hashFiles('reports/junit/*.xml') != '' &&
+            (github.event_name != 'pull_request' ||
+              github.event.pull_request.head.repo.full_name == github.repository)
+          }}
+        with:
+          files: reports/junit/*.xml
+          check_name: E2E Test Results
+          comment_mode: off
+
+      - name: Upload E2E test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pytest-e2e-report
+          path: reports/junit/*.xml
+          if-no-files-found: warn
 
   storage-config:
     name: Storage Config Variations
@@ -121,21 +173,48 @@ jobs:
         env:
           PYTHONHASHSEED: '0'
         run: |
+          mkdir -p reports/junit
           if [ "${{ matrix.case }}" = "sqlite-default" ]; then
             uv run pytest -q tests/integration/test_storage_features.py -k \
               "sqlite_capabilities_and_health or \
-              build_runtime_fails_fast_on_schema_version"
+              build_runtime_fails_fast_on_schema_version" \
+              --junitxml=reports/junit/pytest-storage-${{ matrix.case }}.xml
           elif [ "${{ matrix.case }}" = "dry-run" ]; then
             uv run pytest -q tests/integration/test_storage_features.py -k \
               "dry_run_write_is_noop or \
-              runtime_health_reports_dry_run"
+              runtime_health_reports_dry_run" \
+              --junitxml=reports/junit/pytest-storage-${{ matrix.case }}.xml
           elif [ "${{ matrix.case }}" = "custom-schema" ]; then
             uv run pytest -q tests/unit/test_mvp_ingestion.py -k \
-              "schema_file_from_config_is_used"
+              "schema_file_from_config_is_used" \
+              --junitxml=reports/junit/pytest-storage-${{ matrix.case }}.xml
           else
             uv run pytest -q tests/integration/test_storage_features.py -k \
-              "build_runtime_vector_fallback_disabled_raises"
+              "build_runtime_vector_fallback_disabled_raises" \
+              --junitxml=reports/junit/pytest-storage-${{ matrix.case }}.xml
           fi
+
+      - name: Publish storage config test results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: >-
+          ${{
+            always() &&
+            hashFiles('reports/junit/*.xml') != '' &&
+            (github.event_name != 'pull_request' ||
+              github.event.pull_request.head.repo.full_name == github.repository)
+          }}
+        with:
+          files: reports/junit/*.xml
+          check_name: Storage Config Test Results (${{ matrix.case }})
+          comment_mode: off
+
+      - name: Upload storage config test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pytest-storage-config-${{ matrix.case }}-report
+          path: reports/junit/*.xml
+          if-no-files-found: warn
 
   storage-postgres:
     name: Storage Postgres Integration
@@ -180,11 +259,35 @@ jobs:
           PYTHONHASHSEED: '0'
           AMH_TEST_POSTGRES_DSN: postgresql://test:test@127.0.0.1:5432/memory
         run: >
+          mkdir -p reports/junit &&
           uv run pytest -q tests/integration/test_storage_features.py -k
           "postgres_live_integration_when_dsn_provided or
           postgres_schema_version or
           pgvector_live_integration_when_dsn_provided or
           runtime_postgres_pgvector_live_integration_when_dsn_provided"
+          --junitxml=reports/junit/pytest-postgres-storage.xml
+
+      - name: Publish postgres storage test results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: >-
+          ${{
+            always() &&
+            hashFiles('reports/junit/*.xml') != '' &&
+            (github.event_name != 'pull_request' ||
+              github.event.pull_request.head.repo.full_name == github.repository)
+          }}
+        with:
+          files: reports/junit/*.xml
+          check_name: Postgres Storage Test Results
+          comment_mode: off
+
+      - name: Upload postgres storage test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pytest-postgres-storage-report
+          path: reports/junit/*.xml
+          if-no-files-found: warn
 
   container-lint:
     name: Containerfile Lint

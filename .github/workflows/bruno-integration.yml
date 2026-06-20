@@ -20,6 +20,8 @@ on:
 
 permissions:
   contents: read
+  checks: write
+  issues: read
 
 jobs:
   bruno-integration:
@@ -113,6 +115,7 @@ jobs:
             --tags smoke \
             --env-var run_id="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
             --reporter-html ../../reports/bruno-integration-report.html \
+            --reporter-junit ../../reports/bruno-integration-junit.xml \
             --sandbox developer \
             --noproxy
 
@@ -192,8 +195,23 @@ jobs:
             --tags auth \
             --env-var run_id="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-auth" \
             --reporter-html ../../reports/bruno-auth-project-report.html \
+            --reporter-junit ../../reports/bruno-auth-project-junit.xml \
             --sandbox developer \
             --noproxy
+
+      - name: Publish Bruno test results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: >-
+          ${{
+            always() &&
+            hashFiles('tests/bruno/reports/*junit.xml') != '' &&
+            (github.event_name != 'pull_request' ||
+              github.event.pull_request.head.repo.full_name == github.repository)
+          }}
+        with:
+          files: tests/bruno/reports/*junit.xml
+          check_name: Bruno API/MCP Test Results
+          comment_mode: off
 
       - name: Capture server logs
         if: always()

@@ -1,0 +1,56 @@
+meta {
+  name: API filter target insert
+  type: http
+  seq: 50
+  tags: [
+    smoke
+    api
+    filters
+  ]
+}
+
+post {
+  url: {{base_url}}/memory/insert
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "source": "bruno-filter-target",
+    "timestamp": "2026-06-18T10:00:00Z",
+    "messages": [
+      {
+        "role": "user",
+        "text": "Bruno filter smoke {{run_id}} target memory contains the cobalt filter key."
+      },
+      {
+        "role": "assistant",
+        "text": "The filtered target answer is cobalt-target-{{run_id}}."
+      }
+    ],
+    "metadata": {
+      "summary": "Target memory for Bruno filter smoke {{run_id}}.",
+      "tags": ["bruno", "filters", "target"],
+      "run_id": "{{run_id}}"
+    }
+  }
+}
+
+tests {
+  test("api filter target insert succeeds", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.status).to.equal("ok");
+    expect(res.body.id).to.be.a("string");
+  });
+  bru.setVar("filter_target_id", res.body.id);
+}
+
+settings {
+  encodeUrl: true
+  timeout: 15000
+}

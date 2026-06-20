@@ -17,7 +17,7 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P0 | Conversation summary metadata and profile views | Implemented | `improvements/client_feedback_improvement_plan.md` |
 | P0 | MCP client smoke coverage for Codex, Gemini, Copilot, Claude, opencode | Implemented | `mcp_client_smoke_plan.md` |
 | P0 | Weekly scheduled real-client MCP smoke coverage | Implemented | `real_client_mcp_smoke_plan.md` |
-| P0 | Bruno black-box API/MCP integration test layer | Partial | `bruno_integration_test_plan.md` |
+| P0 | Bruno black-box API/MCP integration test layer | Implemented | `bruno_integration_test_plan.md` |
 | P1 | CLI foundation and command contract | Implemented | `cli_implementation_plan.md` |
 | P1 | CLI `ingest`, `search`, `retrieve`, and `ask` commands | Implemented | `cli_implementation_plan.md` |
 | P1 | CLI `serve` command for container/runtime entrypoint | Implemented | `cli_implementation_plan.md`, `release_container_docs_plan.md` |
@@ -314,10 +314,11 @@ and storage adapter details.
       `memory_ask`.
 - [x] Run against the reusable Postgres/PGVector local stack.
 - [x] Add a GitHub Actions lane that installs `@usebruno/cli`, runs `bru run`,
-      and uploads an HTML report artifact.
+      uploads HTML/JUnit report artifacts, and publishes JUnit test results.
 - [x] Add bearer-token and project-workspace smoke tests after CI token/project
       seeding is scripted.
-- [x] Add an OAuth resource-server fail-fast guard until OAuth is implemented.
+- [x] Add an OAuth resource-server protected-resource metadata guard.
+- [x] Add source/date/tag filter smoke coverage for API and MCP search/ask.
 - [x] Verify the unauthenticated smoke collection with the real Bruno CLI locally.
 - [ ] Promote to required CI only after repeated stable runs.
 
