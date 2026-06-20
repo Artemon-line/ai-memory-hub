@@ -27,6 +27,7 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P2 | Recurring codebase cleanup and engineering-health review | Planned | `recurring_codebase_cleanup_plan.md` |
 | P2 | Admin-only mutation workflows for local/API maintenance, not MCP | Planned | `improvements/client_feedback_improvement_plan.md` |
 | P2 | GitHub release and Docker Hub image publishing | Planned | `release_container_docs_plan.md` |
+| P2 | First release readiness, repository governance, and contribution policy | Planned | `first_release_readiness_plan.md` |
 | P2 | Storage operational hardening: startup policy logs, production fallback warnings, audit events | Partial | `storage_agnostic_byoa_plan.md` |
 | P2 | Storage provider expansion config and shared contract tests | Planned | `storage_agnostic_byoa_plan.md` |
 | P2 | ChromaDB and Qdrant vector providers | Planned | `storage_agnostic_byoa_plan.md` |
@@ -419,6 +420,19 @@ Implementation sequence:
 - [ ] Push `latest` only for stable releases.
 - [ ] Add image digest to workflow summary and release notes.
 - [ ] Add manual `workflow_dispatch` for release publish recovery.
+
+## P2: First Release Readiness
+
+Use `first_release_readiness_plan.md` as the source of truth.
+
+Implementation sequence:
+
+- [ ] Add `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, and `SECURITY.md`.
+- [ ] Add pull request and issue templates.
+- [ ] Stop direct pushes to `main` after the release-readiness PR lands.
+- [ ] Configure branch protection and required checks.
+- [ ] Add release checklist and version/tag validation.
+- [ ] Run a `v0.1.0-rc.1` release-candidate drill before publishing `v0.1.0`.
 
 ## P2: Recurring Codebase Cleanup
 

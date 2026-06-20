@@ -568,6 +568,8 @@ tests/          unit, integration, and end-to-end tests
 - [Agent integration](agents.md)
 - [Roadmap](roadmap.md)
 - [Release, container, and docs publishing plan](release_container_docs_plan.md)
+- [First release readiness plan](first_release_readiness_plan.md)
+- [Project promotion plan](project_promotion_plan.md)
 - [Bruno integration test plan](bruno_integration_test_plan.md)
 - [Browser extension capture plan](browser_extension_capture_plan.md)
 - [Observability, logging, and telemetry plan](observability_logging_telemetry_plan.md)

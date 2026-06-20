@@ -155,6 +155,8 @@ runbook in the checked-in Compose example directory for the exact commands.
 - [MCP plan](docs/mcp_plan.md)
 - [Real-client MCP smoke plan](docs/real_client_mcp_smoke_plan.md)
 - [Browser extension capture plan](docs/browser_extension_capture_plan.md)
+- [First release readiness plan](docs/first_release_readiness_plan.md)
+- [Project promotion plan](docs/project_promotion_plan.md)
 - [Roadmap](docs/roadmap.md)
 - [Improvements](docs/improvements.md)
 
