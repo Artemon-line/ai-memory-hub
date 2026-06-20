@@ -1148,6 +1148,12 @@ def ingest_messages(
         # to ensure the vector store is in sync with the metadata.
         conversation_json["id"] = duplicate_metadata_id
 
+    _attach_generated_summaries(
+        conversation_json,
+        owner_id=owner_id,
+        project_id=effective_project_id,
+    )
+
     existing_by_id = None
     store = _runtime().metadata_store
     if hasattr(store, "get"):
@@ -1176,6 +1182,12 @@ def ingest_messages(
         else:
             start_index = len(same_thread.get("messages", []))
             updated = _append_conversation(same_thread, conversation_json, new_messages)
+            enrich_topics(updated)
+            _attach_generated_summaries(
+                updated,
+                owner_id=owner_id,
+                project_id=effective_project_id,
+            )
         
         # If we are here, we either have new messages or we are re-indexing existing
         indexing_messages = new_messages if new_messages else updated.get("messages", [])
@@ -1317,10 +1329,15 @@ def search(
     ids.extend(str(conversation["id"]) for conversation in keyword_conversations if "id" in conversation)
     ids = _unique_strings(ids)
     conversations = runtime.metadata_store.get_many(ids)
+    conversations = {
+        memory_id: enriched
+        for memory_id, conversation in conversations.items()
+        if (enriched := _with_generated_summary_metadata(conversation)) is not None
+    }
     for conversation in keyword_conversations:
         memory_id = str(conversation.get("id", ""))
         if memory_id and memory_id not in conversations:
-            conversations[memory_id] = conversation
+            conversations[memory_id] = _with_generated_summary_metadata(conversation) or conversation
 
     results: list[dict[str, Any]] = []
     for match in matches:
@@ -1580,12 +1597,7 @@ def _metadata_overlap(query: str, conversation: Any) -> int:
     metadata = conversation.get("metadata", {})
     metadata_values: list[str] = [str(conversation.get("source", "")), str(conversation.get("title", ""))]
     if isinstance(metadata, dict):
-        for key in ("tags", "topics", "summary"):
-            value = metadata.get(key)
-            if isinstance(value, list):
-                metadata_values.extend(str(item) for item in value)
-            elif value is not None:
-                metadata_values.append(str(value))
+        metadata_values.extend(_metadata_search_values(metadata))
     text = " ".join(metadata_values).lower()
     return sum(1 for token in tokens if token in text)
 
@@ -1604,13 +1616,21 @@ def _conversation_search_text(conversation: dict[str, Any]) -> str:
                 parts.append(str(message.get("text", "")))
     metadata = conversation.get("metadata", {})
     if isinstance(metadata, dict):
-        for key in ("tags", "topics", "summary"):
-            value = metadata.get(key)
-            if isinstance(value, list):
-                parts.extend(str(item) for item in value)
-            elif value is not None:
-                parts.append(str(value))
+        parts.extend(_metadata_search_values(metadata))
     return " ".join(parts)
+
+
+def _metadata_search_values(metadata: dict[str, Any]) -> list[str]:
+    values: list[str] = []
+    for key in ("tags", "topics", "summary", "generated_summary"):
+        value = metadata.get(key)
+        if isinstance(value, list):
+            values.extend(str(item) for item in value)
+        elif isinstance(value, dict):
+            values.extend(str(item) for item in value.values() if item is not None)
+        elif value is not None:
+            values.append(str(value))
+    return values
 
 
 def _query_tokens(query: str) -> list[str]:
@@ -1641,7 +1661,7 @@ def retrieve(
     conversation = runtime.metadata_store.get(memory_id)
     if not _conversation_allowed(conversation, owner_id, effective_project_id):
         return None
-    return conversation
+    return _with_generated_summary_metadata(conversation)
 
 
 def ask(
@@ -2724,6 +2744,268 @@ def _profile_summary(
     payload = summary.model_dump(mode="json")
     _store_generated_summary(payload)
     return payload
+
+
+def _attach_generated_summaries(
+    conversation: dict[str, Any], *, owner_id: str | None, project_id: str | None
+) -> None:
+    conversation_summary = _conversation_summary(
+        conversation, owner_id=owner_id, project_id=project_id
+    )
+    _store_generated_summary(conversation_summary)
+    metadata = _ensure_metadata(conversation)
+    metadata["generated_summary"] = {
+        "id": conversation_summary["id"],
+        "type": conversation_summary["type"],
+        "text": conversation_summary["text"],
+        "basis": conversation_summary["basis"],
+        "provenance_status": conversation_summary["provenance_status"],
+        "generated_at": conversation_summary["generated_at"],
+    }
+
+    topic_summary_ids: list[str] = []
+    for topic in _conversation_topics(conversation):
+        topic_summary = _topic_summary(
+            topic,
+            conversation,
+            conversation_summary=conversation_summary,
+            owner_id=owner_id,
+            project_id=project_id,
+        )
+        _store_generated_summary(topic_summary)
+        topic_summary_ids.append(str(topic_summary["id"]))
+    metadata["generated_topic_summary_ids"] = topic_summary_ids
+
+    project_summary = _project_summary(
+        conversation,
+        conversation_summary=conversation_summary,
+        owner_id=owner_id,
+        project_id=project_id,
+    )
+    _store_generated_summary(project_summary)
+    metadata["generated_project_summary_id"] = project_summary["id"]
+
+
+def _conversation_summary(
+    conversation: dict[str, Any], *, owner_id: str | None, project_id: str | None
+) -> dict[str, Any]:
+    conversation_id = str(conversation.get("id", ""))
+    message_indexes = _message_indexes(conversation)
+    text = _conversation_summary_text(conversation)
+    summary = GeneratedSummary(
+        id=_generated_summary_id(
+            summary_type=SummaryType.CONVERSATION,
+            target_id=conversation_id,
+            project_id=project_id,
+            filters={},
+        ),
+        type=SummaryType.CONVERSATION,
+        target_id=conversation_id,
+        project_id=project_id,
+        owner_id=owner_id,
+        text=text,
+        basis=SummaryBasis.CONVERSATION_MESSAGES,
+        provenance_status=SummaryProvenanceStatus.CONVERSATION_IDS,
+        filters={},
+        provenance=[
+            GeneratedSummaryProvenance(
+                conversation_id=conversation_id,
+                source=_optional_string(conversation.get("source")),
+                title=_optional_string(conversation.get("title")),
+                source_conversation_id=conversation_id,
+                source_message_indexes=message_indexes,
+            )
+        ],
+        generated_at=_utc_now_iso(),
+    )
+    return summary.model_dump(mode="json")
+
+
+def _topic_summary(
+    topic: str,
+    conversation: dict[str, Any],
+    *,
+    conversation_summary: dict[str, Any],
+    owner_id: str | None,
+    project_id: str | None,
+) -> dict[str, Any]:
+    conversation_id = str(conversation.get("id", ""))
+    summary = GeneratedSummary(
+        id=_generated_summary_id(
+            summary_type=SummaryType.TOPIC,
+            target_id=topic,
+            project_id=project_id,
+            filters={"conversation_id": conversation_id},
+        ),
+        type=SummaryType.TOPIC,
+        target_id=topic,
+        project_id=project_id,
+        owner_id=owner_id,
+        text=f"{topic}: {conversation_summary['text']}",
+        basis=SummaryBasis.TOPIC_CONVERSATIONS,
+        provenance_status=SummaryProvenanceStatus.CONVERSATION_IDS,
+        filters={"topic": topic, "conversation_id": conversation_id},
+        provenance=[
+            GeneratedSummaryProvenance(
+                conversation_id=conversation_id,
+                source=_optional_string(conversation.get("source")),
+                title=_optional_string(conversation.get("title")),
+                source_conversation_id=conversation_id,
+                source_message_indexes=_message_indexes(conversation),
+            )
+        ],
+        generated_at=_utc_now_iso(),
+    )
+    return summary.model_dump(mode="json")
+
+
+def _project_summary(
+    conversation: dict[str, Any],
+    *,
+    conversation_summary: dict[str, Any],
+    owner_id: str | None,
+    project_id: str | None,
+) -> dict[str, Any]:
+    target_id = project_id or LOCAL_DEFAULT_PROJECT_ID
+    conversation_id = str(conversation.get("id", ""))
+    summary = GeneratedSummary(
+        id=_generated_summary_id(
+            summary_type=SummaryType.PROJECT,
+            target_id=target_id,
+            project_id=project_id,
+            filters={"conversation_id": conversation_id},
+        ),
+        type=SummaryType.PROJECT,
+        target_id=target_id,
+        project_id=project_id,
+        owner_id=owner_id,
+        text=f"{target_id}: {conversation_summary['text']}",
+        basis=SummaryBasis.PROJECT_CONVERSATIONS,
+        provenance_status=SummaryProvenanceStatus.CONVERSATION_IDS,
+        filters={"conversation_id": conversation_id},
+        provenance=[
+            GeneratedSummaryProvenance(
+                conversation_id=conversation_id,
+                source=_optional_string(conversation.get("source")),
+                title=_optional_string(conversation.get("title")),
+                source_conversation_id=conversation_id,
+                source_message_indexes=_message_indexes(conversation),
+            )
+        ],
+        generated_at=_utc_now_iso(),
+    )
+    return summary.model_dump(mode="json")
+
+
+def _conversation_summary_text(conversation: dict[str, Any]) -> str:
+    subject = _conversation_summary_subject(conversation)
+    snippets: list[str] = []
+    messages = conversation.get("messages", [])
+    if isinstance(messages, list):
+        for message in messages:
+            if not isinstance(message, dict):
+                continue
+            role = str(message.get("role", "")).strip() or "message"
+            text = _compact_summary_text(str(message.get("text", "")))
+            if text:
+                snippets.append(f"{role}: {text}")
+            if len(snippets) >= 3:
+                break
+    body = "; ".join(snippets) if snippets else "No message text was available."
+    return _truncate_summary_text(f"{subject}: {body}")
+
+
+def _conversation_summary_subject(conversation: dict[str, Any]) -> str:
+    title = str(conversation.get("title") or "").strip()
+    if title:
+        return title
+    topics = _conversation_topics(conversation)
+    if topics:
+        return "Conversation about " + ", ".join(topics[:4])
+    source = str(conversation.get("source") or "conversation").strip()
+    return f"{source} conversation"
+
+
+def _compact_summary_text(text: str) -> str:
+    value = " ".join(text.strip().split())
+    if not value:
+        return ""
+    sentence = re.split(r"(?<=[.!?])\s+", value, maxsplit=1)[0]
+    return _truncate_summary_text(sentence, limit=220)
+
+
+def _truncate_summary_text(text: str, *, limit: int = 600) -> str:
+    value = " ".join(text.strip().split())
+    if len(value) <= limit:
+        return value
+    return value[: limit - 1].rstrip() + "..."
+
+
+def _conversation_topics(conversation: dict[str, Any]) -> list[str]:
+    metadata = conversation.get("metadata", {})
+    topics = metadata.get("topics") if isinstance(metadata, dict) else None
+    if not isinstance(topics, list):
+        return []
+    return _unique_strings([str(topic) for topic in topics if isinstance(topic, str)])
+
+
+def _message_indexes(conversation: dict[str, Any]) -> list[int]:
+    messages = conversation.get("messages", [])
+    if not isinstance(messages, list):
+        return []
+    return list(range(len(messages)))
+
+
+def _ensure_metadata(conversation: dict[str, Any]) -> dict[str, Any]:
+    metadata = conversation.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+        conversation["metadata"] = metadata
+    return metadata
+
+
+def _with_generated_summary_metadata(conversation: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(conversation, dict):
+        return conversation
+    enriched = dict(conversation)
+    metadata = dict(enriched.get("metadata", {}))
+    if not isinstance(metadata.get("generated_summary"), dict):
+        summary = _get_conversation_summary(enriched)
+        if isinstance(summary, dict):
+            metadata["generated_summary"] = {
+                "id": summary["id"],
+                "type": summary["type"],
+                "text": summary["text"],
+                "basis": summary["basis"],
+                "provenance_status": summary["provenance_status"],
+                "generated_at": summary["generated_at"],
+            }
+    enriched["metadata"] = metadata
+    return enriched
+
+
+def _get_conversation_summary(conversation: dict[str, Any]) -> dict[str, Any] | None:
+    metadata = conversation.get("metadata", {})
+    summary_id = None
+    if isinstance(metadata, dict):
+        generated = metadata.get("generated_summary")
+        if isinstance(generated, dict) and isinstance(generated.get("id"), str):
+            summary_id = generated["id"]
+    if summary_id is None:
+        summary_id = _generated_summary_id(
+            summary_type=SummaryType.CONVERSATION,
+            target_id=str(conversation.get("id", "")),
+            project_id=_project_id_from_conversation(conversation),
+            filters={},
+        )
+    store = _runtime().metadata_store
+    if hasattr(store, "get_generated_summary"):
+        return store.get_generated_summary(summary_id)
+    summaries = getattr(store, "_generated_summaries", {})
+    if isinstance(summaries, dict):
+        summary = summaries.get(summary_id)
+        return summary if isinstance(summary, dict) else None
+    return None
 
 
 def _profile_summary_text(facts: list[dict[str, Any]]) -> str:

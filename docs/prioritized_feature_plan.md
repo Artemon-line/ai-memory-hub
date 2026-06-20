@@ -243,7 +243,7 @@ Implementation sequence:
       compact provenance.
 - [x] Keep generated summary storage separate from raw chunks and normalized
       facts with provenance-aware generated summary records.
-- [ ] Add server-generated conversation, topic, and project summaries after
+- [x] Add server-generated conversation, topic, and project summaries after
       summary provenance is reliable.
 
 ## Closed: Bulk Conversation Insert

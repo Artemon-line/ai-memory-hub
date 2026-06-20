@@ -21,13 +21,19 @@ class SummaryProvenanceStatus(StrEnum):
 
 class SummaryBasis(StrEnum):
     ACTIVE_FACTS = "active_facts"
+    CONVERSATION_MESSAGES = "conversation_messages"
+    TOPIC_CONVERSATIONS = "topic_conversations"
+    PROJECT_CONVERSATIONS = "project_conversations"
 
 
 class GeneratedSummaryProvenance(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     fact_id: str | None = None
+    conversation_id: str | None = None
     predicate: str | None = None
+    source: str | None = None
+    title: str | None = None
     source_conversation_id: str | None = None
     source_message_indexes: list[int] = []
     last_confirmed_at: str | None = None

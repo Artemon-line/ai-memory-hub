@@ -262,7 +262,11 @@ The MCP layer tolerates common client-shaped payloads:
 Invalid explicit IDs still fail fast. If an agent supplies `id`, it must be a valid UUID.
 `metadata.summary` must be a string of 2000 characters or fewer. It improves
 search recall and metadata reranking, but answers still need support from raw
-messages or normalized facts.
+messages or normalized facts. The hub also generates deterministic
+conversation, topic, and project summaries from stored message text. Search and
+retrieve responses expose the conversation summary as
+`metadata.generated_summary`; treat it as metadata, not as citation evidence by
+itself.
 
 Use `memory_profile_get` when you need a compact profile view. It returns
 filtered normalized facts plus a `summary` object generated from active facts,

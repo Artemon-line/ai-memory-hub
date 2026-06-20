@@ -721,13 +721,18 @@ def _format_search_text(result: dict[str, Any]) -> str:
     lines = []
     for row in result.get("results", []):
         lines.append(f"- {row.get('id')}#{row.get('chunk_index', 0)} score={row.get('score')}: {row.get('text', '')}")
+        summary = _generated_summary_text(row.get("conversation"))
+        if summary:
+            lines.append(f"  summary: {summary}")
     return "\n".join(lines) if lines else "no results"
 
 
 def _format_retrieve_text(result: dict[str, Any]) -> str:
     memory = result.get("memory", {})
     messages = memory.get("messages", []) if isinstance(memory, dict) else []
-    return f"{result.get('id')} messages={len(messages)} source={memory.get('source') if isinstance(memory, dict) else ''}"
+    line = f"{result.get('id')} messages={len(messages)} source={memory.get('source') if isinstance(memory, dict) else ''}"
+    summary = _generated_summary_text(memory)
+    return f"{line}\nsummary: {summary}" if summary else line
 
 
 def _format_ask_text(result: dict[str, Any]) -> str:
@@ -773,6 +778,19 @@ def _format_profile_text(result: dict[str, Any]) -> str:
         if isinstance(fact, dict):
             lines.append(f"- {fact['id']} {fact['predicate']}: {fact['object']}")
     return "\n".join(lines)
+
+
+def _generated_summary_text(conversation: Any) -> str | None:
+    if not isinstance(conversation, dict):
+        return None
+    metadata = conversation.get("metadata")
+    if not isinstance(metadata, dict):
+        return None
+    summary = metadata.get("generated_summary")
+    if not isinstance(summary, dict):
+        return None
+    text = summary.get("text")
+    return str(text) if text else None
 
 
 def _format_user_text(user: dict[str, Any]) -> str:

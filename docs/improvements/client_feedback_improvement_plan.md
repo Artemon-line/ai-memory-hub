@@ -190,8 +190,8 @@ Implementation sequence:
 - [x] Do not trust client-supplied owner metadata.
 - [x] Filter vector candidates through metadata ownership before returning or
   answering.
-- [ ] Redact bearer tokens from logs and diagnostics.
-- [ ] Keep Google/Apple/Meta OAuth as a later `oauth_resource_server` or reverse
+- [x] Redact bearer tokens from logs and diagnostics.
+- [x] Keep Google/Apple/Meta OAuth as a later `oauth_resource_server` or reverse
   proxy option.
 
 Acceptance criteria:
@@ -331,11 +331,11 @@ Implementation sequence:
   unless the raw message evidence also supports the answer.
 - [x] Add tests showing summary improves recall without replacing message
   provenance.
-- [ ] Add server-generated per-conversation summaries after client-provided
+- [x] Add server-generated per-conversation summaries after client-provided
   summaries have enough real usage examples.
 - [x] Add a profile summary response that combines active facts, freshness, and
   compact provenance.
-- [ ] Add topic and project summaries after conversation summaries are reliable.
+- [x] Add topic and project summaries after conversation summaries are reliable.
 - [x] Keep generated summary storage separate from raw chunks and normalized facts.
 - [x] Add tests showing generated summaries cite their source conversations or facts.
 

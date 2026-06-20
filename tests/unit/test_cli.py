@@ -326,6 +326,63 @@ def test_search_cli_applies_source_filter(capsys, monkeypatch) -> None:
     assert captured["source"] == "opencode"
 
 
+def test_search_text_output_includes_generated_summary(capsys, monkeypatch) -> None:
+    monkeypatch.setattr(cli, "_configure_memory_runtime", lambda config_path: None)
+    monkeypatch.setattr(
+        cli.mvp_ingestion,
+        "search",
+        lambda query, **kwargs: {
+            "status": "ok",
+            "results": [
+                {
+                    "id": "memory-b",
+                    "score": 0.2,
+                    "chunk_index": 0,
+                    "text": "hello",
+                    "conversation": {
+                        "source": "opencode",
+                        "metadata": {
+                            "generated_summary": {
+                                "text": "opencode conversation: user asked about GPU setup."
+                            }
+                        },
+                    },
+                },
+            ],
+        },
+    )
+
+    exit_code = cli.main(["search", "hello"])
+
+    output = capsys.readouterr().out
+    assert exit_code == 0
+    assert "summary: opencode conversation: user asked about GPU setup." in output
+
+
+def test_retrieve_text_output_includes_generated_summary(capsys, monkeypatch) -> None:
+    monkeypatch.setattr(cli, "_configure_memory_runtime", lambda config_path: None)
+    monkeypatch.setattr(
+        cli.mvp_ingestion,
+        "retrieve",
+        lambda memory_id: {
+            "id": memory_id,
+            "source": "codex",
+            "messages": [{"role": "user", "text": "hello"}],
+            "metadata": {
+                "generated_summary": {
+                    "text": "codex conversation: user asked about summaries."
+                }
+            },
+        },
+    )
+
+    exit_code = cli.main(["retrieve", "memory-b"])
+
+    output = capsys.readouterr().out
+    assert exit_code == 0
+    assert "summary: codex conversation: user asked about summaries." in output
+
+
 def test_retrieve_cli_not_found_json(capsys, monkeypatch) -> None:
     monkeypatch.setattr(cli, "_configure_memory_runtime", lambda config_path: None)
     monkeypatch.setattr(cli.mvp_ingestion, "retrieve", lambda memory_id: None)

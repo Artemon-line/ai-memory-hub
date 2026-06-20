@@ -84,7 +84,10 @@ canonical UUID. When the backend requires caller-supplied IDs, include an `id`:
 Messages may use `text` or `content`; `content` is normalized to `text`.
 `metadata.summary` is optional. Use it as a short factual retrieval hint only;
 raw `messages` and normalized facts remain the source of truth for answers and
-citations.
+citations. The server also writes deterministic generated summaries for each
+conversation, its topics, and its project. Generated summaries are persisted
+separately from raw messages and facts; conversation summaries are exposed back
+under `metadata.generated_summary` for search, retrieve, and CLI display.
 
 Store one complete conversation per insert. Do not split one thread into
 multiple batch items. If an importer has many independent source conversations,
@@ -98,7 +101,9 @@ preserving each original thread/session boundary.
 - `id`: canonical conversation ID
 - `score`: vector distance, where lower is better
 - `chunk_index`, `role`, and `text`: the matched chunk
-- `conversation`: the stored conversation payload
+- `conversation`: the stored conversation payload, including
+  `metadata.generated_summary` when a server-generated conversation summary is
+  available
 - `conversation_score`: best score for that conversation among retrieved chunks
 - `conversation_match_count`: number of retrieved chunks from that conversation
 
@@ -217,8 +222,11 @@ Core tools:
 
 `memory_profile_get` returns `facts` plus a `summary` object. The summary is
 generated from active normalized facts and includes freshness, source-quality
-counts, filters, and compact fact provenance. Generated summaries are stored
-separately from raw chunks and normalized facts.
+counts, filters, and compact fact provenance. Insert also generates
+conversation, topic, and project summaries from stored message text. Generated
+summaries are stored separately from raw chunks and normalized facts; the
+conversation summary is returned as `metadata.generated_summary` on search and
+retrieve responses.
 
 `memory_insert` accepts one complete conversation object. There is intentionally
 no bulk MCP insert tool. Clients may include a short `metadata.summary`, but

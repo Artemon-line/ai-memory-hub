@@ -162,7 +162,12 @@ def test_generated_summary_json_schema_exports_enum_values() -> None:
         "mixed",
         "none",
     ]
-    assert definitions["SummaryBasis"]["enum"] == ["active_facts"]
+    assert definitions["SummaryBasis"]["enum"] == [
+        "active_facts",
+        "conversation_messages",
+        "topic_conversations",
+        "project_conversations",
+    ]
 
 
 def test_ingest_messages_success() -> None:
@@ -185,6 +190,62 @@ def test_ingest_messages_success() -> None:
     assert stored["messages"][0]["hash"].startswith("sha256:")
     assert stored["metadata"]["conversation_hash"].startswith("sha256:")
     assert stored["metadata"]["updated_at"].startswith("2026-")
+
+
+def test_ingest_messages_stores_generated_conversation_topic_and_project_summaries() -> None:
+    metadata, _ = _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["title"] = "GPU rollout"
+    conversation["messages"] = [
+        {"role": "user", "text": "Build FastAPI endpoint with MCP and SQLite search."},
+        {"role": "assistant", "text": "Use pytest for tests and add docker setup."},
+    ]
+
+    mvp_ingestion.ingest_messages(conversation, owner_id="owner-a", project_id="project-a")
+
+    stored = metadata.by_id["d9fd4c95-9cb3-4fd5-b967-3027f8863210"]
+    generated = stored["metadata"]["generated_summary"]
+    summaries = metadata._generated_summaries
+    conversation_summary = summaries[generated["id"]]
+    topic_summaries = [
+        summaries[summary_id]
+        for summary_id in stored["metadata"]["generated_topic_summary_ids"]
+    ]
+    project_summary = summaries[stored["metadata"]["generated_project_summary_id"]]
+
+    assert conversation_summary["type"] == "conversation"
+    assert conversation_summary["basis"] == "conversation_messages"
+    assert conversation_summary["target_id"] == stored["id"]
+    assert conversation_summary["owner_id"] == "owner-a"
+    assert conversation_summary["project_id"] == "project-a"
+    assert conversation_summary["provenance_status"] == "conversation_ids"
+    assert conversation_summary["provenance"][0]["conversation_id"] == stored["id"]
+    assert conversation_summary["provenance"][0]["source_message_indexes"] == [0, 1]
+    assert "GPU rollout" in conversation_summary["text"]
+    assert generated["text"] == conversation_summary["text"]
+    assert {summary["type"] for summary in topic_summaries} == {"topic"}
+    assert {summary["basis"] for summary in topic_summaries} == {"topic_conversations"}
+    assert "mcp" in {summary["target_id"] for summary in topic_summaries}
+    assert project_summary["type"] == "project"
+    assert project_summary["basis"] == "project_conversations"
+    assert project_summary["target_id"] == "project-a"
+
+
+def test_search_uses_generated_summary_metadata_without_returning_it_as_chunk_text() -> None:
+    metadata, vectors = _configure_stubs(retrieval_vector_score_threshold=0.5)
+    conversation = _valid_conversation()
+    conversation["title"] = "Obsidian Quartz"
+    conversation["messages"] = [{"role": "user", "text": "We discussed deployment notes."}]
+    mvp_ingestion.ingest_messages(conversation)
+    vectors.rows = []
+
+    search_result = mvp_ingestion.search(query="Obsidian Quartz", top_k=5)
+
+    assert search_result["results"][0]["id"] == conversation["id"]
+    assert search_result["results"][0]["text"] == "We discussed deployment notes."
+    generated = search_result["results"][0]["conversation"]["metadata"]["generated_summary"]
+    assert generated["type"] == "conversation"
+    assert "Obsidian Quartz" in generated["text"]
 
 
 def test_ingest_messages_preserves_bounded_metadata_summary() -> None:
@@ -254,6 +315,12 @@ def test_ingest_messages_appends_only_new_same_id_messages() -> None:
     assert result["embedded_chunks"] == 1
     assert len(metadata.by_id["d9fd4c95-9cb3-4fd5-b967-3027f8863210"]["messages"]) == 3
     assert [row["chunk_index"] for row in vectors.rows] == [0, 1, 2]
+    generated = metadata.by_id["d9fd4c95-9cb3-4fd5-b967-3027f8863210"]["metadata"][
+        "generated_summary"
+    ]
+    summary = metadata._generated_summaries[generated["id"]]
+    assert summary["provenance"][0]["source_message_indexes"] == [0, 1, 2]
+    assert "next" in summary["text"]
 
 
 def test_trusted_append_extracts_facts_only_from_new_messages() -> None:
