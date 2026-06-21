@@ -342,6 +342,7 @@ def test_search_text_output_includes_generated_summary(capsys, monkeypatch) -> N
                     "conversation": {
                         "source": "opencode",
                         "metadata": {
+                            "auto_tags": ["source:opencode", "gpu"],
                             "generated_summary": {
                                 "text": "opencode conversation: user asked about GPU setup."
                             }
@@ -357,6 +358,7 @@ def test_search_text_output_includes_generated_summary(capsys, monkeypatch) -> N
     output = capsys.readouterr().out
     assert exit_code == 0
     assert "summary: opencode conversation: user asked about GPU setup." in output
+    assert "auto_tags: source:opencode, gpu" in output
 
 
 def test_retrieve_text_output_includes_generated_summary(capsys, monkeypatch) -> None:
@@ -369,6 +371,7 @@ def test_retrieve_text_output_includes_generated_summary(capsys, monkeypatch) ->
             "source": "codex",
             "messages": [{"role": "user", "text": "hello"}],
             "metadata": {
+                "auto_tags": ["source:codex", "summaries"],
                 "generated_summary": {
                     "text": "codex conversation: user asked about summaries."
                 }
@@ -381,6 +384,7 @@ def test_retrieve_text_output_includes_generated_summary(capsys, monkeypatch) ->
     output = capsys.readouterr().out
     assert exit_code == 0
     assert "summary: codex conversation: user asked about summaries." in output
+    assert "auto_tags: source:codex, summaries" in output
 
 
 def test_retrieve_cli_not_found_json(capsys, monkeypatch) -> None:

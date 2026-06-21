@@ -231,6 +231,28 @@ def test_ingest_messages_stores_generated_conversation_topic_and_project_summari
     assert project_summary["target_id"] == "project-a"
 
 
+def test_ingest_messages_generates_auto_tags_without_overwriting_manual_tags() -> None:
+    metadata, _ = _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["source"] = "codex"
+    conversation["title"] = "Velvet Lantern"
+    conversation["metadata"]["tags"] = ["manual", "mcp"]
+    conversation["messages"] = [
+        {"role": "user", "text": "Velvet Lantern uses MCP and FastAPI."},
+        {"role": "assistant", "text": "The creator is Ada Lovelace."},
+    ]
+
+    mvp_ingestion.ingest_messages(conversation)
+
+    stored_metadata = metadata.by_id[conversation["id"]]["metadata"]
+    assert stored_metadata["tags"] == ["manual", "mcp"]
+    assert "mcp" not in stored_metadata["auto_tags"]
+    assert "source:codex" in stored_metadata["auto_tags"]
+    assert "velvet-lantern" in stored_metadata["auto_tags"]
+    assert "fact:creator" in stored_metadata["auto_tags"]
+    assert stored_metadata["tag_sources"]["fact:creator"] == ["fact_predicate"]
+
+
 def test_search_uses_generated_summary_metadata_without_returning_it_as_chunk_text() -> None:
     metadata, vectors = _configure_stubs(retrieval_vector_score_threshold=0.5)
     conversation = _valid_conversation()
@@ -564,6 +586,39 @@ def test_search_metadata_rerank_prefers_matching_tags() -> None:
 
     assert search_result["results"][0]["id"] == tagged["id"]
     assert "_ranking_score" not in search_result["results"][0]
+
+
+def test_search_metadata_rerank_uses_auto_tags() -> None:
+    metadata, vectors = _configure_stubs(retrieval_metadata_weight=2.0)
+    generic = _valid_conversation()
+    generic["id"] = "11111111-1111-4111-8111-111111111111"
+    generic["messages"] = [{"role": "user", "text": "general project note"}]
+    tagged = _valid_conversation()
+    tagged["id"] = "22222222-2222-4222-8222-222222222222"
+    tagged["source"] = "codex"
+    tagged["messages"] = [{"role": "user", "text": "driver troubleshooting note"}]
+    tagged["metadata"]["auto_tags"] = ["gpu"]
+    tagged["metadata"]["tag_sources"] = {"gpu": ["topic"]}
+    metadata.insert(generic)
+    metadata.insert(tagged)
+    vectors.rows = [
+        {
+            "memory_id": generic["id"],
+            "chunk_index": 0,
+            "role": "user",
+            "text": "general project note",
+        },
+        {
+            "memory_id": tagged["id"],
+            "chunk_index": 0,
+            "role": "user",
+            "text": "driver troubleshooting note",
+        },
+    ]
+
+    search_result = mvp_ingestion.search(query="gpu", top_k=2)
+
+    assert search_result["results"][0]["id"] == tagged["id"]
 
 
 def test_ask_applies_conversation_filters_before_answering() -> None:

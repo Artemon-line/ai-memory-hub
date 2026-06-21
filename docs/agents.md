@@ -266,7 +266,9 @@ messages or normalized facts. The hub also generates deterministic
 conversation, topic, and project summaries from stored message text. Search and
 retrieve responses expose the conversation summary as
 `metadata.generated_summary`; treat it as metadata, not as citation evidence by
-itself.
+itself. The hub may also return server-owned `metadata.auto_tags` and
+`metadata.tag_sources`; clients should keep user/manual tags in `metadata.tags`
+and let the server refresh auto-tags during insert or trusted append.
 
 Use `memory_profile_get` when you need a compact profile view. It returns
 filtered normalized facts plus a `summary` object generated from active facts,

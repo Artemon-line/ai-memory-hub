@@ -724,6 +724,9 @@ def _format_search_text(result: dict[str, Any]) -> str:
         summary = _generated_summary_text(row.get("conversation"))
         if summary:
             lines.append(f"  summary: {summary}")
+        auto_tags = _auto_tags_text(row.get("conversation"))
+        if auto_tags:
+            lines.append(f"  auto_tags: {auto_tags}")
     return "\n".join(lines) if lines else "no results"
 
 
@@ -732,7 +735,13 @@ def _format_retrieve_text(result: dict[str, Any]) -> str:
     messages = memory.get("messages", []) if isinstance(memory, dict) else []
     line = f"{result.get('id')} messages={len(messages)} source={memory.get('source') if isinstance(memory, dict) else ''}"
     summary = _generated_summary_text(memory)
-    return f"{line}\nsummary: {summary}" if summary else line
+    auto_tags = _auto_tags_text(memory)
+    details = []
+    if summary:
+        details.append(f"summary: {summary}")
+    if auto_tags:
+        details.append(f"auto_tags: {auto_tags}")
+    return "\n".join([line, *details]) if details else line
 
 
 def _format_ask_text(result: dict[str, Any]) -> str:
@@ -791,6 +800,19 @@ def _generated_summary_text(conversation: Any) -> str | None:
         return None
     text = summary.get("text")
     return str(text) if text else None
+
+
+def _auto_tags_text(conversation: Any) -> str | None:
+    if not isinstance(conversation, dict):
+        return None
+    metadata = conversation.get("metadata")
+    if not isinstance(metadata, dict):
+        return None
+    auto_tags = metadata.get("auto_tags")
+    if not isinstance(auto_tags, list):
+        return None
+    tags = [str(tag) for tag in auto_tags if isinstance(tag, str)]
+    return ", ".join(tags) if tags else None
 
 
 def _format_user_text(user: dict[str, Any]) -> str:

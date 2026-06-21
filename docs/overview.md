@@ -88,6 +88,9 @@ citations. The server also writes deterministic generated summaries for each
 conversation, its topics, and its project. Generated summaries are persisted
 separately from raw messages and facts; conversation summaries are exposed back
 under `metadata.generated_summary` for search, retrieve, and CLI display.
+The server also writes deterministic `metadata.auto_tags` and
+`metadata.tag_sources` from source, topics, entities, and fact predicates.
+Manual `metadata.tags` remain authoritative and are not overwritten.
 
 Store one complete conversation per insert. Do not split one thread into
 multiple batch items. If an importer has many independent source conversations,
@@ -103,7 +106,7 @@ preserving each original thread/session boundary.
 - `chunk_index`, `role`, and `text`: the matched chunk
 - `conversation`: the stored conversation payload, including
   `metadata.generated_summary` when a server-generated conversation summary is
-  available
+  available, and `metadata.auto_tags` when deterministic tags were generated
 - `conversation_score`: best score for that conversation among retrieved chunks
 - `conversation_match_count`: number of retrieved chunks from that conversation
 

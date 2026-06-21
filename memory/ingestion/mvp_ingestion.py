@@ -193,6 +193,7 @@ _MAX_PAYLOAD_BYTES = 25_000_000
 _MAX_RAW_TRANSCRIPT_BYTES = 5_000_000
 _MAX_METADATA_BYTES = 1_000_000
 _MAX_METADATA_SUMMARY_CHARS = 2_000
+_MAX_AUTO_TAGS = 24
 _ROLE_ALIASES = {
     "human": "user",
     "user_message": "user",
@@ -468,6 +469,92 @@ def enrich_topics(obj: dict[str, Any]) -> None:
             merged.append(topic)
 
     metadata["topics"] = merged
+
+
+def enrich_auto_tags(obj: dict[str, Any]) -> None:
+    metadata = obj.get("metadata")
+    if not isinstance(metadata, dict):
+        return
+
+    tag_sources: dict[str, list[str]] = {}
+    for tag in _auto_tags_from_source(obj):
+        _add_auto_tag(tag_sources, tag, "source")
+    for tag in _auto_tags_from_topics(metadata):
+        _add_auto_tag(tag_sources, tag, "topic")
+    for tag in _auto_tags_from_entities(obj):
+        _add_auto_tag(tag_sources, tag, "entity")
+    for tag in _auto_tags_from_fact_predicates(obj):
+        _add_auto_tag(tag_sources, tag, "fact_predicate")
+
+    manual_tags = _manual_tag_set(metadata)
+    auto_tags = [
+        tag
+        for tag in tag_sources
+        if tag not in manual_tags
+    ][:_MAX_AUTO_TAGS]
+    metadata["auto_tags"] = auto_tags
+    metadata["tag_sources"] = {
+        tag: tag_sources[tag]
+        for tag in auto_tags
+    }
+
+
+def _add_auto_tag(tag_sources: dict[str, list[str]], tag: str, source: str) -> None:
+    normalized = _normalize_auto_tag(tag)
+    if not normalized:
+        return
+    sources = tag_sources.setdefault(normalized, [])
+    if source not in sources:
+        sources.append(source)
+
+
+def _auto_tags_from_source(obj: dict[str, Any]) -> list[str]:
+    source = str(obj.get("source", "")).strip()
+    return [f"source:{source}"] if source else []
+
+
+def _auto_tags_from_topics(metadata: dict[str, Any]) -> list[str]:
+    topics = metadata.get("topics")
+    if not isinstance(topics, list):
+        return []
+    return [str(topic) for topic in topics if isinstance(topic, str)]
+
+
+def _auto_tags_from_entities(obj: dict[str, Any]) -> list[str]:
+    candidates: list[str] = []
+    title = obj.get("title")
+    if isinstance(title, str):
+        candidates.append(title)
+    for message in obj.get("messages", []):
+        if not isinstance(message, dict):
+            continue
+        text = message.get("text")
+        if not isinstance(text, str):
+            continue
+        candidates.extend(match.group(0) for match in re.finditer(r"\b[A-Z][A-Za-z0-9]+(?:\s+[A-Z][A-Za-z0-9]+){1,4}\b", text))
+    return candidates
+
+
+def _auto_tags_from_fact_predicates(obj: dict[str, Any]) -> list[str]:
+    predicates = {
+        str(fact.get("predicate", ""))
+        for fact in extract_facts(obj)
+        if isinstance(fact, dict) and fact.get("predicate")
+    }
+    return [f"fact:{predicate}" for predicate in sorted(predicates)]
+
+
+def _manual_tag_set(metadata: dict[str, Any]) -> set[str]:
+    tags = metadata.get("tags")
+    if not isinstance(tags, list):
+        return set()
+    return {_normalize_auto_tag(str(tag)) for tag in tags if isinstance(tag, str)}
+
+
+def _normalize_auto_tag(value: str) -> str:
+    normalized = re.sub(r"[^A-Za-z0-9:_-]+", "-", value.strip().lower())
+    normalized = re.sub(r"-{2,}", "-", normalized).strip("-_:")
+    return normalized[:80]
 
 
 def chunk_messages(obj: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1138,6 +1225,7 @@ def ingest_messages(
 
     # 2. Enrich metadata topics from message text
     enrich_topics(conversation_json)
+    enrich_auto_tags(conversation_json)
 
     conversation_hash = conversation_json["metadata"]["conversation_hash"]
     duplicate = _lookup_by_conversation_hash(conversation_hash, project_id=effective_project_id)
@@ -1183,6 +1271,7 @@ def ingest_messages(
             start_index = len(same_thread.get("messages", []))
             updated = _append_conversation(same_thread, conversation_json, new_messages)
             enrich_topics(updated)
+            enrich_auto_tags(updated)
             _attach_generated_summaries(
                 updated,
                 owner_id=owner_id,
@@ -1622,12 +1711,16 @@ def _conversation_search_text(conversation: dict[str, Any]) -> str:
 
 def _metadata_search_values(metadata: dict[str, Any]) -> list[str]:
     values: list[str] = []
-    for key in ("tags", "topics", "summary", "generated_summary"):
+    for key in ("tags", "auto_tags", "tag_sources", "topics", "summary", "generated_summary"):
         value = metadata.get(key)
         if isinstance(value, list):
             values.extend(str(item) for item in value)
         elif isinstance(value, dict):
-            values.extend(str(item) for item in value.values() if item is not None)
+            for item in value.values():
+                if isinstance(item, list):
+                    values.extend(str(child) for child in item)
+                elif item is not None:
+                    values.append(str(item))
         elif value is not None:
             values.append(str(value))
     return values

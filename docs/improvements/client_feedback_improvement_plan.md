@@ -124,14 +124,23 @@ Source feedback:
 
 Implementation sequence:
 
-- [ ] Generate deterministic tags from extracted topics, entities, source, and fact predicates.
-- [ ] Store generated tags separately from user-supplied tags:
-  - [ ] `tags`
-  - [ ] `auto_tags`
-  - [ ] `tag_sources`
-- [ ] Use auto-tags for retrieval reranking only after tests show no precision regression.
-- [ ] Expose auto-tags in search/retrieve responses and CLI output.
-- [ ] Add tests for generated tags, manual tag preservation, and metadata-aware reranking.
+- [x] Generate deterministic tags from extracted topics, entities, source, and fact predicates.
+- [x] Store generated tags separately from user-supplied tags:
+  - [x] `tags`
+  - [x] `auto_tags`
+  - [x] `tag_sources`
+- [x] Use auto-tags for retrieval reranking only after tests show no precision regression.
+- [x] Expose auto-tags in search/retrieve responses and CLI output.
+- [x] Add tests for generated tags, manual tag preservation, and metadata-aware reranking.
+
+Current implementation:
+
+- `metadata.tags` remains the manual/user-supplied tag list.
+- `metadata.auto_tags` contains deterministic server-generated tags from source,
+  inferred topics, title/message entities, and normalized fact predicates.
+- `metadata.tag_sources` records why each auto-tag was produced.
+- Auto-tags participate in metadata-aware reranking and search text, but do not
+  overwrite manual tags.
 
 Acceptance criteria:
 
