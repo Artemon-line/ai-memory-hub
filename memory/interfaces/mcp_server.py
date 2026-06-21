@@ -15,6 +15,11 @@ from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig
 from memory.ingestion.base_agent import BaseIngestionAgent
 from memory.ingestion.mvp_ingestion import normalize_conversation_json
+from memory.ingestion.thread_models import (
+    SearchResultMode,
+    result_mode_error_message,
+    result_mode_values,
+)
 from memory.ingestion.validate import validate_conversation
 
 ToolFn = Callable[..., Awaitable[dict[str, Any]]]
@@ -34,7 +39,8 @@ SERVER_INSTRUCTIONS = (
     "Include metadata.summary as a short factual retrieval hint when available, while "
     "still preserving all source messages. "
     "Pass project_id when saving to or reading from a shared project; omit it for the default private project. "
-    "memory_search and memory_ask support source, date_from, date_to, and tags filters when narrowing recall. "
+    "memory_search and memory_ask support source, date_from, date_to, tags, and thread_id filters "
+    "when narrowing recall. "
     "memory_fact_search and memory_profile_get support source, predicate, date range, confidence, status, "
     "source_quality, and freshness filters."
 )
@@ -54,13 +60,14 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "and optionally pass `project_id` for a shared workspace."
     ),
     "memory_search": (
-        "Search existing memory by text query. Optional filters: source, date_from, date_to, tags. "
-        "Use project_id for a shared workspace. Use limit and cursor for paged results."
+        "Search existing memory by text query. Optional filters: source, date_from, date_to, tags, "
+        "and thread_id. Use project_id for a shared workspace. Use limit and cursor for paged "
+        "results. Use result_mode=threads for thread-grouped results."
     ),
     "memory_retrieve": "Retrieve a stored memory item by ID, optionally within a project_id.",
     "memory_ask": (
         "Answer a question using stored memory and facts. Optional filters: source, date_from, "
-        "date_to, tags, and project_id."
+        "date_to, tags, thread_id, and project_id."
     ),
     "memory_fact_search": (
         "Search normalized extracted memory facts. Optional filters: source, subject, predicate, "
@@ -295,8 +302,8 @@ def _paginate(
 
 
 def _validate_result_mode(result_mode: str) -> str:
-    if result_mode not in {"chunks", "compact", "conversations"}:
-        raise ValueError("result_mode must be one of: chunks, compact, conversations")
+    if result_mode not in result_mode_values():
+        raise ValueError(result_mode_error_message())
     return result_mode
 
 
@@ -613,8 +620,9 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
         date_from: str | None = None,
         date_to: str | None = None,
         tags: list[str] | None = None,
-        result_mode: str = "chunks",
+        result_mode: str = SearchResultMode.CHUNKS.value,
         project_id: str | None = None,
+        thread_id: str | None = None,
         ctx: FastMCPContext | None = None,
     ) -> dict[str, Any]:
         if not isinstance(query, str) or not query.strip():
@@ -657,6 +665,7 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 date_from=unwrap_array(date_from),
                 date_to=unwrap_array(date_to),
                 tags=unwrap_array(tags),
+                thread_id=unwrap_array(thread_id),
             )
             matches = result.get("results", [])
             if not isinstance(matches, list):
@@ -724,12 +733,13 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
         question: str,
         top_k: int = 5,
         max_context_tokens: int | None = None,
-        result_mode: str = "chunks",
+        result_mode: str = SearchResultMode.CHUNKS.value,
         source: str | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
         tags: list[str] | None = None,
         project_id: str | None = None,
+        thread_id: str | None = None,
         ctx: FastMCPContext | None = None,
     ) -> dict[str, Any]:
         if not isinstance(question, str) or not question.strip():
@@ -801,6 +811,7 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 date_from=unwrap_array(date_from),
                 date_to=unwrap_array(date_to),
                 tags=unwrap_array(tags),
+                thread_id=unwrap_array(thread_id),
             )
         except ValueError as exc:
             return _envelope(

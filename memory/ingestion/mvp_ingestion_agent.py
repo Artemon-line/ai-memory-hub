@@ -7,6 +7,7 @@ import jsonschema
 from memory.config import HubConfig
 from memory.ingestion import mvp_ingestion
 from memory.ingestion.base_agent import BaseIngestionAgent
+from memory.ingestion.thread_models import SearchResultMode
 
 
 class MVPIngestionAgent(BaseIngestionAgent):
@@ -42,13 +43,14 @@ class MVPIngestionAgent(BaseIngestionAgent):
         query: str,
         *,
         top_k: int = 5,
-        result_mode: str = "chunks",
+        result_mode: str = SearchResultMode.CHUNKS.value,
         owner_id: str | None = None,
         project_id: str | None = None,
         source: str | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
         tags: list[str] | tuple[str, ...] | None = None,
+        thread_id: str | None = None,
     ) -> Dict[str, Any]:
         return mvp_ingestion.search(
             query=query,
@@ -60,6 +62,7 @@ class MVPIngestionAgent(BaseIngestionAgent):
             date_from=date_from,
             date_to=date_to,
             tags=tags,
+            thread_id=thread_id,
         )
 
     async def retrieve(
@@ -73,13 +76,14 @@ class MVPIngestionAgent(BaseIngestionAgent):
         *,
         top_k: int = 5,
         max_context_tokens: int | None = None,
-        result_mode: str = "chunks",
+        result_mode: str = SearchResultMode.CHUNKS.value,
         owner_id: str | None = None,
         project_id: str | None = None,
         source: str | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
         tags: list[str] | tuple[str, ...] | None = None,
+        thread_id: str | None = None,
     ) -> Dict[str, Any]:
         return mvp_ingestion.ask(
             question=question,
@@ -92,6 +96,7 @@ class MVPIngestionAgent(BaseIngestionAgent):
             date_from=date_from,
             date_to=date_to,
             tags=tags,
+            thread_id=thread_id,
         )
 
     async def health(self) -> Dict[str, Any]:

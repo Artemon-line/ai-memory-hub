@@ -145,7 +145,8 @@ Search stored memory by semantic query.
   "source": "codex",
   "date_from": "2026-01-01T00:00:00Z",
   "date_to": "2026-12-31T23:59:59Z",
-  "tags": ["preferences"]
+  "tags": ["preferences"],
+  "thread_id": "codex:session-42"
 }
 ```
 
@@ -153,7 +154,7 @@ Notes:
 
 - `top_k` controls retrieval breadth.
 - `limit` and `cursor` support paginated MCP output.
-- `source`, `date_from`, `date_to`, and `tags` are optional filters.
+- `source`, `date_from`, `date_to`, `tags`, and `thread_id` are optional filters.
 - Do not pass `null` for optional fields; omit them instead.
 
 ### `memory_retrieve`
@@ -269,6 +270,11 @@ retrieve responses expose the conversation summary as
 itself. The hub may also return server-owned `metadata.auto_tags` and
 `metadata.tag_sources`; clients should keep user/manual tags in `metadata.tags`
 and let the server refresh auto-tags during insert or trusted append.
+For thread continuity, clients may send `metadata.upstream_thread_id` or
+`metadata.thread_id`. The hub preserves upstream IDs, derives `thread_id` from
+`source` plus `upstream_thread_id` when needed, and supports `thread_id` filters
+on `memory_search` and `memory_ask`. Use `result_mode="threads"` when a client
+wants grouped thread-level search results.
 
 Use `memory_profile_get` when you need a compact profile view. It returns
 filtered normalized facts plus a `summary` object generated from active facts,

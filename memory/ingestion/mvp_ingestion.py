@@ -32,6 +32,14 @@ from memory.ingestion.summary_models import (
     SummaryProvenanceStatus,
     SummaryType,
 )
+from memory.ingestion.thread_models import (
+    SearchResultMode,
+    ThreadMetadataKey,
+    ThreadResultKey,
+    result_mode_error_message,
+    result_mode_values,
+    thread_metadata_from_mapping,
+)
 from memory.ingestion.tokenizer import (
     count_tokens,
     split_token_windows,
@@ -119,6 +127,7 @@ class ConversationFilters:
     date_from: str | None = None
     date_to: str | None = None
     tags: tuple[str, ...] = ()
+    thread_id: str | None = None
 
     @classmethod
     def from_options(
@@ -128,17 +137,21 @@ class ConversationFilters:
         date_from: str | None = None,
         date_to: str | None = None,
         tags: Sequence[str] | None = None,
+        thread_id: str | None = None,
     ) -> "ConversationFilters":
         return cls(
             source=str(source) if source else None,
             date_from=str(date_from) if date_from else None,
             date_to=str(date_to) if date_to else None,
             tags=tuple(str(tag) for tag in tags or () if str(tag)),
+            thread_id=str(thread_id) if thread_id else None,
         )
 
     @property
     def has_filters(self) -> bool:
-        return bool(self.source or self.date_from or self.date_to or self.tags)
+        return bool(
+            self.source or self.date_from or self.date_to or self.tags or self.thread_id
+        )
 
 
 @dataclass(frozen=True)
@@ -228,7 +241,7 @@ _TOPIC_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ),
     ("backend", re.compile(r"\b(backend|fastapi|flask|server)\b", re.IGNORECASE)),
 ]
-_RESULT_MODES = {"chunks", "compact", "conversations"}
+_RESULT_MODES = result_mode_values()
 _FACT_CORRECTION_RE = re.compile(
     r"\bactually,\s+my\s+(?P<item>[A-Za-z0-9][A-Za-z0-9 _-]{1,80})\s+is\s+(?P<new>[^,.]+),\s+not\s+(?P<old>[^.]+)",
     re.IGNORECASE,
@@ -706,7 +719,7 @@ def _lookup_same_thread(
 
     metadata = incoming.get("metadata", {})
     upstream_thread_id = (
-        metadata.get("upstream_thread_id") if isinstance(metadata, dict) else None
+        metadata.get(ThreadMetadataKey.UPSTREAM_THREAD_ID) if isinstance(metadata, dict) else None
     )
     if isinstance(upstream_thread_id, str) and upstream_thread_id:
         source = str(incoming.get("source", ""))
@@ -723,7 +736,7 @@ def _lookup_same_thread(
                     if (
                         isinstance(conversation_metadata, dict)
                         and conversation.get("source") == source
-                        and conversation_metadata.get("upstream_thread_id")
+                        and conversation_metadata.get(ThreadMetadataKey.UPSTREAM_THREAD_ID)
                         == upstream_thread_id
                     ):
                         if _conversation_allowed(conversation, owner_id, project_id):
@@ -750,10 +763,13 @@ def _append_conversation(
 ) -> dict[str, Any]:
     updated = dict(existing)
     metadata = dict(updated.get("metadata", {}))
+    incoming_metadata = incoming.get("metadata", {})
     messages = list(updated.get("messages", [])) + new_messages
     metadata["updated_at"] = incoming["metadata"]["updated_at"]
     metadata["message_hashes"] = [str(message["hash"]) for message in messages]
     metadata["conversation_hash"] = hash_ordered_messages(messages)
+    if isinstance(incoming_metadata, dict):
+        _merge_thread_metadata(metadata, incoming_metadata)
     updated["messages"] = messages
     updated["metadata"] = metadata
     store = _runtime().metadata_store
@@ -806,6 +822,44 @@ def _scope_conversation_hash(
     metadata["conversation_hash"] = f"sha256:{digest}"
 
 
+def _normalize_thread_metadata(conversation: dict[str, Any]) -> None:
+    metadata = conversation.get("metadata")
+    if not isinstance(metadata, dict):
+        return
+    thread_metadata = thread_metadata_from_mapping(metadata)
+    if thread_metadata.thread_id is None and thread_metadata.upstream_thread_id:
+        thread_metadata.thread_id = _derived_thread_id(
+            str(conversation.get("source", "")), thread_metadata.upstream_thread_id
+        )
+    for key in ThreadMetadataKey:
+        metadata.pop(key, None)
+    metadata.update(thread_metadata.to_metadata_update())
+
+
+def _merge_thread_metadata(target: dict[str, Any], incoming: dict[str, Any]) -> None:
+    for key in (
+        ThreadMetadataKey.THREAD_ID,
+        ThreadMetadataKey.UPSTREAM_THREAD_ID,
+        ThreadMetadataKey.PARENT_CONVERSATION_ID,
+    ):
+        if key not in target and isinstance(incoming.get(key), str):
+            target[key] = str(incoming[key])
+    existing_related = target.get(ThreadMetadataKey.RELATED_CONVERSATION_IDS)
+    incoming_related = incoming.get(ThreadMetadataKey.RELATED_CONVERSATION_IDS)
+    related: list[str] = []
+    if isinstance(existing_related, list):
+        related.extend(str(item) for item in existing_related if isinstance(item, str))
+    if isinstance(incoming_related, list):
+        related.extend(str(item) for item in incoming_related if isinstance(item, str))
+    if related:
+        target[ThreadMetadataKey.RELATED_CONVERSATION_IDS] = _unique_strings(related)
+
+
+def _derived_thread_id(source: str, upstream_thread_id: str) -> str:
+    source_part = source.strip() or "unknown"
+    return f"{source_part}:{upstream_thread_id}"
+
+
 def _owner_id_from_conversation(conversation: Any) -> str | None:
     if not isinstance(conversation, dict):
         return None
@@ -856,6 +910,13 @@ def _conversation_matches_filters(conversation: Any, filters: ConversationFilter
         return False
     if filters.source and str(conversation.get("source", "")) != filters.source:
         return False
+    metadata = conversation.get("metadata", {})
+    if filters.thread_id:
+        if (
+            not isinstance(metadata, dict)
+            or str(metadata.get(ThreadMetadataKey.THREAD_ID, "")) != filters.thread_id
+        ):
+            return False
     if not _datetime_in_range(
         str(conversation.get("timestamp", "")),
         date_from=filters.date_from,
@@ -865,7 +926,6 @@ def _conversation_matches_filters(conversation: Any, filters: ConversationFilter
         return False
     if not filters.tags:
         return True
-    metadata = conversation.get("metadata", {})
     conversation_tags = metadata.get("tags", []) if isinstance(metadata, dict) else []
     if not isinstance(conversation_tags, list):
         return False
@@ -1009,6 +1069,7 @@ def normalize_conversation_json(
     ]
     metadata["conversation_hash"] = hash_ordered_messages(normalized["messages"])
     normalized["metadata"] = metadata
+    _normalize_thread_metadata(normalized)
     _enforce_payload_limits(normalized)
     return normalized
 
@@ -1382,17 +1443,22 @@ def _mark_chunks_indexing_failed(metadata_id: str, chunks: list[dict[str, Any]])
 def search(
     query: str,
     top_k: int = 5,
-    result_mode: str = "chunks",
+    result_mode: str = SearchResultMode.CHUNKS.value,
     owner_id: str | None = None,
     project_id: str | None = None,
     source: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
     tags: Sequence[str] | None = None,
+    thread_id: str | None = None,
 ) -> dict[str, Any]:
     _validate_result_mode(result_mode)
     filters = ConversationFilters.from_options(
-        source=source, date_from=date_from, date_to=date_to, tags=tags
+        source=source,
+        date_from=date_from,
+        date_to=date_to,
+        tags=tags,
+        thread_id=thread_id,
     )
     runtime = _runtime()
     effective_project_id = _resolve_project(
@@ -1484,12 +1550,14 @@ def search(
 
 def _validate_result_mode(result_mode: str) -> None:
     if result_mode not in _RESULT_MODES:
-        raise ValueError("result_mode must be one of: chunks, compact, conversations")
+        raise ValueError(result_mode_error_message())
 
 
 def _apply_result_mode(rows: list[dict[str, Any]], result_mode: str) -> list[dict[str, Any]]:
-    if result_mode == "chunks":
+    if result_mode == SearchResultMode.CHUNKS:
         return rows
+    if result_mode == SearchResultMode.THREADS:
+        return _thread_result_rows(rows)
     grouped: dict[str, list[dict[str, Any]]] = {}
     order: list[str] = []
     for row in rows:
@@ -1507,12 +1575,73 @@ def _apply_result_mode(rows: list[dict[str, Any]], result_mode: str) -> list[dic
         best["matching_chunks"] = len(chunk_rows)
         best["evidence_chunks"] = evidence
         best["used_in_answer"] = False
-        if result_mode == "conversations":
+        if result_mode == SearchResultMode.CONVERSATIONS:
             best["chunk_index"] = 0
             best["role"] = ""
             best["text"] = _conversation_result_text(best.get("conversation"), evidence)
         compacted.append(best)
     return compacted
+
+
+def _thread_result_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    order: list[str] = []
+    for row in rows:
+        thread_id = _thread_id_from_conversation(row.get("conversation"))
+        if thread_id not in grouped:
+            grouped[thread_id] = []
+            order.append(thread_id)
+        grouped[thread_id].append(row)
+
+    thread_rows: list[dict[str, Any]] = []
+    for thread_id in order:
+        thread_matches = grouped[thread_id]
+        best = dict(thread_matches[0])
+        conversation_ids = _unique_strings(
+            [str(row.get("id", "")) for row in thread_matches if row.get("id")]
+        )
+        best[ThreadResultKey.THREAD_ID] = thread_id
+        best[ThreadResultKey.THREAD_CONVERSATION_IDS] = conversation_ids
+        best[ThreadResultKey.THREAD_CONVERSATION_COUNT] = len(conversation_ids)
+        best[ThreadResultKey.MATCHING_CONVERSATIONS] = len(conversation_ids)
+        best[ThreadResultKey.MATCHING_CHUNKS] = sum(
+            int(row.get("matching_chunks", 1)) for row in thread_matches
+        )
+        best[ThreadResultKey.EVIDENCE_CHUNKS] = [_citation_from_row(row) for row in thread_matches]
+        best[ThreadResultKey.USED_IN_ANSWER] = False
+        best["chunk_index"] = 0
+        best["role"] = ""
+        best["text"] = _thread_result_text(thread_id, conversation_ids, thread_matches)
+        return_row = _strip_internal_ranking_fields(best)
+        thread_rows.append(return_row)
+    return thread_rows
+
+
+def _thread_id_from_conversation(conversation: Any) -> str:
+    if not isinstance(conversation, dict):
+        return "thread:unknown"
+    metadata = conversation.get("metadata")
+    if isinstance(metadata, dict) and metadata.get(ThreadMetadataKey.THREAD_ID):
+        return str(metadata[ThreadMetadataKey.THREAD_ID])
+    return f"conversation:{conversation.get('id', 'unknown')}"
+
+
+def _thread_result_text(
+    thread_id: str, conversation_ids: list[str], thread_matches: list[dict[str, Any]]
+) -> str:
+    return (
+        f"{thread_id}: {len(conversation_ids)} conversation(s), "
+        f"{len(thread_matches)} matching chunk(s)"
+    )
+
+
+def _strip_internal_ranking_fields(row: dict[str, Any]) -> dict[str, Any]:
+    cleaned = dict(row)
+    cleaned.pop("_grouped_score", None)
+    cleaned.pop("_original_rank", None)
+    cleaned.pop("_ranking_score", None)
+    cleaned.pop("_ranking_boost", None)
+    return cleaned
 
 
 def _conversation_result_text(conversation: Any, evidence: list[dict[str, Any]]) -> str:
@@ -1761,17 +1890,22 @@ def ask(
     question: str,
     top_k: int = 5,
     max_context_tokens: int | None = None,
-    result_mode: str = "chunks",
+    result_mode: str = SearchResultMode.CHUNKS.value,
     owner_id: str | None = None,
     project_id: str | None = None,
     source: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
     tags: Sequence[str] | None = None,
+    thread_id: str | None = None,
 ) -> dict[str, Any]:
     _validate_result_mode(result_mode)
     filters = ConversationFilters.from_options(
-        source=source, date_from=date_from, date_to=date_to, tags=tags
+        source=source,
+        date_from=date_from,
+        date_to=date_to,
+        tags=tags,
+        thread_id=thread_id,
     )
     effective_project_id = _resolve_project(
         owner_id=owner_id, project_id=project_id, required_role=PROJECT_ROLE_READER
@@ -1874,9 +2008,10 @@ def _search_for_ask(
             date_from=filters.date_from,
             date_to=filters.date_to,
             tags=filters.tags,
+            thread_id=filters.thread_id,
         )
     except TypeError:
-        if result_mode != "chunks":
+        if result_mode != SearchResultMode.CHUNKS:
             raise
         return search(query=question, top_k=top_k)
 
@@ -2579,6 +2714,7 @@ def _fact_matches_filters(
                 date_from=conversation_filters.date_from,
                 date_to=conversation_filters.date_to,
                 tags=conversation_filters.tags,
+                thread_id=conversation_filters.thread_id,
             )
         conversation = _runtime().metadata_store.get(str(fact.get("source_conversation_id", "")))
         if not _conversation_matches_filters(conversation, source_filters):

@@ -567,13 +567,23 @@ def test_memory_ask_accepts_conversation_filters() -> None:
     second["source"] = "opencode"
     second["timestamp"] = "2026-01-02T00:00:00Z"
     second["messages"] = [{"role": "user", "text": "hello from opencode"}]
-    second["metadata"] = {"imported_at": "2026-01-02T00:00:00Z", "tags": ["shared"]}
+    second["metadata"] = {
+        "imported_at": "2026-01-02T00:00:00Z",
+        "tags": ["shared"],
+        "thread_id": "thread-opencode",
+    }
     client.post("/memory/insert", json=first)
     client.post("/memory/insert", json=second)
 
     ask = client.post(
         "/memory/ask",
-        json={"question": "hello", "top_k": 5, "source": "opencode", "tags": ["shared"]},
+        json={
+            "question": "hello",
+            "top_k": 5,
+            "source": "opencode",
+            "tags": ["shared"],
+            "thread_id": "thread-opencode",
+        },
     )
 
     assert ask.status_code == 200

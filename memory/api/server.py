@@ -12,18 +12,20 @@ from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig, ensure_token_hash_secret, normalize_config
 from memory.ingestion.base_agent import BaseIngestionAgent
 from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
+from memory.ingestion.thread_models import SearchResultMode
 from memory.interfaces.mcp_server import create_mcp_server
 
 
 class SearchRequest(BaseModel):
     query: str
     top_k: int = Field(default=5, ge=1, le=100)
-    result_mode: str = "chunks"
+    result_mode: str = SearchResultMode.CHUNKS.value
     project_id: str | None = None
     source: str | None = None
     date_from: str | None = None
     date_to: str | None = None
     tags: list[str] | None = None
+    thread_id: str | None = None
 
 
 class RetrieveRequest(BaseModel):
@@ -35,12 +37,13 @@ class AskRequest(BaseModel):
     question: str
     top_k: int = Field(default=5, ge=1, le=100)
     max_context_tokens: int | None = Field(default=None, ge=1)
-    result_mode: str = "chunks"
+    result_mode: str = SearchResultMode.CHUNKS.value
     project_id: str | None = None
     source: str | None = None
     date_from: str | None = None
     date_to: str | None = None
     tags: list[str] | None = None
+    thread_id: str | None = None
 
 
 class FactSearchRequest(BaseModel):
@@ -152,6 +155,7 @@ def _register_api_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
                     date_from=payload.date_from,
                     date_to=payload.date_to,
                     tags=payload.tags,
+                    thread_id=payload.thread_id,
                 )
             )
         except PermissionError as exc:
@@ -188,6 +192,7 @@ def _register_api_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
                     date_from=payload.date_from,
                     date_to=payload.date_to,
                     tags=payload.tags,
+                    thread_id=payload.thread_id,
                 )
             )
         except PermissionError as exc:

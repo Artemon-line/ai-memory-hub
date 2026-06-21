@@ -14,6 +14,7 @@ from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig, load_config
 from memory.importers import get_importer
 from memory.ingestion import mvp_ingestion
+from memory.ingestion.thread_models import SearchResultMode
 from memory.ingestion.tokenizer import tokenizer_diagnostics
 
 EXIT_OK = 0
@@ -83,10 +84,11 @@ def build_parser() -> argparse.ArgumentParser:
     search.add_argument("--date-from", default=None, help="Filter results from this ISO-8601 timestamp.")
     search.add_argument("--date-to", default=None, help="Filter results through this ISO-8601 timestamp.")
     search.add_argument("--tags", action="append", default=None, help="Require a tag. Repeat for multiple tags.")
+    search.add_argument("--thread-id", default=None, help="Filter results by canonical thread id.")
     search.add_argument(
         "--result-mode",
-        choices=["chunks", "compact", "conversations"],
-        default="chunks",
+        choices=[mode.value for mode in SearchResultMode],
+        default=SearchResultMode.CHUNKS.value,
         help="Result shape to return.",
     )
 
@@ -103,10 +105,11 @@ def build_parser() -> argparse.ArgumentParser:
     ask.add_argument("--date-from", default=None, help="Filter context from this ISO-8601 timestamp.")
     ask.add_argument("--date-to", default=None, help="Filter context through this ISO-8601 timestamp.")
     ask.add_argument("--tags", action="append", default=None, help="Require a tag. Repeat for multiple tags.")
+    ask.add_argument("--thread-id", default=None, help="Filter context by canonical thread id.")
     ask.add_argument(
         "--result-mode",
-        choices=["chunks", "compact", "conversations"],
-        default="chunks",
+        choices=[mode.value for mode in SearchResultMode],
+        default=SearchResultMode.CHUNKS.value,
         help="Result shape to return.",
     )
 
@@ -348,6 +351,7 @@ def _search(args: argparse.Namespace) -> int:
             date_from=args.date_from,
             date_to=args.date_to,
             tags=args.tags,
+            thread_id=args.thread_id,
         )
     )
     _emit_result(args, result, text_formatter=_format_search_text)
@@ -381,6 +385,7 @@ def _ask(args: argparse.Namespace) -> int:
             date_from=args.date_from,
             date_to=args.date_to,
             tags=args.tags,
+            thread_id=args.thread_id,
         )
     )
     _emit_result(args, result, text_formatter=_format_ask_text)

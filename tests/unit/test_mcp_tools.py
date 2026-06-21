@@ -99,7 +99,11 @@ def _conversation_two() -> dict[str, object]:
         "source": "chatgpt",
         "timestamp": "2026-01-02T00:00:00Z",
         "messages": [{"role": "user", "text": "hello again"}],
-        "metadata": {"imported_at": "2026-01-02T00:00:00Z", "tags": ["beta"]},
+        "metadata": {
+            "imported_at": "2026-01-02T00:00:00Z",
+            "tags": ["beta"],
+            "thread_id": "thread-beta",
+        },
     }
 
 
@@ -435,8 +439,22 @@ async def test_mcp_tool_handlers_search_pagination_and_filters() -> None:
         for row in filtered_tags["results"]
     )
 
+    filtered_thread = await handlers["memory_search"](
+        "hello", thread_id="thread-beta", top_k=10
+    )
+    assert filtered_thread["status"] == "ok"
+    assert [row["id"] for row in filtered_thread["results"]] == [
+        "2f39f5cc-6256-4ca9-a9b2-6211bc6e3702"
+    ]
+
+    grouped_threads = await handlers["memory_search"](
+        "hello", top_k=10, result_mode="threads"
+    )
+    assert grouped_threads["status"] == "ok"
+    assert "thread_id" in grouped_threads["results"][0]
+
     filtered_ask = await handlers["memory_ask"](
-        "hello", top_k=10, source="chatgpt", tags=["beta"]
+        "hello", top_k=10, source="chatgpt", tags=["beta"], thread_id="thread-beta"
     )
     assert filtered_ask["status"] == "ok"
     assert [row["id"] for row in filtered_ask["results"]] == [

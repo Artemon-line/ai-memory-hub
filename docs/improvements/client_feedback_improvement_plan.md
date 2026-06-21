@@ -155,11 +155,23 @@ Source feedback:
 
 Implementation sequence:
 
-- [ ] Promote existing upstream-thread metadata into a documented cross-client thread model.
-- [ ] Add `thread_id`, `parent_conversation_id`, and `related_conversation_ids` where storage adapters can support them.
-- [ ] Add append-or-continue behavior for clients that send a stable upstream thread id.
-- [ ] Add search filters and result grouping by thread.
-- [ ] Add tests for cross-client handoff, append-only updates, and thread-aware retrieval.
+- [x] Promote existing upstream-thread metadata into a documented cross-client thread model.
+- [x] Add `thread_id`, `parent_conversation_id`, and `related_conversation_ids` where storage adapters can support them.
+- [x] Add append-or-continue behavior for clients that send a stable upstream thread id.
+- [x] Add search filters and result grouping by thread.
+- [x] Add tests for cross-client handoff, append-only updates, and thread-aware retrieval.
+
+Current implementation:
+
+- `metadata.thread_id` is the canonical thread filter/grouping field.
+- `metadata.upstream_thread_id` is preserved. If `metadata.thread_id` is omitted,
+  the server derives one from `source` plus `upstream_thread_id`.
+- `metadata.parent_conversation_id` and `metadata.related_conversation_ids`
+  are accepted as UUID conversation references.
+- Trusted append can continue a stored conversation when a client sends the same
+  `source` and `metadata.upstream_thread_id`.
+- `memory_search` and `memory_ask` accept `thread_id`; `result_mode="threads"`
+  returns thread-grouped search results.
 
 Acceptance criteria:
 

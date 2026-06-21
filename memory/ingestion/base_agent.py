@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 
 from memory.config import HubConfig
+from memory.ingestion.thread_models import SearchResultMode
 
 
 class BaseIngestionAgent(ABC):
@@ -33,13 +34,14 @@ class BaseIngestionAgent(ABC):
         query: str,
         *,
         top_k: int = 5,
-        result_mode: str = "chunks",
+        result_mode: str = SearchResultMode.CHUNKS.value,
         owner_id: str | None = None,
         project_id: str | None = None,
         source: str | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
         tags: list[str] | tuple[str, ...] | None = None,
+        thread_id: str | None = None,
     ) -> Dict[str, Any]:
         raise NotImplementedError("search is not implemented")
 
@@ -54,13 +56,14 @@ class BaseIngestionAgent(ABC):
         *,
         top_k: int = 5,
         max_context_tokens: int | None = None,
-        result_mode: str = "chunks",
+        result_mode: str = SearchResultMode.CHUNKS.value,
         owner_id: str | None = None,
         project_id: str | None = None,
         source: str | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
         tags: list[str] | tuple[str, ...] | None = None,
+        thread_id: str | None = None,
     ) -> Dict[str, Any]:
         raise NotImplementedError("ask is not implemented")
 

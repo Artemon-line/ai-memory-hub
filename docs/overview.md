@@ -91,6 +91,11 @@ under `metadata.generated_summary` for search, retrieve, and CLI display.
 The server also writes deterministic `metadata.auto_tags` and
 `metadata.tag_sources` from source, topics, entities, and fact predicates.
 Manual `metadata.tags` remain authoritative and are not overwritten.
+For continuing source threads, clients may send `metadata.upstream_thread_id`
+or `metadata.thread_id`. The server preserves upstream IDs, derives
+`metadata.thread_id` when needed, and accepts optional
+`metadata.parent_conversation_id` plus `metadata.related_conversation_ids` as
+conversation UUID references.
 
 Store one complete conversation per insert. Do not split one thread into
 multiple batch items. If an importer has many independent source conversations,
@@ -113,6 +118,7 @@ preserving each original thread/session boundary.
 Search applies conservative conversation grouping before trimming to `top_k`, so
 closely matched chunks from the same conversation can surface together without
 hiding strong unrelated matches.
+Use `result_mode=threads` to group matching conversations by `metadata.thread_id`.
 
 ## Ask Result Shape
 
@@ -167,7 +173,7 @@ Use `-` as the file name to read the transcript from stdin.
 
 Shared options include `--config <path>`, `--json`, `--quiet`, and `--verbose`.
 `search` also supports `--source`, `--date-from`, `--date-to`, repeated `--tags`,
-and `--result-mode chunks|compact|conversations`.
+`--thread-id`, and `--result-mode chunks|compact|conversations|threads`.
 
 Diagnostics:
 
@@ -216,9 +222,9 @@ Core tools:
 
 - `memory_validate(conversation_json)`
 - `memory_insert(conversation_json)`
-- `memory_search(query, top_k=5, limit, cursor, source, date_from, date_to, tags)`
+- `memory_search(query, top_k=5, limit, cursor, source, date_from, date_to, tags, thread_id)`
 - `memory_retrieve(id)`
-- `memory_ask(question, top_k=5, max_context_tokens=None, result_mode="chunks", source, date_from, date_to, tags, project_id)`
+- `memory_ask(question, top_k=5, max_context_tokens=None, result_mode="chunks", source, date_from, date_to, tags, thread_id, project_id)`
 - `memory_fact_search(subject=None, predicate=None, include_superseded=False, source, date_from, date_to, confidence, status, source_quality, freshness_from, freshness_to, project_id)`
 - `memory_profile_get(subject="user", predicate, source, date_from, date_to, confidence, status, source_quality, freshness_from, freshness_to, project_id)`
 - `memory_fact_supersede(fact_id, superseded_by)`

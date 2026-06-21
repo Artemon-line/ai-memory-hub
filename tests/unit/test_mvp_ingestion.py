@@ -15,6 +15,11 @@ from memory.ingestion.summary_models import (
     SummaryProvenanceStatus,
     SummaryType,
 )
+from memory.ingestion.thread_models import (
+    SearchResultMode,
+    ThreadMetadata,
+    ThreadMetadataKey,
+)
 
 
 class StubEmbedder:
@@ -170,6 +175,32 @@ def test_generated_summary_json_schema_exports_enum_values() -> None:
     ]
 
 
+def test_thread_metadata_model_rejects_unknown_keys() -> None:
+    with pytest.raises(ValueError):
+        ThreadMetadata(thread_id="thread-a", unsupported_key=True)
+
+
+def test_thread_metadata_model_normalizes_and_exports_typed_keys() -> None:
+    metadata = ThreadMetadata(
+        thread_id=" thread-a ",
+        upstream_thread_id=" upstream-a ",
+        parent_conversation_id="11111111-1111-4111-8111-111111111111",
+        related_conversation_ids=[
+            "22222222-2222-4222-8222-222222222222",
+            "22222222-2222-4222-8222-222222222222",
+        ],
+    )
+
+    payload = metadata.to_metadata_update()
+
+    assert payload[ThreadMetadataKey.THREAD_ID] == "thread-a"
+    assert payload[ThreadMetadataKey.UPSTREAM_THREAD_ID] == "upstream-a"
+    assert payload[ThreadMetadataKey.RELATED_CONVERSATION_IDS] == [
+        "22222222-2222-4222-8222-222222222222"
+    ]
+    assert SearchResultMode.THREADS.value == "threads"
+
+
 def test_ingest_messages_success() -> None:
     metadata, vectors = _configure_stubs()
 
@@ -251,6 +282,28 @@ def test_ingest_messages_generates_auto_tags_without_overwriting_manual_tags() -
     assert "velvet-lantern" in stored_metadata["auto_tags"]
     assert "fact:creator" in stored_metadata["auto_tags"]
     assert stored_metadata["tag_sources"]["fact:creator"] == ["fact_predicate"]
+
+
+def test_ingest_messages_promotes_upstream_thread_metadata() -> None:
+    metadata, _ = _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["source"] = "codex"
+    conversation["metadata"]["upstream_thread_id"] = "session-42"
+    conversation["metadata"]["parent_conversation_id"] = "11111111-1111-4111-8111-111111111111"
+    conversation["metadata"]["related_conversation_ids"] = [
+        "22222222-2222-4222-8222-222222222222",
+        "22222222-2222-4222-8222-222222222222",
+    ]
+
+    mvp_ingestion.ingest_messages(conversation)
+
+    stored_metadata = metadata.by_id[conversation["id"]]["metadata"]
+    assert stored_metadata["thread_id"] == "codex:session-42"
+    assert stored_metadata["upstream_thread_id"] == "session-42"
+    assert stored_metadata["parent_conversation_id"] == "11111111-1111-4111-8111-111111111111"
+    assert stored_metadata["related_conversation_ids"] == [
+        "22222222-2222-4222-8222-222222222222"
+    ]
 
 
 def test_search_uses_generated_summary_metadata_without_returning_it_as_chunk_text() -> None:
@@ -364,6 +417,36 @@ def test_trusted_append_extracts_facts_only_from_new_messages() -> None:
     assert len(facts) == 1
     assert facts[0]["predicate"] == "owns_guitar"
     assert facts[0]["source_message_indexes"] == [1]
+
+
+def test_trusted_append_continues_same_upstream_thread_with_new_id() -> None:
+    metadata, vectors = _configure_stubs(allow_trusted_appends=True)
+    base = _valid_conversation()
+    base["source"] = "opencode"
+    base["metadata"]["upstream_thread_id"] = "thread-alpha"
+    base["messages"] = [{"role": "user", "text": "first thread note"}]
+    mvp_ingestion.ingest_messages(base)
+
+    continuation = _valid_conversation()
+    continuation["id"] = "22222222-2222-4222-8222-222222222222"
+    continuation["source"] = "opencode"
+    continuation["metadata"]["upstream_thread_id"] = "thread-alpha"
+    continuation["messages"] = [
+        {"role": "user", "text": "first thread note"},
+        {"role": "assistant", "text": "second thread note"},
+    ]
+
+    result = mvp_ingestion.ingest_messages(continuation)
+
+    assert result["id"] == base["id"]
+    assert result["appended_messages"] == 1
+    stored = metadata.by_id[base["id"]]
+    assert stored["metadata"]["thread_id"] == "opencode:thread-alpha"
+    assert [message["text"] for message in stored["messages"]] == [
+        "first thread note",
+        "second thread note",
+    ]
+    assert [row["chunk_index"] for row in vectors.rows] == [0, 1]
 
 
 def test_ingest_messages_rejects_same_id_append_without_trust() -> None:
@@ -619,6 +702,56 @@ def test_search_metadata_rerank_uses_auto_tags() -> None:
     search_result = mvp_ingestion.search(query="gpu", top_k=2)
 
     assert search_result["results"][0]["id"] == tagged["id"]
+
+
+def test_search_filters_by_thread_id() -> None:
+    _configure_stubs(retrieval_vector_score_threshold=0.0)
+    first = _valid_conversation()
+    first["id"] = "11111111-1111-4111-8111-111111111111"
+    first["metadata"]["thread_id"] = "thread-a"
+    first["messages"] = [{"role": "user", "text": "shared release note amber"}]
+    second = _valid_conversation()
+    second["id"] = "22222222-2222-4222-8222-222222222222"
+    second["metadata"]["thread_id"] = "thread-b"
+    second["messages"] = [{"role": "user", "text": "shared release note cobalt"}]
+    mvp_ingestion.ingest_messages(first)
+    mvp_ingestion.ingest_messages(second)
+
+    search_result = mvp_ingestion.search("shared release", top_k=5, thread_id="thread-b")
+
+    assert [row["id"] for row in search_result["results"]] == [second["id"]]
+    assert "cobalt" in search_result["results"][0]["text"]
+
+
+def test_search_threads_mode_groups_results_by_thread() -> None:
+    _configure_stubs(retrieval_vector_score_threshold=0.0)
+    first = _valid_conversation()
+    first["id"] = "11111111-1111-4111-8111-111111111111"
+    first["metadata"]["thread_id"] = "shared-thread"
+    first["messages"] = [{"role": "user", "text": "gpu alpha"}]
+    second = _valid_conversation()
+    second["id"] = "22222222-2222-4222-8222-222222222222"
+    second["metadata"]["thread_id"] = "shared-thread"
+    second["messages"] = [{"role": "user", "text": "gpu beta"}]
+    third = _valid_conversation()
+    third["id"] = "33333333-3333-4333-8333-333333333333"
+    third["metadata"]["thread_id"] = "other-thread"
+    third["messages"] = [{"role": "user", "text": "gpu gamma"}]
+    mvp_ingestion.ingest_messages(first)
+    mvp_ingestion.ingest_messages(second)
+    mvp_ingestion.ingest_messages(third)
+
+    search_result = mvp_ingestion.search("gpu", top_k=5, result_mode="threads")
+
+    assert [row["thread_id"] for row in search_result["results"]] == [
+        "shared-thread",
+        "other-thread",
+    ]
+    assert search_result["results"][0]["thread_conversation_ids"] == [
+        first["id"],
+        second["id"],
+    ]
+    assert search_result["results"][0]["thread_conversation_count"] == 2
 
 
 def test_ask_applies_conversation_filters_before_answering() -> None:
