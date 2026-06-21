@@ -5,13 +5,56 @@ import math
 import re
 from pathlib import Path
 from typing import Any, Callable, Protocol
+from urllib.parse import urlparse
 
 import pyarrow as pa
+from pydantic import BaseModel, ConfigDict
 
 from memory.backend.contracts import ProviderCapabilities
 from memory.backend.errors import NotSupportedError, VectorDimensionError
+from memory.provider_models import (
+    ChromaClientMode,
+    ChromaQueryKey,
+    VectorPayloadKey,
+    VectorProviderName,
+    VectorStatsKey,
+)
 
 logger = logging.getLogger(__name__)
+
+
+class ChromaMetadata(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    memory_id: str
+    chunk_id: str
+    chunk_index: int
+    message_hash: str = ""
+    role: str = ""
+    text: str = ""
+    owner_id: str = ""
+    project_id: str = ""
+
+    @classmethod
+    def from_embedding(cls, metadata_id: str, item: dict[str, Any]) -> "ChromaMetadata":
+        return cls(
+            memory_id=str(metadata_id),
+            chunk_id=str(item[VectorPayloadKey.CHUNK_ID.value]),
+            chunk_index=int(item.get(VectorPayloadKey.CHUNK_INDEX.value, 0)),
+            message_hash=str(item.get(VectorPayloadKey.MESSAGE_HASH.value, "")),
+            role=str(item.get(VectorPayloadKey.ROLE.value, "")),
+            text=str(item.get(VectorPayloadKey.TEXT.value, "")),
+            owner_id=str(item.get(VectorPayloadKey.OWNER_ID.value, "")),
+            project_id=str(item.get(VectorPayloadKey.PROJECT_ID.value, "")),
+        )
+
+    @classmethod
+    def from_query(cls, metadata: dict[str, Any], *, fallback_chunk_id: Any) -> "ChromaMetadata":
+        payload = dict(metadata)
+        payload[VectorPayloadKey.CHUNK_ID.value] = str(
+            payload.get(VectorPayloadKey.CHUNK_ID.value) or fallback_chunk_id
+        )
+        return cls.model_validate(payload)
 
 
 class VectorStore(Protocol):
@@ -27,6 +70,167 @@ class VectorStore(Protocol):
     def get_stats(self) -> dict[str, Any]: ...
 
     def health(self) -> dict[str, Any]: ...
+
+
+class ChromaDBVectorStore:
+    def __init__(
+        self,
+        *,
+        path: str | Path = "./data/chromadb",
+        url: str = "",
+        host: str = "127.0.0.1",
+        port: int = 8000,
+        collection_name: str = "memory_vectors",
+        dimension: int = 32,
+        client: Any | None = None,
+    ):
+        self.path = Path(path)
+        self.url = url
+        self.host = host
+        self.port = port
+        self.collection_name = collection_name
+        self.dimension = dimension
+        self._client = client or self._create_client()
+        self._collection = self._client.get_or_create_collection(
+            name=self.collection_name,
+            metadata={"hnsw:space": "cosine"},
+        )
+
+    @property
+    def expected_dimensionality(self) -> int:
+        return self.dimension
+
+    def insert(
+        self, metadata_id: str, embeddings: list[dict[str, Any]], replace: bool = False
+    ) -> None:
+        if replace:
+            self.delete([metadata_id])
+        ids: list[str] = []
+        vectors: list[list[float]] = []
+        documents: list[str] = []
+        metadatas: list[dict[str, Any]] = []
+        for item in embeddings:
+            vector = [float(value) for value in item[VectorPayloadKey.VECTOR.value]]
+            self._validate_dimension(vector, operation="insert")
+            metadata = ChromaMetadata.from_embedding(metadata_id, item)
+            ids.append(metadata.chunk_id)
+            vectors.append(vector)
+            documents.append(metadata.text)
+            metadatas.append(metadata.model_dump(mode="json"))
+        if ids:
+            self._collection.upsert(
+                ids=ids,
+                embeddings=vectors,
+                documents=documents,
+                metadatas=metadatas,
+            )
+
+    def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
+        self._validate_dimension(query_vector, operation="search")
+        result = self._collection.query(
+            query_embeddings=[query_vector],
+            n_results=top_k,
+            include=[
+                ChromaQueryKey.METADATAS.value,
+                ChromaQueryKey.DOCUMENTS.value,
+                ChromaQueryKey.DISTANCES.value,
+            ],
+        )
+        return self._normalize_query_result(result)
+
+    def delete(self, ids: list[str]) -> None:
+        for memory_id in ids:
+            self._collection.delete(
+                where={VectorPayloadKey.MEMORY_ID.value: str(memory_id)}
+            )
+
+    def get_stats(self) -> dict[str, Any]:
+        try:
+            rows = int(self._collection.count())
+        except Exception:
+            rows = None
+        return {
+            VectorStatsKey.PROVIDER.value: VectorProviderName.CHROMADB.value,
+            VectorStatsKey.ROWS.value: rows,
+            VectorStatsKey.EXPECTED_DIMENSIONALITY.value: self.expected_dimensionality,
+            VectorStatsKey.COLLECTION.value: self.collection_name,
+            VectorStatsKey.MODE.value: (
+                ChromaClientMode.HTTP.value
+                if self.url
+                else ChromaClientMode.PERSISTENT.value
+            ),
+        }
+
+    def capabilities(self) -> ProviderCapabilities:
+        return ProviderCapabilities(supports_metadata_indexing=True)
+
+    def health(self) -> dict[str, Any]:
+        return {
+            VectorStatsKey.PROVIDER.value: VectorProviderName.CHROMADB.value,
+            VectorStatsKey.EXPECTED_DIMENSIONALITY.value: self.expected_dimensionality,
+            VectorStatsKey.COLLECTION.value: self.collection_name,
+            VectorStatsKey.STATS.value: self.get_stats(),
+        }
+
+    def _create_client(self) -> Any:
+        try:
+            import chromadb  # type: ignore
+        except ImportError as exc:
+            raise RuntimeError(
+                "chromadb package is required for providers.vector_db=chromadb"
+            ) from exc
+        if self.url:
+            parsed = urlparse(self.url)
+            return chromadb.HttpClient(
+                host=parsed.hostname or self.host,
+                port=parsed.port or self.port,
+                ssl=parsed.scheme == "https",
+            )
+        self.path.mkdir(parents=True, exist_ok=True)
+        return chromadb.PersistentClient(path=str(self.path))
+
+    def _normalize_query_result(self, result: dict[str, Any]) -> list[dict[str, Any]]:
+        ids = _first_query_batch(result.get(ChromaQueryKey.IDS.value, []))
+        metadatas = _first_query_batch(result.get(ChromaQueryKey.METADATAS.value, []))
+        documents = _first_query_batch(result.get(ChromaQueryKey.DOCUMENTS.value, []))
+        distances = _first_query_batch(result.get(ChromaQueryKey.DISTANCES.value, []))
+        rows: list[dict[str, Any]] = []
+        for index, chunk_id in enumerate(ids):
+            metadata_payload = (
+                dict(metadatas[index] or {}) if index < len(metadatas) else {}
+            )
+            metadata = ChromaMetadata.from_query(
+                metadata_payload, fallback_chunk_id=chunk_id
+            )
+            distance = float(distances[index]) if index < len(distances) else 0.0
+            text = (
+                str(documents[index])
+                if index < len(documents) and documents[index] is not None
+                else metadata.text
+            )
+            row = {
+                VectorPayloadKey.MEMORY_ID.value: metadata.memory_id,
+                VectorPayloadKey.CHUNK_ID.value: metadata.chunk_id,
+                VectorPayloadKey.CHUNK_INDEX.value: metadata.chunk_index,
+                VectorPayloadKey.MESSAGE_HASH.value: metadata.message_hash,
+                VectorPayloadKey.ROLE.value: metadata.role,
+                VectorPayloadKey.TEXT.value: text,
+                VectorPayloadKey.SCORE.value: 1.0 - distance,
+            }
+            if metadata.owner_id:
+                row[VectorPayloadKey.OWNER_ID.value] = metadata.owner_id
+            if metadata.project_id:
+                row[VectorPayloadKey.PROJECT_ID.value] = metadata.project_id
+            rows.append(row)
+        return rows
+
+    def _validate_dimension(self, vector: list[float], *, operation: str) -> None:
+        expected = self.expected_dimensionality
+        actual = len(vector)
+        if actual != expected:
+            raise VectorDimensionError(
+                f"Vector dimensionality mismatch during {operation}: expected {expected}, got {actual}"
+            )
 
 
 class LanceDBVectorStore:
@@ -546,3 +750,11 @@ def _cosine_distance(a: list[float], b: list[float]) -> float:
 
 def _vector_literal(vector: list[float]) -> str:
     return "[" + ",".join(str(float(value)) for value in vector) + "]"
+
+
+def _first_query_batch(value: Any) -> list[Any]:
+    if isinstance(value, list) and value and isinstance(value[0], list):
+        return value[0]
+    if isinstance(value, list):
+        return value
+    return []

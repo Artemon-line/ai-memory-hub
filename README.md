@@ -59,6 +59,7 @@ not production-quality semantic retrieval.
 Storage guidance:
 
 - Use SQLite + LanceDB for the fastest single-machine development setup.
+- Use SQLite + ChromaDB when you want a local-first vector backend with an optional HTTP client mode.
 - Use Postgres metadata when multiple clients/users or long-running containers
   need one shared database.
 - Use Postgres + PGVector when you want one database to store both conversation
@@ -171,7 +172,7 @@ uv run python -m mkdocs build --strict
 
 The project currently includes deterministic ingestion, MCP tools/resources/prompts,
 HTTP endpoints, CLI commands, fact-backed answers, SQLite/Postgres metadata,
-LanceDB/PGVector/in-memory vectors, token-budgeted ask, container CI, and GitHub
+LanceDB/ChromaDB/PGVector/in-memory vectors, token-budgeted ask, container CI, and GitHub
 Pages docs publishing.
 
 Planned work includes broader importers, richer summaries, deletion/update

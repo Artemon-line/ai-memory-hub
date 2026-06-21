@@ -316,6 +316,26 @@ paths:
   data_dir: ./data
 ```
 
+### SQLite + ChromaDB
+
+Use ChromaDB as an optional local-first vector backend:
+
+```yaml
+providers:
+  metadata_db: sqlite
+  vector_db: chromadb
+
+storage:
+  vector:
+    allow_fallback: false
+  vector_providers:
+    chromadb:
+      path: ./data/chromadb
+      collection: memory_vectors
+```
+
+Install the optional dependency with `uv sync --extra chromadb`.
+
 ### Postgres Metadata
 
 Use Postgres for conversation metadata:
@@ -368,6 +388,10 @@ storage:
   vector:
     allow_fallback: true
     distance: cosine
+  vector_providers:
+    chromadb:
+      path: ./data/chromadb
+      collection: memory_vectors
 
 tokenizer:
   enabled: false

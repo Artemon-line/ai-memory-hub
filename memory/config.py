@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import secrets
 from pathlib import Path
 from typing import Any
@@ -10,24 +11,40 @@ from urllib.parse import urlparse
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from memory.provider_models import (
+    EmbeddingProviderName,
+    MetadataProviderConfigKey,
+    MetadataProviderName,
+    ProviderConfigSection,
+    VectorProviderAlias,
+    VectorProviderConfigKey,
+    VectorProviderName,
+)
+
 logger = logging.getLogger(__name__)
+
+
+VECTOR_PROVIDER_VALUES = tuple(item.value for item in VectorProviderName)
+METADATA_PROVIDER_VALUES = tuple(item.value for item in MetadataProviderName)
+_VALID_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]*$")
+_VALID_INDEX_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]*$")
 
 
 class ProvidersConfig(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    embeddings: str = "openai"
+    embeddings: str = EmbeddingProviderName.OPENAI.value
     embedding_model: str = "nomic-embed-text"
     embedding_dimension: int = 768
-    vector_db: str = "lancedb"
-    metadata_db: str = "sqlite"
+    vector_db: str = VectorProviderName.LANCEDB.value
+    metadata_db: str = MetadataProviderName.SQLITE.value
     metadata_dsn: str = ""
 
     @field_validator("embeddings")
     @classmethod
     def validate_embeddings(cls, v: str) -> str:
         v = v.lower()
-        if v not in {"openai", "local"}:
+        if v not in {item.value for item in EmbeddingProviderName}:
             raise ValueError("providers.embeddings must be one of: openai, local")
         return v
 
@@ -35,18 +52,24 @@ class ProvidersConfig(BaseModel):
     @classmethod
     def validate_vector_db(cls, v: str) -> str:
         v = v.lower()
-        if v == "in_memory":
-            v = "memory"
-        if v not in {"lancedb", "pgvector", "memory"}:
-            raise ValueError("providers.vector_db must be one of: lancedb, pgvector, memory")
+        if v == VectorProviderAlias.IN_MEMORY.value:
+            v = VectorProviderName.MEMORY.value
+        if v not in VECTOR_PROVIDER_VALUES:
+            raise ValueError(
+                "providers.vector_db must be one of: "
+                + ", ".join(VECTOR_PROVIDER_VALUES)
+            )
         return v
 
     @field_validator("metadata_db")
     @classmethod
     def validate_metadata_db(cls, v: str) -> str:
         v = v.lower()
-        if v not in {"sqlite", "postgres"}:
-            raise ValueError("providers.metadata_db must be one of: sqlite, postgres")
+        if v not in METADATA_PROVIDER_VALUES:
+            raise ValueError(
+                "providers.metadata_db must be one of: "
+                + ", ".join(METADATA_PROVIDER_VALUES)
+            )
         return v
 
 
@@ -77,11 +100,233 @@ class StorageVectorConfig(BaseModel):
         return v
 
 
+class ChromaDBVectorConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    path: str = "./data/chromadb"
+    url: str = ""
+    host: str = "127.0.0.1"
+    port: int = Field(default=8000, ge=1, le=65535)
+    collection: str = "memory_vectors"
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, value: str) -> str:
+        if value:
+            _validate_absolute_uri(value, field_name="storage.vector.chromadb.url")
+        return value.rstrip("/")
+
+    @field_validator("collection")
+    @classmethod
+    def validate_collection(cls, value: str) -> str:
+        return _validate_provider_name(
+            value, field_name="storage.vector.chromadb.collection"
+        )
+
+
+class QdrantVectorConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str = "http://127.0.0.1:6333"
+    api_key: str = ""
+    collection: str = "memory_vectors"
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, value: str) -> str:
+        if value:
+            _validate_absolute_uri(value, field_name="storage.vector.qdrant.url")
+        return value.rstrip("/")
+
+    @field_validator("collection")
+    @classmethod
+    def validate_collection(cls, value: str) -> str:
+        return _validate_provider_name(
+            value, field_name="storage.vector.qdrant.collection"
+        )
+
+
+class MilvusVectorConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    uri: str = "http://127.0.0.1:19530"
+    token: str = ""
+    collection: str = "memory_vectors"
+
+    @field_validator("uri")
+    @classmethod
+    def validate_uri(cls, value: str) -> str:
+        if value:
+            _validate_absolute_uri(value, field_name="storage.vector.milvus.uri")
+        return value.rstrip("/")
+
+    @field_validator("collection")
+    @classmethod
+    def validate_collection(cls, value: str) -> str:
+        return _validate_provider_name(
+            value, field_name="storage.vector.milvus.collection"
+        )
+
+
+class WeaviateVectorConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str = "http://127.0.0.1:8080"
+    api_key: str = ""
+    collection: str = "MemoryVector"
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, value: str) -> str:
+        if value:
+            _validate_absolute_uri(value, field_name="storage.vector.weaviate.url")
+        return value.rstrip("/")
+
+    @field_validator("collection")
+    @classmethod
+    def validate_collection(cls, value: str) -> str:
+        return _validate_provider_name(
+            value, field_name="storage.vector.weaviate.collection"
+        )
+
+
+class MongoDBAtlasVectorConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    uri: str = ""
+    database: str = "ai_memory_hub"
+    collection: str = "memory_vectors"
+    index: str = "memory_vector_index"
+
+    @field_validator("uri")
+    @classmethod
+    def validate_uri(cls, value: str) -> str:
+        if value:
+            _validate_absolute_uri(value, field_name="storage.vector.mongodb_atlas.uri")
+        return value
+
+    @field_validator("database", "collection")
+    @classmethod
+    def validate_name(cls, value: str, info: Any) -> str:
+        return _validate_provider_name(
+            value, field_name=f"storage.vector.mongodb_atlas.{info.field_name}"
+        )
+
+    @field_validator("index")
+    @classmethod
+    def validate_index(cls, value: str) -> str:
+        return _validate_provider_index(
+            value, field_name="storage.vector.mongodb_atlas.index"
+        )
+
+
+class SearchVectorConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str = "http://127.0.0.1:9200"
+    username: str = ""
+    password: str = ""
+    index: str = "memory_vectors"
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, value: str) -> str:
+        if value:
+            _validate_absolute_uri(value, field_name="storage.vector.search.url")
+        return value.rstrip("/")
+
+    @field_validator("index")
+    @classmethod
+    def validate_index(cls, value: str) -> str:
+        return _validate_provider_index(value, field_name="storage.vector.search.index")
+
+
+class VectorProviderConfigs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    chromadb: ChromaDBVectorConfig = Field(
+        default_factory=ChromaDBVectorConfig,
+        alias=VectorProviderConfigKey.CHROMADB.value,
+    )
+    qdrant: QdrantVectorConfig = Field(
+        default_factory=QdrantVectorConfig,
+        alias=VectorProviderConfigKey.QDRANT.value,
+    )
+    milvus: MilvusVectorConfig = Field(
+        default_factory=MilvusVectorConfig,
+        alias=VectorProviderConfigKey.MILVUS.value,
+    )
+    weaviate: WeaviateVectorConfig = Field(
+        default_factory=WeaviateVectorConfig,
+        alias=VectorProviderConfigKey.WEAVIATE.value,
+    )
+    mongodb_atlas: MongoDBAtlasVectorConfig = Field(
+        default_factory=MongoDBAtlasVectorConfig,
+        alias=VectorProviderConfigKey.MONGODB_ATLAS.value,
+    )
+    elasticsearch: SearchVectorConfig = Field(
+        default_factory=SearchVectorConfig,
+        alias=VectorProviderConfigKey.ELASTICSEARCH.value,
+    )
+    opensearch: SearchVectorConfig = Field(
+        default_factory=SearchVectorConfig,
+        alias=VectorProviderConfigKey.OPENSEARCH.value,
+    )
+
+
+class MongoDBMetadataConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    uri: str = ""
+    database: str = "ai_memory_hub"
+    conversations_collection: str = "conversations"
+    facts_collection: str = "facts"
+    generated_summaries_collection: str = "generated_summaries"
+    schema_collection: str = "schema_versions"
+
+    @field_validator("uri")
+    @classmethod
+    def validate_uri(cls, value: str) -> str:
+        if value:
+            _validate_absolute_uri(value, field_name="storage.metadata.mongodb.uri")
+        return value
+
+    @field_validator(
+        "database",
+        "conversations_collection",
+        "facts_collection",
+        "generated_summaries_collection",
+        "schema_collection",
+    )
+    @classmethod
+    def validate_name(cls, value: str, info: Any) -> str:
+        return _validate_provider_name(
+            value, field_name=f"storage.metadata.mongodb.{info.field_name}"
+        )
+
+
+class MetadataProviderConfigs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    mongodb: MongoDBMetadataConfig = Field(
+        default_factory=MongoDBMetadataConfig,
+        alias=MetadataProviderConfigKey.MONGODB.value,
+    )
+
+
 class StorageConfig(BaseModel):
     dry_run: bool = False
     allow_trusted_appends: bool = False
     metadata_schema_versions: tuple[int, ...] = (1,)
     vector: StorageVectorConfig = Field(default_factory=StorageVectorConfig)
+    vector_providers: VectorProviderConfigs = Field(
+        default_factory=VectorProviderConfigs,
+        alias=ProviderConfigSection.VECTOR_PROVIDERS.value,
+    )
+    metadata_providers: MetadataProviderConfigs = Field(
+        default_factory=MetadataProviderConfigs,
+        alias=ProviderConfigSection.METADATA_PROVIDERS.value,
+    )
 
 
 class TokenizerConfig(BaseModel):
@@ -290,3 +535,27 @@ def _validate_absolute_uri(value: str, *, field_name: str) -> None:
         raise ValueError(f"{field_name} must be an absolute URI")
     if parsed.fragment:
         raise ValueError(f"{field_name} must not include a fragment")
+
+
+def _validate_provider_name(value: str, *, field_name: str) -> str:
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError(f"{field_name} must not be empty")
+    if not _VALID_NAME_RE.fullmatch(normalized):
+        raise ValueError(
+            f"{field_name} must start with a letter and contain only letters, "
+            "numbers, underscores, dashes, or dots"
+        )
+    return normalized
+
+
+def _validate_provider_index(value: str, *, field_name: str) -> str:
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError(f"{field_name} must not be empty")
+    if not _VALID_INDEX_RE.fullmatch(normalized):
+        raise ValueError(
+            f"{field_name} must start with a letter and contain only letters, "
+            "numbers, underscores, dashes, or dots"
+        )
+    return normalized

@@ -423,7 +423,34 @@ def test_ask_cli_prints_answer_and_citations(capsys, monkeypatch) -> None:
 def test_config_show_redacts_secrets(capsys, tmp_path) -> None:
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "openai:\n  api_key: secret\nproviders:\n  metadata_dsn: postgresql://u:p@localhost/db\n",
+        "\n".join(
+            [
+                "openai:",
+                "  api_key: secret",
+                "providers:",
+                "  metadata_dsn: postgresql://u:p@localhost/db",
+                "storage:",
+                "  vector_providers:",
+                "    qdrant:",
+                "      api_key: qdrant-secret",
+                "    milvus:",
+                "      token: milvus-secret",
+                "    weaviate:",
+                "      api_key: weaviate-secret",
+                "    mongodb_atlas:",
+                "      uri: mongodb+srv://user:atlas-secret@example.mongodb.net/app",
+                "    elasticsearch:",
+                "      username: elastic-user",
+                "      password: elastic-secret",
+                "    opensearch:",
+                "      username: opensearch-user",
+                "      password: opensearch-secret",
+                "  metadata_providers:",
+                "    mongodb:",
+                "      uri: mongodb://user:mongo-secret@127.0.0.1:27017/app",
+                "",
+            ]
+        ),
         encoding="utf-8",
     )
 
@@ -433,6 +460,16 @@ def test_config_show_redacts_secrets(capsys, tmp_path) -> None:
     assert exit_code == 0
     assert body["config"]["openai"]["api_key"] == "***"
     assert body["config"]["providers"]["metadata_dsn"] == "***"
+    vector_providers = body["config"]["storage"]["vector_providers"]
+    assert vector_providers["qdrant"]["api_key"] == "***"
+    assert vector_providers["milvus"]["token"] == "***"
+    assert vector_providers["weaviate"]["api_key"] == "***"
+    assert vector_providers["mongodb_atlas"]["uri"] == "***"
+    assert vector_providers["elasticsearch"]["username"] == "***"
+    assert vector_providers["elasticsearch"]["password"] == "***"
+    assert vector_providers["opensearch"]["username"] == "***"
+    assert vector_providers["opensearch"]["password"] == "***"
+    assert body["config"]["storage"]["metadata_providers"]["mongodb"]["uri"] == "***"
 
 
 def test_health_cli_json(capsys, monkeypatch) -> None:

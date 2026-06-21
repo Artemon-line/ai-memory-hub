@@ -17,6 +17,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+chromadb = [
+    "chromadb>=1.0.0",
+]
 postgres = [
     "psycopg[binary]>=3.2.4",
 ]

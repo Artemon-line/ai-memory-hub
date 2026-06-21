@@ -490,17 +490,17 @@ Use `storage_agnostic_byoa_plan.md` as the source of truth.
 
 Provider expansion sequence:
 
-- [ ] Add provider-specific config model for ChromaDB, Qdrant, Milvus, Weaviate, MongoDB Atlas, Elasticsearch, and OpenSearch.
-- [ ] Extend `providers.vector_db` and `providers.metadata_db` accepted values only as providers land.
-- [ ] Add shared metadata-store contract tests.
-- [ ] Add shared vector-store contract tests.
-- [ ] Add fake SDK/client fixtures for unit tests.
+- [x] Add provider-specific config model for ChromaDB, Qdrant, Milvus, Weaviate, MongoDB Atlas, Elasticsearch, and OpenSearch.
+- [x] Extend `providers.vector_db` and `providers.metadata_db` accepted values only as providers land.
+- [x] Add shared metadata-store contract tests.
+- [x] Add shared vector-store contract tests.
+- [x] Add fake SDK/client fixtures for unit tests.
 - [ ] Add live integration tests gated by provider-specific environment variables.
-- [ ] Add fallback and secret-redaction tests for each vector provider.
-- [ ] Implement ChromaDB vector adapter first.
+- [x] Add fallback and secret-redaction tests for ChromaDB.
+- [x] Implement ChromaDB vector adapter first.
 - [ ] Implement Qdrant vector adapter second.
 - [ ] Implement MongoDB metadata, then MongoDB Atlas Vector Search.
-- [ ] Update architecture docs and config examples after each provider lands.
+- [x] Update architecture docs and config examples after ChromaDB landed.
 
 ## P3: Later Storage Providers
 

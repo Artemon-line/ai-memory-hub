@@ -11,6 +11,49 @@ storage:
   vector:
     # set false in production to fail fast on vector init errors
     allow_fallback: true
+    distance: cosine
+  vector_providers:
+    chromadb:
+      path: ./data/chromadb
+      url: ""
+      host: 127.0.0.1
+      port: 8000
+      collection: memory_vectors
+    qdrant:
+      url: http://127.0.0.1:6333
+      api_key: ""
+      collection: memory_vectors
+    milvus:
+      uri: http://127.0.0.1:19530
+      token: ""
+      collection: memory_vectors
+    weaviate:
+      url: http://127.0.0.1:8080
+      api_key: ""
+      collection: MemoryVector
+    mongodb_atlas:
+      uri: ""
+      database: ai_memory_hub
+      collection: memory_vectors
+      index: memory_vector_index
+    elasticsearch:
+      url: http://127.0.0.1:9200
+      username: ""
+      password: ""
+      index: memory_vectors
+    opensearch:
+      url: http://127.0.0.1:9200
+      username: ""
+      password: ""
+      index: memory_vectors
+  metadata_providers:
+    mongodb:
+      uri: ""
+      database: ai_memory_hub
+      conversations_collection: conversations
+      facts_collection: facts
+      generated_summaries_collection: generated_summaries
+      schema_collection: schema_versions
 
 retrieval:
   # Lower vector distance is better. Matches above this threshold are dropped
@@ -107,26 +150,42 @@ openai:
 # storage:
 #   metadata_schema_versions: [1]
 #
-# 3) Strict production startup (no vector fallback)
+# 3) ChromaDB vectors
+#
+# providers:
+#   vector_db: chromadb
+#
+# storage:
+#   vector:
+#     allow_fallback: false
+#   vector_providers:
+#     chromadb:
+#       path: ./data/chromadb
+#       collection: memory_vectors
+#
+# Install with:
+#   uv sync --extra chromadb
+#
+# 4) Strict production startup (no vector fallback)
 #
 # storage:
 #   dry_run: false
 #   vector:
 #     allow_fallback: false
 #
-# 4) Dry-run mode for ingestion validation
+# 5) Dry-run mode for ingestion validation
 #
 # storage:
 #   dry_run: true
 #   vector:
 #     allow_fallback: true
 #
-# 5) In-memory vectors path (current in_memory placeholder mode)
+# 6) In-memory vectors path (current in_memory placeholder mode)
 #
 # providers:
 #   vector_db: in_memory
 #
-# 6) Custom conversation schema
+# 7) Custom conversation schema
 #
 # schema:
 #   file: "./memory/schema/conversation.schema.json"

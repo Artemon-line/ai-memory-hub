@@ -23,7 +23,12 @@ from memory.backend.metadata_store import (
     _validate_project_id,
 )
 from memory.backend.postgres_metadata_store import PostgresMetadataStore
-from memory.backend.vector_store import InMemoryVectorStore, LanceDBVectorStore, PGVectorStore
+from memory.backend.vector_store import (
+    ChromaDBVectorStore,
+    InMemoryVectorStore,
+    LanceDBVectorStore,
+    PGVectorStore,
+)
 from memory.config import HubConfig, ensure_token_hash_secret, load_config, parse_config
 from memory.ingestion.summary_models import (
     GeneratedSummary,
@@ -52,6 +57,7 @@ from memory.ingestion.validate import (
     validate_conversation,
     validate_schema_compatibility,
 )
+from memory.provider_models import VectorProviderAlias, VectorProviderName
 
 logger = logging.getLogger(__name__)
 
@@ -343,11 +349,13 @@ def build_runtime(
 
     expected_dimension = embedding_provider.dimension
     requested_vector_provider = (
-        "memory" if cfg.providers.vector_db == "in_memory" else cfg.providers.vector_db
+        VectorProviderName.MEMORY.value
+        if cfg.providers.vector_db == VectorProviderAlias.IN_MEMORY.value
+        else cfg.providers.vector_db
     )
     vector_fallback_active = False
     fallback_reasons: list[str] = []
-    if requested_vector_provider == "memory":
+    if requested_vector_provider == VectorProviderName.MEMORY.value:
         vector_store = InMemoryVectorStore(dimension=expected_dimension)
     else:
         try:
@@ -385,7 +393,9 @@ def build_runtime(
     health_state = {
         "mode": mode,
         "metadata_provider": cfg.providers.metadata_db,
-        "vector_provider": "memory" if vector_fallback_active else requested_vector_provider,
+        "vector_provider": VectorProviderName.MEMORY.value
+        if vector_fallback_active
+        else requested_vector_provider,
         "requested_vector_provider": requested_vector_provider,
         "vector_fallback_active": vector_fallback_active,
         "reasons": fallback_reasons,
@@ -419,11 +429,21 @@ def _build_vector_store(
     data_dir: Path,
     expected_dimension: int,
 ) -> Any:
-    if provider == "lancedb":
+    if provider == VectorProviderName.LANCEDB.value:
         return LanceDBVectorStore(
             data_dir / "lancedb", dimension=expected_dimension
         )
-    if provider == "pgvector":
+    if provider == VectorProviderName.CHROMADB.value:
+        chroma_config = cfg.storage.vector_providers.chromadb
+        return ChromaDBVectorStore(
+            path=chroma_config.path,
+            url=chroma_config.url,
+            host=chroma_config.host,
+            port=chroma_config.port,
+            collection_name=chroma_config.collection,
+            dimension=expected_dimension,
+        )
+    if provider == VectorProviderName.PGVECTOR.value:
         dsn = cfg.providers.metadata_dsn
         return PGVectorStore(
             dsn,

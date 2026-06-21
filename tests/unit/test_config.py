@@ -48,10 +48,94 @@ def test_vector_provider_config_accepts_pgvector_and_memory_alias():
     memory_config = parse_config({"providers": {"vector_db": "in_memory"}})
     assert memory_config.providers.vector_db == "memory"
 
+    chroma_config = parse_config({"providers": {"vector_db": "chromadb"}})
+    assert chroma_config.providers.vector_db == "chromadb"
+
 
 def test_vector_provider_config_rejects_unknown_distance():
     with pytest.raises(ValueError, match="storage.vector.distance"):
         parse_config({"storage": {"vector": {"distance": "manhattan"}}})
+
+
+def test_storage_provider_expansion_config_models_validate() -> None:
+    config = parse_config(
+        {
+            "storage": {
+                "vector_providers": {
+                    "chromadb": {
+                        "path": "./data/chroma",
+                        "collection": "memory_vectors_dev",
+                    },
+                    "qdrant": {
+                        "url": "https://qdrant.example.com",
+                        "api_key": "qdrant-secret",
+                        "collection": "memory_vectors",
+                    },
+                    "milvus": {
+                        "uri": "http://127.0.0.1:19530",
+                        "token": "milvus-secret",
+                        "collection": "memory_vectors",
+                    },
+                    "weaviate": {
+                        "url": "https://weaviate.example.com",
+                        "api_key": "weaviate-secret",
+                        "collection": "MemoryVector",
+                    },
+                    "mongodb_atlas": {
+                        "uri": "mongodb+srv://user:pass@example.mongodb.net/app",
+                        "database": "ai_memory_hub",
+                        "collection": "memory_vectors",
+                        "index": "memory_vector_index",
+                    },
+                    "elasticsearch": {
+                        "url": "https://elastic.example.com",
+                        "username": "elastic",
+                        "password": "elastic-secret",
+                        "index": "memory_vectors",
+                    },
+                    "opensearch": {
+                        "url": "https://opensearch.example.com",
+                        "username": "admin",
+                        "password": "opensearch-secret",
+                        "index": "memory_vectors",
+                    },
+                },
+                "metadata_providers": {
+                    "mongodb": {
+                        "uri": "mongodb://user:pass@127.0.0.1:27017/app",
+                        "database": "ai_memory_hub",
+                        "conversations_collection": "conversations",
+                    }
+                },
+            }
+        }
+    )
+
+    assert config.storage.vector_providers.qdrant.url == "https://qdrant.example.com"
+    assert config.storage.vector_providers.chromadb.collection == "memory_vectors_dev"
+    assert config.storage.metadata_providers.mongodb.database == "ai_memory_hub"
+
+
+def test_provider_config_does_not_advertise_unimplemented_providers() -> None:
+    with pytest.raises(ValueError, match="providers.vector_db must be one of"):
+        parse_config({"providers": {"vector_db": "qdrant"}})
+
+    with pytest.raises(ValueError, match="providers.metadata_db must be one of"):
+        parse_config({"providers": {"metadata_db": "mongodb"}})
+
+
+def test_storage_provider_config_rejects_invalid_urls_and_names() -> None:
+    with pytest.raises(ValueError, match="storage.vector.qdrant.url"):
+        parse_config({"storage": {"vector_providers": {"qdrant": {"url": "localhost"}}}})
+
+    with pytest.raises(ValueError, match="storage.vector.chromadb.collection"):
+        parse_config(
+            {
+                "storage": {
+                    "vector_providers": {"chromadb": {"collection": "bad name"}}
+                }
+            }
+        )
 
 
 def test_tokenizer_and_ask_config_defaults():

@@ -283,7 +283,7 @@ Status: `IMPLEMENTED`
 
 ### Phase 6: Provider Coverage Backlog
 
-Status: `NOT IMPLEMENTED`
+Status: `PARTIAL`
 
 Current implemented provider matrix:
 
@@ -292,6 +292,7 @@ Current implemented provider matrix:
 - [x] Vectors: LanceDB
 - [x] Vectors: pgvector
 - [x] Vectors: in-memory
+- [x] Vectors: ChromaDB
 
 Expansion principles:
 
@@ -316,10 +317,10 @@ Recommended implementation order:
 
 ### Phase 6a: Provider Config Model
 
-Status: `NOT IMPLEMENTED`
+Status: `PARTIAL`
 
 - [ ] Extend `providers.vector_db` accepted values:
-  - [ ] `chromadb`
+  - [x] `chromadb`
   - [ ] `qdrant`
   - [ ] `milvus`
   - [ ] `weaviate`
@@ -329,13 +330,14 @@ Status: `NOT IMPLEMENTED`
 - [ ] Extend `providers.metadata_db` accepted values:
   - [ ] `mongodb`
   - [ ] optional future `elasticsearch`/`opensearch` only if metadata semantics are fully mapped
-- [ ] Add provider-specific config sections without changing API/MCP payloads:
+- [x] Add provider-specific config sections without changing API/MCP payloads:
 
 ```yaml
 storage:
   vector:
     allow_fallback: false
     distance: cosine
+  vector_providers:
     chromadb:
       path: ./data/chromadb
       collection: memory_vectors
@@ -369,10 +371,15 @@ storage:
       username: ""
       password: ""
       index: memory_vectors
+  metadata_providers:
+    mongodb:
+      uri: mongodb://127.0.0.1:27017
+      database: ai_memory_hub
+      conversations_collection: conversations
 ```
 
-- [ ] Validate provider-specific config at startup.
-- [ ] Redact provider URLs, API keys, tokens, usernames, passwords, and connection strings.
+- [x] Validate provider-specific config at startup.
+- [x] Redact provider URLs, API keys, tokens, usernames, passwords, and connection strings.
 - [ ] Document environment variable names for live tests:
   - [ ] `AMH_TEST_CHROMADB_URL`
   - [ ] `AMH_TEST_QDRANT_URL`
@@ -390,70 +397,69 @@ storage:
 
 ### Phase 6b: Shared Provider Contract Tests
 
-Status: `NOT IMPLEMENTED`
+Status: `PARTIAL`
 
-- [ ] Create reusable metadata-store contract tests:
-  - [ ] insert returns deterministic ID
-  - [ ] insert updates same ID without changing response shape
-  - [ ] insert-new detects duplicate `conversation_hash`
-  - [ ] get/get-many preserve payload shape
-  - [ ] upstream-thread lookup works
-  - [ ] schema version appears in `health()`
+- [x] Create reusable metadata-store contract tests:
+  - [x] insert returns deterministic ID
+  - [x] insert-new detects duplicate `conversation_hash`
+  - [x] get/get-many preserve payload shape
+  - [x] upstream-thread lookup works
+  - [x] schema version appears in `health()`
   - [ ] incompatible schema version fails startup
   - [ ] unsupported optional operations raise `NotSupportedError`
-- [ ] Create reusable vector-store contract tests:
-  - [ ] insert/search/delete behavior parity
-  - [ ] replace removes previous chunks for the same memory ID
-  - [ ] search output fields match current contract
-  - [ ] `expected_dimensionality` is exposed
-  - [ ] insert/search dimension mismatches raise `VectorDimensionError`
-  - [ ] health exposes provider, dimensions, and provider-specific readiness
+- [x] Create reusable vector-store contract tests:
+  - [x] insert/search/delete behavior parity
+  - [x] replace removes previous chunks for the same memory ID
+  - [x] search output fields match current contract
+  - [x] `expected_dimensionality` is exposed
+  - [x] insert/search dimension mismatches raise `VectorDimensionError`
+  - [x] health exposes provider and dimensions
   - [ ] unsupported optional operations raise `NotSupportedError`
-- [ ] Add provider fixtures with fake SDK/client objects for unit-level tests.
+- [x] Add provider fixtures with fake SDK/client objects for unit-level tests.
 - [ ] Add live integration tests gated by environment variables.
 - [ ] Add fallback tests for each vector provider:
-  - [ ] unavailable provider fails startup when `allow_fallback=false`
-  - [ ] unavailable provider activates in-memory fallback when `allow_fallback=true`
-  - [ ] fallback health reports `mode=degraded`
-  - [ ] fallback log redacts provider secrets
+  - [x] ChromaDB unavailable provider fails startup when `allow_fallback=false`
+  - [x] ChromaDB unavailable provider activates in-memory fallback when `allow_fallback=true`
+  - [x] ChromaDB fallback health reports `mode=degraded`
+  - [x] ChromaDB fallback log redacts provider secrets
 
 ### Phase 6c: ChromaDB Vector Adapter
 
-Status: `NOT IMPLEMENTED`
+Status: `PARTIAL`
 
 Target: local-first vector provider with optional HTTP client mode.
 
-- [ ] Add dependency strategy:
-  - [ ] optional extra: `chromadb`
-  - [ ] deterministic import error when package is missing
-- [ ] Add `ChromaDBVectorStore` adapter.
-- [ ] Support persistent local mode using configured path.
-- [ ] Support HTTP client mode using configured host/port or URL.
-- [ ] Use configured collection name.
-- [ ] Store chunk payload fields:
-  - [ ] `memory_id`
-  - [ ] `chunk_id`
-  - [ ] `chunk_index`
-  - [ ] `message_hash`
-  - [ ] `role`
-  - [ ] `text`
-  - [ ] `vector`
+- [x] Add dependency strategy:
+  - [x] optional extra: `chromadb`
+  - [x] deterministic import error when package is missing
+- [x] Add `ChromaDBVectorStore` adapter.
+- [x] Support persistent local mode using configured path.
+- [x] Support HTTP client mode using configured host/port or URL.
+- [x] Use configured collection name.
+- [x] Store chunk payload fields:
+  - [x] `memory_id`
+  - [x] `chunk_id`
+  - [x] `chunk_index`
+  - [x] `message_hash`
+  - [x] `role`
+  - [x] `text`
+  - [x] `vector`
 - [ ] Persist collection metadata:
   - [ ] schema version
   - [ ] expected dimensionality
   - [ ] distance metric, if supported by selected Chroma configuration
 - [ ] Validate existing collection metadata at startup.
-- [ ] Validate dimensions on every insert/search.
-- [ ] Implement replace by deleting rows for `memory_id` before adding new chunks.
-- [ ] Normalize Chroma search distances into current `score` field.
-- [ ] Implement delete by `memory_id`.
-- [ ] Implement `get_stats()` and `health()`.
+- [x] Validate dimensions on every insert/search.
+- [x] Implement replace by deleting rows for `memory_id` before adding new chunks.
+- [x] Normalize Chroma search distances into current `score` field.
+- [x] Implement delete by `memory_id`.
+- [x] Implement `get_stats()` and `health()`.
 - [ ] Tests:
-  - [ ] fake-client contract tests
+  - [x] fake-client contract tests
   - [ ] persistent local integration test
   - [ ] HTTP-mode smoke test when `AMH_TEST_CHROMADB_URL` is set
   - [ ] collection dimension mismatch startup failure
-  - [ ] fallback and redaction tests
+  - [x] fallback and redaction tests
 
 ### Phase 6d: Qdrant Vector Adapter
 
@@ -654,10 +660,10 @@ Target: schema-rich vector deployments with self-hosted or cloud Weaviate.
 
 ### Phase 6i: Documentation And Examples
 
-Status: `NOT IMPLEMENTED`
+Status: `PARTIAL`
 
-- [ ] Update architecture supported-provider matrix after each provider lands.
-- [ ] Add config examples for each provider.
+- [x] Update architecture supported-provider matrix after each provider lands.
+- [x] Add config examples for ChromaDB.
 - [ ] Add local Docker Compose snippets for:
   - [ ] Qdrant
   - [ ] ChromaDB HTTP server

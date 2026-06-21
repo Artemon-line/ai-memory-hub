@@ -37,7 +37,7 @@ When planning or estimating work, treat phases as **ordered capability layers**:
 
 - **Phase 1** defines the minimum **pipeline**: **schema-first ingestion** (MCP/API payloads) → **unified schema** → **embeddings** → **vector search** → **HTTP** `/memory/search`, 
 `/memory/retrieve` + MCP `memory_*` tools/resources.
-- **Phase 1.5** promotes storage to a **first-class subsystem**: `VectorStore` interface → LanceDB/PGVector/in-memory providers → deterministic startup checks → fallback behavior.
+- **Phase 1.5** promotes storage to a **first-class subsystem**: `VectorStore` interface → LanceDB/ChromaDB/PGVector/in-memory providers → deterministic startup checks → fallback behavior.
 - **Phase 2** adds **platform-specific ingestion** (Gemini Takeout, Copilot workarounds, Claude HTML, local LLM logs);
 **schema and storage stay stable** if normalization boundaries are respected.
 - Browser extension capture is a planned Phase 2-compatible ingestion option:
@@ -45,7 +45,7 @@ extension repos parse ChatGPT, Microsoft Copilot, Claude, Gemini, and similar
 web UIs, then post normalized payloads to `POST /memory/insert`.
 - **Phase 3** is **offline/batch intelligence** on top of stored chunks (summaries, clustering, timelines).
 - **Phase 4** is **presentation and distribution** (UI, SDKs, OpenAPI, pip).
-- **Phase 5** aligns with [agents.md](agents.md): external agent frameworks consume the same memory API/MCP backend with their choice of LanceDB, PGVector, or ephemeral in-memory vectors.
+- **Phase 5** aligns with [agents.md](agents.md): external agent frameworks consume the same memory API/MCP backend with their choice of LanceDB, ChromaDB, PGVector, or ephemeral in-memory vectors.
 - **Phases 6–7** are **extensions**; **local-first** remains default until Phase 7 is explicitly enabled.
 
 ---
@@ -123,7 +123,7 @@ web UIs, then post normalized payloads to `POST /memory/insert`.
 
 ### 1.5.3 Config changes
 
-- [x] `providers.vector_db: lancedb | pgvector | memory`
+- [x] `providers.vector_db: lancedb | chromadb | pgvector | memory`
 - [x] `providers.metadata_db: sqlite | postgres`
 - [x] `storage.vector.allow_fallback: true`
 - [x] `storage.vector.distance: cosine | l2 | inner_product`
@@ -334,7 +334,7 @@ PGVector and Postgres enable future hybrid search, SQL-based memory analytics, a
 Evolution path:
 
 1. **MVP** — ingest, store, search, RAG
-2. **Storage abstraction** — LanceDB, PGVector, and in-memory providers behind one interface
+2. **Storage abstraction** — LanceDB, ChromaDB, PGVector, and in-memory providers behind one interface
 3. **Multi-source ingestion**
 4. **Intelligence layer**
 5. **UI and developer experience**

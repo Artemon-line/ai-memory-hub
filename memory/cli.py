@@ -16,10 +16,73 @@ from memory.importers import get_importer
 from memory.ingestion import mvp_ingestion
 from memory.ingestion.thread_models import SearchResultMode
 from memory.ingestion.tokenizer import tokenizer_diagnostics
+from memory.provider_models import (
+    MetadataProviderConfigKey,
+    ProviderConfigSection,
+    SecretConfigKey,
+    VectorProviderConfigKey,
+)
 
 EXIT_OK = 0
 EXIT_COMMAND_FAILURE = 1
 EXIT_USAGE = 2
+_STORAGE_CONFIG_KEY = "storage"
+_PROVIDER_SECRET_PATHS = (
+    (
+        _STORAGE_CONFIG_KEY,
+        ProviderConfigSection.VECTOR_PROVIDERS.value,
+        VectorProviderConfigKey.QDRANT.value,
+        SecretConfigKey.API_KEY.value,
+    ),
+    (
+        _STORAGE_CONFIG_KEY,
+        ProviderConfigSection.VECTOR_PROVIDERS.value,
+        VectorProviderConfigKey.MILVUS.value,
+        SecretConfigKey.TOKEN.value,
+    ),
+    (
+        _STORAGE_CONFIG_KEY,
+        ProviderConfigSection.VECTOR_PROVIDERS.value,
+        VectorProviderConfigKey.WEAVIATE.value,
+        SecretConfigKey.API_KEY.value,
+    ),
+    (
+        _STORAGE_CONFIG_KEY,
+        ProviderConfigSection.VECTOR_PROVIDERS.value,
+        VectorProviderConfigKey.MONGODB_ATLAS.value,
+        SecretConfigKey.URI.value,
+    ),
+    (
+        _STORAGE_CONFIG_KEY,
+        ProviderConfigSection.VECTOR_PROVIDERS.value,
+        VectorProviderConfigKey.ELASTICSEARCH.value,
+        SecretConfigKey.USERNAME.value,
+    ),
+    (
+        _STORAGE_CONFIG_KEY,
+        ProviderConfigSection.VECTOR_PROVIDERS.value,
+        VectorProviderConfigKey.ELASTICSEARCH.value,
+        SecretConfigKey.PASSWORD.value,
+    ),
+    (
+        _STORAGE_CONFIG_KEY,
+        ProviderConfigSection.VECTOR_PROVIDERS.value,
+        VectorProviderConfigKey.OPENSEARCH.value,
+        SecretConfigKey.USERNAME.value,
+    ),
+    (
+        _STORAGE_CONFIG_KEY,
+        ProviderConfigSection.VECTOR_PROVIDERS.value,
+        VectorProviderConfigKey.OPENSEARCH.value,
+        SecretConfigKey.PASSWORD.value,
+    ),
+    (
+        _STORAGE_CONFIG_KEY,
+        ProviderConfigSection.METADATA_PROVIDERS.value,
+        MetadataProviderConfigKey.MONGODB.value,
+        SecretConfigKey.URI.value,
+    ),
+)
 EXIT_RUNTIME = 3
 
 
@@ -893,11 +956,21 @@ def _capabilities(store: Any) -> dict[str, Any]:
 
 def _redact_config(config: HubConfig) -> dict[str, Any]:
     data = config.model_dump(by_alias=True)
-    for section, key in (("openai", "api_key"), ("providers", "metadata_dsn")):
-        value = data.get(section, {}).get(key)
-        if value:
-            data[section][key] = "***"
+    _redact_config_path(data, ("openai", "api_key"))
+    _redact_config_path(data, ("providers", "metadata_dsn"))
+    for path in _PROVIDER_SECRET_PATHS:
+        _redact_config_path(data, path)
     return data
+
+
+def _redact_config_path(data: dict[str, Any], path: tuple[str, ...]) -> None:
+    target: Any = data
+    for key in path[:-1]:
+        if not isinstance(target, dict):
+            return
+        target = target.get(key)
+    if isinstance(target, dict) and target.get(path[-1]):
+        target[path[-1]] = "***"
 
 
 if __name__ == "__main__":

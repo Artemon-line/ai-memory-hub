@@ -3,9 +3,11 @@ from __future__ import annotations
 import logging
 import re
 
-_URI_CREDENTIALS = re.compile(r"(postgres(?:ql)?://[^:\s/]+:)([^@\s/]+)(@)", re.IGNORECASE)
+_URI_CREDENTIALS = re.compile(
+    r"([a-z][a-z0-9+.-]*://[^:\s/@]+:)([^@\s/]+)(@)", re.IGNORECASE
+)
 _KV_SECRETS = re.compile(
-    r"(?i)\b(password|pwd|token|api_key|apikey|secret)\s*=\s*([^\s;]+)"
+    r"(?i)\b(password|pwd|token|api_key|apikey|api-key|secret)\s*=\s*([^\s;]+)"
 )
 _AUTHORIZATION_BEARER = re.compile(
     r"(?i)\b(authorization\s*[:=]\s*bearer\s+)([^\s,;]+)"

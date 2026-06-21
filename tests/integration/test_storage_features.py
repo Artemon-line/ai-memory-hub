@@ -20,7 +20,13 @@ from memory.backend.errors import (
 from memory.backend.log_safety import redact_secrets
 from memory.backend.metadata_store import SQLiteMetadataStore
 from memory.backend.postgres_metadata_store import PostgresMetadataStore
-from memory.backend.vector_store import InMemoryVectorStore, LanceDBVectorStore, PGVectorStore
+from memory.backend.vector_store import (
+    ChromaDBVectorStore,
+    ChromaMetadata,
+    InMemoryVectorStore,
+    LanceDBVectorStore,
+    PGVectorStore,
+)
 from memory.ingestion import mvp_ingestion
 
 VectorStoreFactory = Callable[[Path], Any]
@@ -34,6 +40,56 @@ def test_sqlite_capabilities_and_health(tmp_path: Path) -> None:
     assert isinstance(capabilities, ProviderCapabilities)
     assert capabilities.supports_transactions is True
     assert health["schema_version"] == 1
+
+
+def _assert_metadata_store_contract(store: Any) -> None:
+    memory_id = str(uuid4())
+    thread_id = f"thread-{uuid4().hex}"
+    conversation_hash = "sha256:" + ("1" * 64)
+    conversation = {
+        "id": memory_id,
+        "source": "contract",
+        "timestamp": "2026-01-01T00:00:00Z",
+        "title": "metadata contract",
+        "messages": [
+            {
+                "role": "user",
+                "text": "contract memory",
+                "hash": "sha256:" + ("3" * 64),
+            }
+        ],
+        "metadata": {
+            "conversation_hash": conversation_hash,
+            "upstream_thread_id": thread_id,
+            "index_chunks": [
+                {
+                    "chunk_id": f"{memory_id}:0",
+                    "chunk_index": 0,
+                    "message_hash": "sha256:" + ("2" * 64),
+                    "role": "user",
+                    "text": "contract memory",
+                }
+            ],
+        },
+    }
+
+    inserted_id, inserted = store.insert_new(conversation)
+
+    assert (inserted_id, inserted) == (memory_id, True)
+    assert store.insert_new(conversation) == (memory_id, False)
+    assert store.get(memory_id) == conversation
+    assert store.get_many([memory_id]) == {memory_id: conversation}
+    assert store.get_by_conversation_hash(conversation_hash) == conversation
+    assert store.get_by_upstream_thread("contract", thread_id) == conversation
+    assert store.is_fully_indexed(memory_id) is False
+
+    store.mark_chunks_indexed(memory_id, [f"{memory_id}:0"])
+
+    assert store.is_fully_indexed(memory_id) is True
+
+
+def test_metadata_store_contract_for_sqlite(tmp_path: Path) -> None:
+    _assert_metadata_store_contract(SQLiteMetadataStore(tmp_path / "metadata.sqlite3"))
 
 
 def test_sqlite_metadata_store_persists_generated_summaries_separately(tmp_path: Path) -> None:
@@ -253,6 +309,19 @@ def test_inmemory_vector_dimension_validation_insert_and_search() -> None:
         store.search([1.0, 2.0], top_k=5)
 
 
+def test_chroma_metadata_model_rejects_unknown_keys() -> None:
+    with pytest.raises(ValueError):
+        ChromaMetadata.from_query(
+            {
+                "memory_id": str(uuid4()),
+                "chunk_id": "chunk-1",
+                "chunk_index": 0,
+                "unexpected": "value",
+            },
+            fallback_chunk_id="chunk-1",
+        )
+
+
 def _assert_vector_store_contract(store: Any) -> None:
     first_id = str(uuid4())
     second_id = str(uuid4())
@@ -330,7 +399,7 @@ def _assert_vector_store_contract(store: Any) -> None:
 
     stats = store.get_stats()
     assert stats["expected_dimensionality"] == 3
-    assert stats["provider"] in {"memory", "lancedb", "pgvector"}
+    assert stats["provider"] in {"memory", "lancedb", "pgvector", "chromadb", "fake"}
     assert stats["rows"] is None or stats["rows"] >= 3
 
     store.delete([first_id])
@@ -340,11 +409,182 @@ def _assert_vector_store_contract(store: Any) -> None:
     assert deleted_matches == []
 
 
+class FakeVectorClient:
+    def __init__(self) -> None:
+        self.rows: dict[str, dict[str, Any]] = {}
+
+    def upsert(self, rows: list[dict[str, Any]]) -> None:
+        for row in rows:
+            self.rows[row["chunk_id"]] = dict(row)
+
+    def delete_by_memory_id(self, memory_id: str) -> None:
+        self.rows = {
+            chunk_id: row
+            for chunk_id, row in self.rows.items()
+            if row["memory_id"] != memory_id
+        }
+
+    def search(self, query_vector: list[float], top_k: int) -> list[dict[str, Any]]:
+        rows = sorted(
+            self.rows.values(),
+            key=lambda row: _test_cosine_distance(query_vector, row["vector"]),
+        )
+        return rows[:top_k]
+
+
+class FakeSDKVectorStore:
+    def __init__(self, *, client: FakeVectorClient, dimension: int) -> None:
+        self.client = client
+        self.dimension = dimension
+
+    @property
+    def expected_dimensionality(self) -> int:
+        return self.dimension
+
+    def insert(
+        self, metadata_id: str, embeddings: list[dict[str, Any]], replace: bool = False
+    ) -> None:
+        if replace:
+            self.client.delete_by_memory_id(metadata_id)
+        rows = []
+        for item in embeddings:
+            vector = item["vector"]
+            self._validate_dimension(vector)
+            rows.append(
+                {
+                    **item,
+                    "memory_id": metadata_id,
+                    "score": 1.0,
+                }
+            )
+        self.client.upsert(rows)
+
+    def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
+        self._validate_dimension(query_vector)
+        return [
+            {**row, "score": 1.0 - _test_cosine_distance(query_vector, row["vector"])}
+            for row in self.client.search(query_vector, top_k)
+        ]
+
+    def delete(self, ids: list[str]) -> None:
+        for memory_id in ids:
+            self.client.delete_by_memory_id(memory_id)
+
+    def get_stats(self) -> dict[str, Any]:
+        return {
+            "provider": "fake",
+            "rows": len(self.client.rows),
+            "expected_dimensionality": self.dimension,
+        }
+
+    def health(self) -> dict[str, Any]:
+        return {"provider": "fake", "status": "ok", "dimension": self.dimension}
+
+    def capabilities(self) -> ProviderCapabilities:
+        return ProviderCapabilities(
+            supports_batch_insert=False,
+            supports_transactions=False,
+            supports_ttl=False,
+            supports_tags=False,
+            supports_metadata_indexing=False,
+        )
+
+    def _validate_dimension(self, vector: list[float]) -> None:
+        if len(vector) != self.dimension:
+            raise VectorDimensionError(
+                f"Vector dimensionality mismatch: expected {self.dimension}, got {len(vector)}"
+            )
+
+
+def _test_cosine_distance(a: list[float], b: list[float]) -> float:
+    dot = sum(left * right for left, right in zip(a, b))
+    norm_a = sum(value * value for value in a) ** 0.5
+    norm_b = sum(value * value for value in b) ** 0.5
+    if norm_a == 0 or norm_b == 0:
+        return 1.0
+    return 1.0 - (dot / (norm_a * norm_b))
+
+
+class FakeChromaCollection:
+    def __init__(self) -> None:
+        self.rows: dict[str, dict[str, Any]] = {}
+
+    def upsert(
+        self,
+        *,
+        ids: list[str],
+        embeddings: list[list[float]],
+        documents: list[str],
+        metadatas: list[dict[str, Any]],
+    ) -> None:
+        for index, chunk_id in enumerate(ids):
+            self.rows[chunk_id] = {
+                "id": chunk_id,
+                "embedding": embeddings[index],
+                "document": documents[index],
+                "metadata": dict(metadatas[index]),
+            }
+
+    def query(
+        self, *, query_embeddings: list[list[float]], n_results: int, include: list[str]
+    ) -> dict[str, Any]:
+        _ = include
+        query_vector = query_embeddings[0]
+        rows = sorted(
+            self.rows.values(),
+            key=lambda row: _test_cosine_distance(query_vector, row["embedding"]),
+        )[:n_results]
+        return {
+            "ids": [[row["id"] for row in rows]],
+            "metadatas": [[row["metadata"] for row in rows]],
+            "documents": [[row["document"] for row in rows]],
+            "distances": [
+                [
+                    _test_cosine_distance(query_vector, row["embedding"])
+                    for row in rows
+                ]
+            ],
+        }
+
+    def delete(self, *, where: dict[str, str]) -> None:
+        memory_id = where["memory_id"]
+        self.rows = {
+            chunk_id: row
+            for chunk_id, row in self.rows.items()
+            if row["metadata"]["memory_id"] != memory_id
+        }
+
+    def count(self) -> int:
+        return len(self.rows)
+
+
+class FakeChromaClient:
+    def __init__(self) -> None:
+        self.collection = FakeChromaCollection()
+
+    def get_or_create_collection(self, *, name: str, metadata: dict[str, Any]) -> Any:
+        assert name == "memory_vectors"
+        assert metadata == {"hnsw:space": "cosine"}
+        return self.collection
+
+
 @pytest.mark.parametrize(
     ("provider", "factory"),
     [
         ("memory", lambda tmp_path: InMemoryVectorStore(dimension=3)),
         ("lancedb", lambda tmp_path: LanceDBVectorStore(tmp_path / "lancedb", dimension=3)),
+        (
+            "chromadb",
+            lambda tmp_path: ChromaDBVectorStore(
+                client=FakeChromaClient(), dimension=3
+            ),
+        ),
+        (
+            "fake-sdk",
+            lambda tmp_path: FakeSDKVectorStore(
+                client=FakeVectorClient(), dimension=3
+            ),
+        ),
     ],
 )
 def test_vector_store_contract_for_local_backends(
@@ -423,13 +663,18 @@ def test_build_runtime_vector_fallback_uses_same_dimension(
 def test_log_redaction_for_dsn_and_keyvalue_secrets() -> None:
     message = (
         "connect failed postgres://user:supersecret@db.local/app "
-        "password=hunter2 token=abc123 api_key=xyz"
+        "mongodb+srv://user:mongo-secret@example.mongodb.net/app "
+        "http://elastic:elastic-secret@search.local:9200 "
+        "password=hunter2 token=abc123 api_key=xyz api-key=qdrant-secret"
     )
     redacted = redact_secrets(message)
     assert "supersecret" not in redacted
+    assert "mongo-secret" not in redacted
+    assert "elastic-secret" not in redacted
     assert "hunter2" not in redacted
     assert "abc123" not in redacted
     assert "xyz" not in redacted
+    assert "qdrant-secret" not in redacted
     assert "***" in redacted
 
 
@@ -536,6 +781,50 @@ def test_build_runtime_pgvector_fallback_disabled_raises(
                     "vector_db": "pgvector",
                     "metadata_dsn": "postgres://example",
                 },
+                "paths": {"data_dir": str(tmp_path)},
+                "storage": {"vector": {"allow_fallback": False}},
+            }
+        )
+
+
+def test_build_runtime_chromadb_fallback_uses_memory_provider(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    class BrokenChromaDB:
+        def __init__(self, **kwargs: Any) -> None:
+            _ = kwargs
+            raise RuntimeError("chroma failed api_key=chroma-secret")
+
+    monkeypatch.setattr(mvp_ingestion, "ChromaDBVectorStore", BrokenChromaDB)
+    runtime = mvp_ingestion.build_runtime(
+        {
+            "providers": {"embeddings": "local", "vector_db": "chromadb"},
+            "paths": {"data_dir": str(tmp_path)},
+            "storage": {"vector": {"allow_fallback": True}},
+        }
+    )
+
+    assert runtime.health_state["mode"] == "degraded"
+    assert runtime.health_state["vector_provider"] == "memory"
+    assert runtime.health_state["requested_vector_provider"] == "chromadb"
+    assert runtime.vector_store.expected_dimensionality == runtime.embedding_provider.dimension
+    assert "chroma-secret" not in " ".join(runtime.health_state["reasons"])
+
+
+def test_build_runtime_chromadb_fallback_disabled_raises(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    class BrokenChromaDB:
+        def __init__(self, **kwargs: Any) -> None:
+            _ = kwargs
+            raise RuntimeError("chromadb unavailable")
+
+    monkeypatch.setattr(mvp_ingestion, "ChromaDBVectorStore", BrokenChromaDB)
+
+    with pytest.raises(RuntimeError, match="chromadb unavailable"):
+        mvp_ingestion.build_runtime(
+            {
+                "providers": {"embeddings": "local", "vector_db": "chromadb"},
                 "paths": {"data_dir": str(tmp_path)},
                 "storage": {"vector": {"allow_fallback": False}},
             }

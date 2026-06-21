@@ -10,6 +10,18 @@ storage:
   vector:
     # set false in production to fail fast on vector init errors
     allow_fallback: true
+    distance: cosine
+  vector_providers:
+    chromadb:
+      path: ./data/chromadb
+      url: ""
+      host: 127.0.0.1
+      port: 8000
+      collection: memory_vectors
+  metadata_providers:
+    mongodb:
+      uri: ""
+      database: ai_memory_hub
 
 tokenizer:
   enabled: false

@@ -25,7 +25,7 @@ Implemented and verified in the codebase:
 - Message-level chunking by default, plus opt-in token-window chunking for long messages.
 - Embedding providers: OpenAI and local deterministic embeddings.
 - Metadata stores: SQLite and Postgres.
-- Vector stores: LanceDB, PGVector, and in-memory.
+- Vector stores: LanceDB, ChromaDB, PGVector, and in-memory.
 - Provider capabilities, schema-version checks, vector dimensionality checks, fallback policy, degraded health state, and dry-run wrappers.
 - Search result grouping by conversation score.
 - `memory_ask` returns structured `results`, human-readable `answer`, and `citations`.
@@ -96,7 +96,7 @@ Default providers:
 Supported providers:
 
 - Metadata: SQLite, Postgres
-- Vectors: LanceDB, PGVector, in-memory
+- Vectors: LanceDB, ChromaDB, PGVector, in-memory
 
 Implemented storage safety:
 
@@ -181,7 +181,7 @@ Bring Your Own Stack means embedding and storage providers are selected through 
 [Configured Providers]
   Embeddings: openai | local
   Metadata: sqlite | postgres
-  Vectors: lancedb | pgvector | memory
+  Vectors: lancedb | chromadb | pgvector | memory
        |
        v
 [Consumers]
@@ -206,6 +206,12 @@ storage:
   vector:
     allow_fallback: true
     distance: cosine
+  vector_providers:
+    chromadb:
+      path: ./data/chromadb
+      collection: memory_vectors
+      # Optional HTTP mode:
+      # url: http://127.0.0.1:8000
 
 interfaces:
   mcp: true
