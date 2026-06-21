@@ -22,12 +22,15 @@ from memory.backend.metadata_store import (
     _validate_owner_id,
     _validate_project_id,
 )
+from memory.backend.mongodb_metadata_store import MongoDBMetadataStore
 from memory.backend.postgres_metadata_store import PostgresMetadataStore
 from memory.backend.vector_store import (
     ChromaDBVectorStore,
     InMemoryVectorStore,
     LanceDBVectorStore,
+    MongoDBAtlasVectorStore,
     PGVectorStore,
+    QdrantVectorStore,
 )
 from memory.config import HubConfig, ensure_token_hash_secret, load_config, parse_config
 from memory.ingestion.summary_models import (
@@ -330,6 +333,15 @@ def build_runtime(
     data_dir = Path(cfg.paths.data_dir)
     if cfg.providers.metadata_db == "postgres":
         metadata_store = PostgresMetadataStore(cfg.providers.metadata_dsn)
+    elif cfg.providers.metadata_db == "mongodb":
+        mongodb_config = cfg.storage.metadata_providers.mongodb
+        metadata_store = MongoDBMetadataStore(
+            uri=mongodb_config.uri,
+            database=mongodb_config.database,
+            conversations_collection=mongodb_config.conversations_collection,
+            facts_collection=mongodb_config.facts_collection,
+            generated_summaries_collection=mongodb_config.generated_summaries_collection,
+        )
     else:
         metadata_store = SQLiteMetadataStore(data_dir / "metadata.sqlite3")
     _validate_metadata_schema(
@@ -441,6 +453,25 @@ def _build_vector_store(
             host=chroma_config.host,
             port=chroma_config.port,
             collection_name=chroma_config.collection,
+            dimension=expected_dimension,
+        )
+    if provider == VectorProviderName.QDRANT.value:
+        qdrant_config = cfg.storage.vector_providers.qdrant
+        return QdrantVectorStore(
+            url=qdrant_config.url,
+            api_key=qdrant_config.api_key,
+            collection_name=qdrant_config.collection,
+            dimension=expected_dimension,
+            distance=cfg.storage.vector.distance,
+            prefer_grpc=qdrant_config.prefer_grpc,
+        )
+    if provider == VectorProviderName.MONGODB_ATLAS.value:
+        atlas_config = cfg.storage.vector_providers.mongodb_atlas
+        return MongoDBAtlasVectorStore(
+            uri=atlas_config.uri,
+            database=atlas_config.database,
+            collection_name=atlas_config.collection,
+            index_name=atlas_config.index,
             dimension=expected_dimension,
         )
     if provider == VectorProviderName.PGVECTOR.value:
@@ -708,8 +739,10 @@ def store_vectors(metadata_id: str, embeddings: list[dict[str, Any]], replace: b
 
 
 def _lookup_by_conversation_hash(
-    conversation_hash: str, *, project_id: str | None = None
+    conversation_hash: str | None, *, project_id: str | None = None
 ) -> dict[str, Any] | None:
+    if conversation_hash is None:
+        return None
     store = _runtime().metadata_store
     if hasattr(store, "get_by_conversation_hash"):
         return store.get_by_conversation_hash(conversation_hash, project_id=project_id)

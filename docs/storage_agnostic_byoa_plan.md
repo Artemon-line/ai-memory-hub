@@ -289,10 +289,13 @@ Current implemented provider matrix:
 
 - [x] Metadata: SQLite
 - [x] Metadata: Postgres
+- [x] Metadata: MongoDB
 - [x] Vectors: LanceDB
 - [x] Vectors: pgvector
 - [x] Vectors: in-memory
 - [x] Vectors: ChromaDB
+- [x] Vectors: Qdrant
+- [x] Vectors: MongoDB Atlas Vector Search
 
 Expansion principles:
 
@@ -319,16 +322,16 @@ Recommended implementation order:
 
 Status: `PARTIAL`
 
-- [ ] Extend `providers.vector_db` accepted values:
+- [x] Extend `providers.vector_db` accepted values:
   - [x] `chromadb`
-  - [ ] `qdrant`
+  - [x] `qdrant`
   - [ ] `milvus`
   - [ ] `weaviate`
-  - [ ] `mongodb_atlas`
+  - [x] `mongodb_atlas`
   - [ ] `elasticsearch`
   - [ ] `opensearch`
-- [ ] Extend `providers.metadata_db` accepted values:
-  - [ ] `mongodb`
+- [x] Extend `providers.metadata_db` accepted values:
+  - [x] `mongodb`
   - [ ] optional future `elasticsearch`/`opensearch` only if metadata semantics are fully mapped
 - [x] Add provider-specific config sections without changing API/MCP payloads:
 
@@ -381,14 +384,18 @@ storage:
 - [x] Validate provider-specific config at startup.
 - [x] Redact provider URLs, API keys, tokens, usernames, passwords, and connection strings.
 - [ ] Document environment variable names for live tests:
-  - [ ] `AMH_TEST_CHROMADB_URL`
-  - [ ] `AMH_TEST_QDRANT_URL`
-  - [ ] `AMH_TEST_QDRANT_API_KEY`
+  - [x] `AMH_TEST_CHROMADB_URL`
+  - [x] `AMH_TEST_QDRANT_URL`
+  - [x] `AMH_TEST_QDRANT_API_KEY`
   - [ ] `AMH_TEST_MILVUS_URI`
   - [ ] `AMH_TEST_MILVUS_TOKEN`
   - [ ] `AMH_TEST_WEAVIATE_URL`
   - [ ] `AMH_TEST_WEAVIATE_API_KEY`
-  - [ ] `AMH_TEST_MONGODB_URI`
+  - [x] `AMH_TEST_MONGODB_URI`
+  - [x] `AMH_TEST_MONGODB_ATLAS_URI`
+  - [x] `AMH_TEST_MONGODB_ATLAS_DATABASE`
+  - [x] `AMH_TEST_MONGODB_ATLAS_COLLECTION`
+  - [x] `AMH_TEST_MONGODB_ATLAS_INDEX`
   - [ ] `AMH_TEST_ELASTICSEARCH_URL`
   - [ ] `AMH_TEST_ELASTICSEARCH_API_KEY`
   - [ ] `AMH_TEST_OPENSEARCH_URL`
@@ -463,87 +470,87 @@ Target: local-first vector provider with optional HTTP client mode.
 
 ### Phase 6d: Qdrant Vector Adapter
 
-Status: `NOT IMPLEMENTED`
+Status: `IMPLEMENTED`
 
 Target: local Docker or Qdrant Cloud vector provider.
 
-- [ ] Add dependency strategy:
-  - [ ] optional extra: `qdrant-client`
-  - [ ] deterministic import error when package is missing
-- [ ] Add `QdrantVectorStore` adapter.
-- [ ] Support URL and API key configuration.
-- [ ] Map hub distance config to Qdrant distance:
-  - [ ] `cosine`
-  - [ ] `l2`
-  - [ ] `inner_product`
-- [ ] Create collection when missing with configured vector size/distance.
+- [x] Add dependency strategy:
+  - [x] optional extra: `qdrant-client`
+  - [x] deterministic import error when package is missing
+- [x] Add `QdrantVectorStore` adapter.
+- [x] Support URL and API key configuration.
+- [x] Map hub distance config to Qdrant distance:
+  - [x] `cosine`
+  - [x] `l2`
+  - [x] `inner_product`
+- [x] Create collection when missing with configured vector size/distance.
 - [ ] Validate existing collection vector size and distance at startup.
-- [ ] Store chunk payload fields in Qdrant payload.
-- [ ] Use stable point IDs derived from `chunk_id` or deterministic UUID namespace.
-- [ ] Implement upsert for insert.
-- [ ] Implement replace by deleting points filtered by `memory_id`.
-- [ ] Implement search result normalization.
-- [ ] Implement delete by `memory_id` filter.
-- [ ] Implement `get_stats()` and `health()`.
+- [x] Store chunk payload fields in Qdrant payload.
+- [x] Use stable point IDs derived from `chunk_id` or deterministic UUID namespace.
+- [x] Implement upsert for insert.
+- [x] Implement replace by deleting points filtered by `memory_id`.
+- [x] Implement search result normalization.
+- [x] Implement delete by `memory_id` filter.
+- [x] Implement `get_stats()` and `health()`.
 - [ ] Tests:
-  - [ ] fake-client contract tests
-  - [ ] local/cloud live smoke when `AMH_TEST_QDRANT_URL` is set
+  - [x] fake-client contract tests
+  - [x] local/cloud live smoke when `AMH_TEST_QDRANT_URL` is set
   - [ ] collection distance/dimension mismatch failures
-  - [ ] API key redaction checks
-  - [ ] fallback behavior tests
+  - [x] API key redaction checks
+  - [x] fallback behavior tests
 
 ### Phase 6e: MongoDB Metadata And Atlas Vector Search
 
-Status: `NOT IMPLEMENTED`
+Status: `IMPLEMENTED`
 
 Target: MongoDB as a metadata provider, with optional Atlas Vector Search as a vector provider.
 
 Decision points:
 
-- [ ] Decide whether first implementation is:
-  - [ ] metadata-only MongoDB provider
+- [x] Decide whether first implementation is:
+  - [x] metadata-only MongoDB provider
   - [ ] Atlas Vector Search only
-  - [ ] combined metadata + vector provider
-- [ ] Recommended sequence:
-  - [ ] implement MongoDB metadata first
-  - [ ] add Atlas Vector Search after metadata semantics are stable
+  - [x] combined metadata + vector provider
+- [x] Recommended sequence:
+  - [x] implement MongoDB metadata first
+  - [x] add Atlas Vector Search after metadata semantics are stable
 
 MongoDB metadata adapter:
 
-- [ ] Add dependency strategy:
-  - [ ] optional extra: `pymongo`
-  - [ ] deterministic import error when package is missing
-- [ ] Add `MongoDBMetadataStore`.
-- [ ] Store conversations in configured database/collection.
+- [x] Add dependency strategy:
+  - [x] optional extra: `pymongo`
+  - [x] deterministic import error when package is missing
+- [x] Add `MongoDBMetadataStore`.
+- [x] Store conversations in configured database/collection.
 - [ ] Add schema version document with single active version invariant.
 - [ ] Create unique indexes:
   - [ ] `id`
   - [ ] `metadata.conversation_hash`
   - [ ] `(source, metadata.upstream_thread_id)` where upstream thread exists
-- [ ] Preserve insert, insert-new, append, get, get-many, conversation-hash lookup, and upstream-thread lookup semantics.
-- [ ] Ensure duplicate-key errors map to deterministic behavior.
-- [ ] Implement `capabilities()` and `health()`.
+- [x] Preserve insert, insert-new, append, get, get-many, conversation-hash lookup, and upstream-thread lookup semantics.
+- [x] Ensure duplicate-key errors map to deterministic behavior.
+- [x] Implement `capabilities()` and `health()`.
 - [ ] Tests:
-  - [ ] fake-client metadata contract tests
-  - [ ] optional live smoke when `AMH_TEST_MONGODB_URI` is set
+  - [x] fake-client metadata contract tests
+  - [x] optional live smoke when `AMH_TEST_MONGODB_URI` is set
   - [ ] schema version invariant tests
-  - [ ] duplicate/deduplication parity tests
+  - [x] duplicate/deduplication parity tests
   - [ ] URI credential redaction tests
 
 Atlas Vector Search adapter:
 
-- [ ] Add `MongoDBAtlasVectorStore`.
+- [x] Add `MongoDBAtlasVectorStore`.
 - [ ] Validate configured vector search index exists and is queryable.
 - [ ] Validate index dimensions and similarity mode where Atlas exposes them.
-- [ ] Store vector documents with chunk payload fields.
-- [ ] Implement insert/upsert, replace, search, delete, stats, health.
+- [x] Store vector documents with chunk payload fields.
+- [x] Implement insert/upsert, replace, search, delete, stats, health.
 - [ ] Define readiness behavior while Atlas search indexes are still building.
 - [ ] Tests:
-  - [ ] fake-client vector contract tests
-  - [ ] optional Atlas live smoke when `AMH_TEST_MONGODB_URI` is set
+  - [x] fake-client vector contract tests
+  - [x] optional Atlas live smoke when `AMH_TEST_MONGODB_ATLAS_URI` is set
   - [ ] index missing/not-ready startup failures
   - [ ] dimension mismatch tests
-  - [ ] fallback behavior tests
+  - [x] fallback behavior tests
 
 ### Phase 6f: Elasticsearch And OpenSearch Vector Adapters
 
@@ -664,6 +671,8 @@ Status: `PARTIAL`
 
 - [x] Update architecture supported-provider matrix after each provider lands.
 - [x] Add config examples for ChromaDB.
+- [x] Add config examples for Qdrant.
+- [x] Add config examples for MongoDB metadata and MongoDB Atlas Vector Search.
 - [ ] Add local Docker Compose snippets for:
   - [ ] Qdrant
   - [ ] ChromaDB HTTP server
@@ -672,9 +681,9 @@ Status: `PARTIAL`
   - [ ] Elasticsearch
   - [ ] OpenSearch
 - [ ] Add cloud setup notes for:
-  - [ ] Qdrant Cloud
+  - [x] Qdrant Cloud
   - [ ] Zilliz
-  - [ ] MongoDB Atlas Vector Search
+  - [x] MongoDB Atlas Vector Search
   - [ ] Weaviate Cloud
   - [ ] Elastic Cloud
 - [ ] Document provider-specific limitations:
@@ -686,14 +695,14 @@ Status: `PARTIAL`
 
 ### Phase 6 Acceptance Criteria
 
-- [ ] `providers.vector_db` can select every implemented vector provider from config.
-- [ ] `providers.metadata_db` can select every implemented metadata provider from config.
+- [x] `providers.vector_db` can select every implemented vector provider from config.
+- [x] `providers.metadata_db` can select every implemented metadata provider from config.
 - [ ] API and MCP response shapes are unchanged for all providers.
 - [ ] Domain ingestion/search code remains provider-agnostic.
-- [ ] Each provider passes shared contract tests.
+- [x] Each provider passes shared contract tests.
 - [ ] Each provider has fallback, health, dimensionality, and redaction tests.
-- [ ] Live tests are optional and skipped unless provider-specific environment variables are set.
-- [ ] Missing optional provider dependencies produce actionable startup errors.
+- [x] Live tests are optional and skipped unless provider-specific environment variables are set.
+- [x] Missing optional provider dependencies produce actionable startup errors.
 - [ ] Provider docs include a minimal config example and known limitations.
 
 ### Phase 7: Operational Hardening Backlog

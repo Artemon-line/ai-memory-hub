@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import math
 import re
+import uuid
 from pathlib import Path
 from typing import Any, Callable, Protocol
 from urllib.parse import urlparse
@@ -15,6 +16,7 @@ from memory.backend.errors import NotSupportedError, VectorDimensionError
 from memory.provider_models import (
     ChromaClientMode,
     ChromaQueryKey,
+    QdrantDistanceName,
     VectorPayloadKey,
     VectorProviderName,
     VectorStatsKey,
@@ -223,6 +225,306 @@ class ChromaDBVectorStore:
                 row[VectorPayloadKey.PROJECT_ID.value] = metadata.project_id
             rows.append(row)
         return rows
+
+    def _validate_dimension(self, vector: list[float], *, operation: str) -> None:
+        expected = self.expected_dimensionality
+        actual = len(vector)
+        if actual != expected:
+            raise VectorDimensionError(
+                f"Vector dimensionality mismatch during {operation}: expected {expected}, got {actual}"
+            )
+
+
+class QdrantVectorStore:
+    _DISTANCE_MAP = {
+        "cosine": QdrantDistanceName.COSINE.value,
+        "l2": QdrantDistanceName.L2.value,
+        "inner_product": QdrantDistanceName.INNER_PRODUCT.value,
+    }
+
+    def __init__(
+        self,
+        *,
+        url: str = "http://127.0.0.1:6333",
+        api_key: str = "",
+        collection_name: str = "memory_vectors",
+        dimension: int = 32,
+        distance: str = "cosine",
+        prefer_grpc: bool = False,
+        client: Any | None = None,
+        models: Any | None = None,
+    ):
+        self.url = url.rstrip("/")
+        self.api_key = api_key
+        self.collection_name = collection_name
+        self.dimension = dimension
+        self.distance = distance
+        self._client: Any
+        self._models: Any
+        if client is None:
+            self._client, self._models = self._create_client(prefer_grpc)
+        else:
+            if models is None:
+                raise ValueError("Qdrant models are required when injecting a Qdrant client")
+            self._client = client
+            self._models = models
+        self._ensure_collection()
+
+    @property
+    def expected_dimensionality(self) -> int:
+        return self.dimension
+
+    def insert(
+        self, metadata_id: str, embeddings: list[dict[str, Any]], replace: bool = False
+    ) -> None:
+        if replace:
+            self.delete([metadata_id])
+        points = []
+        for item in embeddings:
+            vector = [float(value) for value in item[VectorPayloadKey.VECTOR.value]]
+            self._validate_dimension(vector, operation="insert")
+            payload = _vector_payload(metadata_id, item)
+            points.append(
+                self._models.PointStruct(
+                    id=_stable_point_id(metadata_id, payload[VectorPayloadKey.CHUNK_ID.value]),
+                    vector=vector,
+                    payload=payload,
+                )
+            )
+        if points:
+            self._client.upsert(collection_name=self.collection_name, points=points)
+
+    def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
+        self._validate_dimension(query_vector, operation="search")
+        points = self._search_points(query_vector=query_vector, top_k=top_k)
+        rows: list[dict[str, Any]] = []
+        for point in points:
+            payload = dict(getattr(point, "payload", {}) or {})
+            row = _row_from_vector_payload(payload)
+            row[VectorPayloadKey.SCORE.value] = float(getattr(point, "score", 0.0))
+            rows.append(row)
+        return rows
+
+    def delete(self, ids: list[str]) -> None:
+        if not ids:
+            return
+        condition = self._models.FieldCondition(
+            key=VectorPayloadKey.MEMORY_ID.value,
+            match=self._models.MatchAny(any=[str(item) for item in ids]),
+        )
+        self._client.delete(
+            collection_name=self.collection_name,
+            points_selector=self._models.FilterSelector(
+                filter=self._models.Filter(must=[condition])
+            ),
+        )
+
+    def get_stats(self) -> dict[str, Any]:
+        try:
+            info = self._client.get_collection(collection_name=self.collection_name)
+            rows = int(getattr(info, "points_count", 0) or 0)
+        except Exception:
+            rows = None
+        return {
+            VectorStatsKey.PROVIDER.value: VectorProviderName.QDRANT.value,
+            VectorStatsKey.ROWS.value: rows,
+            VectorStatsKey.EXPECTED_DIMENSIONALITY.value: self.expected_dimensionality,
+            VectorStatsKey.COLLECTION.value: self.collection_name,
+            "distance": self.distance,
+        }
+
+    def capabilities(self) -> ProviderCapabilities:
+        return ProviderCapabilities(
+            supports_batch_insert=True,
+            supports_metadata_indexing=True,
+        )
+
+    def health(self) -> dict[str, Any]:
+        return {
+            VectorStatsKey.PROVIDER.value: VectorProviderName.QDRANT.value,
+            VectorStatsKey.EXPECTED_DIMENSIONALITY.value: self.expected_dimensionality,
+            VectorStatsKey.COLLECTION.value: self.collection_name,
+            "distance": self.distance,
+            VectorStatsKey.STATS.value: self.get_stats(),
+        }
+
+    def set_ttl(self, memory_id: str, ttl_seconds: int) -> None:
+        _ = (memory_id, ttl_seconds)
+        raise NotSupportedError("TTL is not supported by this vector adapter")
+
+    def _create_client(self, prefer_grpc: bool) -> tuple[Any, Any]:
+        try:
+            from qdrant_client import QdrantClient, models  # type: ignore
+        except ImportError as exc:
+            raise RuntimeError(
+                "qdrant-client package is required for providers.vector_db=qdrant"
+            ) from exc
+        kwargs: dict[str, Any] = {"url": self.url, "prefer_grpc": prefer_grpc}
+        if self.api_key:
+            kwargs["api_key"] = self.api_key
+        return QdrantClient(**kwargs), models
+
+    def _ensure_collection(self) -> None:
+        if self._collection_exists():
+            return
+        distance = self._DISTANCE_MAP.get(self.distance)
+        if distance is None:
+            raise ValueError("Qdrant distance must be one of: cosine, l2, inner_product")
+        self._client.create_collection(
+            collection_name=self.collection_name,
+            vectors_config=self._models.VectorParams(
+                size=self.expected_dimensionality,
+                distance=distance,
+            ),
+        )
+
+    def _collection_exists(self) -> bool:
+        if hasattr(self._client, "collection_exists"):
+            return bool(self._client.collection_exists(self.collection_name))
+        collections = self._client.get_collections()
+        names = {str(item.name) for item in getattr(collections, "collections", [])}
+        return self.collection_name in names
+
+    def _search_points(self, *, query_vector: list[float], top_k: int) -> list[Any]:
+        if hasattr(self._client, "query_points"):
+            result = self._client.query_points(
+                collection_name=self.collection_name,
+                query=query_vector,
+                limit=top_k,
+                with_payload=True,
+            )
+            return list(getattr(result, "points", result) or [])
+        return list(
+            self._client.search(
+                collection_name=self.collection_name,
+                query_vector=query_vector,
+                limit=top_k,
+                with_payload=True,
+            )
+            or []
+        )
+
+    def _validate_dimension(self, vector: list[float], *, operation: str) -> None:
+        expected = self.expected_dimensionality
+        actual = len(vector)
+        if actual != expected:
+            raise VectorDimensionError(
+                f"Vector dimensionality mismatch during {operation}: expected {expected}, got {actual}"
+            )
+
+
+class MongoDBAtlasVectorStore:
+    def __init__(
+        self,
+        *,
+        uri: str,
+        database: str = "ai_memory_hub",
+        collection_name: str = "memory_vectors",
+        index_name: str = "memory_vector_index",
+        dimension: int = 32,
+        client: Any | None = None,
+    ):
+        if not uri and client is None:
+            raise ValueError("MongoDB Atlas URI is required for providers.vector_db=mongodb_atlas")
+        self.uri = uri
+        self.database = database
+        self.collection_name = collection_name
+        self.index_name = index_name
+        self.dimension = dimension
+        self._client = client or self._create_client()
+        self._collection = self._client[self.database][self.collection_name]
+        self._ensure_indexes()
+
+    @property
+    def expected_dimensionality(self) -> int:
+        return self.dimension
+
+    def insert(
+        self, metadata_id: str, embeddings: list[dict[str, Any]], replace: bool = False
+    ) -> None:
+        if replace:
+            self.delete([metadata_id])
+        docs = []
+        for item in embeddings:
+            vector = [float(value) for value in item[VectorPayloadKey.VECTOR.value]]
+            self._validate_dimension(vector, operation="insert")
+            docs.append(
+                {
+                    **_vector_payload(metadata_id, item),
+                    VectorPayloadKey.VECTOR.value: vector,
+                }
+            )
+        if docs:
+            self._collection.insert_many(docs)
+
+    def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
+        self._validate_dimension(query_vector, operation="search")
+        pipeline = [
+            {
+                "$vectorSearch": {
+                    "index": self.index_name,
+                    "path": VectorPayloadKey.VECTOR.value,
+                    "queryVector": query_vector,
+                    "numCandidates": max(top_k * 10, top_k),
+                    "limit": top_k,
+                }
+            },
+            {"$set": {VectorPayloadKey.SCORE.value: {"$meta": "vectorSearchScore"}}},
+        ]
+        return [
+            {
+                **_row_from_vector_payload(dict(doc)),
+                VectorPayloadKey.SCORE.value: float(doc.get(VectorPayloadKey.SCORE.value, 0.0)),
+            }
+            for doc in self._collection.aggregate(pipeline)
+        ]
+
+    def delete(self, ids: list[str]) -> None:
+        if ids:
+            self._collection.delete_many(
+                {VectorPayloadKey.MEMORY_ID.value: {"$in": [str(item) for item in ids]}}
+            )
+
+    def get_stats(self) -> dict[str, Any]:
+        return {
+            VectorStatsKey.PROVIDER.value: VectorProviderName.MONGODB_ATLAS.value,
+            VectorStatsKey.ROWS.value: int(self._collection.count_documents({})),
+            VectorStatsKey.EXPECTED_DIMENSIONALITY.value: self.expected_dimensionality,
+            VectorStatsKey.COLLECTION.value: self.collection_name,
+            "index": self.index_name,
+        }
+
+    def capabilities(self) -> ProviderCapabilities:
+        return ProviderCapabilities(
+            supports_batch_insert=True,
+            supports_metadata_indexing=True,
+        )
+
+    def health(self) -> dict[str, Any]:
+        return {
+            VectorStatsKey.PROVIDER.value: VectorProviderName.MONGODB_ATLAS.value,
+            VectorStatsKey.EXPECTED_DIMENSIONALITY.value: self.expected_dimensionality,
+            VectorStatsKey.COLLECTION.value: self.collection_name,
+            "index": self.index_name,
+            VectorStatsKey.STATS.value: self.get_stats(),
+        }
+
+    def set_ttl(self, memory_id: str, ttl_seconds: int) -> None:
+        _ = (memory_id, ttl_seconds)
+        raise NotSupportedError("TTL is not supported by this vector adapter")
+
+    def _create_client(self) -> Any:
+        try:
+            from pymongo import MongoClient  # type: ignore
+        except ImportError as exc:
+            raise RuntimeError(
+                "pymongo package is required for providers.vector_db=mongodb_atlas"
+            ) from exc
+        return MongoClient(self.uri)
+
+    def _ensure_indexes(self) -> None:
+        self._collection.create_index(VectorPayloadKey.MEMORY_ID.value)
+        self._collection.create_index(VectorPayloadKey.CHUNK_ID.value)
 
     def _validate_dimension(self, vector: list[float], *, operation: str) -> None:
         expected = self.expected_dimensionality
@@ -750,6 +1052,44 @@ def _cosine_distance(a: list[float], b: list[float]) -> float:
 
 def _vector_literal(vector: list[float]) -> str:
     return "[" + ",".join(str(float(value)) for value in vector) + "]"
+
+
+def _stable_point_id(memory_id: str, chunk_id: str) -> str:
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"ai-memory-hub:{memory_id}:{chunk_id}"))
+
+
+def _vector_payload(metadata_id: str, item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        VectorPayloadKey.MEMORY_ID.value: metadata_id,
+        VectorPayloadKey.PROJECT_ID.value: str(item.get(VectorPayloadKey.PROJECT_ID.value, "")),
+        VectorPayloadKey.OWNER_ID.value: str(item.get(VectorPayloadKey.OWNER_ID.value, "")),
+        VectorPayloadKey.CHUNK_ID.value: str(
+            item.get(VectorPayloadKey.CHUNK_ID.value)
+            or f"{metadata_id}:{int(item[VectorPayloadKey.CHUNK_INDEX.value])}"
+        ),
+        VectorPayloadKey.CHUNK_INDEX.value: int(item[VectorPayloadKey.CHUNK_INDEX.value]),
+        VectorPayloadKey.MESSAGE_HASH.value: str(item.get(VectorPayloadKey.MESSAGE_HASH.value, "")),
+        VectorPayloadKey.ROLE.value: str(item[VectorPayloadKey.ROLE.value]),
+        VectorPayloadKey.TEXT.value: str(item[VectorPayloadKey.TEXT.value]),
+    }
+
+
+def _row_from_vector_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    row = {
+        VectorPayloadKey.MEMORY_ID.value: str(payload.get(VectorPayloadKey.MEMORY_ID.value, "")),
+        VectorPayloadKey.CHUNK_ID.value: str(payload.get(VectorPayloadKey.CHUNK_ID.value, "")),
+        VectorPayloadKey.CHUNK_INDEX.value: int(payload.get(VectorPayloadKey.CHUNK_INDEX.value, 0)),
+        VectorPayloadKey.MESSAGE_HASH.value: str(payload.get(VectorPayloadKey.MESSAGE_HASH.value, "")),
+        VectorPayloadKey.ROLE.value: str(payload.get(VectorPayloadKey.ROLE.value, "")),
+        VectorPayloadKey.TEXT.value: str(payload.get(VectorPayloadKey.TEXT.value, "")),
+    }
+    project_id = str(payload.get(VectorPayloadKey.PROJECT_ID.value, ""))
+    owner_id = str(payload.get(VectorPayloadKey.OWNER_ID.value, ""))
+    if project_id:
+        row[VectorPayloadKey.PROJECT_ID.value] = project_id
+    if owner_id:
+        row[VectorPayloadKey.OWNER_ID.value] = owner_id
+    return row
 
 
 def _first_query_batch(value: Any) -> list[Any]:

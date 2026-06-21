@@ -19,13 +19,16 @@ from memory.backend.errors import (
 )
 from memory.backend.log_safety import redact_secrets
 from memory.backend.metadata_store import SQLiteMetadataStore
+from memory.backend.mongodb_metadata_store import MongoDBMetadataStore
 from memory.backend.postgres_metadata_store import PostgresMetadataStore
 from memory.backend.vector_store import (
     ChromaDBVectorStore,
     ChromaMetadata,
     InMemoryVectorStore,
     LanceDBVectorStore,
+    MongoDBAtlasVectorStore,
     PGVectorStore,
+    QdrantVectorStore,
 )
 from memory.ingestion import mvp_ingestion
 
@@ -90,6 +93,35 @@ def _assert_metadata_store_contract(store: Any) -> None:
 
 def test_metadata_store_contract_for_sqlite(tmp_path: Path) -> None:
     _assert_metadata_store_contract(SQLiteMetadataStore(tmp_path / "metadata.sqlite3"))
+
+
+def test_metadata_store_contract_for_mongodb_fake_client() -> None:
+    _assert_metadata_store_contract(
+        MongoDBMetadataStore(uri="mongodb://example", client=FakeMongoClient())
+    )
+
+
+def test_mongodb_insert_new_rejects_same_id_different_hash() -> None:
+    store = MongoDBMetadataStore(uri="mongodb://example", client=FakeMongoClient())
+    memory_id = str(uuid4())
+    first = {
+        "id": memory_id,
+        "source": "manual",
+        "timestamp": "2026-01-01T00:00:00Z",
+        "messages": [{"role": "user", "text": "first"}],
+        "metadata": {"conversation_hash": "sha256:" + ("a" * 64)},
+    }
+    second = {
+        "id": memory_id,
+        "source": "manual",
+        "timestamp": "2026-01-01T00:00:00Z",
+        "messages": [{"role": "user", "text": "second"}],
+        "metadata": {"conversation_hash": "sha256:" + ("b" * 64)},
+    }
+
+    assert store.insert_new(first) == (memory_id, True)
+    with pytest.raises(ValueError, match="unauthorized_update"):
+        store.insert_new(second)
 
 
 def test_sqlite_metadata_store_persists_generated_summaries_separately(tmp_path: Path) -> None:
@@ -399,7 +431,15 @@ def _assert_vector_store_contract(store: Any) -> None:
 
     stats = store.get_stats()
     assert stats["expected_dimensionality"] == 3
-    assert stats["provider"] in {"memory", "lancedb", "pgvector", "chromadb", "fake"}
+    assert stats["provider"] in {
+        "memory",
+        "lancedb",
+        "pgvector",
+        "chromadb",
+        "qdrant",
+        "mongodb_atlas",
+        "fake",
+    }
     assert stats["rows"] is None or stats["rows"] >= 3
 
     store.delete([first_id])
@@ -568,6 +608,218 @@ class FakeChromaClient:
         return self.collection
 
 
+class FakeQdrantPoint:
+    def __init__(self, *, payload: dict[str, Any], score: float) -> None:
+        self.payload = payload
+        self.score = score
+
+
+class FakeQdrantModels:
+    class PointStruct:
+        def __init__(self, *, id: str, vector: list[float], payload: dict[str, Any]) -> None:
+            self.id = id
+            self.vector = vector
+            self.payload = payload
+
+    class VectorParams:
+        def __init__(self, *, size: int, distance: str) -> None:
+            self.size = size
+            self.distance = distance
+
+    class MatchAny:
+        def __init__(self, *, any: list[str]) -> None:
+            self.any = any
+
+    class FieldCondition:
+        def __init__(self, *, key: str, match: Any) -> None:
+            self.key = key
+            self.match = match
+
+    class Filter:
+        def __init__(self, *, must: list[Any]) -> None:
+            self.must = must
+
+    class FilterSelector:
+        def __init__(self, *, filter: Any) -> None:
+            self.filter = filter
+
+
+class FakeQdrantClient:
+    def __init__(self) -> None:
+        self.rows: dict[str, Any] = {}
+        self.created: dict[str, Any] = {}
+
+    def collection_exists(self, collection_name: str) -> bool:
+        return collection_name in self.created
+
+    def create_collection(self, *, collection_name: str, vectors_config: Any) -> None:
+        self.created[collection_name] = vectors_config
+
+    def upsert(self, *, collection_name: str, points: list[Any]) -> None:
+        assert collection_name == "memory_vectors"
+        for point in points:
+            self.rows[str(point.id)] = point
+
+    def query_points(
+        self, *, collection_name: str, query: list[float], limit: int, with_payload: bool
+    ) -> Any:
+        _ = (collection_name, with_payload)
+        points = sorted(
+            self.rows.values(),
+            key=lambda point: _test_cosine_distance(query, point.vector),
+        )
+        return types.SimpleNamespace(
+            points=[
+                FakeQdrantPoint(
+                    payload=point.payload,
+                    score=1.0 - _test_cosine_distance(query, point.vector),
+                )
+                for point in points[:limit]
+            ]
+        )
+
+    def delete(self, *, collection_name: str, points_selector: Any) -> None:
+        _ = collection_name
+        ids = set(points_selector.filter.must[0].match.any)
+        self.rows = {
+            point_id: point
+            for point_id, point in self.rows.items()
+            if point.payload["memory_id"] not in ids
+        }
+
+    def get_collection(self, *, collection_name: str) -> Any:
+        _ = collection_name
+        return types.SimpleNamespace(points_count=len(self.rows))
+
+
+class FakeMongoCollection:
+    def __init__(self) -> None:
+        self.docs: list[dict[str, Any]] = []
+
+    def create_index(self, *_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    def replace_one(self, query: dict[str, Any], doc: dict[str, Any], upsert: bool = False) -> Any:
+        for index, existing in enumerate(self.docs):
+            if _matches_query(existing, query):
+                self.docs[index] = dict(doc)
+                return types.SimpleNamespace(modified_count=1)
+        if upsert:
+            self.docs.append(dict(doc))
+        return types.SimpleNamespace(modified_count=0)
+
+    def insert_one(self, doc: dict[str, Any]) -> None:
+        self.docs.append(dict(doc))
+
+    def insert_many(self, docs: list[dict[str, Any]]) -> None:
+        self.docs.extend(dict(doc) for doc in docs)
+
+    def find_one(self, query: dict[str, Any], sort: list[tuple[str, int]] | None = None) -> dict[str, Any] | None:
+        rows = list(self.find(query))
+        if sort:
+            key, direction = sort[0]
+            rows.sort(key=lambda row: str(row.get(key, "")), reverse=direction < 0)
+        return rows[0] if rows else None
+
+    def find(self, query: dict[str, Any] | None = None) -> Any:
+        rows = [dict(doc) for doc in self.docs if _matches_query(doc, query or {})]
+        return FakeMongoCursor(rows)
+
+    def update_one(self, query: dict[str, Any], update: dict[str, Any]) -> Any:
+        return self.update_many(query, update, limit=1)
+
+    def update_many(
+        self, query: dict[str, Any], update: dict[str, Any], limit: int | None = None
+    ) -> Any:
+        modified = 0
+        for doc in self.docs:
+            if _matches_query(doc, query):
+                _apply_update(doc, update)
+                modified += 1
+                if limit is not None and modified >= limit:
+                    break
+        return types.SimpleNamespace(modified_count=modified)
+
+    def delete_many(self, query: dict[str, Any]) -> None:
+        self.docs = [doc for doc in self.docs if not _matches_query(doc, query)]
+
+    def count_documents(self, query: dict[str, Any]) -> int:
+        return len([doc for doc in self.docs if _matches_query(doc, query)])
+
+    def aggregate(self, pipeline: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        vector_search = pipeline[0]["$vectorSearch"]
+        query_vector = vector_search["queryVector"]
+        limit = int(vector_search["limit"])
+        rows = sorted(
+            self.docs,
+            key=lambda doc: _test_cosine_distance(query_vector, doc["vector"]),
+        )
+        output = []
+        for doc in rows[:limit]:
+            row = dict(doc)
+            row["score"] = 1.0 - _test_cosine_distance(query_vector, doc["vector"])
+            output.append(row)
+        return output
+
+
+class FakeMongoCursor:
+    def __init__(self, rows: list[dict[str, Any]]) -> None:
+        self.rows = rows
+
+    def sort(self, key: Any, direction: int | None = None) -> "FakeMongoCursor":
+        if isinstance(key, list):
+            key, direction = key[0]
+        self.rows.sort(key=lambda row: str(row.get(str(key), "")), reverse=(direction or 1) < 0)
+        return self
+
+    def __iter__(self):
+        return iter(self.rows)
+
+
+class FakeMongoDatabase:
+    def __init__(self) -> None:
+        self.collections: dict[str, FakeMongoCollection] = {}
+
+    def __getitem__(self, name: str) -> FakeMongoCollection:
+        if name not in self.collections:
+            self.collections[name] = FakeMongoCollection()
+        return self.collections[name]
+
+
+class FakeMongoClient:
+    def __init__(self) -> None:
+        self.databases: dict[str, FakeMongoDatabase] = {}
+
+    def __getitem__(self, name: str) -> FakeMongoDatabase:
+        if name not in self.databases:
+            self.databases[name] = FakeMongoDatabase()
+        return self.databases[name]
+
+
+def _matches_query(doc: dict[str, Any], query: dict[str, Any]) -> bool:
+    for key, expected in query.items():
+        actual = doc.get(key)
+        if isinstance(expected, dict) and "$in" in expected:
+            if actual not in set(expected["$in"]):
+                return False
+        elif actual != expected:
+            return False
+    return True
+
+
+def _apply_update(doc: dict[str, Any], update: dict[str, Any]) -> None:
+    for key, value in update.get("$set", {}).items():
+        doc[key] = value
+    for key, value in update.get("$addToSet", {}).items():
+        current = doc.setdefault(key, [])
+        if isinstance(value, dict) and "$each" in value:
+            for item in value["$each"]:
+                if item not in current:
+                    current.append(item)
+        elif value not in current:
+            current.append(value)
+
+
 @pytest.mark.parametrize(
     ("provider", "factory"),
     [
@@ -577,6 +829,20 @@ class FakeChromaClient:
             "chromadb",
             lambda tmp_path: ChromaDBVectorStore(
                 client=FakeChromaClient(), dimension=3
+            ),
+        ),
+        (
+            "qdrant",
+            lambda tmp_path: QdrantVectorStore(
+                client=FakeQdrantClient(), models=FakeQdrantModels, dimension=3
+            ),
+        ),
+        (
+            "mongodb_atlas",
+            lambda tmp_path: MongoDBAtlasVectorStore(
+                uri="mongodb://example",
+                client=FakeMongoClient(),
+                dimension=3,
             ),
         ),
         (
@@ -592,6 +858,64 @@ def test_vector_store_contract_for_local_backends(
 ) -> None:
     _ = provider
     _assert_vector_store_contract(factory(tmp_path))
+
+
+@pytest.mark.skipif(
+    not os.getenv("AMH_TEST_CHROMADB_URL"),
+    reason="AMH_TEST_CHROMADB_URL is not set",
+)
+def test_live_chromadb_http_vector_contract() -> None:
+    _assert_vector_store_contract(
+        ChromaDBVectorStore(
+            url=str(os.environ["AMH_TEST_CHROMADB_URL"]),
+            collection_name=f"memory_vectors_{uuid4().hex}",
+            dimension=3,
+        )
+    )
+
+
+@pytest.mark.skipif(
+    not os.getenv("AMH_TEST_QDRANT_URL"),
+    reason="AMH_TEST_QDRANT_URL is not set",
+)
+def test_live_qdrant_vector_contract() -> None:
+    _assert_vector_store_contract(
+        QdrantVectorStore(
+            url=str(os.environ["AMH_TEST_QDRANT_URL"]),
+            api_key=str(os.getenv("AMH_TEST_QDRANT_API_KEY", "")),
+            collection_name=f"memory_vectors_{uuid4().hex}",
+            dimension=3,
+        )
+    )
+
+
+@pytest.mark.skipif(
+    not os.getenv("AMH_TEST_MONGODB_URI"),
+    reason="AMH_TEST_MONGODB_URI is not set",
+)
+def test_live_mongodb_metadata_contract() -> None:
+    _assert_metadata_store_contract(
+        MongoDBMetadataStore(
+            uri=str(os.environ["AMH_TEST_MONGODB_URI"]),
+            database=f"ai_memory_hub_test_{uuid4().hex}",
+        )
+    )
+
+
+@pytest.mark.skipif(
+    not os.getenv("AMH_TEST_MONGODB_ATLAS_URI"),
+    reason="AMH_TEST_MONGODB_ATLAS_URI is not set",
+)
+def test_live_mongodb_atlas_vector_contract() -> None:
+    _assert_vector_store_contract(
+        MongoDBAtlasVectorStore(
+            uri=str(os.environ["AMH_TEST_MONGODB_ATLAS_URI"]),
+            database=str(os.getenv("AMH_TEST_MONGODB_ATLAS_DATABASE", "ai_memory_hub")),
+            collection_name=str(os.getenv("AMH_TEST_MONGODB_ATLAS_COLLECTION", "memory_vectors")),
+            index_name=str(os.getenv("AMH_TEST_MONGODB_ATLAS_INDEX", "memory_vector_index")),
+            dimension=3,
+        )
+    )
 
 
 def test_build_runtime_fails_fast_on_schema_version(
@@ -827,6 +1151,86 @@ def test_build_runtime_chromadb_fallback_disabled_raises(
                 "providers": {"embeddings": "local", "vector_db": "chromadb"},
                 "paths": {"data_dir": str(tmp_path)},
                 "storage": {"vector": {"allow_fallback": False}},
+            }
+        )
+
+
+@pytest.mark.parametrize(
+    ("provider", "class_name", "secret_message"),
+    [
+        ("qdrant", "QdrantVectorStore", "qdrant unavailable api_key=qdrant-secret"),
+        (
+            "mongodb_atlas",
+            "MongoDBAtlasVectorStore",
+            "mongodb unavailable mongodb://u:atlas-secret@example/app",
+        ),
+    ],
+)
+def test_build_runtime_expansion_vector_fallback_uses_memory_provider(
+    provider: str,
+    class_name: str,
+    secret_message: str,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    class BrokenVectorStore:
+        def __init__(self, **kwargs: Any) -> None:
+            _ = kwargs
+            raise RuntimeError(secret_message)
+
+    monkeypatch.setattr(mvp_ingestion, class_name, BrokenVectorStore)
+    runtime = mvp_ingestion.build_runtime(
+        {
+            "providers": {"embeddings": "local", "vector_db": provider},
+            "paths": {"data_dir": str(tmp_path)},
+            "storage": {
+                "vector": {"allow_fallback": True},
+                "vector_providers": {
+                    "mongodb_atlas": {"uri": "mongodb://u:atlas-secret@example/app"}
+                },
+            },
+        }
+    )
+
+    assert runtime.health_state["mode"] == "degraded"
+    assert runtime.health_state["vector_provider"] == "memory"
+    assert runtime.health_state["requested_vector_provider"] == provider
+    assert runtime.vector_store.expected_dimensionality == runtime.embedding_provider.dimension
+    assert "qdrant-secret" not in " ".join(runtime.health_state["reasons"])
+    assert "atlas-secret" not in " ".join(runtime.health_state["reasons"])
+
+
+@pytest.mark.parametrize(
+    ("provider", "class_name"),
+    [
+        ("qdrant", "QdrantVectorStore"),
+        ("mongodb_atlas", "MongoDBAtlasVectorStore"),
+    ],
+)
+def test_build_runtime_expansion_vector_fallback_disabled_raises(
+    provider: str,
+    class_name: str,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    class BrokenVectorStore:
+        def __init__(self, **kwargs: Any) -> None:
+            _ = kwargs
+            raise RuntimeError(f"{provider} unavailable")
+
+    monkeypatch.setattr(mvp_ingestion, class_name, BrokenVectorStore)
+
+    with pytest.raises(RuntimeError, match=f"{provider} unavailable"):
+        mvp_ingestion.build_runtime(
+            {
+                "providers": {"embeddings": "local", "vector_db": provider},
+                "paths": {"data_dir": str(tmp_path)},
+                "storage": {
+                    "vector": {"allow_fallback": False},
+                    "vector_providers": {
+                        "mongodb_atlas": {"uri": "mongodb://example/app"}
+                    },
+                },
             }
         )
 

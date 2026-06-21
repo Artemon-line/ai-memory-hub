@@ -23,6 +23,7 @@ storage:
       url: http://127.0.0.1:6333
       api_key: ""
       collection: memory_vectors
+      prefer_grpc: false
     milvus:
       uri: http://127.0.0.1:19530
       token: ""
@@ -166,7 +167,46 @@ openai:
 # Install with:
 #   uv sync --extra chromadb
 #
-# 4) Strict production startup (no vector fallback)
+# 4) Qdrant vectors
+#
+# providers:
+#   vector_db: qdrant
+#
+# storage:
+#   vector:
+#     allow_fallback: false
+#     distance: cosine
+#   vector_providers:
+#     qdrant:
+#       url: http://127.0.0.1:6333
+#       api_key: ""
+#       collection: memory_vectors
+#
+# Install with:
+#   uv sync --extra qdrant
+#
+# 5) MongoDB metadata + Atlas Vector Search
+#
+# providers:
+#   metadata_db: mongodb
+#   vector_db: mongodb_atlas
+#
+# storage:
+#   metadata_providers:
+#     mongodb:
+#       uri: mongodb://127.0.0.1:27017
+#       database: ai_memory_hub
+#   vector_providers:
+#     mongodb_atlas:
+#       uri: mongodb+srv://user:password@example.mongodb.net/app
+#       database: ai_memory_hub
+#       collection: memory_vectors
+#       index: memory_vector_index
+#
+# Install with:
+#   uv sync --extra mongodb
+#
+# 6) Strict production startup (no vector fallback)
 #
 # storage:
 #   dry_run: false

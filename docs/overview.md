@@ -336,6 +336,54 @@ storage:
 
 Install the optional dependency with `uv sync --extra chromadb`.
 
+### SQLite + Qdrant
+
+Use Qdrant as a local Docker or Qdrant Cloud vector backend:
+
+```yaml
+providers:
+  metadata_db: sqlite
+  vector_db: qdrant
+
+storage:
+  vector:
+    allow_fallback: false
+    distance: cosine
+  vector_providers:
+    qdrant:
+      url: http://127.0.0.1:6333
+      api_key: ""
+      collection: memory_vectors
+```
+
+Install the optional dependency with `uv sync --extra qdrant`.
+
+### MongoDB Metadata And Atlas Vectors
+
+Use MongoDB for metadata when Mongo already owns application persistence, and
+use MongoDB Atlas Vector Search when Atlas should also own vectors:
+
+```yaml
+providers:
+  metadata_db: mongodb
+  vector_db: mongodb_atlas
+
+storage:
+  metadata_providers:
+    mongodb:
+      uri: mongodb://127.0.0.1:27017
+      database: ai_memory_hub
+      conversations_collection: conversations
+  vector_providers:
+    mongodb_atlas:
+      uri: mongodb+srv://user:password@example.mongodb.net/app
+      database: ai_memory_hub
+      collection: memory_vectors
+      index: memory_vector_index
+```
+
+Install the optional dependency with `uv sync --extra mongodb`.
+
 ### Postgres Metadata
 
 Use Postgres for conversation metadata:
@@ -392,6 +440,20 @@ storage:
     chromadb:
       path: ./data/chromadb
       collection: memory_vectors
+    qdrant:
+      url: http://127.0.0.1:6333
+      api_key: ""
+      collection: memory_vectors
+    mongodb_atlas:
+      uri: ""
+      database: ai_memory_hub
+      collection: memory_vectors
+      index: memory_vector_index
+  metadata_providers:
+    mongodb:
+      uri: ""
+      database: ai_memory_hub
+      conversations_collection: conversations
 
 tokenizer:
   enabled: false

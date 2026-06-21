@@ -724,7 +724,7 @@ class PostgresMetadataStore:
         if not tokens:
             return []
         clauses = ["payload::text ILIKE %s"] * len(tokens)
-        params = [f"%{token}%" for token in tokens]
+        params: list[Any] = [f"%{token}%" for token in tokens]
         if project_id is not None:
             clauses.append("project_id = %s")
             params.append(project_id)

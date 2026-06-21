@@ -105,10 +105,13 @@ class AuthMiddleware(BaseHTTPMiddleware):
             context = await self._agent.authenticate_bearer_token_context(token)
             if context is None:
                 return None
+            scopes = context.get("scopes", [])
+            if not isinstance(scopes, list | tuple | set | frozenset):
+                scopes = []
             return AuthContext(
                 owner_id=str(context["owner_id"]),
                 token_id=str(context["token_id"]) if context.get("token_id") is not None else None,
-                scopes=frozenset(str(scope) for scope in context.get("scopes", [])),
+                scopes=frozenset(str(scope) for scope in scopes),
                 auth_mode="bearer_token",
             )
         claims = validate_oauth_access_token(token, self._config)

@@ -130,6 +130,7 @@ class QdrantVectorConfig(BaseModel):
     url: str = "http://127.0.0.1:6333"
     api_key: str = ""
     collection: str = "memory_vectors"
+    prefer_grpc: bool = False
 
     @field_validator("url")
     @classmethod

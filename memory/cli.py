@@ -5,7 +5,7 @@ import json
 import secrets
 import sys
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, NoReturn, Sequence
 
 import jsonschema
 
@@ -91,7 +91,7 @@ class UsageError(Exception):
 
 
 class CLIArgumentParser(argparse.ArgumentParser):
-    def error(self, message: str) -> None:
+    def error(self, message: str) -> NoReturn:
         raise UsageError(message)
 
 

@@ -116,12 +116,48 @@ def test_storage_provider_expansion_config_models_validate() -> None:
     assert config.storage.metadata_providers.mongodb.database == "ai_memory_hub"
 
 
-def test_provider_config_does_not_advertise_unimplemented_providers() -> None:
-    with pytest.raises(ValueError, match="providers.vector_db must be one of"):
-        parse_config({"providers": {"vector_db": "qdrant"}})
+def test_provider_config_accepts_implemented_expansion_providers() -> None:
+    qdrant_config = parse_config({"providers": {"vector_db": "qdrant"}})
+    atlas_config = parse_config({"providers": {"vector_db": "mongodb_atlas"}})
+    mongodb_config = parse_config({"providers": {"metadata_db": "mongodb"}})
 
-    with pytest.raises(ValueError, match="providers.metadata_db must be one of"):
-        parse_config({"providers": {"metadata_db": "mongodb"}})
+    assert qdrant_config.providers.vector_db == "qdrant"
+    assert atlas_config.providers.vector_db == "mongodb_atlas"
+    assert mongodb_config.providers.metadata_db == "mongodb"
+
+
+def test_storage_provider_configs_override_qdrant_and_atlas_defaults() -> None:
+    config = parse_config(
+        {
+            "storage": {
+                "vector_providers": {
+                    "qdrant": {
+                        "url": "https://qdrant.example.com",
+                        "api_key": "qdrant-key",
+                        "collection": "custom_qdrant_vectors",
+                        "prefer_grpc": True,
+                    },
+                    "mongodb_atlas": {
+                        "uri": "mongodb+srv://user:secret@example.mongodb.net/app",
+                        "database": "custom_memory",
+                        "collection": "custom_atlas_vectors",
+                        "index": "custom_vector_index",
+                    },
+                }
+            }
+        }
+    )
+
+    assert config.storage.vector_providers.qdrant.url == "https://qdrant.example.com"
+    assert config.storage.vector_providers.qdrant.api_key == "qdrant-key"
+    assert config.storage.vector_providers.qdrant.collection == "custom_qdrant_vectors"
+    assert config.storage.vector_providers.qdrant.prefer_grpc is True
+    assert config.storage.vector_providers.mongodb_atlas.uri == (
+        "mongodb+srv://user:secret@example.mongodb.net/app"
+    )
+    assert config.storage.vector_providers.mongodb_atlas.database == "custom_memory"
+    assert config.storage.vector_providers.mongodb_atlas.collection == "custom_atlas_vectors"
+    assert config.storage.vector_providers.mongodb_atlas.index == "custom_vector_index"
 
 
 def test_storage_provider_config_rejects_invalid_urls_and_names() -> None:

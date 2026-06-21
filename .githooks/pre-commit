@@ -15,6 +15,9 @@ MD_FILES=$(printf "%s\n" "$STAGED_FILES" | grep -E '\.md$' || true)
 if [ -n "$PY_FILES" ]; then
   echo "[pre-commit] Linting Python files with ruff..."
   printf "%s\n" "$PY_FILES" | xargs uvx ruff check
+
+  echo "[pre-commit] Type-checking Python files with pyright..."
+  uv run python -m pyright
 fi
 
 if [ -n "$YAML_FILES" ]; then

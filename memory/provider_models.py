@@ -13,6 +13,8 @@ class VectorProviderName(StrEnum):
     PGVECTOR = "pgvector"
     MEMORY = "memory"
     CHROMADB = "chromadb"
+    QDRANT = "qdrant"
+    MONGODB_ATLAS = "mongodb_atlas"
 
 
 class VectorProviderAlias(StrEnum):
@@ -22,6 +24,7 @@ class VectorProviderAlias(StrEnum):
 class MetadataProviderName(StrEnum):
     SQLITE = "sqlite"
     POSTGRES = "postgres"
+    MONGODB = "mongodb"
 
 
 class ProviderConfigSection(StrEnum):
@@ -83,3 +86,15 @@ class ChromaQueryKey(StrEnum):
 class ChromaClientMode(StrEnum):
     HTTP = "http"
     PERSISTENT = "persistent"
+
+
+class QdrantDistanceName(StrEnum):
+    COSINE = "Cosine"
+    L2 = "Euclid"
+    INNER_PRODUCT = "Dot"
+
+
+class MongoCollectionName(StrEnum):
+    CONVERSATIONS = "conversations"
+    FACTS = "facts"
+    GENERATED_SUMMARIES = "generated_summaries"

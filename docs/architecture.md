@@ -24,8 +24,8 @@ Implemented and verified in the codebase:
 - Deterministic ingestion with message hashes, conversation hashes, duplicate detection, same-thread append handling, append-only chunking, and indexing state updates.
 - Message-level chunking by default, plus opt-in token-window chunking for long messages.
 - Embedding providers: OpenAI and local deterministic embeddings.
-- Metadata stores: SQLite and Postgres.
-- Vector stores: LanceDB, ChromaDB, PGVector, and in-memory.
+- Metadata stores: SQLite, Postgres, and MongoDB.
+- Vector stores: LanceDB, ChromaDB, Qdrant, PGVector, MongoDB Atlas Vector Search, and in-memory.
 - Provider capabilities, schema-version checks, vector dimensionality checks, fallback policy, degraded health state, and dry-run wrappers.
 - Search result grouping by conversation score.
 - `memory_ask` returns structured `results`, human-readable `answer`, and `citations`.
@@ -95,8 +95,8 @@ Default providers:
 
 Supported providers:
 
-- Metadata: SQLite, Postgres
-- Vectors: LanceDB, ChromaDB, PGVector, in-memory
+- Metadata: SQLite, Postgres, MongoDB
+- Vectors: LanceDB, ChromaDB, Qdrant, PGVector, MongoDB Atlas Vector Search, in-memory
 
 Implemented storage safety:
 
@@ -180,8 +180,8 @@ Bring Your Own Stack means embedding and storage providers are selected through 
        v
 [Configured Providers]
   Embeddings: openai | local
-  Metadata: sqlite | postgres
-  Vectors: lancedb | chromadb | pgvector | memory
+  Metadata: sqlite | postgres | mongodb
+  Vectors: lancedb | chromadb | qdrant | pgvector | mongodb_atlas | memory
        |
        v
 [Consumers]
@@ -212,6 +212,19 @@ storage:
       collection: memory_vectors
       # Optional HTTP mode:
       # url: http://127.0.0.1:8000
+    qdrant:
+      url: http://127.0.0.1:6333
+      collection: memory_vectors
+    mongodb_atlas:
+      uri: ""
+      database: ai_memory_hub
+      collection: memory_vectors
+      index: memory_vector_index
+  metadata_providers:
+    mongodb:
+      uri: ""
+      database: ai_memory_hub
+      conversations_collection: conversations
 
 interfaces:
   mcp: true

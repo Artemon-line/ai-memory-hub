@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -90,12 +91,20 @@ class ThreadMetadata(BaseModel):
         return update
 
 
-def thread_metadata_from_mapping(metadata: dict[str, object]) -> ThreadMetadata:
-    return ThreadMetadata(
-        thread_id=metadata.get(ThreadMetadataKey.THREAD_ID),
-        upstream_thread_id=metadata.get(ThreadMetadataKey.UPSTREAM_THREAD_ID),
-        parent_conversation_id=metadata.get(ThreadMetadataKey.PARENT_CONVERSATION_ID),
-        related_conversation_ids=metadata.get(ThreadMetadataKey.RELATED_CONVERSATION_IDS),
+def thread_metadata_from_mapping(metadata: dict[str, Any]) -> ThreadMetadata:
+    return ThreadMetadata.model_validate(
+        {
+            ThreadMetadataKey.THREAD_ID: metadata.get(ThreadMetadataKey.THREAD_ID),
+            ThreadMetadataKey.UPSTREAM_THREAD_ID: metadata.get(
+                ThreadMetadataKey.UPSTREAM_THREAD_ID
+            ),
+            ThreadMetadataKey.PARENT_CONVERSATION_ID: metadata.get(
+                ThreadMetadataKey.PARENT_CONVERSATION_ID
+            ),
+            ThreadMetadataKey.RELATED_CONVERSATION_IDS: metadata.get(
+                ThreadMetadataKey.RELATED_CONVERSATION_IDS
+            ),
+        }
     )
 
 

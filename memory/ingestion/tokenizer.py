@@ -105,7 +105,7 @@ def tokenizer_diagnostics(encoding: str) -> dict[str, Any]:
 def _get_encoding(encoding: str) -> Any | None:
     global _warned_fallback
     try:
-        import tiktoken
+        import tiktoken  # type: ignore[reportMissingImports]
 
         return tiktoken.get_encoding(encoding)
     except Exception as exc:

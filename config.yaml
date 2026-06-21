@@ -18,10 +18,24 @@ storage:
       host: 127.0.0.1
       port: 8000
       collection: memory_vectors
+    qdrant:
+      url: http://127.0.0.1:6333
+      api_key: ""
+      collection: memory_vectors
+      prefer_grpc: false
+    mongodb_atlas:
+      uri: ""
+      database: ai_memory_hub
+      collection: memory_vectors
+      index: memory_vector_index
   metadata_providers:
     mongodb:
       uri: ""
       database: ai_memory_hub
+      conversations_collection: conversations
+      facts_collection: facts
+      generated_summaries_collection: generated_summaries
+      schema_collection: schema_versions
 
 tokenizer:
   enabled: false

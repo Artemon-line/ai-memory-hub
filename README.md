@@ -60,10 +60,13 @@ Storage guidance:
 
 - Use SQLite + LanceDB for the fastest single-machine development setup.
 - Use SQLite + ChromaDB when you want a local-first vector backend with an optional HTTP client mode.
+- Use SQLite + Qdrant when you want a local Docker or Qdrant Cloud vector backend.
 - Use Postgres metadata when multiple clients/users or long-running containers
   need one shared database.
 - Use Postgres + PGVector when you want one database to store both conversation
   metadata and vector indexes.
+- Use MongoDB metadata or MongoDB Atlas Vector Search when MongoDB already owns
+  the application's persistence layer.
 - Use in-memory vectors only for tests, demos, and disposable container smoke
   runs.
 
@@ -172,7 +175,7 @@ uv run python -m mkdocs build --strict
 
 The project currently includes deterministic ingestion, MCP tools/resources/prompts,
 HTTP endpoints, CLI commands, fact-backed answers, SQLite/Postgres metadata,
-LanceDB/ChromaDB/PGVector/in-memory vectors, token-budgeted ask, container CI, and GitHub
+LanceDB/ChromaDB/Qdrant/PGVector/MongoDB Atlas/in-memory vectors, token-budgeted ask, container CI, and GitHub
 Pages docs publishing.
 
 Planned work includes broader importers, richer summaries, deletion/update
@@ -185,6 +188,7 @@ and run the relevant checks before opening a pull request.
 
 ```bash
 uv run python -m ruff check memory tests tools
+uv run python -m pyright
 uv run pytest
 ```
 

@@ -495,11 +495,11 @@ Provider expansion sequence:
 - [x] Add shared metadata-store contract tests.
 - [x] Add shared vector-store contract tests.
 - [x] Add fake SDK/client fixtures for unit tests.
-- [ ] Add live integration tests gated by provider-specific environment variables.
+- [x] Add live integration tests gated by provider-specific environment variables.
 - [x] Add fallback and secret-redaction tests for ChromaDB.
 - [x] Implement ChromaDB vector adapter first.
-- [ ] Implement Qdrant vector adapter second.
-- [ ] Implement MongoDB metadata, then MongoDB Atlas Vector Search.
+- [x] Implement Qdrant vector adapter second.
+- [x] Implement MongoDB metadata, then MongoDB Atlas Vector Search.
 - [x] Update architecture docs and config examples after ChromaDB landed.
 
 ## P3: Later Storage Providers

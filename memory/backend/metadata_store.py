@@ -803,7 +803,7 @@ class SQLiteMetadataStore:
         if not tokens:
             return []
         clauses = ["lower(payload) LIKE ?"] * len(tokens)
-        params = [f"%{token}%" for token in tokens]
+        params: list[Any] = [f"%{token}%" for token in tokens]
         if project_id is not None:
             clauses.append("project_id = ?")
             params.append(project_id)
