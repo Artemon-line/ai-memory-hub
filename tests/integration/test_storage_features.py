@@ -704,6 +704,7 @@ class FakeMilvusClient:
     def __init__(self) -> None:
         self.rows: dict[str, dict[str, Any]] = {}
         self.collections: dict[str, dict[str, Any]] = {}
+        self.flushes: list[str] = []
 
     def has_collection(self, *, collection_name: str) -> bool:
         return collection_name in self.collections
@@ -771,6 +772,9 @@ class FakeMilvusClient:
             for row_id, row in self.rows.items()
             if row["memory_id"] not in ids
         }
+
+    def flush(self, *, collection_name: str) -> None:
+        self.flushes.append(collection_name)
 
     def get_collection_stats(self, *, collection_name: str) -> dict[str, int]:
         _ = collection_name
@@ -1151,10 +1155,25 @@ def test_vector_store_contract_for_local_backends(
 def test_milvus_uses_string_primary_key_for_stable_point_ids() -> None:
     client = FakeMilvusClient()
 
-    MilvusVectorStore(client=client, dimension=3)
+    store = MilvusVectorStore(client=client, dimension=3)
 
     assert client.collections["memory_vectors"]["id_type"] == "string"
     assert client.collections["memory_vectors"]["max_length"] == 64
+    store.insert(
+        "memory-a",
+        [
+            {
+                "chunk_id": "memory-a:0",
+                "chunk_index": 0,
+                "message_hash": "sha256:" + ("a" * 64),
+                "role": "user",
+                "text": "alpha memory",
+                "vector": [1.0, 0.0, 0.0],
+            }
+        ],
+    )
+    store.delete(["memory-a"])
+    assert client.flushes == ["memory_vectors", "memory_vectors"]
 
 
 def test_elasticsearch_create_index_when_exists_probe_returns_bad_request() -> None:

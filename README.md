@@ -4,6 +4,15 @@
 [![Python 3.14+](https://img.shields.io/badge/python-3.14%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+Provider live checks:
+[![ChromaDB](https://img.shields.io/github/actions/workflow/status/Artemon-line/ai-memory-hub/storage-providers.yml?branch=main&event=push&label=ChromaDB&logo=chroma)](https://github.com/Artemon-line/ai-memory-hub/actions/workflows/storage-providers.yml)
+[![Qdrant](https://img.shields.io/github/actions/workflow/status/Artemon-line/ai-memory-hub/storage-providers.yml?branch=main&event=push&label=Qdrant&logo=qdrant)](https://github.com/Artemon-line/ai-memory-hub/actions/workflows/storage-providers.yml)
+[![MongoDB](https://img.shields.io/github/actions/workflow/status/Artemon-line/ai-memory-hub/storage-providers.yml?branch=main&event=push&label=MongoDB&logo=mongodb)](https://github.com/Artemon-line/ai-memory-hub/actions/workflows/storage-providers.yml)
+[![Weaviate](https://img.shields.io/github/actions/workflow/status/Artemon-line/ai-memory-hub/storage-providers.yml?branch=main&event=push&label=Weaviate&logo=weaviate)](https://github.com/Artemon-line/ai-memory-hub/actions/workflows/storage-providers.yml)
+[![Elasticsearch](https://img.shields.io/github/actions/workflow/status/Artemon-line/ai-memory-hub/storage-providers.yml?branch=main&event=push&label=Elasticsearch&logo=elasticsearch)](https://github.com/Artemon-line/ai-memory-hub/actions/workflows/storage-providers.yml)
+[![OpenSearch](https://img.shields.io/github/actions/workflow/status/Artemon-line/ai-memory-hub/storage-providers.yml?branch=main&event=push&label=OpenSearch&logo=opensearch)](https://github.com/Artemon-line/ai-memory-hub/actions/workflows/storage-providers.yml)
+[![Milvus](https://img.shields.io/github/actions/workflow/status/Artemon-line/ai-memory-hub/storage-providers.yml?branch=main&event=push&label=Milvus&logo=milvus)](https://github.com/Artemon-line/ai-memory-hub/actions/workflows/storage-providers.yml)
+
 Local-first memory for AI agents.
 
 `ai-memory-hub` gives Codex, opencode, Claude, Copilot, and other agent clients a

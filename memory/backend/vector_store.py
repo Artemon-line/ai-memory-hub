@@ -469,6 +469,7 @@ class MilvusVectorStore:
             )
         if rows:
             self._client.upsert(collection_name=self.collection_name, data=rows)
+            self._flush_collection()
 
     def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
         _validate_vector_length(
@@ -491,6 +492,7 @@ class MilvusVectorStore:
             collection_name=self.collection_name,
             filter=f"{VectorPayloadKey.MEMORY_ID.value} in [{quoted}]",
         )
+        self._flush_collection()
 
     def get_stats(self) -> dict[str, Any]:
         rows = None
@@ -555,6 +557,11 @@ class MilvusVectorStore:
             max_length=64,
             auto_id=False,
         )
+
+    def _flush_collection(self) -> None:
+        flush = getattr(self._client, "flush", None)
+        if flush is not None:
+            flush(collection_name=self.collection_name)
 
     def _normalize_search_result(self, result: Any) -> list[dict[str, Any]]:
         hits = _first_query_batch(result)
