@@ -38,6 +38,11 @@ body:json {
   }
 }
 
+assert {
+  res.status: 200
+  res.body.status: "ok"
+}
+
 tests {
   test("owner a private insert succeeds", function() {
     expect(res.status).to.equal(200);

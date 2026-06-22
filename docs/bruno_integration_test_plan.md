@@ -220,6 +220,9 @@ portable for local users.
   check and job summary.
 - [x] The collection proves API insert/search/ask and MCP initialize/tools/list/tool
   calls against a live server.
+- [x] Requests use Bruno `assert` blocks for stable status and simple
+  response-body checks, with scripts kept for cross-request state and richer
+  API/MCP payload assertions.
 - [x] The collection uses unique run data and can be run repeatedly without manual
   cleanup.
 - [x] No bearer tokens, API keys, DSNs with credentials, conversations, or

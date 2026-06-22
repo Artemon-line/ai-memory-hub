@@ -41,6 +41,11 @@ body:json {
   }
 }
 
+assert {
+  res.status: 200
+  res.body.status: "ok"
+}
+
 tests {
   test("api filter target insert succeeds", function() {
     expect(res.status).to.equal(200);

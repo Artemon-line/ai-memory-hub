@@ -14,6 +14,11 @@ get {
   auth: none
 }
 
+assert {
+  res.status: 200
+  res.body.status: "ok"
+}
+
 tests {
   test("ready returns ok", function() {
     expect(res.status).to.equal(200);

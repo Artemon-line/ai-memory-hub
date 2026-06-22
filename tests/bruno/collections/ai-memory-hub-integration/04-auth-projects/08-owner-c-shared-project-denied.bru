@@ -29,6 +29,11 @@ body:json {
   }
 }
 
+assert {
+  res.status: 403
+  res.body.detail: "project access denied"
+}
+
 tests {
   test("owner c is denied shared project access", function() {
     expect(res.status).to.equal(403);

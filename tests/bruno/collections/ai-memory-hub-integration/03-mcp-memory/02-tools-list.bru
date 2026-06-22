@@ -29,6 +29,10 @@ body:json {
   }
 }
 
+assert {
+  res.status: 200
+}
+
 tests {
   const { eventPayload } = require("./scripts/mcp.js");
 

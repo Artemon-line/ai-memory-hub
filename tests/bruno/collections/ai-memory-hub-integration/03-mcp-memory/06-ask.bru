@@ -37,6 +37,10 @@ body:json {
   }
 }
 
+assert {
+  res.status: 200
+}
+
 tests {
   const { toolPayload } = require("./scripts/mcp.js");
 

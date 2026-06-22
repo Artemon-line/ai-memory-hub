@@ -36,6 +36,10 @@ body:json {
   }
 }
 
+assert {
+  res.status: 401
+}
+
 tests {
   const { responseHeader } = require("./scripts/mcp.js");
 

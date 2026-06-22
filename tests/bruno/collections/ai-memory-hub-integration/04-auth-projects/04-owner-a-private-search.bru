@@ -28,6 +28,11 @@ body:json {
   }
 }
 
+assert {
+  res.status: 200
+  res.body.status: "ok"
+}
+
 tests {
   test("owner a sees private memory", function() {
     expect(res.status).to.equal(200);
