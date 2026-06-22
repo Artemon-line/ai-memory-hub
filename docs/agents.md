@@ -288,8 +288,9 @@ summary is stored separately from raw messages, chunks, and normalized facts.
 Agents should not branch behavior based on the active storage backend. The configured providers
 are selected at startup:
 
-- Metadata: `sqlite` or `postgres`
-- Vectors: `lancedb`, `pgvector`, or `memory`
+- Metadata: `sqlite`, `postgres`, or `mongodb`
+- Vectors: `lancedb`, `chromadb`, `qdrant`, `milvus`, `weaviate`,
+  `pgvector`, `mongodb_atlas`, `elasticsearch`, `opensearch`, or `memory`
 - Embeddings: `openai` or `local`
 
 Agents can inspect `memory://health` or API health behavior when available, but storage provider

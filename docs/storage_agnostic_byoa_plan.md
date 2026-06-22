@@ -371,7 +371,8 @@ storage:
       vector_index: memory_vector_index
     elasticsearch:
       url: http://127.0.0.1:9200
-      api_key: ""
+      username: ""
+      password: ""
       index: memory_vectors
     opensearch:
       url: http://127.0.0.1:9200
@@ -387,24 +388,25 @@ storage:
 
 - [x] Validate provider-specific config at startup.
 - [x] Redact provider URLs, API keys, tokens, usernames, passwords, and connection strings.
-- [ ] Document environment variable names for live tests:
+- [x] Document environment variable names for live tests:
   - [x] `AMH_TEST_CHROMADB_URL`
   - [x] `AMH_TEST_QDRANT_URL`
   - [x] `AMH_TEST_QDRANT_API_KEY`
-  - [ ] `AMH_TEST_MILVUS_URI`
-  - [ ] `AMH_TEST_MILVUS_TOKEN`
-  - [ ] `AMH_TEST_WEAVIATE_URL`
-  - [ ] `AMH_TEST_WEAVIATE_API_KEY`
+  - [x] `AMH_TEST_MILVUS_URI`
+  - [x] `AMH_TEST_MILVUS_TOKEN`
+  - [x] `AMH_TEST_WEAVIATE_URL`
+  - [x] `AMH_TEST_WEAVIATE_API_KEY`
   - [x] `AMH_TEST_MONGODB_URI`
   - [x] `AMH_TEST_MONGODB_ATLAS_URI`
   - [x] `AMH_TEST_MONGODB_ATLAS_DATABASE`
   - [x] `AMH_TEST_MONGODB_ATLAS_COLLECTION`
   - [x] `AMH_TEST_MONGODB_ATLAS_INDEX`
-  - [ ] `AMH_TEST_ELASTICSEARCH_URL`
-  - [ ] `AMH_TEST_ELASTICSEARCH_API_KEY`
-  - [ ] `AMH_TEST_OPENSEARCH_URL`
-  - [ ] `AMH_TEST_OPENSEARCH_USERNAME`
-  - [ ] `AMH_TEST_OPENSEARCH_PASSWORD`
+  - [x] `AMH_TEST_ELASTICSEARCH_URL`
+  - [x] `AMH_TEST_ELASTICSEARCH_USERNAME`
+  - [x] `AMH_TEST_ELASTICSEARCH_PASSWORD`
+  - [x] `AMH_TEST_OPENSEARCH_URL`
+  - [x] `AMH_TEST_OPENSEARCH_USERNAME`
+  - [x] `AMH_TEST_OPENSEARCH_PASSWORD`
 
 ### Phase 6b: Shared Provider Contract Tests
 
@@ -558,38 +560,38 @@ Atlas Vector Search adapter:
 
 ### Phase 6f: Elasticsearch And OpenSearch Vector Adapters
 
-Status: `NOT IMPLEMENTED`
+Status: `IMPLEMENTED`
 
 Target: vector search for users already running Elastic/OpenSearch, with a path toward hybrid retrieval.
 
 Shared adapter requirements:
 
-- [ ] Add dependency strategy:
+- [x] Add dependency strategy:
   - [x] optional extra: `elasticsearch`
   - [x] optional extra: `opensearch-py`
-  - [ ] deterministic import error when package is missing
+  - [x] deterministic import error when package is missing
 - [x] Add `ElasticsearchVectorStore`.
 - [x] Add `OpenSearchVectorStore`.
-- [ ] Support URL plus API key or username/password auth.
-- [ ] Create index when missing.
+- [x] Support URL plus username/password auth.
+- [x] Create index when missing.
 - [ ] Store mapping metadata:
   - [ ] schema version
   - [ ] dense-vector field dimensions
   - [ ] similarity/distance mode
 - [ ] Validate existing mapping at startup.
-- [ ] Store chunk payload fields as document fields.
-- [ ] Use stable document IDs derived from `chunk_id`.
-- [ ] Implement replace by deleting documents filtered by `memory_id`.
+- [x] Store chunk payload fields as document fields.
+- [x] Use stable document IDs derived from `chunk_id`.
+- [x] Implement replace by deleting documents filtered by `memory_id`.
 - [ ] Implement vector search:
   - [x] Elasticsearch `knn` path
   - [x] OpenSearch k-NN query path
-- [ ] Normalize provider scores/distances into current `score` field.
+- [x] Normalize provider scores/distances into current `score` field.
 - [ ] Explicitly document refresh/read-after-write behavior.
-- [ ] Implement `get_stats()` and `health()`.
-- [ ] Tests:
-  - [ ] fake-client contract tests for both providers
-  - [ ] optional live smoke for Elasticsearch
-  - [ ] optional live smoke for OpenSearch
+- [x] Implement `get_stats()` and `health()`.
+- [x] Tests:
+  - [x] fake-client contract tests for both providers
+  - [x] optional live smoke for Elasticsearch
+  - [x] optional live smoke for OpenSearch
   - [ ] mapping mismatch startup failures
   - [ ] auth redaction checks
   - [ ] fallback behavior tests
@@ -601,17 +603,17 @@ Hybrid-search follow-up:
 
 ### Phase 6g: Milvus/Zilliz Vector Adapter
 
-Status: `NOT IMPLEMENTED`
+Status: `IMPLEMENTED`
 
 Target: larger vector deployments via self-hosted Milvus or managed Zilliz.
 
-- [ ] Add dependency strategy:
+- [x] Add dependency strategy:
   - [x] optional extra: `pymilvus`
-  - [ ] deterministic import error when package is missing
+  - [x] deterministic import error when package is missing
 - [x] Add `MilvusVectorStore`.
-- [ ] Support URI and token configuration.
+- [x] Support URI and token configuration.
 - [x] Map hub distance config to Milvus metric type.
-- [ ] Create collection when missing.
+- [x] Create collection when missing.
 - [ ] Define collection schema:
   - [ ] primary key
   - [ ] `memory_id`
@@ -624,14 +626,14 @@ Target: larger vector deployments via self-hosted Milvus or managed Zilliz.
 - [ ] Validate existing collection schema/dimension/metric at startup.
 - [ ] Create or validate vector index.
 - [ ] Ensure collection load/readiness before search.
-- [ ] Implement insert/upsert behavior.
-- [ ] Implement replace by deleting rows filtered by `memory_id`.
-- [ ] Implement search result normalization.
-- [ ] Implement delete by `memory_id`.
-- [ ] Implement `get_stats()` and `health()`.
-- [ ] Tests:
-  - [ ] fake-client contract tests
-  - [ ] optional Milvus/Zilliz live smoke when `AMH_TEST_MILVUS_URI` is set
+- [x] Implement insert/upsert behavior.
+- [x] Implement replace by deleting rows filtered by `memory_id`.
+- [x] Implement search result normalization.
+- [x] Implement delete by `memory_id`.
+- [x] Implement `get_stats()` and `health()`.
+- [x] Tests:
+  - [x] fake-client contract tests
+  - [x] optional Milvus/Zilliz live smoke when `AMH_TEST_MILVUS_URI` is set
   - [ ] collection not-loaded readiness tests
   - [ ] metric/dimension mismatch startup failures
   - [ ] token redaction checks
@@ -639,32 +641,32 @@ Target: larger vector deployments via self-hosted Milvus or managed Zilliz.
 
 ### Phase 6h: Weaviate Vector Adapter
 
-Status: `NOT IMPLEMENTED`
+Status: `IMPLEMENTED`
 
 Target: schema-rich vector deployments with self-hosted or cloud Weaviate.
 
-- [ ] Add dependency strategy:
+- [x] Add dependency strategy:
   - [x] optional extra: `weaviate-client`
-  - [ ] deterministic import error when package is missing
+  - [x] deterministic import error when package is missing
 - [x] Add `WeaviateVectorStore`.
-- [ ] Support URL and API key configuration.
-- [ ] Use externally supplied vectors from the hub embedding provider.
-- [ ] Disable or avoid provider-side vectorization for stored chunks unless explicitly configured later.
-- [ ] Create class/collection when missing.
+- [x] Support URL and API key configuration.
+- [x] Use externally supplied vectors from the hub embedding provider.
+- [x] Disable or avoid provider-side vectorization for stored chunks unless explicitly configured later.
+- [x] Create class/collection when missing.
 - [ ] Validate existing class schema:
   - [ ] vector dimensions where available
   - [ ] distance metric
   - [ ] required properties
   - [ ] schema version marker
-- [ ] Store chunk payload properties.
-- [ ] Use stable object UUIDs derived from `chunk_id`.
-- [ ] Implement replace by deleting objects filtered by `memory_id`.
-- [ ] Implement near-vector search.
+- [x] Store chunk payload properties.
+- [x] Use stable object UUIDs derived from `chunk_id`.
+- [x] Implement replace by deleting objects filtered by `memory_id`.
+- [x] Implement near-vector search.
 - [x] Normalize Weaviate distances/scores into current `score` field.
-- [ ] Implement delete, stats, and health.
-- [ ] Tests:
-  - [ ] fake-client contract tests
-  - [ ] optional live smoke when `AMH_TEST_WEAVIATE_URL` is set
+- [x] Implement delete, stats, and health.
+- [x] Tests:
+  - [x] fake-client contract tests
+  - [x] optional live smoke when `AMH_TEST_WEAVIATE_URL` is set
   - [ ] schema mismatch startup failures
   - [ ] API key/header redaction checks
   - [ ] fallback behavior tests
@@ -677,9 +679,10 @@ Status: `PARTIAL`
 - [x] Add config examples for ChromaDB.
 - [x] Add config examples for Qdrant.
 - [x] Add config examples for MongoDB metadata and MongoDB Atlas Vector Search.
-- [ ] Add local Docker Compose snippets for:
-  - [ ] Qdrant
-  - [ ] ChromaDB HTTP server
+- [x] Add local Docker Compose snippets for:
+  - [x] Qdrant
+  - [x] ChromaDB HTTP server
+  - [x] MongoDB
   - [x] Milvus
   - [x] Weaviate
   - [x] Elasticsearch

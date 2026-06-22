@@ -1,0 +1,384 @@
+name: storage-providers
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/storage-providers.yml"
+      - "examples/storage-providers/**"
+      - "examples/postgres/pgvector/**"
+      - "memory/backend/**"
+      - "memory/config.py"
+      - "memory/ingestion/mvp_ingestion.py"
+      - "memory/provider_models.py"
+      - "tests/integration/test_storage_features.py"
+      - "pyproject.toml"
+      - "uv.lock"
+  schedule:
+    - cron: "17 4 * * 2"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: write
+  issues: read
+
+jobs:
+  provider-contracts:
+    name: Provider Contract Matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Install all provider dependencies
+        run: uv sync --dev --all-extras
+
+      - name: Run provider contract checks
+        env:
+          PYTHONHASHSEED: "0"
+        run: |
+          mkdir -p reports/junit
+          uv run pytest -q \
+            tests/unit/test_config.py \
+            tests/unit/test_container_definition.py \
+            tests/integration/test_storage_features.py \
+            -k "vector_store_contract_for_local_backends or \
+                provider_config_accepts_implemented_expansion_providers or \
+                storage_provider_configs_override_expansion_defaults or \
+                build_runtime_expansion_vector_fallback" \
+            --junitxml=reports/junit/pytest-provider-contracts.xml
+
+      - name: Publish provider contract test results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always() && hashFiles('reports/junit/*.xml') != ''
+        with:
+          files: reports/junit/*.xml
+          check_name: Storage Provider Contract Results
+          comment_mode: off
+
+      - name: Upload provider contract reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pytest-provider-contract-report
+          path: reports/junit/*.xml
+          if-no-files-found: warn
+
+  chromadb:
+    name: ChromaDB Live Storage
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      chromadb:
+        image: chromadb/chroma:latest
+        ports:
+          - 8001:8000
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      - run: uv sync --dev --extra chromadb
+      - name: Wait for ChromaDB
+        run: |
+          for i in {1..60}; do
+            curl -fsS http://127.0.0.1:8001/api/v1/heartbeat && exit 0
+            curl -fsS http://127.0.0.1:8001/api/v2/heartbeat && exit 0
+            sleep 2
+          done
+          exit 1
+      - name: Run ChromaDB live test
+        env:
+          PYTHONHASHSEED: "0"
+          AMH_TEST_CHROMADB_URL: http://127.0.0.1:8001
+        run: |
+          mkdir -p reports/junit
+          uv run pytest -q tests/integration/test_storage_features.py \
+            -k live_chromadb_http_vector_contract \
+            --junitxml=reports/junit/pytest-chromadb-live.xml
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: pytest-chromadb-live-report
+          path: reports/junit/*.xml
+          if-no-files-found: warn
+
+  qdrant:
+    name: Qdrant Live Storage
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      qdrant:
+        image: qdrant/qdrant:v1.12.1
+        ports:
+          - 6333:6333
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      - run: uv sync --dev --extra qdrant
+      - name: Wait for Qdrant
+        run: |
+          for i in {1..60}; do
+            curl -fsS http://127.0.0.1:6333/readyz && exit 0
+            sleep 2
+          done
+          exit 1
+      - name: Run Qdrant live test
+        env:
+          PYTHONHASHSEED: "0"
+          AMH_TEST_QDRANT_URL: http://127.0.0.1:6333
+        run: |
+          mkdir -p reports/junit
+          uv run pytest -q tests/integration/test_storage_features.py \
+            -k live_qdrant_vector_contract \
+            --junitxml=reports/junit/pytest-qdrant-live.xml
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: pytest-qdrant-live-report
+          path: reports/junit/*.xml
+          if-no-files-found: warn
+
+  mongodb:
+    name: MongoDB Live Metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      - run: uv sync --dev --extra mongodb
+      - name: Run MongoDB live test
+        env:
+          PYTHONHASHSEED: "0"
+          AMH_TEST_MONGODB_URI: mongodb://127.0.0.1:27017
+        run: |
+          mkdir -p reports/junit
+          uv run pytest -q tests/integration/test_storage_features.py \
+            -k live_mongodb_metadata_contract \
+            --junitxml=reports/junit/pytest-mongodb-live.xml
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: pytest-mongodb-live-report
+          path: reports/junit/*.xml
+          if-no-files-found: warn
+
+  weaviate:
+    name: Weaviate Live Storage
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      weaviate:
+        image: semitechnologies/weaviate:1.26.7
+        env:
+          QUERY_DEFAULTS_LIMIT: "25"
+          AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
+          PERSISTENCE_DATA_PATH: /var/lib/weaviate
+          DEFAULT_VECTORIZER_MODULE: none
+          CLUSTER_HOSTNAME: node1
+        ports:
+          - 8080:8080
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      - run: uv sync --dev --extra weaviate
+      - name: Wait for Weaviate
+        run: |
+          for i in {1..60}; do
+            curl -fsS http://127.0.0.1:8080/v1/.well-known/ready && exit 0
+            sleep 2
+          done
+          exit 1
+      - name: Run Weaviate live test
+        env:
+          PYTHONHASHSEED: "0"
+          AMH_TEST_WEAVIATE_URL: http://127.0.0.1:8080
+        run: |
+          mkdir -p reports/junit
+          uv run pytest -q tests/integration/test_storage_features.py \
+            -k live_weaviate_vector_contract \
+            --junitxml=reports/junit/pytest-weaviate-live.xml
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: pytest-weaviate-live-report
+          path: reports/junit/*.xml
+          if-no-files-found: warn
+
+  elasticsearch:
+    name: Elasticsearch Live Storage
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      elasticsearch:
+        image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+        env:
+          discovery.type: single-node
+          xpack.security.enabled: "false"
+          ES_JAVA_OPTS: -Xms512m -Xmx512m
+        ports:
+          - 9200:9200
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      - run: uv sync --dev --extra elasticsearch
+      - name: Wait for Elasticsearch
+        run: |
+          for i in {1..90}; do
+            curl -fsS http://127.0.0.1:9200/_cluster/health && exit 0
+            sleep 2
+          done
+          exit 1
+      - name: Run Elasticsearch live test
+        env:
+          PYTHONHASHSEED: "0"
+          AMH_TEST_ELASTICSEARCH_URL: http://127.0.0.1:9200
+        run: |
+          mkdir -p reports/junit
+          uv run pytest -q tests/integration/test_storage_features.py \
+            -k live_elasticsearch_vector_contract \
+            --junitxml=reports/junit/pytest-elasticsearch-live.xml
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: pytest-elasticsearch-live-report
+          path: reports/junit/*.xml
+          if-no-files-found: warn
+
+  opensearch:
+    name: OpenSearch Live Storage
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      opensearch:
+        image: opensearchproject/opensearch:2.17.1
+        env:
+          discovery.type: single-node
+          DISABLE_SECURITY_PLUGIN: "true"
+          OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
+        ports:
+          - 9201:9200
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      - run: uv sync --dev --extra opensearch
+      - name: Wait for OpenSearch
+        run: |
+          for i in {1..90}; do
+            curl -fsS http://127.0.0.1:9201/_cluster/health && exit 0
+            sleep 2
+          done
+          exit 1
+      - name: Run OpenSearch live test
+        env:
+          PYTHONHASHSEED: "0"
+          AMH_TEST_OPENSEARCH_URL: http://127.0.0.1:9201
+        run: |
+          mkdir -p reports/junit
+          uv run pytest -q tests/integration/test_storage_features.py \
+            -k live_opensearch_vector_contract \
+            --junitxml=reports/junit/pytest-opensearch-live.xml
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: pytest-opensearch-live-report
+          path: reports/junit/*.xml
+          if-no-files-found: warn
+
+  milvus:
+    name: Milvus Live Storage
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      - run: uv sync --dev --extra milvus
+      - name: Start Milvus dependencies
+        run: |
+          docker compose -f examples/storage-providers/milvus/compose.yaml up -d etcd minio milvus
+      - name: Wait for Milvus
+        run: |
+          for i in {1..120}; do
+            uv run python -c \
+              "from pymilvus import MilvusClient; MilvusClient(uri='http://127.0.0.1:19530').list_collections()" \
+              && exit 0 || true
+            sleep 2
+          done
+          docker compose -f examples/storage-providers/milvus/compose.yaml logs milvus
+          exit 1
+      - name: Run Milvus live test
+        env:
+          PYTHONHASHSEED: "0"
+          AMH_TEST_MILVUS_URI: http://127.0.0.1:19530
+        run: |
+          mkdir -p reports/junit
+          uv run pytest -q tests/integration/test_storage_features.py \
+            -k live_milvus_vector_contract \
+            --junitxml=reports/junit/pytest-milvus-live.xml
+      - name: Stop Milvus
+        if: always()
+        run: docker compose -f examples/storage-providers/milvus/compose.yaml down -v
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: pytest-milvus-live-report
+          path: reports/junit/*.xml
+          if-no-files-found: warn

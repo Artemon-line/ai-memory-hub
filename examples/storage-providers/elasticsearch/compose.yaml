@@ -1,0 +1,31 @@
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    ports:
+      - "127.0.0.1:9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+
+  ai-memory-hub:
+    build:
+      context: ../../..
+      dockerfile: Containerfile
+    restart: on-failure
+    depends_on:
+      - elasticsearch
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro,Z
+      - hub_data:/data
+      - hub_logs:/logs
+
+volumes:
+  elasticsearch_data:
+  hub_data:
+  hub_logs:

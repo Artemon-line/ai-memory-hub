@@ -513,7 +513,7 @@ Implementation sequence:
 - [x] Keep Elasticsearch/OpenSearch vector-only at first; add hybrid capability only after API semantics are designed.
 - [x] Implement Milvus/Zilliz vector adapter.
 - [x] Implement Weaviate vector adapter.
-- [ ] Add Docker Compose examples for local provider smoke testing.
+- [x] Add Docker Compose examples for local provider smoke testing.
 - [ ] Document provider limitations: consistency, index readiness, score interpretation, distance metrics, and local/hosted differences.
 
 ## P3: Release Notes And Supply Chain Hardening

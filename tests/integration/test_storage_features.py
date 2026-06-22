@@ -1191,6 +1191,68 @@ def test_live_mongodb_atlas_vector_contract() -> None:
     )
 
 
+@pytest.mark.skipif(
+    not os.getenv("AMH_TEST_MILVUS_URI"),
+    reason="AMH_TEST_MILVUS_URI is not set",
+)
+def test_live_milvus_vector_contract() -> None:
+    _assert_vector_store_contract(
+        MilvusVectorStore(
+            uri=str(os.environ["AMH_TEST_MILVUS_URI"]),
+            token=str(os.getenv("AMH_TEST_MILVUS_TOKEN", "")),
+            collection_name=f"memory_vectors_{uuid4().hex}",
+            dimension=3,
+        )
+    )
+
+
+@pytest.mark.skipif(
+    not os.getenv("AMH_TEST_WEAVIATE_URL"),
+    reason="AMH_TEST_WEAVIATE_URL is not set",
+)
+def test_live_weaviate_vector_contract() -> None:
+    _assert_vector_store_contract(
+        WeaviateVectorStore(
+            url=str(os.environ["AMH_TEST_WEAVIATE_URL"]),
+            api_key=str(os.getenv("AMH_TEST_WEAVIATE_API_KEY", "")),
+            collection_name=f"MemoryVector{uuid4().hex}",
+            dimension=3,
+        )
+    )
+
+
+@pytest.mark.skipif(
+    not os.getenv("AMH_TEST_ELASTICSEARCH_URL"),
+    reason="AMH_TEST_ELASTICSEARCH_URL is not set",
+)
+def test_live_elasticsearch_vector_contract() -> None:
+    _assert_vector_store_contract(
+        ElasticsearchVectorStore(
+            url=str(os.environ["AMH_TEST_ELASTICSEARCH_URL"]),
+            username=str(os.getenv("AMH_TEST_ELASTICSEARCH_USERNAME", "")),
+            password=str(os.getenv("AMH_TEST_ELASTICSEARCH_PASSWORD", "")),
+            index_name=f"memory-vectors-{uuid4().hex}",
+            dimension=3,
+        )
+    )
+
+
+@pytest.mark.skipif(
+    not os.getenv("AMH_TEST_OPENSEARCH_URL"),
+    reason="AMH_TEST_OPENSEARCH_URL is not set",
+)
+def test_live_opensearch_vector_contract() -> None:
+    _assert_vector_store_contract(
+        OpenSearchVectorStore(
+            url=str(os.environ["AMH_TEST_OPENSEARCH_URL"]),
+            username=str(os.getenv("AMH_TEST_OPENSEARCH_USERNAME", "")),
+            password=str(os.getenv("AMH_TEST_OPENSEARCH_PASSWORD", "")),
+            index_name=f"memory-vectors-{uuid4().hex}",
+            dimension=3,
+        )
+    )
+
+
 def test_build_runtime_fails_fast_on_schema_version(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

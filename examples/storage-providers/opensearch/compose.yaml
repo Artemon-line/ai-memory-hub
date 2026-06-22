@@ -1,0 +1,31 @@
+services:
+  opensearch:
+    image: opensearchproject/opensearch:2.17.1
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: "true"
+      OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
+    ports:
+      - "127.0.0.1:9200:9200"
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+
+  ai-memory-hub:
+    build:
+      context: ../../..
+      dockerfile: Containerfile
+    restart: on-failure
+    depends_on:
+      - opensearch
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro,Z
+      - hub_data:/data
+      - hub_logs:/logs
+
+volumes:
+  opensearch_data:
+  hub_data:
+  hub_logs:

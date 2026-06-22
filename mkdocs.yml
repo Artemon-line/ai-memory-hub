@@ -25,6 +25,7 @@ nav:
   - Technical Overview: docs/overview.md
   - Architecture: docs/architecture.md
   - Roadmap: docs/roadmap.md
+  - Storage Provider Examples: docs/storage_provider_examples.md
   - Storage BYOA Plan: docs/storage_agnostic_byoa_plan.md
   - Agent Integration: docs/agents.md
   - MCP:

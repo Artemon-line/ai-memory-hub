@@ -1,0 +1,27 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.12.1
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  ai-memory-hub:
+    build:
+      context: ../../..
+      dockerfile: Containerfile
+    restart: on-failure
+    depends_on:
+      - qdrant
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro,Z
+      - hub_data:/data
+      - hub_logs:/logs
+
+volumes:
+  qdrant_data:
+  hub_data:
+  hub_logs:

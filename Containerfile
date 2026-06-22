@@ -22,14 +22,33 @@ WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
 
 RUN python -m pip install --no-cache-dir uv && \
-    uv sync --frozen --no-dev --extra postgres --extra tokenizer --no-install-project && \
+    uv sync --frozen --no-dev \
+      --extra chromadb \
+      --extra elasticsearch \
+      --extra milvus \
+      --extra mongodb \
+      --extra opensearch \
+      --extra postgres \
+      --extra qdrant \
+      --extra tokenizer \
+      --extra weaviate \
+      --no-install-project && \
     mkdir -p "$TIKTOKEN_CACHE_DIR" && \
     uv run python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"
 
 COPY memory ./memory
 COPY examples/container/config.yaml /app/config.yaml
 
-RUN uv sync --frozen --no-dev --extra postgres --extra tokenizer && \
+RUN uv sync --frozen --no-dev \
+      --extra chromadb \
+      --extra elasticsearch \
+      --extra milvus \
+      --extra mongodb \
+      --extra opensearch \
+      --extra postgres \
+      --extra qdrant \
+      --extra tokenizer \
+      --extra weaviate && \
     test -x /app/.venv/bin/aim && \
     mkdir -p /app/data /app/logs /app/.uv-cache "$TIKTOKEN_CACHE_DIR" && \
     useradd --uid 1001 --gid 0 --home-dir /tmp --no-create-home \

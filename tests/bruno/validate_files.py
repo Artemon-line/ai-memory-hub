@@ -42,7 +42,13 @@ def main() -> None:
         for path in list(root.rglob("*.yml")) + list(root.rglob("*.yaml"))
         if not _is_generated(path)
     ]
-    yaml_files.append(Path(".github/workflows/bruno-integration.yml"))
+    yaml_files.extend(
+        [
+            Path(".github/workflows/bruno-integration.yml"),
+            Path(".github/workflows/storage-providers.yml"),
+            *Path("examples/storage-providers").rglob("*.yaml"),
+        ]
+    )
     json_files = [path for path in root.rglob("*.json") if not _is_generated(path)]
 
     for path in yaml_files:

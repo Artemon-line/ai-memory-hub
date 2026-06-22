@@ -22,7 +22,7 @@ It is built for:
 - Local-first project and profile memory
 - MCP-native workflows
 - Deterministic ingestion and retrieval
-- SQLite/LanceDB by default, Postgres/PGVector when you want it
+- SQLite/LanceDB by default, with optional Postgres, MongoDB, and vector-store providers
 - Bring-your-own embedding model, local or hosted
 
 ## What It Does
@@ -32,7 +32,7 @@ It is built for:
 - Answers questions with citations, confidence, and provenance
 - Extracts useful profile/project facts for direct answers
 - Serves both FastAPI endpoints and an MCP server
-- Runs locally, in containers, or against Postgres/PGVector
+- Runs locally, in containers, or against your selected storage backend
 
 ## Runtime Choices
 
@@ -45,8 +45,8 @@ You choose three things:
 | Choice | Local/default path | When to change it |
 | --- | --- | --- |
 | Embeddings | Deterministic local embeddings for smoke tests and demos | Use a real embedding model for useful semantic search, especially multilingual memory |
-| Metadata storage | SQLite | Use Postgres when you want a shared, multi-user, container, or durable server setup |
-| Vector storage | LanceDB, or in-memory in the simple container image | Use PGVector when you want Postgres to own both metadata and vectors |
+| Metadata storage | SQLite | Use Postgres for shared durable server setups, or MongoDB when it already owns application persistence |
+| Vector storage | LanceDB, ChromaDB, Qdrant, Milvus, Weaviate, PGVector, MongoDB Atlas, Elasticsearch, OpenSearch, or in-memory | Use the backend that already fits your local or hosted operations stack |
 
 For multilingual chat history, choose an embedding model that supports the
 languages you actually use. The embedding provider/model and vector dimension
@@ -67,6 +67,8 @@ Storage guidance:
   metadata and vector indexes.
 - Use MongoDB metadata or MongoDB Atlas Vector Search when MongoDB already owns
   the application's persistence layer.
+- Use Milvus/Zilliz, Weaviate, Elasticsearch, or OpenSearch when those systems
+  already own vector infrastructure in your environment.
 - Use in-memory vectors only for tests, demos, and disposable container smoke
   runs.
 
@@ -151,6 +153,20 @@ it on a LAN, create a bearer token in the metadata database and change
 `Authorization: Bearer <token>` to both HTTP and MCP endpoints. See the PGVector
 runbook in the checked-in Compose example directory for the exact commands.
 
+Other checked-in provider examples live under `examples/storage-providers`:
+ChromaDB, Qdrant, MongoDB, MongoDB Atlas, Milvus, Weaviate, Elasticsearch,
+OpenSearch, local LanceDB, and in-memory vectors.
+
+Example:
+
+```bash
+cd examples/storage-providers/qdrant
+docker compose up --build
+```
+
+See [Storage provider examples](docs/storage_provider_examples.md) for the
+provider matrix, smoke commands, CI coverage, and hosted-provider notes.
+
 ## Documentation
 
 - [Technical overview](docs/overview.md)
@@ -161,6 +177,7 @@ runbook in the checked-in Compose example directory for the exact commands.
 - [Browser extension capture plan](docs/browser_extension_capture_plan.md)
 - [First release readiness plan](docs/first_release_readiness_plan.md)
 - [Project promotion plan](docs/project_promotion_plan.md)
+- [Storage provider examples](docs/storage_provider_examples.md)
 - [Roadmap](docs/roadmap.md)
 - [Improvements](docs/improvements.md)
 
@@ -174,12 +191,13 @@ uv run python -m mkdocs build --strict
 ## Status
 
 The project currently includes deterministic ingestion, MCP tools/resources/prompts,
-HTTP endpoints, CLI commands, fact-backed answers, SQLite/Postgres metadata,
-LanceDB/ChromaDB/Qdrant/Milvus/Weaviate/PGVector/MongoDB Atlas/Elasticsearch/OpenSearch/in-memory vectors, token-budgeted ask, container CI, and GitHub
-Pages docs publishing.
+HTTP endpoints, CLI commands, fact-backed answers, SQLite/Postgres/MongoDB
+metadata, LanceDB/ChromaDB/Qdrant/Milvus/Weaviate/PGVector/MongoDB Atlas/
+Elasticsearch/OpenSearch/in-memory vectors, token-budgeted ask, container CI,
+provider live-test CI, and GitHub Pages docs publishing.
 
 Planned work includes broader importers, richer summaries, deletion/update
-workflows, more vector providers, and release publishing.
+workflows, provider-specific index compatibility checks, and release publishing.
 
 ## Contributing
 
@@ -190,6 +208,7 @@ and run the relevant checks before opening a pull request.
 uv run python -m ruff check memory tests tools
 uv run python -m pyright
 uv run pytest
+uv run python -m mkdocs build --strict
 ```
 
 ## License

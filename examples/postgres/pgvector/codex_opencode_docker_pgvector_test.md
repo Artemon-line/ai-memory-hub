@@ -28,13 +28,22 @@ It uses Docker or Podman for ai-memory-hub and Postgres with PGVector.
 - Metadata backends currently implemented:
   - SQLite
   - Postgres
+  - MongoDB
 - Vector backends currently implemented:
   - LanceDB
+  - ChromaDB
+  - Qdrant
+  - Milvus/Zilliz
+  - Weaviate
   - PGVector
+  - MongoDB Atlas Vector Search
+  - Elasticsearch
+  - OpenSearch
   - in-memory
 - `tests/e2e/test_client_smoke_profiles.py` already has contract profiles for Codex-shaped and opencode-shaped MCP payloads.
-- The existing `Containerfile` installs the optional `postgres` extra, so it can be used for Postgres/PGVector container runs.
-- The existing `Containerfile` also installs the optional `tokenizer` extra and prewarms `cl100k_base` for `tiktoken`.
+- The existing `Containerfile` installs all supported storage-provider extras,
+  including `postgres`, plus the optional `tokenizer` extra.
+- The existing `Containerfile` prewarms `cl100k_base` for `tiktoken`.
 - ai-memory-hub does not currently scrape Codex or opencode transcript files. The client must call MCP tools and send a structured conversation payload.
 
 ## Prerequisites
@@ -50,13 +59,20 @@ It uses Docker or Podman for ai-memory-hub and Postgres with PGVector.
 
 ## Use The Checked-In Container Example
 
-This test uses the existing repo-root `Containerfile`. That file must install the
-Postgres extra:
+This test uses the existing repo-root `Containerfile`. That file installs the
+Postgres and tokenizer extras, plus the other supported storage-provider SDKs:
 
 ```dockerfile
-RUN python -m pip install --upgrade pip && \
-    pip install --no-cache-dir uv && \
-    uv sync --frozen --no-dev --extra postgres
+RUN uv sync --frozen --no-dev \
+      --extra chromadb \
+      --extra elasticsearch \
+      --extra milvus \
+      --extra mongodb \
+      --extra opensearch \
+      --extra postgres \
+      --extra qdrant \
+      --extra tokenizer \
+      --extra weaviate
 ```
 
 The existing `Containerfile` copies `example.config.yaml` to `/app/config.yaml`.
@@ -447,8 +463,10 @@ docker compose down -v
 - Codex and opencode must be explicitly prompted to use the MCP server. ai-memory-hub does not automatically capture their transcripts.
 - The current `save_conversation` MCP prompt helps agents build payloads, but the client still decides whether and how to call tools.
 - The Docker/Podman instructions use `providers.embeddings: local` with 32-dimensional deterministic embeddings. That is best for this integration test. For more realistic semantic retrieval, switch to OpenAI or Ollama-compatible embeddings and set `embedding_dimension` to match the embedding model.
-- The checked-in `Containerfile` must install `psycopg` through `uv sync --frozen --no-dev --extra postgres` before using Postgres in containers.
-- The checked-in `Containerfile` must install `tiktoken` through `uv sync --frozen --no-dev --extra tokenizer` before precise token budgeting is available.
+- The checked-in `Containerfile` installs `psycopg` through the `postgres` extra
+  before using Postgres in containers.
+- The checked-in `Containerfile` installs `tiktoken` through the `tokenizer`
+  extra before precise token budgeting is available.
 - `storage.vector.allow_fallback: false` is intentional. If PGVector fails, the container should fail instead of silently using in-memory vectors.
 - The Compose example exposes ai-memory-hub on the LAN. Keep `api.auth: none`
   only for local smoke tests; use `api.auth: bearer_token` before trusted-LAN

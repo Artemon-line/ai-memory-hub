@@ -9,13 +9,22 @@ def test_containerfile_installs_project_after_copying_package() -> None:
 
     dependency_sync = containerfile.index("--no-install-project")
     package_copy = containerfile.index("COPY memory ./memory")
-    project_sync = containerfile.index(
-        "uv sync --frozen --no-dev --extra postgres --extra tokenizer &&",
-        package_copy,
-    )
+    project_sync = containerfile.index("uv sync --frozen --no-dev", package_copy)
     console_script_check = containerfile.index("test -x /app/.venv/bin/aim")
 
     assert dependency_sync < package_copy < project_sync < console_script_check
+    for extra in (
+        "chromadb",
+        "elasticsearch",
+        "milvus",
+        "mongodb",
+        "opensearch",
+        "postgres",
+        "qdrant",
+        "tokenizer",
+        "weaviate",
+    ):
+        assert f"--extra {extra}" in containerfile
     assert "COPY examples/container/config.yaml /app/config.yaml" in containerfile
     assert "useradd --uid 1001 --gid 0" in containerfile
 

@@ -21,10 +21,14 @@ Optional extras:
 ```bash
 uv sync --dev --extra postgres
 uv sync --dev --extra tokenizer
+uv sync --dev --all-extras
 ```
 
-Use the Postgres extra for Postgres metadata or PGVector. Use the tokenizer extra
-for exact OpenAI-compatible token counting through `tiktoken`.
+Use provider extras when selecting optional storage SDKs such as ChromaDB,
+Qdrant, Milvus, Weaviate, MongoDB, Elasticsearch, OpenSearch, Postgres, or
+PGVector. Use the tokenizer extra for exact OpenAI-compatible token counting
+through `tiktoken`. Use `--all-extras` for container builds or provider
+compatibility checks.
 
 ## How It Works
 
@@ -691,6 +695,10 @@ The example binds ai-memory-hub on host port `8000` for LAN clients. Use
 enables tokenizer budgeting with the optional `tiktoken` extra. For remote
 Ollama embeddings, see `examples/postgres/pgvector/config.ollama.yaml`.
 
+Additional checked-in provider examples are under `examples/storage-providers`.
+They cover local LanceDB, in-memory vectors, ChromaDB, Qdrant, MongoDB metadata,
+MongoDB Atlas Vector Search, Milvus, Weaviate, Elasticsearch, and OpenSearch.
+
 ## Testing
 
 Run the full local suite:
@@ -705,8 +713,10 @@ Run storage tests only:
 uv run pytest tests/integration/test_storage_features.py
 ```
 
-Default local runs do not require Postgres or PGVector. Live Postgres/PGVector
-tests are skipped unless `AMH_TEST_POSTGRES_DSN` is set.
+Default local runs do not require external storage services. Live provider tests
+are skipped unless their `AMH_TEST_*` environment variables are set. GitHub
+Actions runs fake-client provider contracts in the normal CI suite and service-
+backed live provider checks in `.github/workflows/storage-providers.yml`.
 
 Run live Postgres and PGVector tests locally:
 
