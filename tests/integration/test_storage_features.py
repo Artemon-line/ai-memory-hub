@@ -716,11 +716,13 @@ class FakeMilvusClient:
         metric_type: str,
         auto_id: bool,
         id_type: str = "int",
+        max_length: int | None = None,
     ) -> None:
         self.collections[collection_name] = {
             "dimension": dimension,
             "metric_type": metric_type,
             "id_type": id_type,
+            "max_length": max_length,
             "auto_id": auto_id,
         }
 
@@ -1152,6 +1154,7 @@ def test_milvus_uses_string_primary_key_for_stable_point_ids() -> None:
     MilvusVectorStore(client=client, dimension=3)
 
     assert client.collections["memory_vectors"]["id_type"] == "string"
+    assert client.collections["memory_vectors"]["max_length"] == 64
 
 
 def test_elasticsearch_create_index_when_exists_probe_returns_bad_request() -> None:

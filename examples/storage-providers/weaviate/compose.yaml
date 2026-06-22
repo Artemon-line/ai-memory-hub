@@ -10,6 +10,7 @@ services:
       CLUSTER_HOSTNAME: node1
     ports:
       - "127.0.0.1:8080:8080"
+      - "127.0.0.1:50051:50051"
     volumes:
       - weaviate_data:/var/lib/weaviate
 

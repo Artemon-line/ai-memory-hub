@@ -212,6 +212,7 @@ jobs:
           CLUSTER_HOSTNAME: node1
         ports:
           - 8080:8080
+          - 50051:50051
 
     steps:
       - uses: actions/checkout@v6
@@ -251,7 +252,7 @@ jobs:
     timeout-minutes: 25
     services:
       elasticsearch:
-        image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+        image: docker.elastic.co/elasticsearch/elasticsearch:9.4.1
         env:
           discovery.type: single-node
           xpack.security.enabled: "false"

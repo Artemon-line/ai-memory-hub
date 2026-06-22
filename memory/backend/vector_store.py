@@ -552,6 +552,7 @@ class MilvusVectorStore:
             dimension=self.expected_dimensionality,
             metric_type=metric_type,
             id_type="string",
+            max_length=64,
             auto_id=False,
         )
 
