@@ -203,7 +203,7 @@ jobs:
     timeout-minutes: 25
     services:
       weaviate:
-        image: semitechnologies/weaviate:1.26.7
+        image: semitechnologies/weaviate:1.27.8
         env:
           QUERY_DEFAULTS_LIMIT: "25"
           AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"

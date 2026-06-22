@@ -715,10 +715,12 @@ class FakeMilvusClient:
         dimension: int,
         metric_type: str,
         auto_id: bool,
+        id_type: str = "int",
     ) -> None:
         self.collections[collection_name] = {
             "dimension": dimension,
             "metric_type": metric_type,
+            "id_type": id_type,
             "auto_id": auto_id,
         }
 
@@ -774,20 +776,31 @@ class FakeMilvusClient:
 
 
 class FakeSearchIndices:
-    def __init__(self) -> None:
+    def __init__(self, *, fail_exists_status: int | None = None) -> None:
         self.created: dict[str, dict[str, Any]] = {}
+        self.fail_exists_status = fail_exists_status
 
     def exists(self, *, index: str) -> bool:
+        if self.fail_exists_status is not None:
+            raise FakeSearchStatusError(self.fail_exists_status)
         return index in self.created
 
     def create(self, *, index: str, **kwargs: Any) -> None:
         self.created[index] = dict(kwargs)
 
 
+class FakeSearchStatusError(Exception):
+    def __init__(self, status: int) -> None:
+        self.meta = types.SimpleNamespace(status=status)
+        super().__init__(f"search status {status}")
+
+
 class FakeSearchClient:
-    def __init__(self, *, opensearch: bool = False) -> None:
+    def __init__(
+        self, *, opensearch: bool = False, fail_exists_status: int | None = None
+    ) -> None:
         self.rows: dict[str, dict[str, Any]] = {}
-        self.indices = FakeSearchIndices()
+        self.indices = FakeSearchIndices(fail_exists_status=fail_exists_status)
         self.opensearch = opensearch
 
     def index(
@@ -1131,6 +1144,29 @@ def test_vector_store_contract_for_local_backends(
 ) -> None:
     _ = provider
     _assert_vector_store_contract(factory(tmp_path))
+
+
+def test_milvus_uses_string_primary_key_for_stable_point_ids() -> None:
+    client = FakeMilvusClient()
+
+    MilvusVectorStore(client=client, dimension=3)
+
+    assert client.collections["memory_vectors"]["id_type"] == "string"
+
+
+def test_elasticsearch_create_index_when_exists_probe_returns_bad_request() -> None:
+    client = FakeSearchClient(fail_exists_status=400)
+
+    ElasticsearchVectorStore(client=client, dimension=3)
+
+    assert "memory_vectors" in client.indices.created
+
+
+def test_elasticsearch_reraises_unexpected_exists_probe_errors() -> None:
+    client = FakeSearchClient(fail_exists_status=503)
+
+    with pytest.raises(FakeSearchStatusError, match="search status 503"):
+        ElasticsearchVectorStore(client=client, dimension=3)
 
 
 @pytest.mark.skipif(

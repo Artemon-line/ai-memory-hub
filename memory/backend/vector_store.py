@@ -551,6 +551,7 @@ class MilvusVectorStore:
             collection_name=self.collection_name,
             dimension=self.expected_dimensionality,
             metric_type=metric_type,
+            id_type="string",
             auto_id=False,
         )
 
@@ -824,7 +825,7 @@ class ElasticsearchVectorStore:
         return Elasticsearch(**kwargs)
 
     def _ensure_index(self) -> None:
-        if self._client.indices.exists(index=self.index_name):
+        if self._index_exists():
             return
         similarity = self._SIMILARITY_MAP.get(self.distance)
         if similarity is None:
@@ -851,6 +852,14 @@ class ElasticsearchVectorStore:
                 }
             },
         )
+
+    def _index_exists(self) -> bool:
+        try:
+            return bool(self._client.indices.exists(index=self.index_name))
+        except Exception as exc:
+            if _exception_status(exc) == 400:
+                return False
+            raise
 
 
 class OpenSearchVectorStore:
@@ -1737,6 +1746,16 @@ def _vector_literal(vector: list[float]) -> str:
 
 def _stable_point_id(memory_id: str, chunk_id: str) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, f"ai-memory-hub:{memory_id}:{chunk_id}"))
+
+
+def _exception_status(exc: Exception) -> int | None:
+    meta = getattr(exc, "meta", None)
+    status = getattr(meta, "status", None)
+    if status is None:
+        status = getattr(exc, "status_code", None)
+    if status is None:
+        return None
+    return int(status)
 
 
 def _vector_payload(metadata_id: str, item: dict[str, Any]) -> dict[str, Any]:

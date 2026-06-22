@@ -1,6 +1,6 @@
 services:
   weaviate:
-    image: semitechnologies/weaviate:1.26.7
+    image: semitechnologies/weaviate:1.27.8
     restart: unless-stopped
     environment:
       QUERY_DEFAULTS_LIMIT: "25"
