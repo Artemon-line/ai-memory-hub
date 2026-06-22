@@ -295,7 +295,11 @@ Current implemented provider matrix:
 - [x] Vectors: in-memory
 - [x] Vectors: ChromaDB
 - [x] Vectors: Qdrant
+- [x] Vectors: Milvus/Zilliz
+- [x] Vectors: Weaviate
 - [x] Vectors: MongoDB Atlas Vector Search
+- [x] Vectors: Elasticsearch
+- [x] Vectors: OpenSearch
 
 Expansion principles:
 
@@ -325,11 +329,11 @@ Status: `PARTIAL`
 - [x] Extend `providers.vector_db` accepted values:
   - [x] `chromadb`
   - [x] `qdrant`
-  - [ ] `milvus`
-  - [ ] `weaviate`
+  - [x] `milvus`
+  - [x] `weaviate`
   - [x] `mongodb_atlas`
-  - [ ] `elasticsearch`
-  - [ ] `opensearch`
+  - [x] `elasticsearch`
+  - [x] `opensearch`
 - [x] Extend `providers.metadata_db` accepted values:
   - [x] `mongodb`
   - [ ] optional future `elasticsearch`/`opensearch` only if metadata semantics are fully mapped
@@ -561,11 +565,11 @@ Target: vector search for users already running Elastic/OpenSearch, with a path 
 Shared adapter requirements:
 
 - [ ] Add dependency strategy:
-  - [ ] optional extra: `elasticsearch`
-  - [ ] optional extra: `opensearch-py`
+  - [x] optional extra: `elasticsearch`
+  - [x] optional extra: `opensearch-py`
   - [ ] deterministic import error when package is missing
-- [ ] Add `ElasticsearchVectorStore`.
-- [ ] Add `OpenSearchVectorStore`.
+- [x] Add `ElasticsearchVectorStore`.
+- [x] Add `OpenSearchVectorStore`.
 - [ ] Support URL plus API key or username/password auth.
 - [ ] Create index when missing.
 - [ ] Store mapping metadata:
@@ -577,8 +581,8 @@ Shared adapter requirements:
 - [ ] Use stable document IDs derived from `chunk_id`.
 - [ ] Implement replace by deleting documents filtered by `memory_id`.
 - [ ] Implement vector search:
-  - [ ] Elasticsearch `knn` or script-score path based on supported version
-  - [ ] OpenSearch k-NN query path based on installed plugin/version
+  - [x] Elasticsearch `knn` path
+  - [x] OpenSearch k-NN query path
 - [ ] Normalize provider scores/distances into current `score` field.
 - [ ] Explicitly document refresh/read-after-write behavior.
 - [ ] Implement `get_stats()` and `health()`.
@@ -602,11 +606,11 @@ Status: `NOT IMPLEMENTED`
 Target: larger vector deployments via self-hosted Milvus or managed Zilliz.
 
 - [ ] Add dependency strategy:
-  - [ ] optional extra: `pymilvus`
+  - [x] optional extra: `pymilvus`
   - [ ] deterministic import error when package is missing
-- [ ] Add `MilvusVectorStore`.
+- [x] Add `MilvusVectorStore`.
 - [ ] Support URI and token configuration.
-- [ ] Map hub distance config to Milvus metric type.
+- [x] Map hub distance config to Milvus metric type.
 - [ ] Create collection when missing.
 - [ ] Define collection schema:
   - [ ] primary key
@@ -640,9 +644,9 @@ Status: `NOT IMPLEMENTED`
 Target: schema-rich vector deployments with self-hosted or cloud Weaviate.
 
 - [ ] Add dependency strategy:
-  - [ ] optional extra: `weaviate-client`
+  - [x] optional extra: `weaviate-client`
   - [ ] deterministic import error when package is missing
-- [ ] Add `WeaviateVectorStore`.
+- [x] Add `WeaviateVectorStore`.
 - [ ] Support URL and API key configuration.
 - [ ] Use externally supplied vectors from the hub embedding provider.
 - [ ] Disable or avoid provider-side vectorization for stored chunks unless explicitly configured later.
@@ -656,7 +660,7 @@ Target: schema-rich vector deployments with self-hosted or cloud Weaviate.
 - [ ] Use stable object UUIDs derived from `chunk_id`.
 - [ ] Implement replace by deleting objects filtered by `memory_id`.
 - [ ] Implement near-vector search.
-- [ ] Normalize Weaviate distances/scores into current `score` field.
+- [x] Normalize Weaviate distances/scores into current `score` field.
 - [ ] Implement delete, stats, and health.
 - [ ] Tests:
   - [ ] fake-client contract tests
@@ -676,10 +680,10 @@ Status: `PARTIAL`
 - [ ] Add local Docker Compose snippets for:
   - [ ] Qdrant
   - [ ] ChromaDB HTTP server
-  - [ ] Milvus
-  - [ ] Weaviate
-  - [ ] Elasticsearch
-  - [ ] OpenSearch
+  - [x] Milvus
+  - [x] Weaviate
+  - [x] Elasticsearch
+  - [x] OpenSearch
 - [ ] Add cloud setup notes for:
   - [x] Qdrant Cloud
   - [ ] Zilliz

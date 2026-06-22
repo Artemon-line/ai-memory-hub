@@ -23,11 +23,29 @@ storage:
       api_key: ""
       collection: memory_vectors
       prefer_grpc: false
+    milvus:
+      uri: http://127.0.0.1:19530
+      token: ""
+      collection: memory_vectors
+    weaviate:
+      url: http://127.0.0.1:8080
+      api_key: ""
+      collection: MemoryVector
     mongodb_atlas:
       uri: ""
       database: ai_memory_hub
       collection: memory_vectors
       index: memory_vector_index
+    elasticsearch:
+      url: http://127.0.0.1:9200
+      username: ""
+      password: ""
+      index: memory_vectors
+    opensearch:
+      url: http://127.0.0.1:9200
+      username: ""
+      password: ""
+      index: memory_vectors
   metadata_providers:
     mongodb:
       uri: ""
@@ -64,9 +82,10 @@ providers:
   embeddings: openai # Embedding provider used for chunk vectors
   embedding_model: 'nomic-embed-text'
   embedding_dimension: 768
-  metadata_db: sqlite # sqlite | postgres
+  metadata_db: sqlite # sqlite | postgres | mongodb
   metadata_dsn: '' # required when metadata_db=postgres
-  # lancedb | in_memory (in_memory maps to in-memory vector store in MVP)
+  # lancedb | chromadb | qdrant | milvus | weaviate | mongodb_atlas |
+  # elasticsearch | opensearch | pgvector | memory | in_memory
   vector_db: lancedb
   agent: mvp # Phase 1 ingestion agent (deterministic pipeline)
 

@@ -175,7 +175,7 @@ uv run python -m mkdocs build --strict
 
 The project currently includes deterministic ingestion, MCP tools/resources/prompts,
 HTTP endpoints, CLI commands, fact-backed answers, SQLite/Postgres metadata,
-LanceDB/ChromaDB/Qdrant/PGVector/MongoDB Atlas/in-memory vectors, token-budgeted ask, container CI, and GitHub
+LanceDB/ChromaDB/Qdrant/Milvus/Weaviate/PGVector/MongoDB Atlas/Elasticsearch/OpenSearch/in-memory vectors, token-budgeted ask, container CI, and GitHub
 Pages docs publishing.
 
 Planned work includes broader importers, richer summaries, deletion/update

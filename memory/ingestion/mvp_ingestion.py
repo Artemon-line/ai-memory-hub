@@ -26,11 +26,15 @@ from memory.backend.mongodb_metadata_store import MongoDBMetadataStore
 from memory.backend.postgres_metadata_store import PostgresMetadataStore
 from memory.backend.vector_store import (
     ChromaDBVectorStore,
+    ElasticsearchVectorStore,
     InMemoryVectorStore,
     LanceDBVectorStore,
+    MilvusVectorStore,
     MongoDBAtlasVectorStore,
+    OpenSearchVectorStore,
     PGVectorStore,
     QdrantVectorStore,
+    WeaviateVectorStore,
 )
 from memory.config import HubConfig, ensure_token_hash_secret, load_config, parse_config
 from memory.ingestion.summary_models import (
@@ -465,6 +469,23 @@ def _build_vector_store(
             distance=cfg.storage.vector.distance,
             prefer_grpc=qdrant_config.prefer_grpc,
         )
+    if provider == VectorProviderName.MILVUS.value:
+        milvus_config = cfg.storage.vector_providers.milvus
+        return MilvusVectorStore(
+            uri=milvus_config.uri,
+            token=milvus_config.token,
+            collection_name=milvus_config.collection,
+            dimension=expected_dimension,
+            distance=cfg.storage.vector.distance,
+        )
+    if provider == VectorProviderName.WEAVIATE.value:
+        weaviate_config = cfg.storage.vector_providers.weaviate
+        return WeaviateVectorStore(
+            url=weaviate_config.url,
+            api_key=weaviate_config.api_key,
+            collection_name=weaviate_config.collection,
+            dimension=expected_dimension,
+        )
     if provider == VectorProviderName.MONGODB_ATLAS.value:
         atlas_config = cfg.storage.vector_providers.mongodb_atlas
         return MongoDBAtlasVectorStore(
@@ -473,6 +494,26 @@ def _build_vector_store(
             collection_name=atlas_config.collection,
             index_name=atlas_config.index,
             dimension=expected_dimension,
+        )
+    if provider == VectorProviderName.ELASTICSEARCH.value:
+        elastic_config = cfg.storage.vector_providers.elasticsearch
+        return ElasticsearchVectorStore(
+            url=elastic_config.url,
+            username=elastic_config.username,
+            password=elastic_config.password,
+            index_name=elastic_config.index,
+            dimension=expected_dimension,
+            distance=cfg.storage.vector.distance,
+        )
+    if provider == VectorProviderName.OPENSEARCH.value:
+        opensearch_config = cfg.storage.vector_providers.opensearch
+        return OpenSearchVectorStore(
+            url=opensearch_config.url,
+            username=opensearch_config.username,
+            password=opensearch_config.password,
+            index_name=opensearch_config.index,
+            dimension=expected_dimension,
+            distance=cfg.storage.vector.distance,
         )
     if provider == VectorProviderName.PGVECTOR.value:
         dsn = cfg.providers.metadata_dsn

@@ -24,11 +24,15 @@ from memory.backend.postgres_metadata_store import PostgresMetadataStore
 from memory.backend.vector_store import (
     ChromaDBVectorStore,
     ChromaMetadata,
+    ElasticsearchVectorStore,
     InMemoryVectorStore,
     LanceDBVectorStore,
+    MilvusVectorStore,
     MongoDBAtlasVectorStore,
+    OpenSearchVectorStore,
     PGVectorStore,
     QdrantVectorStore,
+    WeaviateVectorStore,
 )
 from memory.ingestion import mvp_ingestion
 
@@ -436,8 +440,12 @@ def _assert_vector_store_contract(store: Any) -> None:
         "lancedb",
         "pgvector",
         "chromadb",
+        "elasticsearch",
+        "milvus",
         "qdrant",
         "mongodb_atlas",
+        "opensearch",
+        "weaviate",
         "fake",
     }
     assert stats["rows"] is None or stats["rows"] >= 3
@@ -692,6 +700,247 @@ class FakeQdrantClient:
         return types.SimpleNamespace(points_count=len(self.rows))
 
 
+class FakeMilvusClient:
+    def __init__(self) -> None:
+        self.rows: dict[str, dict[str, Any]] = {}
+        self.collections: dict[str, dict[str, Any]] = {}
+
+    def has_collection(self, *, collection_name: str) -> bool:
+        return collection_name in self.collections
+
+    def create_collection(
+        self,
+        *,
+        collection_name: str,
+        dimension: int,
+        metric_type: str,
+        auto_id: bool,
+    ) -> None:
+        self.collections[collection_name] = {
+            "dimension": dimension,
+            "metric_type": metric_type,
+            "auto_id": auto_id,
+        }
+
+    def upsert(self, *, collection_name: str, data: list[dict[str, Any]]) -> None:
+        assert collection_name == "memory_vectors"
+        for row in data:
+            self.rows[str(row["id"])] = dict(row)
+
+    def search(
+        self,
+        *,
+        collection_name: str,
+        data: list[list[float]],
+        anns_field: str,
+        limit: int,
+        output_fields: list[str],
+    ) -> list[list[dict[str, Any]]]:
+        _ = (collection_name, anns_field, output_fields)
+        query_vector = data[0]
+        rows = sorted(
+            self.rows.values(),
+            key=lambda row: _test_cosine_distance(query_vector, row["vector"]),
+        )
+        return [
+            [
+                {
+                    "entity": {
+                        key: row[key]
+                        for key in output_fields
+                        if key in row
+                    },
+                    "distance": 1.0 - _test_cosine_distance(query_vector, row["vector"]),
+                }
+                for row in rows[:limit]
+            ]
+        ]
+
+    def delete(self, *, collection_name: str, filter: str) -> None:
+        _ = collection_name
+        ids = {
+            item.strip().strip('"')
+            for item in filter.split("[", 1)[1].split("]", 1)[0].split(",")
+        }
+        self.rows = {
+            row_id: row
+            for row_id, row in self.rows.items()
+            if row["memory_id"] not in ids
+        }
+
+    def get_collection_stats(self, *, collection_name: str) -> dict[str, int]:
+        _ = collection_name
+        return {"row_count": len(self.rows)}
+
+
+class FakeSearchIndices:
+    def __init__(self) -> None:
+        self.created: dict[str, dict[str, Any]] = {}
+
+    def exists(self, *, index: str) -> bool:
+        return index in self.created
+
+    def create(self, *, index: str, **kwargs: Any) -> None:
+        self.created[index] = dict(kwargs)
+
+
+class FakeSearchClient:
+    def __init__(self, *, opensearch: bool = False) -> None:
+        self.rows: dict[str, dict[str, Any]] = {}
+        self.indices = FakeSearchIndices()
+        self.opensearch = opensearch
+
+    def index(
+        self,
+        *,
+        index: str,
+        id: str,
+        refresh: bool,
+        document: dict[str, Any] | None = None,
+        body: dict[str, Any] | None = None,
+    ) -> None:
+        _ = (index, refresh)
+        self.rows[id] = dict(document or body or {})
+
+    def search(
+        self,
+        *,
+        index: str,
+        size: int | None = None,
+        knn: dict[str, Any] | None = None,
+        body: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        _ = index
+        if knn is not None:
+            query_vector = knn["query_vector"]
+            limit = int(size or knn["k"])
+        else:
+            assert body is not None
+            query = body["query"]["knn"]["vector"]
+            query_vector = query["vector"]
+            limit = int(body["size"])
+        rows = sorted(
+            self.rows.values(),
+            key=lambda row: _test_cosine_distance(query_vector, row["vector"]),
+        )
+        return {
+            "hits": {
+                "hits": [
+                    {
+                        "_source": row,
+                        "_score": 1.0 - _test_cosine_distance(query_vector, row["vector"]),
+                    }
+                    for row in rows[:limit]
+                ]
+            }
+        }
+
+    def delete_by_query(self, *, index: str, refresh: bool, conflicts: str, **kwargs: Any) -> None:
+        _ = (index, refresh, conflicts)
+        query = kwargs.get("query") or kwargs.get("body", {}).get("query", {})
+        ids = set(query["terms"]["memory_id"])
+        self.rows = {
+            row_id: row
+            for row_id, row in self.rows.items()
+            if row["memory_id"] not in ids
+        }
+
+    def count(self, *, index: str) -> dict[str, int]:
+        _ = index
+        return {"count": len(self.rows)}
+
+
+class FakeWeaviateMetadata:
+    def __init__(self, *, distance: float) -> None:
+        self.distance = distance
+        self.certainty = 1.0 - distance
+
+
+class FakeWeaviateObject:
+    def __init__(self, *, properties: dict[str, Any], distance: float) -> None:
+        self.properties = properties
+        self.metadata = FakeWeaviateMetadata(distance=distance)
+
+
+class FakeWeaviateData:
+    def __init__(self, collection: "FakeWeaviateCollection") -> None:
+        self.collection = collection
+
+    def insert(self, *, uuid: str, properties: dict[str, Any], vector: list[float]) -> None:
+        self.collection.rows[uuid] = {**properties, "vector": vector}
+
+    def delete_many(self, *, where: dict[str, list[str]]) -> None:
+        ids = set(where["memory_id"])
+        self.collection.rows = {
+            row_id: row
+            for row_id, row in self.collection.rows.items()
+            if row["memory_id"] not in ids
+        }
+
+
+class FakeWeaviateQuery:
+    def __init__(self, collection: "FakeWeaviateCollection") -> None:
+        self.collection = collection
+
+    def near_vector(self, *, near_vector: list[float], limit: int, **_kwargs: Any) -> Any:
+        rows = sorted(
+            self.collection.rows.values(),
+            key=lambda row: _test_cosine_distance(near_vector, row["vector"]),
+        )
+        return types.SimpleNamespace(
+            objects=[
+                FakeWeaviateObject(
+                    properties=row,
+                    distance=_test_cosine_distance(near_vector, row["vector"]),
+                )
+                for row in rows[:limit]
+            ]
+        )
+
+
+class FakeWeaviateAggregate:
+    def __init__(self, collection: "FakeWeaviateCollection") -> None:
+        self.collection = collection
+
+    def over_all(self, *, total_count: bool) -> Any:
+        _ = total_count
+        return types.SimpleNamespace(total_count=len(self.collection.rows))
+
+
+class FakeWeaviateCollection:
+    def __init__(self) -> None:
+        self.rows: dict[str, dict[str, Any]] = {}
+        self.data = FakeWeaviateData(self)
+        self.query = FakeWeaviateQuery(self)
+        self.aggregate = FakeWeaviateAggregate(self)
+
+
+class FakeWeaviateCollections:
+    def __init__(self) -> None:
+        self.collection = FakeWeaviateCollection()
+        self.exists_called = False
+
+    def exists(self, name: str) -> bool:
+        _ = name
+        if self.exists_called:
+            return True
+        self.exists_called = True
+        return False
+
+    def create(self, *args: Any, **kwargs: Any) -> FakeWeaviateCollection:
+        _ = (args, kwargs)
+        return self.collection
+
+    def get(self, name: str) -> FakeWeaviateCollection:
+        _ = name
+        return self.collection
+
+
+class FakeWeaviateClient:
+    def __init__(self) -> None:
+        self.collections = FakeWeaviateCollections()
+
+
 class FakeMongoCollection:
     def __init__(self) -> None:
         self.docs: list[dict[str, Any]] = []
@@ -838,11 +1087,35 @@ def _apply_update(doc: dict[str, Any], update: dict[str, Any]) -> None:
             ),
         ),
         (
+            "milvus",
+            lambda tmp_path: MilvusVectorStore(
+                client=FakeMilvusClient(), dimension=3
+            ),
+        ),
+        (
+            "weaviate",
+            lambda tmp_path: WeaviateVectorStore(
+                client=FakeWeaviateClient(), dimension=3
+            ),
+        ),
+        (
             "mongodb_atlas",
             lambda tmp_path: MongoDBAtlasVectorStore(
                 uri="mongodb://example",
                 client=FakeMongoClient(),
                 dimension=3,
+            ),
+        ),
+        (
+            "elasticsearch",
+            lambda tmp_path: ElasticsearchVectorStore(
+                client=FakeSearchClient(), dimension=3
+            ),
+        ),
+        (
+            "opensearch",
+            lambda tmp_path: OpenSearchVectorStore(
+                client=FakeSearchClient(opensearch=True), dimension=3
             ),
         ),
         (
@@ -1159,10 +1432,22 @@ def test_build_runtime_chromadb_fallback_disabled_raises(
     ("provider", "class_name", "secret_message"),
     [
         ("qdrant", "QdrantVectorStore", "qdrant unavailable api_key=qdrant-secret"),
+        ("milvus", "MilvusVectorStore", "milvus unavailable token=milvus-secret"),
+        ("weaviate", "WeaviateVectorStore", "weaviate unavailable api_key=weaviate-secret"),
         (
             "mongodb_atlas",
             "MongoDBAtlasVectorStore",
             "mongodb unavailable mongodb://u:atlas-secret@example/app",
+        ),
+        (
+            "elasticsearch",
+            "ElasticsearchVectorStore",
+            "elastic unavailable username=elastic password=elastic-secret",
+        ),
+        (
+            "opensearch",
+            "OpenSearchVectorStore",
+            "opensearch unavailable username=admin password=opensearch-secret",
         ),
     ],
 )
@@ -1186,7 +1471,17 @@ def test_build_runtime_expansion_vector_fallback_uses_memory_provider(
             "storage": {
                 "vector": {"allow_fallback": True},
                 "vector_providers": {
-                    "mongodb_atlas": {"uri": "mongodb://u:atlas-secret@example/app"}
+                    "milvus": {"token": "milvus-secret"},
+                    "weaviate": {"api_key": "weaviate-secret"},
+                    "mongodb_atlas": {"uri": "mongodb://u:atlas-secret@example/app"},
+                    "elasticsearch": {
+                        "username": "elastic",
+                        "password": "elastic-secret",
+                    },
+                    "opensearch": {
+                        "username": "admin",
+                        "password": "opensearch-secret",
+                    },
                 },
             },
         }
@@ -1197,14 +1492,22 @@ def test_build_runtime_expansion_vector_fallback_uses_memory_provider(
     assert runtime.health_state["requested_vector_provider"] == provider
     assert runtime.vector_store.expected_dimensionality == runtime.embedding_provider.dimension
     assert "qdrant-secret" not in " ".join(runtime.health_state["reasons"])
+    assert "milvus-secret" not in " ".join(runtime.health_state["reasons"])
+    assert "weaviate-secret" not in " ".join(runtime.health_state["reasons"])
     assert "atlas-secret" not in " ".join(runtime.health_state["reasons"])
+    assert "elastic-secret" not in " ".join(runtime.health_state["reasons"])
+    assert "opensearch-secret" not in " ".join(runtime.health_state["reasons"])
 
 
 @pytest.mark.parametrize(
     ("provider", "class_name"),
     [
         ("qdrant", "QdrantVectorStore"),
+        ("milvus", "MilvusVectorStore"),
+        ("weaviate", "WeaviateVectorStore"),
         ("mongodb_atlas", "MongoDBAtlasVectorStore"),
+        ("elasticsearch", "ElasticsearchVectorStore"),
+        ("opensearch", "OpenSearchVectorStore"),
     ],
 )
 def test_build_runtime_expansion_vector_fallback_disabled_raises(

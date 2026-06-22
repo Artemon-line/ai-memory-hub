@@ -20,8 +20,17 @@ dependencies = [
 chromadb = [
     "chromadb>=1.0.0",
 ]
+elasticsearch = [
+    "elasticsearch>=8.15.0",
+]
+milvus = [
+    "pymilvus>=2.5.0",
+]
 mongodb = [
     "pymongo>=4.10.1",
+]
+opensearch = [
+    "opensearch-py>=2.7.0",
 ]
 postgres = [
     "psycopg[binary]>=3.2.4",
@@ -31,6 +40,9 @@ qdrant = [
 ]
 tokenizer = [
     "tiktoken>=0.13.0",
+]
+weaviate = [
+    "weaviate-client>=4.9.0",
 ]
 
 [project.scripts]

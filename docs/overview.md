@@ -358,6 +358,95 @@ storage:
 
 Install the optional dependency with `uv sync --extra qdrant`.
 
+### SQLite + Milvus
+
+Use Milvus or Zilliz for larger vector deployments:
+
+```yaml
+providers:
+  metadata_db: sqlite
+  vector_db: milvus
+
+storage:
+  vector:
+    allow_fallback: false
+    distance: cosine
+  vector_providers:
+    milvus:
+      uri: http://127.0.0.1:19530
+      token: ""
+      collection: memory_vectors
+```
+
+Install the optional dependency with `uv sync --extra milvus`.
+
+### SQLite + Weaviate
+
+Use Weaviate for schema-rich vector deployments:
+
+```yaml
+providers:
+  metadata_db: sqlite
+  vector_db: weaviate
+
+storage:
+  vector:
+    allow_fallback: false
+  vector_providers:
+    weaviate:
+      url: http://127.0.0.1:8080
+      api_key: ""
+      collection: MemoryVector
+```
+
+Install the optional dependency with `uv sync --extra weaviate`.
+
+### SQLite + Elasticsearch
+
+Use Elasticsearch when vector storage should live in an existing Elastic cluster:
+
+```yaml
+providers:
+  metadata_db: sqlite
+  vector_db: elasticsearch
+
+storage:
+  vector:
+    allow_fallback: false
+    distance: cosine
+  vector_providers:
+    elasticsearch:
+      url: http://127.0.0.1:9200
+      username: ""
+      password: ""
+      index: memory_vectors
+```
+
+Install the optional dependency with `uv sync --extra elasticsearch`.
+
+### SQLite + OpenSearch
+
+Use OpenSearch when vector storage should live in an existing OpenSearch cluster:
+
+```yaml
+providers:
+  metadata_db: sqlite
+  vector_db: opensearch
+
+storage:
+  vector:
+    allow_fallback: false
+    distance: cosine
+  vector_providers:
+    opensearch:
+      url: http://127.0.0.1:9200
+      username: ""
+      password: ""
+      index: memory_vectors
+```
+
+Install the optional dependency with `uv sync --extra opensearch`.
+
 ### MongoDB Metadata And Atlas Vectors
 
 Use MongoDB for metadata when Mongo already owns application persistence, and
@@ -444,11 +533,29 @@ storage:
       url: http://127.0.0.1:6333
       api_key: ""
       collection: memory_vectors
+    milvus:
+      uri: http://127.0.0.1:19530
+      token: ""
+      collection: memory_vectors
+    weaviate:
+      url: http://127.0.0.1:8080
+      api_key: ""
+      collection: MemoryVector
     mongodb_atlas:
       uri: ""
       database: ai_memory_hub
       collection: memory_vectors
       index: memory_vector_index
+    elasticsearch:
+      url: http://127.0.0.1:9200
+      username: ""
+      password: ""
+      index: memory_vectors
+    opensearch:
+      url: http://127.0.0.1:9200
+      username: ""
+      password: ""
+      index: memory_vectors
   metadata_providers:
     mongodb:
       uri: ""

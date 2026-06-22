@@ -29,7 +29,9 @@ Implemented:
   detection, and trusted same-thread append support.
 - Message chunking by default, with optional token-window chunking.
 - Token-budgeted `memory_ask` through config or request `max_context_tokens`.
-- Storage providers: SQLite/Postgres metadata, LanceDB/ChromaDB/PGVector/in-memory vectors.
+- Storage providers: SQLite/Postgres/MongoDB metadata,
+  LanceDB/ChromaDB/Qdrant/Milvus/Weaviate/PGVector/MongoDB Atlas/
+  Elasticsearch/OpenSearch/in-memory vectors.
 - Storage safety: provider capabilities, schema-version checks, vector dimensionality checks,
   policy-gated fallback, degraded health, dry-run wrappers, and secret-safe fallback logging.
 - MCP smoke profiles for Codex, Gemini, VS Code Copilot, and opencode.

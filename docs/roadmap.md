@@ -37,7 +37,7 @@ When planning or estimating work, treat phases as **ordered capability layers**:
 
 - **Phase 1** defines the minimum **pipeline**: **schema-first ingestion** (MCP/API payloads) → **unified schema** → **embeddings** → **vector search** → **HTTP** `/memory/search`, 
 `/memory/retrieve` + MCP `memory_*` tools/resources.
-- **Phase 1.5** promotes storage to a **first-class subsystem**: `VectorStore` interface → LanceDB/ChromaDB/PGVector/in-memory providers → deterministic startup checks → fallback behavior.
+- **Phase 1.5** promotes storage to a **first-class subsystem**: `VectorStore` interface → LanceDB/ChromaDB/Qdrant/Milvus/Weaviate/PGVector/MongoDB Atlas/Elasticsearch/OpenSearch/in-memory providers → deterministic startup checks → fallback behavior.
 - **Phase 2** adds **platform-specific ingestion** (Gemini Takeout, Copilot workarounds, Claude HTML, local LLM logs);
 **schema and storage stay stable** if normalization boundaries are respected.
 - Browser extension capture is a planned Phase 2-compatible ingestion option:
@@ -123,7 +123,7 @@ web UIs, then post normalized payloads to `POST /memory/insert`.
 
 ### 1.5.3 Config changes
 
-- [x] `providers.vector_db: lancedb | chromadb | pgvector | memory`
+- [x] `providers.vector_db: lancedb | chromadb | qdrant | milvus | weaviate | pgvector | mongodb_atlas | elasticsearch | opensearch | memory`
 - [x] `providers.metadata_db: sqlite | postgres`
 - [x] `storage.vector.allow_fallback: true`
 - [x] `storage.vector.distance: cosine | l2 | inner_product`

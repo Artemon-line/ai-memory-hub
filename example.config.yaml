@@ -73,9 +73,10 @@ providers:
   embeddings: openai # Embedding provider used for chunk vectors
   embedding_model: 'text-embedding-3-small' # open_ai embedding_model
   embedding_dimension: 1536 # text-embedding-3-small embedding dimension
-  metadata_db: sqlite # sqlite | postgres
+  metadata_db: sqlite # sqlite | postgres | mongodb
   metadata_dsn: '' # required when metadata_db=postgres
-  # lancedb | in_memory (in_memory maps to in-memory vector store in MVP)
+  # lancedb | chromadb | qdrant | milvus | weaviate | mongodb_atlas |
+  # elasticsearch | opensearch | pgvector | memory | in_memory
   vector_db: lancedb
   agent: mvp # Phase 1 ingestion agent (deterministic pipeline)
 
@@ -185,7 +186,80 @@ openai:
 # Install with:
 #   uv sync --extra qdrant
 #
-# 5) MongoDB metadata + Atlas Vector Search
+# 5) Milvus vectors
+#
+# providers:
+#   vector_db: milvus
+#
+# storage:
+#   vector:
+#     allow_fallback: false
+#     distance: cosine
+#   vector_providers:
+#     milvus:
+#       uri: http://127.0.0.1:19530
+#       token: ""
+#       collection: memory_vectors
+#
+# Install with:
+#   uv sync --extra milvus
+#
+# 6) Weaviate vectors
+#
+# providers:
+#   vector_db: weaviate
+#
+# storage:
+#   vector:
+#     allow_fallback: false
+#   vector_providers:
+#     weaviate:
+#       url: http://127.0.0.1:8080
+#       api_key: ""
+#       collection: MemoryVector
+#
+# Install with:
+#   uv sync --extra weaviate
+#
+# 7) Elasticsearch vectors
+#
+# providers:
+#   vector_db: elasticsearch
+#
+# storage:
+#   vector:
+#     allow_fallback: false
+#     distance: cosine
+#   vector_providers:
+#     elasticsearch:
+#       url: http://127.0.0.1:9200
+#       username: ""
+#       password: ""
+#       index: memory_vectors
+#
+# Install with:
+#   uv sync --extra elasticsearch
+#
+# 8) OpenSearch vectors
+#
+# providers:
+#   vector_db: opensearch
+#
+# storage:
+#   vector:
+#     allow_fallback: false
+#     distance: cosine
+#   vector_providers:
+#     opensearch:
+#       url: http://127.0.0.1:9200
+#       username: ""
+#       password: ""
+#       index: memory_vectors
+#
+# Install with:
+#   uv sync --extra opensearch
+#
+# 9) MongoDB metadata + Atlas Vector Search
 #
 # providers:
 #   metadata_db: mongodb
@@ -206,26 +280,26 @@ openai:
 # Install with:
 #   uv sync --extra mongodb
 #
-# 6) Strict production startup (no vector fallback)
+# 10) Strict production startup (no vector fallback)
 #
 # storage:
 #   dry_run: false
 #   vector:
 #     allow_fallback: false
 #
-# 5) Dry-run mode for ingestion validation
+# 11) Dry-run mode for ingestion validation
 #
 # storage:
 #   dry_run: true
 #   vector:
 #     allow_fallback: true
 #
-# 6) In-memory vectors path (current in_memory placeholder mode)
+# 12) In-memory vectors path
 #
 # providers:
 #   vector_db: in_memory
 #
-# 7) Custom conversation schema
+# 13) Custom conversation schema
 #
 # schema:
 #   file: "./memory/schema/conversation.schema.json"

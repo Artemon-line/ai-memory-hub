@@ -16,7 +16,11 @@ from memory.backend.errors import NotSupportedError, VectorDimensionError
 from memory.provider_models import (
     ChromaClientMode,
     ChromaQueryKey,
+    MilvusMetricType,
+    OpenSearchSpaceType,
     QdrantDistanceName,
+    SearchQueryKey,
+    SearchSimilarityName,
     VectorPayloadKey,
     VectorProviderName,
     VectorStatsKey,
@@ -413,6 +417,162 @@ class QdrantVectorStore:
             )
 
 
+class MilvusVectorStore:
+    _METRIC_MAP = {
+        "cosine": MilvusMetricType.COSINE.value,
+        "l2": MilvusMetricType.L2.value,
+        "inner_product": MilvusMetricType.INNER_PRODUCT.value,
+    }
+
+    def __init__(
+        self,
+        *,
+        uri: str = "http://127.0.0.1:19530",
+        token: str = "",
+        collection_name: str = "memory_vectors",
+        dimension: int = 32,
+        distance: str = "cosine",
+        client: Any | None = None,
+    ):
+        self.uri = uri.rstrip("/")
+        self.token = token
+        self.collection_name = collection_name
+        self.dimension = dimension
+        self.distance = distance
+        self._client = client or self._create_client()
+        self._ensure_collection()
+
+    @property
+    def expected_dimensionality(self) -> int:
+        return self.dimension
+
+    def insert(
+        self, metadata_id: str, embeddings: list[dict[str, Any]], replace: bool = False
+    ) -> None:
+        if replace:
+            self.delete([metadata_id])
+        rows = []
+        for item in embeddings:
+            vector = [float(value) for value in item[VectorPayloadKey.VECTOR.value]]
+            _validate_vector_length(
+                vector, expected=self.expected_dimensionality, operation="insert"
+            )
+            payload = _vector_payload(metadata_id, item)
+            rows.append(
+                {
+                    "id": _stable_point_id(
+                        metadata_id, payload[VectorPayloadKey.CHUNK_ID.value]
+                    ),
+                    **payload,
+                    VectorPayloadKey.VECTOR.value: vector,
+                }
+            )
+        if rows:
+            self._client.upsert(collection_name=self.collection_name, data=rows)
+
+    def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
+        _validate_vector_length(
+            query_vector, expected=self.expected_dimensionality, operation="search"
+        )
+        result = self._client.search(
+            collection_name=self.collection_name,
+            data=[query_vector],
+            anns_field=VectorPayloadKey.VECTOR.value,
+            limit=top_k,
+            output_fields=_vector_payload_fields(),
+        )
+        return self._normalize_search_result(result)
+
+    def delete(self, ids: list[str]) -> None:
+        if not ids:
+            return
+        quoted = ", ".join(f'"{str(item)}"' for item in ids)
+        self._client.delete(
+            collection_name=self.collection_name,
+            filter=f"{VectorPayloadKey.MEMORY_ID.value} in [{quoted}]",
+        )
+
+    def get_stats(self) -> dict[str, Any]:
+        rows = None
+        try:
+            stats = self._client.get_collection_stats(
+                collection_name=self.collection_name
+            )
+            if isinstance(stats, dict):
+                rows = int(stats.get("row_count", stats.get("num_entities", 0)) or 0)
+        except Exception:
+            rows = None
+        return {
+            VectorStatsKey.PROVIDER.value: VectorProviderName.MILVUS.value,
+            VectorStatsKey.ROWS.value: rows,
+            VectorStatsKey.EXPECTED_DIMENSIONALITY.value: self.expected_dimensionality,
+            VectorStatsKey.COLLECTION.value: self.collection_name,
+            VectorStatsKey.DISTANCE.value: self.distance,
+        }
+
+    def capabilities(self) -> ProviderCapabilities:
+        return ProviderCapabilities(
+            supports_batch_insert=True,
+            supports_metadata_indexing=True,
+        )
+
+    def health(self) -> dict[str, Any]:
+        return {
+            VectorStatsKey.PROVIDER.value: VectorProviderName.MILVUS.value,
+            VectorStatsKey.EXPECTED_DIMENSIONALITY.value: self.expected_dimensionality,
+            VectorStatsKey.COLLECTION.value: self.collection_name,
+            VectorStatsKey.DISTANCE.value: self.distance,
+            VectorStatsKey.STATS.value: self.get_stats(),
+        }
+
+    def set_ttl(self, memory_id: str, ttl_seconds: int) -> None:
+        _ = (memory_id, ttl_seconds)
+        raise NotSupportedError("TTL is not supported by this vector adapter")
+
+    def _create_client(self) -> Any:
+        try:
+            from pymilvus import MilvusClient  # type: ignore
+        except ImportError as exc:
+            raise RuntimeError(
+                "pymilvus package is required for providers.vector_db=milvus"
+            ) from exc
+        kwargs: dict[str, Any] = {"uri": self.uri}
+        if self.token:
+            kwargs["token"] = self.token
+        return MilvusClient(**kwargs)
+
+    def _ensure_collection(self) -> None:
+        if self._client.has_collection(collection_name=self.collection_name):
+            return
+        metric_type = self._METRIC_MAP.get(self.distance)
+        if metric_type is None:
+            raise ValueError("Milvus distance must be one of: cosine, l2, inner_product")
+        self._client.create_collection(
+            collection_name=self.collection_name,
+            dimension=self.expected_dimensionality,
+            metric_type=metric_type,
+            auto_id=False,
+        )
+
+    def _normalize_search_result(self, result: Any) -> list[dict[str, Any]]:
+        hits = _first_query_batch(result)
+        rows: list[dict[str, Any]] = []
+        for hit in hits:
+            entity_value = _mapping_from_object_or_dict(hit, "entity") or {}
+            entity = dict(entity_value)
+            if not entity:
+                entity = dict(hit) if isinstance(hit, dict) else {}
+            row = _row_from_vector_payload(entity)
+            score = _mapping_from_object_or_dict(hit, "distance")
+            if score is None:
+                score = _mapping_from_object_or_dict(hit, VectorPayloadKey.SCORE.value)
+            if score is None:
+                score = 0.0
+            row[VectorPayloadKey.SCORE.value] = float(score)
+            rows.append(row)
+        return rows
+
+
 class MongoDBAtlasVectorStore:
     def __init__(
         self,
@@ -533,6 +693,527 @@ class MongoDBAtlasVectorStore:
             raise VectorDimensionError(
                 f"Vector dimensionality mismatch during {operation}: expected {expected}, got {actual}"
             )
+
+
+class ElasticsearchVectorStore:
+    _SIMILARITY_MAP = {
+        "cosine": SearchSimilarityName.COSINE.value,
+        "l2": SearchSimilarityName.L2.value,
+        "inner_product": SearchSimilarityName.INNER_PRODUCT.value,
+    }
+
+    def __init__(
+        self,
+        *,
+        url: str = "http://127.0.0.1:9200",
+        username: str = "",
+        password: str = "",
+        index_name: str = "memory_vectors",
+        dimension: int = 32,
+        distance: str = "cosine",
+        client: Any | None = None,
+    ):
+        self.url = url.rstrip("/")
+        self.username = username
+        self.password = password
+        self.index_name = index_name
+        self.dimension = dimension
+        self.distance = distance
+        self._client = client or self._create_client()
+        self._ensure_index()
+
+    @property
+    def expected_dimensionality(self) -> int:
+        return self.dimension
+
+    def insert(
+        self, metadata_id: str, embeddings: list[dict[str, Any]], replace: bool = False
+    ) -> None:
+        if replace:
+            self.delete([metadata_id])
+        for item in embeddings:
+            vector = [float(value) for value in item[VectorPayloadKey.VECTOR.value]]
+            _validate_vector_length(
+                vector, expected=self.expected_dimensionality, operation="insert"
+            )
+            payload = _vector_payload(metadata_id, item)
+            document = {**payload, VectorPayloadKey.VECTOR.value: vector}
+            self._client.index(
+                index=self.index_name,
+                id=_stable_point_id(
+                    metadata_id, payload[VectorPayloadKey.CHUNK_ID.value]
+                ),
+                document=document,
+                refresh=True,
+            )
+
+    def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
+        _validate_vector_length(
+            query_vector, expected=self.expected_dimensionality, operation="search"
+        )
+        result = self._client.search(
+            index=self.index_name,
+            knn={
+                SearchQueryKey.FIELD.value: VectorPayloadKey.VECTOR.value,
+                SearchQueryKey.QUERY_VECTOR.value: query_vector,
+                SearchQueryKey.K.value: top_k,
+                SearchQueryKey.NUM_CANDIDATES.value: max(top_k * 10, top_k),
+            },
+            size=top_k,
+        )
+        return _rows_from_search_hits(result)
+
+    def delete(self, ids: list[str]) -> None:
+        if not ids:
+            return
+        self._client.delete_by_query(
+            index=self.index_name,
+            query={
+                SearchQueryKey.TERMS.value: {
+                    VectorPayloadKey.MEMORY_ID.value: [str(item) for item in ids]
+                }
+            },
+            refresh=True,
+            conflicts="proceed",
+        )
+
+    def get_stats(self) -> dict[str, Any]:
+        rows = None
+        try:
+            result = self._client.count(index=self.index_name)
+            rows = int(result.get("count", 0))
+        except Exception:
+            rows = None
+        return {
+            VectorStatsKey.PROVIDER.value: VectorProviderName.ELASTICSEARCH.value,
+            VectorStatsKey.ROWS.value: rows,
+            VectorStatsKey.EXPECTED_DIMENSIONALITY.value: self.expected_dimensionality,
+            VectorStatsKey.INDEX.value: self.index_name,
+            VectorStatsKey.DISTANCE.value: self.distance,
+        }
+
+    def capabilities(self) -> ProviderCapabilities:
+        return ProviderCapabilities(
+            supports_batch_insert=False,
+            supports_metadata_indexing=True,
+        )
+
+    def health(self) -> dict[str, Any]:
+        return {
+            VectorStatsKey.PROVIDER.value: VectorProviderName.ELASTICSEARCH.value,
+            VectorStatsKey.EXPECTED_DIMENSIONALITY.value: self.expected_dimensionality,
+            VectorStatsKey.INDEX.value: self.index_name,
+            VectorStatsKey.DISTANCE.value: self.distance,
+            VectorStatsKey.STATS.value: self.get_stats(),
+        }
+
+    def set_ttl(self, memory_id: str, ttl_seconds: int) -> None:
+        _ = (memory_id, ttl_seconds)
+        raise NotSupportedError("TTL is not supported by this vector adapter")
+
+    def _create_client(self) -> Any:
+        try:
+            from elasticsearch import Elasticsearch  # type: ignore
+        except ImportError as exc:
+            raise RuntimeError(
+                "elasticsearch package is required for providers.vector_db=elasticsearch"
+            ) from exc
+        kwargs: dict[str, Any] = {"hosts": [self.url]}
+        if self.username or self.password:
+            kwargs["basic_auth"] = (self.username, self.password)
+        return Elasticsearch(**kwargs)
+
+    def _ensure_index(self) -> None:
+        if self._client.indices.exists(index=self.index_name):
+            return
+        similarity = self._SIMILARITY_MAP.get(self.distance)
+        if similarity is None:
+            raise ValueError(
+                "Elasticsearch distance must be one of: cosine, l2, inner_product"
+            )
+        self._client.indices.create(
+            index=self.index_name,
+            mappings={
+                "properties": {
+                    VectorPayloadKey.VECTOR.value: {
+                        "type": "dense_vector",
+                        "dims": self.expected_dimensionality,
+                        "index": True,
+                        "similarity": similarity,
+                    },
+                    VectorPayloadKey.MEMORY_ID.value: {"type": "keyword"},
+                    VectorPayloadKey.PROJECT_ID.value: {"type": "keyword"},
+                    VectorPayloadKey.OWNER_ID.value: {"type": "keyword"},
+                    VectorPayloadKey.CHUNK_ID.value: {"type": "keyword"},
+                    VectorPayloadKey.MESSAGE_HASH.value: {"type": "keyword"},
+                    VectorPayloadKey.ROLE.value: {"type": "keyword"},
+                    VectorPayloadKey.TEXT.value: {"type": "text"},
+                }
+            },
+        )
+
+
+class OpenSearchVectorStore:
+    _SPACE_TYPE_MAP = {
+        "cosine": OpenSearchSpaceType.COSINE.value,
+        "l2": OpenSearchSpaceType.L2.value,
+        "inner_product": OpenSearchSpaceType.INNER_PRODUCT.value,
+    }
+
+    def __init__(
+        self,
+        *,
+        url: str = "http://127.0.0.1:9200",
+        username: str = "",
+        password: str = "",
+        index_name: str = "memory_vectors",
+        dimension: int = 32,
+        distance: str = "cosine",
+        client: Any | None = None,
+    ):
+        self.url = url.rstrip("/")
+        self.username = username
+        self.password = password
+        self.index_name = index_name
+        self.dimension = dimension
+        self.distance = distance
+        self._client = client or self._create_client()
+        self._ensure_index()
+
+    @property
+    def expected_dimensionality(self) -> int:
+        return self.dimension
+
+    def insert(
+        self, metadata_id: str, embeddings: list[dict[str, Any]], replace: bool = False
+    ) -> None:
+        if replace:
+            self.delete([metadata_id])
+        for item in embeddings:
+            vector = [float(value) for value in item[VectorPayloadKey.VECTOR.value]]
+            _validate_vector_length(
+                vector, expected=self.expected_dimensionality, operation="insert"
+            )
+            payload = _vector_payload(metadata_id, item)
+            document = {**payload, VectorPayloadKey.VECTOR.value: vector}
+            self._client.index(
+                index=self.index_name,
+                id=_stable_point_id(
+                    metadata_id, payload[VectorPayloadKey.CHUNK_ID.value]
+                ),
+                body=document,
+                refresh=True,
+            )
+
+    def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
+        _validate_vector_length(
+            query_vector, expected=self.expected_dimensionality, operation="search"
+        )
+        result = self._client.search(
+            index=self.index_name,
+            body={
+                SearchQueryKey.SIZE.value: top_k,
+                SearchQueryKey.QUERY.value: {
+                    SearchQueryKey.KNN.value: {
+                        VectorPayloadKey.VECTOR.value: {
+                            VectorPayloadKey.VECTOR.value: query_vector,
+                            SearchQueryKey.K.value: top_k,
+                        }
+                    }
+                },
+            },
+        )
+        return _rows_from_search_hits(result)
+
+    def delete(self, ids: list[str]) -> None:
+        if not ids:
+            return
+        self._client.delete_by_query(
+            index=self.index_name,
+            body={
+                SearchQueryKey.QUERY.value: {
+                    SearchQueryKey.TERMS.value: {
+                        VectorPayloadKey.MEMORY_ID.value: [str(item) for item in ids]
+                    }
+                }
+            },
+            refresh=True,
+            conflicts="proceed",
+        )
+
+    def get_stats(self) -> dict[str, Any]:
+        rows = None
+        try:
+            result = self._client.count(index=self.index_name)
+            rows = int(result.get("count", 0))
+        except Exception:
+            rows = None
+        return {
+            VectorStatsKey.PROVIDER.value: VectorProviderName.OPENSEARCH.value,
+            VectorStatsKey.ROWS.value: rows,
+            VectorStatsKey.EXPECTED_DIMENSIONALITY.value: self.expected_dimensionality,
+            VectorStatsKey.INDEX.value: self.index_name,
+            VectorStatsKey.DISTANCE.value: self.distance,
+        }
+
+    def capabilities(self) -> ProviderCapabilities:
+        return ProviderCapabilities(
+            supports_batch_insert=False,
+            supports_metadata_indexing=True,
+        )
+
+    def health(self) -> dict[str, Any]:
+        return {
+            VectorStatsKey.PROVIDER.value: VectorProviderName.OPENSEARCH.value,
+            VectorStatsKey.EXPECTED_DIMENSIONALITY.value: self.expected_dimensionality,
+            VectorStatsKey.INDEX.value: self.index_name,
+            VectorStatsKey.DISTANCE.value: self.distance,
+            VectorStatsKey.STATS.value: self.get_stats(),
+        }
+
+    def set_ttl(self, memory_id: str, ttl_seconds: int) -> None:
+        _ = (memory_id, ttl_seconds)
+        raise NotSupportedError("TTL is not supported by this vector adapter")
+
+    def _create_client(self) -> Any:
+        try:
+            from opensearchpy import OpenSearch  # type: ignore
+        except ImportError as exc:
+            raise RuntimeError(
+                "opensearch-py package is required for providers.vector_db=opensearch"
+            ) from exc
+        parsed = urlparse(self.url)
+        kwargs: dict[str, Any] = {
+            "hosts": [{"host": parsed.hostname, "port": parsed.port or 9200}],
+            "use_ssl": parsed.scheme == "https",
+        }
+        if self.username or self.password:
+            kwargs["http_auth"] = (self.username, self.password)
+        return OpenSearch(**kwargs)
+
+    def _ensure_index(self) -> None:
+        if self._client.indices.exists(index=self.index_name):
+            return
+        space_type = self._SPACE_TYPE_MAP.get(self.distance)
+        if space_type is None:
+            raise ValueError(
+                "OpenSearch distance must be one of: cosine, l2, inner_product"
+            )
+        self._client.indices.create(
+            index=self.index_name,
+            body={
+                "settings": {"index": {"knn": True}},
+                "mappings": {
+                    "properties": {
+                        VectorPayloadKey.VECTOR.value: {
+                            "type": "knn_vector",
+                            "dimension": self.expected_dimensionality,
+                            "method": {
+                                "name": "hnsw",
+                                "space_type": space_type,
+                                "engine": "lucene",
+                            },
+                        },
+                        VectorPayloadKey.MEMORY_ID.value: {"type": "keyword"},
+                        VectorPayloadKey.PROJECT_ID.value: {"type": "keyword"},
+                        VectorPayloadKey.OWNER_ID.value: {"type": "keyword"},
+                        VectorPayloadKey.CHUNK_ID.value: {"type": "keyword"},
+                        VectorPayloadKey.MESSAGE_HASH.value: {"type": "keyword"},
+                        VectorPayloadKey.ROLE.value: {"type": "keyword"},
+                        VectorPayloadKey.TEXT.value: {"type": "text"},
+                    }
+                },
+            },
+        )
+
+
+class WeaviateVectorStore:
+    def __init__(
+        self,
+        *,
+        url: str = "http://127.0.0.1:8080",
+        api_key: str = "",
+        collection_name: str = "MemoryVector",
+        dimension: int = 32,
+        client: Any | None = None,
+        classes: Any | None = None,
+    ):
+        self.url = url.rstrip("/")
+        self.api_key = api_key
+        self.collection_name = collection_name
+        self.dimension = dimension
+        if client is None:
+            self._client, self._classes = self._create_client()
+        else:
+            self._client = client
+            self._classes = classes
+        self._collection = self._ensure_collection()
+
+    @property
+    def expected_dimensionality(self) -> int:
+        return self.dimension
+
+    def insert(
+        self, metadata_id: str, embeddings: list[dict[str, Any]], replace: bool = False
+    ) -> None:
+        if replace:
+            self.delete([metadata_id])
+        for item in embeddings:
+            vector = [float(value) for value in item[VectorPayloadKey.VECTOR.value]]
+            _validate_vector_length(
+                vector, expected=self.expected_dimensionality, operation="insert"
+            )
+            payload = _vector_payload(metadata_id, item)
+            self._collection.data.insert(
+                uuid=_stable_point_id(
+                    metadata_id, payload[VectorPayloadKey.CHUNK_ID.value]
+                ),
+                properties=payload,
+                vector=vector,
+            )
+
+    def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
+        _validate_vector_length(
+            query_vector, expected=self.expected_dimensionality, operation="search"
+        )
+        kwargs: dict[str, Any] = {"near_vector": query_vector, "limit": top_k}
+        metadata_query = self._metadata_query()
+        if metadata_query is not None:
+            kwargs["return_metadata"] = metadata_query
+        result = self._collection.query.near_vector(**kwargs)
+        rows: list[dict[str, Any]] = []
+        for obj in getattr(result, "objects", result) or []:
+            properties = dict(getattr(obj, "properties", {}) or {})
+            row = _row_from_vector_payload(properties)
+            metadata = getattr(obj, "metadata", None)
+            score = getattr(metadata, "certainty", None)
+            if score is None:
+                distance = getattr(metadata, "distance", 0.0)
+                score = 1.0 - float(distance)
+            row[VectorPayloadKey.SCORE.value] = float(score)
+            rows.append(row)
+        return rows
+
+    def delete(self, ids: list[str]) -> None:
+        if not ids:
+            return
+        where = self._memory_id_filter([str(item) for item in ids])
+        self._collection.data.delete_many(where=where)
+
+    def get_stats(self) -> dict[str, Any]:
+        rows = None
+        try:
+            result = self._collection.aggregate.over_all(total_count=True)
+            rows = int(getattr(result, "total_count", 0) or 0)
+        except Exception:
+            rows = None
+        return {
+            VectorStatsKey.PROVIDER.value: VectorProviderName.WEAVIATE.value,
+            VectorStatsKey.ROWS.value: rows,
+            VectorStatsKey.EXPECTED_DIMENSIONALITY.value: self.expected_dimensionality,
+            VectorStatsKey.COLLECTION.value: self.collection_name,
+        }
+
+    def capabilities(self) -> ProviderCapabilities:
+        return ProviderCapabilities(
+            supports_batch_insert=False,
+            supports_metadata_indexing=True,
+        )
+
+    def health(self) -> dict[str, Any]:
+        return {
+            VectorStatsKey.PROVIDER.value: VectorProviderName.WEAVIATE.value,
+            VectorStatsKey.EXPECTED_DIMENSIONALITY.value: self.expected_dimensionality,
+            VectorStatsKey.COLLECTION.value: self.collection_name,
+            VectorStatsKey.STATS.value: self.get_stats(),
+        }
+
+    def set_ttl(self, memory_id: str, ttl_seconds: int) -> None:
+        _ = (memory_id, ttl_seconds)
+        raise NotSupportedError("TTL is not supported by this vector adapter")
+
+    def _create_client(self) -> tuple[Any, Any]:
+        try:
+            import weaviate  # type: ignore
+            from weaviate.classes import config as wvc_config  # type: ignore
+            from weaviate.classes import query as wvc_query  # type: ignore
+        except ImportError as exc:
+            raise RuntimeError(
+                "weaviate-client package is required for providers.vector_db=weaviate"
+            ) from exc
+        parsed = urlparse(self.url)
+        auth = None
+        if self.api_key:
+            auth = weaviate.auth.AuthApiKey(self.api_key)
+        client = weaviate.connect_to_custom(
+            http_host=parsed.hostname or "127.0.0.1",
+            http_port=parsed.port or (443 if parsed.scheme == "https" else 8080),
+            http_secure=parsed.scheme == "https",
+            grpc_host=parsed.hostname or "127.0.0.1",
+            grpc_port=50051,
+            grpc_secure=parsed.scheme == "https",
+            auth_credentials=auth,
+        )
+        return client, {"config": wvc_config, "query": wvc_query}
+
+    def _ensure_collection(self) -> Any:
+        if self._client.collections.exists(self.collection_name):
+            return self._client.collections.get(self.collection_name)
+        config_classes = self._classes.get("config") if isinstance(self._classes, dict) else None
+        if config_classes is None:
+            return self._client.collections.create(self.collection_name)
+        return self._client.collections.create(
+            name=self.collection_name,
+            vectorizer_config=config_classes.Configure.Vectorizer.none(),
+            properties=[
+                config_classes.Property(
+                    name=VectorPayloadKey.MEMORY_ID.value,
+                    data_type=config_classes.DataType.TEXT,
+                ),
+                config_classes.Property(
+                    name=VectorPayloadKey.PROJECT_ID.value,
+                    data_type=config_classes.DataType.TEXT,
+                ),
+                config_classes.Property(
+                    name=VectorPayloadKey.OWNER_ID.value,
+                    data_type=config_classes.DataType.TEXT,
+                ),
+                config_classes.Property(
+                    name=VectorPayloadKey.CHUNK_ID.value,
+                    data_type=config_classes.DataType.TEXT,
+                ),
+                config_classes.Property(
+                    name=VectorPayloadKey.CHUNK_INDEX.value,
+                    data_type=config_classes.DataType.INT,
+                ),
+                config_classes.Property(
+                    name=VectorPayloadKey.MESSAGE_HASH.value,
+                    data_type=config_classes.DataType.TEXT,
+                ),
+                config_classes.Property(
+                    name=VectorPayloadKey.ROLE.value,
+                    data_type=config_classes.DataType.TEXT,
+                ),
+                config_classes.Property(
+                    name=VectorPayloadKey.TEXT.value,
+                    data_type=config_classes.DataType.TEXT,
+                ),
+            ],
+        )
+
+    def _metadata_query(self) -> Any | None:
+        query_classes = self._classes.get("query") if isinstance(self._classes, dict) else None
+        if query_classes is None:
+            return None
+        return query_classes.MetadataQuery(distance=True, certainty=True)
+
+    def _memory_id_filter(self, ids: list[str]) -> Any:
+        query_classes = self._classes.get("query") if isinstance(self._classes, dict) else None
+        if query_classes is None:
+            return {VectorPayloadKey.MEMORY_ID.value: ids}
+        return query_classes.Filter.by_property(
+            VectorPayloadKey.MEMORY_ID.value
+        ).contains_any(ids)
 
 
 class LanceDBVectorStore:
@@ -1090,6 +1771,49 @@ def _row_from_vector_payload(payload: dict[str, Any]) -> dict[str, Any]:
     if owner_id:
         row[VectorPayloadKey.OWNER_ID.value] = owner_id
     return row
+
+
+def _vector_payload_fields() -> list[str]:
+    return [
+        VectorPayloadKey.MEMORY_ID.value,
+        VectorPayloadKey.PROJECT_ID.value,
+        VectorPayloadKey.OWNER_ID.value,
+        VectorPayloadKey.CHUNK_ID.value,
+        VectorPayloadKey.CHUNK_INDEX.value,
+        VectorPayloadKey.MESSAGE_HASH.value,
+        VectorPayloadKey.ROLE.value,
+        VectorPayloadKey.TEXT.value,
+    ]
+
+
+def _validate_vector_length(
+    vector: list[float], *, expected: int, operation: str
+) -> None:
+    actual = len(vector)
+    if actual != expected:
+        raise VectorDimensionError(
+            f"Vector dimensionality mismatch during {operation}: expected {expected}, got {actual}"
+        )
+
+
+def _rows_from_search_hits(result: dict[str, Any]) -> list[dict[str, Any]]:
+    hits_wrapper = result.get(SearchQueryKey.HITS.value, {})
+    hits = hits_wrapper.get(SearchQueryKey.HITS.value, [])
+    rows: list[dict[str, Any]] = []
+    for hit in hits:
+        source = dict(hit.get(SearchQueryKey.SOURCE.value, {}) or {})
+        row = _row_from_vector_payload(source)
+        row[VectorPayloadKey.SCORE.value] = float(
+            hit.get(SearchQueryKey.SCORE.value, 0.0)
+        )
+        rows.append(row)
+    return rows
+
+
+def _mapping_from_object_or_dict(value: Any, key: str) -> Any:
+    if isinstance(value, dict):
+        return value.get(key)
+    return getattr(value, key, None)
 
 
 def _first_query_batch(value: Any) -> list[Any]:

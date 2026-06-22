@@ -14,7 +14,11 @@ class VectorProviderName(StrEnum):
     MEMORY = "memory"
     CHROMADB = "chromadb"
     QDRANT = "qdrant"
+    MILVUS = "milvus"
+    WEAVIATE = "weaviate"
     MONGODB_ATLAS = "mongodb_atlas"
+    ELASTICSEARCH = "elasticsearch"
+    OPENSEARCH = "opensearch"
 
 
 class VectorProviderAlias(StrEnum):
@@ -72,7 +76,9 @@ class VectorStatsKey(StrEnum):
     ROWS = "rows"
     EXPECTED_DIMENSIONALITY = "expected_dimensionality"
     COLLECTION = "collection"
+    INDEX = "index"
     MODE = "mode"
+    DISTANCE = "distance"
     STATS = "stats"
 
 
@@ -92,6 +98,40 @@ class QdrantDistanceName(StrEnum):
     COSINE = "Cosine"
     L2 = "Euclid"
     INNER_PRODUCT = "Dot"
+
+
+class MilvusMetricType(StrEnum):
+    COSINE = "COSINE"
+    L2 = "L2"
+    INNER_PRODUCT = "IP"
+
+
+class SearchSimilarityName(StrEnum):
+    COSINE = "cosine"
+    L2 = "l2_norm"
+    INNER_PRODUCT = "dot_product"
+
+
+class OpenSearchSpaceType(StrEnum):
+    COSINE = "cosinesimil"
+    L2 = "l2"
+    INNER_PRODUCT = "innerproduct"
+
+
+class SearchQueryKey(StrEnum):
+    KNN = "knn"
+    FIELD = "field"
+    QUERY_VECTOR = "query_vector"
+    K = "k"
+    NUM_CANDIDATES = "num_candidates"
+    SIZE = "size"
+    QUERY = "query"
+    TERMS = "terms"
+    BOOL = "bool"
+    FILTER = "filter"
+    HITS = "hits"
+    SOURCE = "_source"
+    SCORE = "_score"
 
 
 class MongoCollectionName(StrEnum):

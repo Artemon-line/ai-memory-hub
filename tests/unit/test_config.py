@@ -117,16 +117,23 @@ def test_storage_provider_expansion_config_models_validate() -> None:
 
 
 def test_provider_config_accepts_implemented_expansion_providers() -> None:
-    qdrant_config = parse_config({"providers": {"vector_db": "qdrant"}})
-    atlas_config = parse_config({"providers": {"vector_db": "mongodb_atlas"}})
+    vector_providers = [
+        "qdrant",
+        "milvus",
+        "weaviate",
+        "mongodb_atlas",
+        "elasticsearch",
+        "opensearch",
+    ]
     mongodb_config = parse_config({"providers": {"metadata_db": "mongodb"}})
 
-    assert qdrant_config.providers.vector_db == "qdrant"
-    assert atlas_config.providers.vector_db == "mongodb_atlas"
+    for provider in vector_providers:
+        config = parse_config({"providers": {"vector_db": provider}})
+        assert config.providers.vector_db == provider
     assert mongodb_config.providers.metadata_db == "mongodb"
 
 
-def test_storage_provider_configs_override_qdrant_and_atlas_defaults() -> None:
+def test_storage_provider_configs_override_expansion_defaults() -> None:
     config = parse_config(
         {
             "storage": {
@@ -137,11 +144,33 @@ def test_storage_provider_configs_override_qdrant_and_atlas_defaults() -> None:
                         "collection": "custom_qdrant_vectors",
                         "prefer_grpc": True,
                     },
+                    "milvus": {
+                        "uri": "https://milvus.example.com",
+                        "token": "milvus-token",
+                        "collection": "custom_milvus_vectors",
+                    },
+                    "weaviate": {
+                        "url": "https://weaviate.example.com",
+                        "api_key": "weaviate-key",
+                        "collection": "CustomMemoryVector",
+                    },
                     "mongodb_atlas": {
                         "uri": "mongodb+srv://user:secret@example.mongodb.net/app",
                         "database": "custom_memory",
                         "collection": "custom_atlas_vectors",
                         "index": "custom_vector_index",
+                    },
+                    "elasticsearch": {
+                        "url": "https://elastic.example.com",
+                        "username": "elastic-user",
+                        "password": "elastic-pass",
+                        "index": "custom_elastic_vectors",
+                    },
+                    "opensearch": {
+                        "url": "https://opensearch.example.com",
+                        "username": "opensearch-user",
+                        "password": "opensearch-pass",
+                        "index": "custom_opensearch_vectors",
                     },
                 }
             }
@@ -152,12 +181,26 @@ def test_storage_provider_configs_override_qdrant_and_atlas_defaults() -> None:
     assert config.storage.vector_providers.qdrant.api_key == "qdrant-key"
     assert config.storage.vector_providers.qdrant.collection == "custom_qdrant_vectors"
     assert config.storage.vector_providers.qdrant.prefer_grpc is True
+    assert config.storage.vector_providers.milvus.uri == "https://milvus.example.com"
+    assert config.storage.vector_providers.milvus.token == "milvus-token"
+    assert config.storage.vector_providers.milvus.collection == "custom_milvus_vectors"
+    assert config.storage.vector_providers.weaviate.url == "https://weaviate.example.com"
+    assert config.storage.vector_providers.weaviate.api_key == "weaviate-key"
+    assert config.storage.vector_providers.weaviate.collection == "CustomMemoryVector"
     assert config.storage.vector_providers.mongodb_atlas.uri == (
         "mongodb+srv://user:secret@example.mongodb.net/app"
     )
     assert config.storage.vector_providers.mongodb_atlas.database == "custom_memory"
     assert config.storage.vector_providers.mongodb_atlas.collection == "custom_atlas_vectors"
     assert config.storage.vector_providers.mongodb_atlas.index == "custom_vector_index"
+    assert config.storage.vector_providers.elasticsearch.url == "https://elastic.example.com"
+    assert config.storage.vector_providers.elasticsearch.username == "elastic-user"
+    assert config.storage.vector_providers.elasticsearch.password == "elastic-pass"
+    assert config.storage.vector_providers.elasticsearch.index == "custom_elastic_vectors"
+    assert config.storage.vector_providers.opensearch.url == "https://opensearch.example.com"
+    assert config.storage.vector_providers.opensearch.username == "opensearch-user"
+    assert config.storage.vector_providers.opensearch.password == "opensearch-pass"
+    assert config.storage.vector_providers.opensearch.index == "custom_opensearch_vectors"
 
 
 def test_storage_provider_config_rejects_invalid_urls_and_names() -> None:

@@ -32,8 +32,8 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P2 | Storage provider expansion config and shared contract tests | Planned | `storage_agnostic_byoa_plan.md` |
 | P2 | ChromaDB and Qdrant vector providers | Planned | `storage_agnostic_byoa_plan.md` |
 | P2 | MongoDB metadata and MongoDB Atlas Vector Search | Planned | `storage_agnostic_byoa_plan.md` |
-| P3 | Elasticsearch/OpenSearch vector providers | Planned | `storage_agnostic_byoa_plan.md` |
-| P3 | Milvus/Zilliz and Weaviate vector providers | Planned | `storage_agnostic_byoa_plan.md` |
+| P3 | Elasticsearch/OpenSearch vector providers | Implemented | `storage_agnostic_byoa_plan.md` |
+| P3 | Milvus/Zilliz and Weaviate vector providers | Implemented | `storage_agnostic_byoa_plan.md` |
 | P3 | Release notes, image scanning, SBOM, and provenance | Planned | `release_container_docs_plan.md` |
 | P3 | Topic/project summaries, digests, consolidation | Planned here | This doc and `roadmap.md` |
 | P3 | UI and developer experience | Planned here | This doc and `roadmap.md` |
@@ -508,11 +508,11 @@ Use `storage_agnostic_byoa_plan.md` as the source of truth.
 
 Implementation sequence:
 
-- [ ] Implement Elasticsearch vector adapter.
-- [ ] Implement OpenSearch vector adapter.
-- [ ] Keep Elasticsearch/OpenSearch vector-only at first; add hybrid capability only after API semantics are designed.
-- [ ] Implement Milvus/Zilliz vector adapter.
-- [ ] Implement Weaviate vector adapter.
+- [x] Implement Elasticsearch vector adapter.
+- [x] Implement OpenSearch vector adapter.
+- [x] Keep Elasticsearch/OpenSearch vector-only at first; add hybrid capability only after API semantics are designed.
+- [x] Implement Milvus/Zilliz vector adapter.
+- [x] Implement Weaviate vector adapter.
 - [ ] Add Docker Compose examples for local provider smoke testing.
 - [ ] Document provider limitations: consistency, index readiness, score interpretation, distance metrics, and local/hosted differences.
 
