@@ -4,6 +4,7 @@ import logging
 import math
 import re
 import uuid
+from importlib import import_module
 from pathlib import Path
 from typing import Any, Callable, Protocol
 from urllib.parse import urlparse
@@ -19,6 +20,7 @@ from memory.provider_models import (
     MilvusMetricType,
     OpenSearchSpaceType,
     QdrantDistanceName,
+    RedisVectorField,
     SearchQueryKey,
     SearchSimilarityName,
     VectorPayloadKey,
@@ -1044,6 +1046,172 @@ class OpenSearchVectorStore:
         )
 
 
+class RedisVectorStore:
+    _DISTANCE_MAP = {
+        "cosine": "COSINE",
+        "l2": "L2",
+        "inner_product": "IP",
+    }
+
+    def __init__(
+        self,
+        *,
+        url: str = "redis://127.0.0.1:6379/0",
+        index_name: str = "memory_vectors",
+        key_prefix: str = "memory_vectors:",
+        dimension: int = 32,
+        distance: str = "cosine",
+        client: Any | None = None,
+    ) -> None:
+        self.index_name = index_name
+        self.key_prefix = key_prefix
+        self.expected_dimensionality = dimension
+        self.distance = distance
+        self._algorithm = self._DISTANCE_MAP.get(distance, "COSINE")
+        self._client = client or self._create_client(url)
+        self._ensure_index()
+
+    def _create_client(self, url: str) -> Any:
+        try:
+            redis_module = import_module("redis")
+        except ImportError as exc:  # pragma: no cover - depends on optional extra
+            raise RuntimeError(
+                "Redis vector support requires installing the 'redis' extra"
+            ) from exc
+        return redis_module.Redis.from_url(url)
+
+    def _ensure_index(self) -> None:
+        try:
+            self._client.ft(self.index_name).info()
+            return
+        except Exception as exc:
+            if not _is_redis_missing_index_error(exc):
+                raise
+        self._client.execute_command(
+            "FT.CREATE",
+            self.index_name,
+            "ON",
+            "HASH",
+            "PREFIX",
+            "1",
+            self.key_prefix,
+            "SCHEMA",
+            VectorPayloadKey.MEMORY_ID.value,
+            "TAG",
+            VectorPayloadKey.PROJECT_ID.value,
+            "TAG",
+            VectorPayloadKey.OWNER_ID.value,
+            "TAG",
+            VectorPayloadKey.CHUNK_ID.value,
+            "TEXT",
+            VectorPayloadKey.CHUNK_INDEX.value,
+            "NUMERIC",
+            VectorPayloadKey.MESSAGE_HASH.value,
+            "TAG",
+            VectorPayloadKey.ROLE.value,
+            "TAG",
+            VectorPayloadKey.TEXT.value,
+            "TEXT",
+            RedisVectorField.VECTOR.value,
+            "VECTOR",
+            "HNSW",
+            "6",
+            "TYPE",
+            "FLOAT32",
+            "DIM",
+            str(self.expected_dimensionality),
+            "DISTANCE_METRIC",
+            self._algorithm,
+        )
+
+    def insert(
+        self,
+        metadata_id: str,
+        chunks: list[dict[str, Any]],
+        *,
+        replace: bool = False,
+    ) -> None:
+        if replace:
+            self.delete([metadata_id])
+        for item in chunks:
+            embedding = [float(value) for value in item[VectorPayloadKey.VECTOR.value]]
+            _validate_vector_length(
+                embedding, expected=self.expected_dimensionality, operation="insert"
+            )
+            payload = _vector_payload(metadata_id, item)
+            self._client.hset(
+                self._key_for_payload(payload),
+                mapping={
+                    **payload,
+                    RedisVectorField.VECTOR.value: _float32_vector_bytes(embedding),
+                },
+            )
+
+    def replace(self, metadata_id: str, chunks: list[dict[str, Any]]) -> None:
+        self.delete([metadata_id])
+        self.insert(metadata_id, chunks)
+
+    def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
+        _validate_vector_length(
+            query_vector, expected=self.expected_dimensionality, operation="search"
+        )
+        query = (
+            f"*=>[KNN {int(top_k)} @{RedisVectorField.VECTOR.value} "
+            f"$vector AS {RedisVectorField.DISTANCE.value}]"
+        )
+        result = self._client.ft(self.index_name).search(
+            _redis_search_query(query),
+            query_params={
+                RedisVectorField.VECTOR.value: _float32_vector_bytes(query_vector)
+            },
+        )
+        rows = [_row_from_redis_document(document) for document in result.docs]
+        rows.sort(key=lambda row: float(row.get(RedisVectorField.DISTANCE.value, 0.0)))
+        return rows[:top_k]
+
+    def delete(self, ids: list[str]) -> None:
+        for memory_id in ids:
+            self._delete_memory_id(str(memory_id))
+
+    def get_stats(self) -> dict[str, Any]:
+        rows = None
+        try:
+            rows = _redis_info_int(self._client.ft(self.index_name).info(), "num_docs")
+        except Exception:
+            rows = None
+        return {
+            VectorStatsKey.PROVIDER.value: VectorProviderName.REDIS.value,
+            VectorStatsKey.ROWS.value: rows,
+            VectorStatsKey.EXPECTED_DIMENSIONALITY.value: self.expected_dimensionality,
+            VectorStatsKey.INDEX.value: self.index_name,
+            VectorStatsKey.DISTANCE.value: self.distance,
+        }
+
+    def capabilities(self) -> ProviderCapabilities:
+        return ProviderCapabilities(supports_metadata_indexing=True)
+
+    def health(self) -> dict[str, Any]:
+        return {
+            VectorStatsKey.PROVIDER.value: VectorProviderName.REDIS.value,
+            VectorStatsKey.EXPECTED_DIMENSIONALITY.value: self.expected_dimensionality,
+            VectorStatsKey.INDEX.value: self.index_name,
+            VectorStatsKey.DISTANCE.value: self.distance,
+            VectorStatsKey.STATS.value: self.get_stats(),
+        }
+
+    def _delete_memory_id(self, memory_id: str) -> None:
+        query = f"@{VectorPayloadKey.MEMORY_ID.value}:{{{_redis_tag_escape(memory_id)}}}"
+        result = self._client.ft(self.index_name).search(query)
+        for document in result.docs:
+            self._client.delete(document.id)
+
+    def _key_for_payload(self, payload: dict[str, Any]) -> str:
+        return self.key_prefix + _stable_point_id(
+            str(payload[VectorPayloadKey.MEMORY_ID.value]),
+            str(payload[VectorPayloadKey.CHUNK_ID.value]),
+        )
+
+
 class WeaviateVectorStore:
     def __init__(
         self,
@@ -1798,6 +1966,59 @@ def _row_from_vector_payload(payload: dict[str, Any]) -> dict[str, Any]:
     if owner_id:
         row[VectorPayloadKey.OWNER_ID.value] = owner_id
     return row
+
+
+def _float32_vector_bytes(vector: list[float]) -> bytes:
+    return pa.array(vector, type=pa.float32()).to_numpy(zero_copy_only=False).tobytes()
+
+
+def _row_from_redis_document(document: Any) -> dict[str, Any]:
+    payload = {
+        field: _decode_redis_value(getattr(document, field, ""))
+        for field in _vector_payload_fields()
+    }
+    row = _row_from_vector_payload(payload)
+    distance = float(
+        _decode_redis_value(getattr(document, RedisVectorField.DISTANCE.value, 0.0))
+    )
+    row[RedisVectorField.DISTANCE.value] = distance
+    row[VectorPayloadKey.SCORE.value] = 1.0 - distance
+    return row
+
+
+def _decode_redis_value(value: Any) -> Any:
+    if isinstance(value, bytes):
+        return value.decode("utf-8")
+    return value
+
+
+def _is_redis_missing_index_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return "unknown index" in message or "no such index" in message
+
+
+def _redis_info_int(info: Any, key: str) -> int | None:
+    value = info.get(key) if isinstance(info, dict) else getattr(info, key, None)
+    if value is None:
+        return None
+    return int(value)
+
+
+def _redis_tag_escape(value: str) -> str:
+    return re.sub(r"([,{}\\])", r"\\\1", value)
+
+
+def _redis_search_query(query: str) -> Any:
+    try:
+        query_module = import_module("redis.commands.search.query")
+    except ImportError:
+        return query
+    return (
+        query_module.Query(query)
+        .return_fields(*_vector_payload_fields(), RedisVectorField.DISTANCE.value)
+        .sort_by(RedisVectorField.DISTANCE.value)
+        .dialect(2)
+    )
 
 
 def _vector_payload_fields() -> list[str]:

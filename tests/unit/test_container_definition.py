@@ -21,6 +21,7 @@ def test_containerfile_installs_project_after_copying_package() -> None:
         "opensearch",
         "postgres",
         "qdrant",
+        "redis",
         "tokenizer",
         "weaviate",
     ):

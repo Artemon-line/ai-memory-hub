@@ -34,6 +34,7 @@ from memory.backend.vector_store import (
     OpenSearchVectorStore,
     PGVectorStore,
     QdrantVectorStore,
+    RedisVectorStore,
     WeaviateVectorStore,
 )
 from memory.config import HubConfig, ensure_token_hash_secret, load_config, parse_config
@@ -512,6 +513,15 @@ def _build_vector_store(
             username=opensearch_config.username,
             password=opensearch_config.password,
             index_name=opensearch_config.index,
+            dimension=expected_dimension,
+            distance=cfg.storage.vector.distance,
+        )
+    if provider == VectorProviderName.REDIS.value:
+        redis_config = cfg.storage.vector_providers.redis
+        return RedisVectorStore(
+            url=redis_config.url,
+            index_name=redis_config.index,
+            key_prefix=redis_config.key_prefix,
             dimension=expected_dimension,
             distance=cfg.storage.vector.distance,
         )

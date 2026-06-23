@@ -338,6 +338,48 @@ jobs:
           path: reports/junit/*.xml
           if-no-files-found: warn
 
+  redis:
+    name: Redis Live Storage
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      redis:
+        image: redis/redis-stack-server:7.4.0-v8
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      - run: uv sync --dev --extra redis
+      - name: Wait for Redis
+        run: |
+          for i in {1..30}; do
+            uv run python -c "from redis import Redis; Redis.from_url('redis://127.0.0.1:6379/0').ping()" && exit 0
+            sleep 2
+          done
+          exit 1
+      - name: Run Redis live test
+        env:
+          PYTHONHASHSEED: "0"
+          AMH_TEST_REDIS_URL: redis://127.0.0.1:6379/0
+        run: |
+          mkdir -p reports/junit
+          uv run pytest -q tests/integration/test_storage_features.py \
+            -k live_redis_vector_contract \
+            --junitxml=reports/junit/pytest-redis-live.xml
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: pytest-redis-live-report
+          path: reports/junit/*.xml
+          if-no-files-found: warn
+
   milvus:
     name: Milvus Live Storage
     runs-on: ubuntu-latest

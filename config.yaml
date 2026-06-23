@@ -46,6 +46,10 @@ storage:
       username: ""
       password: ""
       index: memory_vectors
+    redis:
+      url: redis://127.0.0.1:6379/0
+      index: memory_vectors
+      key_prefix: "memory_vectors:"
   metadata_providers:
     mongodb:
       uri: ""
@@ -85,7 +89,7 @@ providers:
   metadata_db: sqlite # sqlite | postgres | mongodb
   metadata_dsn: '' # required when metadata_db=postgres
   # lancedb | chromadb | qdrant | milvus | weaviate | mongodb_atlas |
-  # elasticsearch | opensearch | pgvector | memory | in_memory
+  # elasticsearch | opensearch | redis | pgvector | memory | in_memory
   vector_db: lancedb
   agent: mvp # Phase 1 ingestion agent (deterministic pipeline)
 

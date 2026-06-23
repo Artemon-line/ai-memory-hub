@@ -26,7 +26,8 @@ Implemented and verified in the codebase:
 - Embedding providers: OpenAI and local deterministic embeddings.
 - Metadata stores: SQLite, Postgres, and MongoDB.
 - Vector stores: LanceDB, ChromaDB, Qdrant, Milvus/Zilliz, Weaviate,
-  PGVector, MongoDB Atlas Vector Search, Elasticsearch, OpenSearch, and in-memory.
+  PGVector, MongoDB Atlas Vector Search, Elasticsearch, OpenSearch, Redis,
+  and in-memory.
 - Provider capabilities, schema-version checks, vector dimensionality checks, fallback policy, degraded health state, and dry-run wrappers.
 - Search result grouping by conversation score.
 - `memory_ask` returns structured `results`, human-readable `answer`, and `citations`.
@@ -98,7 +99,7 @@ Supported providers:
 
 - Metadata: SQLite, Postgres, MongoDB
 - Vectors: LanceDB, ChromaDB, Qdrant, Milvus/Zilliz, Weaviate, PGVector,
-  MongoDB Atlas Vector Search, Elasticsearch, OpenSearch, in-memory
+  MongoDB Atlas Vector Search, Elasticsearch, OpenSearch, Redis, in-memory
 
 Implemented storage safety:
 
@@ -241,6 +242,10 @@ storage:
       username: ""
       password: ""
       index: memory_vectors
+    redis:
+      url: redis://127.0.0.1:6379/0
+      index: memory_vectors
+      key_prefix: "memory_vectors:"
   metadata_providers:
     mongodb:
       uri: ""

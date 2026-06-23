@@ -242,6 +242,34 @@ class SearchVectorConfig(BaseModel):
         return _validate_provider_index(value, field_name="storage.vector.search.index")
 
 
+class RedisVectorConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str = "redis://127.0.0.1:6379/0"
+    index: str = "memory_vectors"
+    key_prefix: str = "memory_vectors:"
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, value: str) -> str:
+        if value:
+            _validate_absolute_uri(value, field_name="storage.vector.redis.url")
+        return value
+
+    @field_validator("index")
+    @classmethod
+    def validate_index(cls, value: str) -> str:
+        return _validate_provider_index(value, field_name="storage.vector.redis.index")
+
+    @field_validator("key_prefix")
+    @classmethod
+    def validate_key_prefix(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("storage.vector.redis.key_prefix must not be empty")
+        return normalized
+
+
 class VectorProviderConfigs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -272,6 +300,10 @@ class VectorProviderConfigs(BaseModel):
     opensearch: SearchVectorConfig = Field(
         default_factory=SearchVectorConfig,
         alias=VectorProviderConfigKey.OPENSEARCH.value,
+    )
+    redis: RedisVectorConfig = Field(
+        default_factory=RedisVectorConfig,
+        alias=VectorProviderConfigKey.REDIS.value,
     )
 
 

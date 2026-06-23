@@ -23,6 +23,7 @@ For production-quality semantic search, switch to a real embedding model and set
 | SQLite + Weaviate | `examples/storage-providers/weaviate` | Weaviate with no provider-side vectorizer |
 | SQLite + Elasticsearch | `examples/storage-providers/elasticsearch` | Local single-node Elasticsearch |
 | SQLite + OpenSearch | `examples/storage-providers/opensearch` | Local single-node OpenSearch |
+| SQLite + Redis/RediSearch | `examples/storage-providers/redis` | Local Redis Stack service |
 
 ## CI Coverage
 
@@ -37,6 +38,7 @@ adapter and metadata provider. The dedicated provider workflow
 - Weaviate
 - Elasticsearch
 - OpenSearch
+- Redis/RediSearch
 
 Postgres and PGVector live tests remain in the main CI workflow because they are
 also used by Bruno API/MCP integration tests.

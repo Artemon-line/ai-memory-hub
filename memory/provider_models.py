@@ -19,6 +19,7 @@ class VectorProviderName(StrEnum):
     MONGODB_ATLAS = "mongodb_atlas"
     ELASTICSEARCH = "elasticsearch"
     OPENSEARCH = "opensearch"
+    REDIS = "redis"
 
 
 class VectorProviderAlias(StrEnum):
@@ -44,6 +45,7 @@ class VectorProviderConfigKey(StrEnum):
     MONGODB_ATLAS = "mongodb_atlas"
     ELASTICSEARCH = "elasticsearch"
     OPENSEARCH = "opensearch"
+    REDIS = "redis"
 
 
 class MetadataProviderConfigKey(StrEnum):
@@ -54,6 +56,7 @@ class SecretConfigKey(StrEnum):
     API_KEY = "api_key"
     TOKEN = "token"
     URI = "uri"
+    URL = "url"
     USERNAME = "username"
     PASSWORD = "password"
 
@@ -132,6 +135,11 @@ class SearchQueryKey(StrEnum):
     HITS = "hits"
     SOURCE = "_source"
     SCORE = "_score"
+
+
+class RedisVectorField(StrEnum):
+    VECTOR = "vector"
+    DISTANCE = "vector_distance"
 
 
 class MongoCollectionName(StrEnum):

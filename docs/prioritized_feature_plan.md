@@ -29,11 +29,12 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P2 | GitHub release and Docker Hub image publishing | Planned | `release_container_docs_plan.md` |
 | P2 | First release readiness, repository governance, and contribution policy | Planned | `first_release_readiness_plan.md` |
 | P2 | Storage operational hardening: startup policy logs, production fallback warnings, audit events | Partial | `storage_agnostic_byoa_plan.md` |
-| P2 | Storage provider expansion config and shared contract tests | Planned | `storage_agnostic_byoa_plan.md` |
-| P2 | ChromaDB and Qdrant vector providers | Planned | `storage_agnostic_byoa_plan.md` |
-| P2 | MongoDB metadata and MongoDB Atlas Vector Search | Planned | `storage_agnostic_byoa_plan.md` |
+| P2 | Storage provider expansion config and shared contract tests | Implemented | `storage_agnostic_byoa_plan.md` |
+| P2 | ChromaDB and Qdrant vector providers | Implemented | `storage_agnostic_byoa_plan.md` |
+| P2 | MongoDB metadata and MongoDB Atlas Vector Search | Implemented | `storage_agnostic_byoa_plan.md` |
 | P3 | Elasticsearch/OpenSearch vector providers | Implemented | `storage_agnostic_byoa_plan.md` |
 | P3 | Milvus/Zilliz and Weaviate vector providers | Implemented | `storage_agnostic_byoa_plan.md` |
+| P3 | Next vector provider candidates: Redis/RediSearch, Pinecone, Turbopuffer, Vespa, Typesense/Meilisearch, DuckDB VSS, sqlite-vec | Partial | `storage_agnostic_byoa_plan.md`, `improvements/vector_dbs.md` |
 | P3 | Release notes, image scanning, SBOM, and provenance | Planned | `release_container_docs_plan.md` |
 | P3 | Topic/project summaries, digests, consolidation | Planned here | This doc and `roadmap.md` |
 | P3 | UI and developer experience | Planned here | This doc and `roadmap.md` |
@@ -515,6 +516,25 @@ Implementation sequence:
 - [x] Implement Weaviate vector adapter.
 - [x] Add Docker Compose examples for local provider smoke testing.
 - [ ] Document provider limitations: consistency, index readiness, score interpretation, distance metrics, and local/hosted differences.
+
+## P3: Next Vector Provider Candidates
+
+Use `storage_agnostic_byoa_plan.md` as the source of truth, with
+`improvements/vector_dbs.md` as the raw candidate list.
+
+Implementation sequence:
+
+- [x] Redis/RediSearch adapter for teams already running Redis Stack.
+- [ ] Pinecone adapter for managed/serverless vector search.
+- [ ] Turbopuffer adapter for serverless, object-storage-backed vector search.
+- [ ] Vespa adapter for large-scale hybrid retrieval.
+- [ ] Typesense and/or Meilisearch adapter after confirming vector API maturity
+      and filtering semantics.
+- [ ] DuckDB VSS and/or sqlite-vec embedded adapter for local analytical or
+      single-file deployments.
+- [ ] Keep Faiss, ScaNN, and HNSWlib out of the advertised provider matrix
+      unless the project adds a local library-backed experimental adapter with
+      explicit persistence, delete, and operational semantics.
 
 ## P3: Release Notes And Supply Chain Hardening
 

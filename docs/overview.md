@@ -25,8 +25,8 @@ uv sync --dev --all-extras
 ```
 
 Use provider extras when selecting optional storage SDKs such as ChromaDB,
-Qdrant, Milvus, Weaviate, MongoDB, Elasticsearch, OpenSearch, Postgres, or
-PGVector. Use the tokenizer extra for exact OpenAI-compatible token counting
+Qdrant, Milvus, Weaviate, MongoDB, Elasticsearch, OpenSearch, Redis, Postgres,
+or PGVector. Use the tokenizer extra for exact OpenAI-compatible token counting
 through `tiktoken`. Use `--all-extras` for container builds or provider
 compatibility checks.
 
@@ -451,6 +451,29 @@ storage:
 
 Install the optional dependency with `uv sync --extra opensearch`.
 
+### SQLite + Redis/RediSearch
+
+Use Redis when Redis Stack already owns operational infrastructure and
+RediSearch should host vectors:
+
+```yaml
+providers:
+  metadata_db: sqlite
+  vector_db: redis
+
+storage:
+  vector:
+    allow_fallback: false
+    distance: cosine
+  vector_providers:
+    redis:
+      url: redis://127.0.0.1:6379/0
+      index: memory_vectors
+      key_prefix: "memory_vectors:"
+```
+
+Install the optional dependency with `uv sync --extra redis`.
+
 ### MongoDB Metadata And Atlas Vectors
 
 Use MongoDB for metadata when Mongo already owns application persistence, and
@@ -697,7 +720,8 @@ Ollama embeddings, see `examples/postgres/pgvector/config.ollama.yaml`.
 
 Additional checked-in provider examples are under `examples/storage-providers`.
 They cover local LanceDB, in-memory vectors, ChromaDB, Qdrant, MongoDB metadata,
-MongoDB Atlas Vector Search, Milvus, Weaviate, Elasticsearch, and OpenSearch.
+MongoDB Atlas Vector Search, Milvus, Weaviate, Elasticsearch, OpenSearch, and
+Redis/RediSearch.
 
 ## Testing
 

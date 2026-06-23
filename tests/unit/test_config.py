@@ -99,6 +99,11 @@ def test_storage_provider_expansion_config_models_validate() -> None:
                         "password": "opensearch-secret",
                         "index": "memory_vectors",
                     },
+                    "redis": {
+                        "url": "redis://:redis-secret@127.0.0.1:6379/0",
+                        "index": "memory_vectors",
+                        "key_prefix": "memory_vectors:",
+                    },
                 },
                 "metadata_providers": {
                     "mongodb": {
@@ -124,6 +129,7 @@ def test_provider_config_accepts_implemented_expansion_providers() -> None:
         "mongodb_atlas",
         "elasticsearch",
         "opensearch",
+        "redis",
     ]
     mongodb_config = parse_config({"providers": {"metadata_db": "mongodb"}})
 
@@ -172,6 +178,11 @@ def test_storage_provider_configs_override_expansion_defaults() -> None:
                         "password": "opensearch-pass",
                         "index": "custom_opensearch_vectors",
                     },
+                    "redis": {
+                        "url": "redis://:redis-pass@redis.example.com:6379/0",
+                        "index": "custom_redis_vectors",
+                        "key_prefix": "custom_vectors:",
+                    },
                 }
             }
         }
@@ -201,6 +212,11 @@ def test_storage_provider_configs_override_expansion_defaults() -> None:
     assert config.storage.vector_providers.opensearch.username == "opensearch-user"
     assert config.storage.vector_providers.opensearch.password == "opensearch-pass"
     assert config.storage.vector_providers.opensearch.index == "custom_opensearch_vectors"
+    assert config.storage.vector_providers.redis.url == (
+        "redis://:redis-pass@redis.example.com:6379/0"
+    )
+    assert config.storage.vector_providers.redis.index == "custom_redis_vectors"
+    assert config.storage.vector_providers.redis.key_prefix == "custom_vectors:"
 
 
 def test_storage_provider_config_rejects_invalid_urls_and_names() -> None:

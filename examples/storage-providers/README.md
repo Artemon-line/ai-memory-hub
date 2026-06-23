@@ -22,6 +22,7 @@ need OpenAI, Ollama, or any external model service.
 | Weaviate vectors | `weaviate` | provider workflow |
 | Elasticsearch vectors | `elasticsearch` | provider workflow |
 | OpenSearch vectors | `opensearch` | provider workflow |
+| Redis/RediSearch vectors | `redis` | provider workflow |
 
 ## Common Smoke Check
 

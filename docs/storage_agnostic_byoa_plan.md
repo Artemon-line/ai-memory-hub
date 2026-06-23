@@ -300,6 +300,30 @@ Current implemented provider matrix:
 - [x] Vectors: MongoDB Atlas Vector Search
 - [x] Vectors: Elasticsearch
 - [x] Vectors: OpenSearch
+- [x] Vectors: Redis/RediSearch
+
+Candidate vector-provider backlog from `improvements/vector_dbs.md`:
+
+- [x] Redis/RediSearch: existing-DB option for teams already running Redis
+      Stack; implemented with RediSearch HNSW over HASH storage, configurable
+      index/key prefix, fake-client contract coverage, optional live test gate,
+      and secret-safe fallback/config diagnostics.
+- [ ] Pinecone: managed/serverless vector search; validate namespace semantics,
+      metadata filtering, deletion consistency, and cost-safe live tests.
+- [ ] Turbopuffer: serverless, object-storage-backed vector search; validate
+      batch write/read latency, consistency, and namespace/index lifecycle.
+- [ ] Vespa: large-scale hybrid retrieval; validate schema deployment,
+      document lifecycle, hybrid scoring, and operational complexity.
+- [ ] Typesense/Meilisearch: lighter search engines with vector support; pick
+      only after confirming stable vector APIs, filtering, delete, and score
+      semantics.
+- [ ] DuckDB VSS and sqlite-vec: embedded/analytical options; treat as local
+      deployment adapters with explicit persistence and extension-loading
+      requirements.
+- [ ] Faiss, ScaNN, HNSWlib: library-only options, not database providers.
+      Keep them out of the normal provider matrix unless introduced later as
+      explicitly experimental local adapters with clear persistence and cleanup
+      semantics.
 
 Expansion principles:
 
@@ -321,6 +345,13 @@ Recommended implementation order:
 4. Elasticsearch/OpenSearch: useful for hybrid search and existing ops stacks.
 5. Milvus/Zilliz: useful for larger vector deployments, more operationally complex.
 6. Weaviate: useful for schema-rich vector deployments, cloud/auth behavior needs careful testing.
+7. Redis/RediSearch: useful existing-infrastructure option if Redis Stack is already deployed.
+8. Pinecone: managed/serverless vector search once hosted-provider auth, namespace, and cost controls are designed.
+9. Turbopuffer: serverless/object-storage-backed option after consistency and latency behavior are validated.
+10. Vespa: large-scale hybrid retrieval option after schema deployment and ranking semantics are designed.
+11. Typesense/Meilisearch: lightweight search-engine vector options after vector/filter maturity is confirmed.
+12. DuckDB VSS/sqlite-vec: embedded analytical or single-file options after extension loading and persistence semantics are designed.
+13. Faiss/ScaNN/HNSWlib: library-only options, not normal storage providers; consider only for experimental local adapters.
 
 ### Phase 6a: Provider Config Model
 
@@ -334,6 +365,7 @@ Status: `PARTIAL`
   - [x] `mongodb_atlas`
   - [x] `elasticsearch`
   - [x] `opensearch`
+  - [x] `redis`
 - [x] Extend `providers.metadata_db` accepted values:
   - [x] `mongodb`
   - [ ] optional future `elasticsearch`/`opensearch` only if metadata semantics are fully mapped
@@ -379,6 +411,10 @@ storage:
       username: ""
       password: ""
       index: memory_vectors
+    redis:
+      url: redis://127.0.0.1:6379/0
+      index: memory_vectors
+      key_prefix: "memory_vectors:"
   metadata_providers:
     mongodb:
       uri: mongodb://127.0.0.1:27017
@@ -407,6 +443,7 @@ storage:
   - [x] `AMH_TEST_OPENSEARCH_URL`
   - [x] `AMH_TEST_OPENSEARCH_USERNAME`
   - [x] `AMH_TEST_OPENSEARCH_PASSWORD`
+  - [x] `AMH_TEST_REDIS_URL`
 
 ### Phase 6b: Shared Provider Contract Tests
 

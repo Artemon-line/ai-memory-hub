@@ -30,6 +30,7 @@ RUN python -m pip install --no-cache-dir uv && \
       --extra opensearch \
       --extra postgres \
       --extra qdrant \
+      --extra redis \
       --extra tokenizer \
       --extra weaviate \
       --no-install-project && \
@@ -47,6 +48,7 @@ RUN uv sync --frozen --no-dev \
       --extra opensearch \
       --extra postgres \
       --extra qdrant \
+      --extra redis \
       --extra tokenizer \
       --extra weaviate && \
     test -x /app/.venv/bin/aim && \

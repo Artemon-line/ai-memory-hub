@@ -78,6 +78,12 @@ _PROVIDER_SECRET_PATHS = (
     ),
     (
         _STORAGE_CONFIG_KEY,
+        ProviderConfigSection.VECTOR_PROVIDERS.value,
+        VectorProviderConfigKey.REDIS.value,
+        SecretConfigKey.URL.value,
+    ),
+    (
+        _STORAGE_CONFIG_KEY,
         ProviderConfigSection.METADATA_PROVIDERS.value,
         MetadataProviderConfigKey.MONGODB.value,
         SecretConfigKey.URI.value,

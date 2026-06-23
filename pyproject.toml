@@ -38,6 +38,9 @@ postgres = [
 qdrant = [
     "qdrant-client>=1.12.1",
 ]
+redis = [
+    "redis>=5.0.0",
+]
 tokenizer = [
     "tiktoken>=0.13.0",
 ]

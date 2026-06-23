@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import struct
 import sys
 import types
 from collections.abc import Callable
@@ -32,6 +33,7 @@ from memory.backend.vector_store import (
     OpenSearchVectorStore,
     PGVectorStore,
     QdrantVectorStore,
+    RedisVectorStore,
     WeaviateVectorStore,
 )
 from memory.ingestion import mvp_ingestion
@@ -445,6 +447,7 @@ def _assert_vector_store_contract(store: Any) -> None:
         "qdrant",
         "mongodb_atlas",
         "opensearch",
+        "redis",
         "weaviate",
         "fake",
     }
@@ -869,6 +872,86 @@ class FakeSearchClient:
         return {"count": len(self.rows)}
 
 
+class FakeRedisSearch:
+    def __init__(self, client: "FakeRedisClient", index_name: str) -> None:
+        self.client = client
+        self.index_name = index_name
+
+    def info(self) -> dict[str, int]:
+        if self.index_name not in self.client.indices:
+            raise RuntimeError("Unknown index name")
+        return {"num_docs": len(self.client.rows)}
+
+    def search(
+        self, query: Any, *, query_params: dict[str, bytes] | None = None
+    ) -> Any:
+        query_text = _fake_redis_query_text(query)
+        if query_text.startswith("@memory_id:"):
+            memory_id = query_text.split("{", 1)[1].split("}", 1)[0]
+            docs = [
+                self._document_for(key, row, distance=0.0)
+                for key, row in self.client.rows.items()
+                if row["memory_id"] == memory_id
+            ]
+            return types.SimpleNamespace(docs=docs)
+        query_vector = _fake_redis_vector_from_bytes((query_params or {})["vector"])
+        docs = [
+            self._document_for(key, row, distance=distance)
+            for key, row, distance in sorted(
+                (
+                    (
+                        key,
+                        row,
+                        _test_cosine_distance(
+                            query_vector, _fake_redis_vector_from_bytes(row["vector"])
+                        ),
+                    )
+                    for key, row in self.client.rows.items()
+                ),
+                key=lambda item: item[2],
+            )
+        ]
+        return types.SimpleNamespace(docs=docs)
+
+    def _document_for(self, key: str, row: dict[str, Any], *, distance: float) -> Any:
+        return types.SimpleNamespace(
+            id=key,
+            vector_distance=str(distance),
+            **{
+                item_key: item_value
+                for item_key, item_value in row.items()
+                if item_key != "vector"
+            },
+        )
+
+
+class FakeRedisClient:
+    def __init__(self) -> None:
+        self.rows: dict[str, dict[str, Any]] = {}
+        self.indices: set[str] = set()
+
+    def ft(self, index_name: str) -> FakeRedisSearch:
+        return FakeRedisSearch(self, index_name)
+
+    def execute_command(self, *args: Any) -> None:
+        if args[:1] == ("FT.CREATE",):
+            self.indices.add(str(args[1]))
+
+    def hset(self, key: str, *, mapping: dict[str, Any]) -> None:
+        self.rows[key] = dict(mapping)
+
+    def delete(self, key: str) -> None:
+        self.rows.pop(key, None)
+
+
+def _fake_redis_vector_from_bytes(value: bytes) -> list[float]:
+    return list(struct.unpack(f"{len(value) // 4}f", value))
+
+
+def _fake_redis_query_text(value: Any) -> str:
+    return str(getattr(value, "_query_string", value))
+
+
 class FakeWeaviateMetadata:
     def __init__(self, *, distance: float) -> None:
         self.distance = distance
@@ -1138,6 +1221,10 @@ def _apply_update(doc: dict[str, Any], update: dict[str, Any]) -> None:
             ),
         ),
         (
+            "redis",
+            lambda tmp_path: RedisVectorStore(client=FakeRedisClient(), dimension=3),
+        ),
+        (
             "fake-sdk",
             lambda tmp_path: FakeSDKVectorStore(
                 client=FakeVectorClient(), dimension=3
@@ -1306,6 +1393,21 @@ def test_live_opensearch_vector_contract() -> None:
             username=str(os.getenv("AMH_TEST_OPENSEARCH_USERNAME", "")),
             password=str(os.getenv("AMH_TEST_OPENSEARCH_PASSWORD", "")),
             index_name=f"memory-vectors-{uuid4().hex}",
+            dimension=3,
+        )
+    )
+
+
+@pytest.mark.skipif(
+    not os.getenv("AMH_TEST_REDIS_URL"),
+    reason="AMH_TEST_REDIS_URL is not set",
+)
+def test_live_redis_vector_contract() -> None:
+    _assert_vector_store_contract(
+        RedisVectorStore(
+            url=str(os.environ["AMH_TEST_REDIS_URL"]),
+            index_name=f"memory_vectors_{uuid4().hex}",
+            key_prefix=f"memory_vectors:{uuid4().hex}:",
             dimension=3,
         )
     )
@@ -1569,6 +1671,11 @@ def test_build_runtime_chromadb_fallback_disabled_raises(
             "OpenSearchVectorStore",
             "opensearch unavailable username=admin password=opensearch-secret",
         ),
+        (
+            "redis",
+            "RedisVectorStore",
+            "redis unavailable redis://:redis-secret@localhost:6379/0",
+        ),
     ],
 )
 def test_build_runtime_expansion_vector_fallback_uses_memory_provider(
@@ -1602,6 +1709,7 @@ def test_build_runtime_expansion_vector_fallback_uses_memory_provider(
                         "username": "admin",
                         "password": "opensearch-secret",
                     },
+                    "redis": {"url": "redis://:redis-secret@localhost:6379/0"},
                 },
             },
         }
@@ -1617,6 +1725,7 @@ def test_build_runtime_expansion_vector_fallback_uses_memory_provider(
     assert "atlas-secret" not in " ".join(runtime.health_state["reasons"])
     assert "elastic-secret" not in " ".join(runtime.health_state["reasons"])
     assert "opensearch-secret" not in " ".join(runtime.health_state["reasons"])
+    assert "redis-secret" not in " ".join(runtime.health_state["reasons"])
 
 
 @pytest.mark.parametrize(
@@ -1628,6 +1737,7 @@ def test_build_runtime_expansion_vector_fallback_uses_memory_provider(
         ("mongodb_atlas", "MongoDBAtlasVectorStore"),
         ("elasticsearch", "ElasticsearchVectorStore"),
         ("opensearch", "OpenSearchVectorStore"),
+        ("redis", "RedisVectorStore"),
     ],
 )
 def test_build_runtime_expansion_vector_fallback_disabled_raises(

@@ -445,6 +445,8 @@ def test_config_show_redacts_secrets(capsys, tmp_path) -> None:
                 "    opensearch:",
                 "      username: opensearch-user",
                 "      password: opensearch-secret",
+                "    redis:",
+                "      url: redis://:redis-secret@127.0.0.1:6379/0",
                 "  metadata_providers:",
                 "    mongodb:",
                 "      uri: mongodb://user:mongo-secret@127.0.0.1:27017/app",
@@ -469,6 +471,7 @@ def test_config_show_redacts_secrets(capsys, tmp_path) -> None:
     assert vector_providers["elasticsearch"]["password"] == "***"
     assert vector_providers["opensearch"]["username"] == "***"
     assert vector_providers["opensearch"]["password"] == "***"
+    assert vector_providers["redis"]["url"] == "***"
     assert body["config"]["storage"]["metadata_providers"]["mongodb"]["uri"] == "***"
 
 

@@ -12,6 +12,7 @@ Provider live checks:
 [![Elasticsearch](https://img.shields.io/github/actions/workflow/status/Artemon-line/ai-memory-hub/storage-providers.yml?branch=main&event=push&label=Elasticsearch&logo=elasticsearch)](https://github.com/Artemon-line/ai-memory-hub/actions/workflows/storage-providers.yml)
 [![OpenSearch](https://img.shields.io/github/actions/workflow/status/Artemon-line/ai-memory-hub/storage-providers.yml?branch=main&event=push&label=OpenSearch&logo=opensearch)](https://github.com/Artemon-line/ai-memory-hub/actions/workflows/storage-providers.yml)
 [![Milvus](https://img.shields.io/github/actions/workflow/status/Artemon-line/ai-memory-hub/storage-providers.yml?branch=main&event=push&label=Milvus&logo=milvus)](https://github.com/Artemon-line/ai-memory-hub/actions/workflows/storage-providers.yml)
+[![Redis](https://img.shields.io/github/actions/workflow/status/Artemon-line/ai-memory-hub/storage-providers.yml?branch=main&event=push&label=Redis&logo=redis)](https://github.com/Artemon-line/ai-memory-hub/actions/workflows/storage-providers.yml)
 
 Local-first memory for AI agents.
 
@@ -55,7 +56,7 @@ You choose three things:
 | --- | --- | --- |
 | Embeddings | Deterministic local embeddings for smoke tests and demos | Use a real embedding model for useful semantic search, especially multilingual memory |
 | Metadata storage | SQLite | Use Postgres for shared durable server setups, or MongoDB when it already owns application persistence |
-| Vector storage | LanceDB, ChromaDB, Qdrant, Milvus, Weaviate, PGVector, MongoDB Atlas, Elasticsearch, OpenSearch, or in-memory | Use the backend that already fits your local or hosted operations stack |
+| Vector storage | LanceDB, ChromaDB, Qdrant, Milvus, Weaviate, PGVector, MongoDB Atlas, Elasticsearch, OpenSearch, Redis/RediSearch, or in-memory | Use the backend that already fits your local or hosted operations stack |
 
 For multilingual chat history, choose an embedding model that supports the
 languages you actually use. The embedding provider/model and vector dimension
@@ -76,8 +77,8 @@ Storage guidance:
   metadata and vector indexes.
 - Use MongoDB metadata or MongoDB Atlas Vector Search when MongoDB already owns
   the application's persistence layer.
-- Use Milvus/Zilliz, Weaviate, Elasticsearch, or OpenSearch when those systems
-  already own vector infrastructure in your environment.
+- Use Milvus/Zilliz, Weaviate, Elasticsearch, OpenSearch, or Redis/RediSearch
+  when those systems already own vector infrastructure in your environment.
 - Use in-memory vectors only for tests, demos, and disposable container smoke
   runs.
 
@@ -164,7 +165,7 @@ runbook in the checked-in Compose example directory for the exact commands.
 
 Other checked-in provider examples live under `examples/storage-providers`:
 ChromaDB, Qdrant, MongoDB, MongoDB Atlas, Milvus, Weaviate, Elasticsearch,
-OpenSearch, local LanceDB, and in-memory vectors.
+OpenSearch, Redis/RediSearch, local LanceDB, and in-memory vectors.
 
 Example:
 
@@ -202,7 +203,7 @@ uv run python -m mkdocs build --strict
 The project currently includes deterministic ingestion, MCP tools/resources/prompts,
 HTTP endpoints, CLI commands, fact-backed answers, SQLite/Postgres/MongoDB
 metadata, LanceDB/ChromaDB/Qdrant/Milvus/Weaviate/PGVector/MongoDB Atlas/
-Elasticsearch/OpenSearch/in-memory vectors, token-budgeted ask, container CI,
+Elasticsearch/OpenSearch/Redis/in-memory vectors, token-budgeted ask, container CI,
 provider live-test CI, and GitHub Pages docs publishing.
 
 Planned work includes broader importers, richer summaries, deletion/update
