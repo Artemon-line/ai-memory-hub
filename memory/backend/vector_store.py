@@ -1124,6 +1124,7 @@ class RedisVectorStore:
             "DISTANCE_METRIC",
             self._algorithm,
         )
+        self._wait_for_index_available()
 
     def insert(
         self,
@@ -1213,7 +1214,7 @@ class RedisVectorStore:
         memory_id: str,
         *,
         expected_chunks: int,
-        timeout_seconds: float = 2.0,
+        timeout_seconds: float = 5.0,
     ) -> None:
         query = f"@{VectorPayloadKey.MEMORY_ID.value}:{{{_redis_tag_escape(memory_id)}}}"
         deadline = time.monotonic() + timeout_seconds
@@ -1224,7 +1225,18 @@ class RedisVectorStore:
                     return
             except Exception:
                 logger.debug("Redis index readiness check failed", exc_info=True)
+            if time.monotonic() >= deadline:
                 return
+            time.sleep(0.05)
+
+    def _wait_for_index_available(self, timeout_seconds: float = 5.0) -> None:
+        deadline = time.monotonic() + timeout_seconds
+        while True:
+            try:
+                self._client.ft(self.index_name).info()
+                return
+            except Exception:
+                logger.debug("Redis index availability check failed", exc_info=True)
             if time.monotonic() >= deadline:
                 return
             time.sleep(0.05)
