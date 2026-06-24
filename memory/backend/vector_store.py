@@ -1214,6 +1214,8 @@ class RedisVectorStore:
         result = self._client.ft(self.index_name).search(query)
         for document in result.docs:
             self._client.delete(document.id)
+        for key in self._keys_for_memory_id(memory_id):
+            self._client.delete(key)
 
     def _wait_for_indexed_documents(
         self, expected_rows: int, timeout_seconds: float = 5.0
@@ -1259,20 +1261,8 @@ class RedisVectorStore:
             logger.debug("Redis explicit hash indexing failed", exc_info=True)
 
     def _fallback_scan_search(self, query_vector: list[float]) -> list[dict[str, Any]]:
-        try:
-            keys = list(self._client.scan_iter(match=f"{self.key_prefix}*", count=1000))
-        except Exception:
-            logger.debug("Redis fallback scan failed", exc_info=True)
-            return []
-
         rows: list[dict[str, Any]] = []
-        for key in keys:
-            try:
-                raw_payload = self._client.hgetall(key)
-            except Exception:
-                logger.debug("Redis fallback hash read failed", exc_info=True)
-                continue
-            payload = _decode_redis_mapping(raw_payload)
+        for payload in self._scan_payloads():
             vector_bytes = payload.pop(RedisVectorField.VECTOR.value, b"")
             if not isinstance(vector_bytes, bytes):
                 continue
@@ -1287,6 +1277,40 @@ class RedisVectorStore:
             row[VectorPayloadKey.SCORE.value] = 1.0 - distance
             rows.append(row)
         return rows
+
+    def _scan_payloads(self) -> list[dict[str, Any]]:
+        try:
+            keys = list(self._client.scan_iter(match=f"{self.key_prefix}*", count=1000))
+        except Exception:
+            logger.debug("Redis fallback scan failed", exc_info=True)
+            return []
+
+        payloads: list[dict[str, Any]] = []
+        for key in keys:
+            try:
+                raw_payload = self._client.hgetall(key)
+            except Exception:
+                logger.debug("Redis fallback hash read failed", exc_info=True)
+                continue
+            payloads.append(_decode_redis_mapping(raw_payload))
+        return payloads
+
+    def _keys_for_memory_id(self, memory_id: str) -> list[Any]:
+        try:
+            keys = list(self._client.scan_iter(match=f"{self.key_prefix}*", count=1000))
+        except Exception:
+            logger.debug("Redis delete fallback scan failed", exc_info=True)
+            return []
+        matched_keys = []
+        for key in keys:
+            try:
+                payload = _decode_redis_mapping(self._client.hgetall(key))
+            except Exception:
+                logger.debug("Redis delete fallback hash read failed", exc_info=True)
+                continue
+            if payload.get(VectorPayloadKey.MEMORY_ID.value) == memory_id:
+                matched_keys.append(key)
+        return matched_keys
 
 
 class PineconeVectorStore:
