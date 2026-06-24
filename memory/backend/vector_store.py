@@ -1160,7 +1160,7 @@ class RedisVectorStore:
             query_vector, expected=self.expected_dimensionality, operation="search"
         )
         query = (
-            f"*=>[KNN {int(top_k)} @{RedisVectorField.VECTOR.value} "
+            f"(*)=>[KNN {int(top_k)} @{RedisVectorField.VECTOR.value} "
             f"$vector AS {RedisVectorField.DISTANCE.value}]"
         )
         result = self._client.ft(self.index_name).search(
