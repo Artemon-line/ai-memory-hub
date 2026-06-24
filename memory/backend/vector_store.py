@@ -1135,6 +1135,7 @@ class RedisVectorStore:
     ) -> None:
         if replace:
             self.delete([metadata_id])
+        indexed_rows = self._indexed_doc_count()
         for item in chunks:
             embedding = [float(value) for value in item[VectorPayloadKey.VECTOR.value]]
             _validate_vector_length(
@@ -1150,8 +1151,8 @@ class RedisVectorStore:
                 },
             )
             self._add_hash_to_index(key)
-        if chunks:
-            self._wait_for_indexed_memory(metadata_id, expected_chunks=len(chunks))
+        if chunks and indexed_rows is not None:
+            self._wait_for_indexed_documents(indexed_rows + len(chunks))
 
     def replace(self, metadata_id: str, chunks: list[dict[str, Any]]) -> None:
         self.delete([metadata_id])
@@ -1211,25 +1212,24 @@ class RedisVectorStore:
         for document in result.docs:
             self._client.delete(document.id)
 
-    def _wait_for_indexed_memory(
-        self,
-        memory_id: str,
-        *,
-        expected_chunks: int,
-        timeout_seconds: float = 5.0,
+    def _wait_for_indexed_documents(
+        self, expected_rows: int, timeout_seconds: float = 5.0
     ) -> None:
-        query = f"@{VectorPayloadKey.MEMORY_ID.value}:{{{_redis_tag_escape(memory_id)}}}"
         deadline = time.monotonic() + timeout_seconds
         while True:
-            try:
-                result = self._client.ft(self.index_name).search(query)
-                if len(getattr(result, "docs", [])) >= expected_chunks:
-                    return
-            except Exception:
-                logger.debug("Redis index readiness check failed", exc_info=True)
+            rows = self._indexed_doc_count()
+            if rows is not None and rows >= expected_rows:
+                return
             if time.monotonic() >= deadline:
                 return
             time.sleep(0.05)
+
+    def _indexed_doc_count(self) -> int | None:
+        try:
+            return _redis_info_int(self._client.ft(self.index_name).info(), "num_docs")
+        except Exception:
+            logger.debug("Redis indexed document count check failed", exc_info=True)
+            return None
 
     def _wait_for_index_available(self, timeout_seconds: float = 5.0) -> None:
         deadline = time.monotonic() + timeout_seconds
