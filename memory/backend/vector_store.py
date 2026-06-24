@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import math
 import re
+import time
 import uuid
 from importlib import import_module
 from pathlib import Path
@@ -1146,6 +1147,8 @@ class RedisVectorStore:
                     RedisVectorField.VECTOR.value: _float32_vector_bytes(embedding),
                 },
             )
+        if chunks:
+            self._wait_for_indexed_memory(metadata_id, expected_chunks=len(chunks))
 
     def replace(self, metadata_id: str, chunks: list[dict[str, Any]]) -> None:
         self.delete([metadata_id])
@@ -1204,6 +1207,27 @@ class RedisVectorStore:
         result = self._client.ft(self.index_name).search(query)
         for document in result.docs:
             self._client.delete(document.id)
+
+    def _wait_for_indexed_memory(
+        self,
+        memory_id: str,
+        *,
+        expected_chunks: int,
+        timeout_seconds: float = 2.0,
+    ) -> None:
+        query = f"@{VectorPayloadKey.MEMORY_ID.value}:{{{_redis_tag_escape(memory_id)}}}"
+        deadline = time.monotonic() + timeout_seconds
+        while True:
+            try:
+                result = self._client.ft(self.index_name).search(query)
+                if len(getattr(result, "docs", [])) >= expected_chunks:
+                    return
+            except Exception:
+                logger.debug("Redis index readiness check failed", exc_info=True)
+                return
+            if time.monotonic() >= deadline:
+                return
+            time.sleep(0.05)
 
     def _key_for_payload(self, payload: dict[str, Any]) -> str:
         return self.key_prefix + _stable_point_id(
