@@ -1141,13 +1141,15 @@ class RedisVectorStore:
                 embedding, expected=self.expected_dimensionality, operation="insert"
             )
             payload = _vector_payload(metadata_id, item)
+            key = self._key_for_payload(payload)
             self._client.hset(
-                self._key_for_payload(payload),
+                key,
                 mapping={
                     **payload,
                     RedisVectorField.VECTOR.value: _float32_vector_bytes(embedding),
                 },
             )
+            self._add_hash_to_index(key)
         if chunks:
             self._wait_for_indexed_memory(metadata_id, expected_chunks=len(chunks))
 
@@ -1246,6 +1248,12 @@ class RedisVectorStore:
             str(payload[VectorPayloadKey.MEMORY_ID.value]),
             str(payload[VectorPayloadKey.CHUNK_ID.value]),
         )
+
+    def _add_hash_to_index(self, key: str) -> None:
+        try:
+            self._client.execute_command("FT.ADDHASH", self.index_name, key, "1.0", "REPLACE")
+        except Exception:
+            logger.debug("Redis explicit hash indexing failed", exc_info=True)
 
 
 class PineconeVectorStore:
