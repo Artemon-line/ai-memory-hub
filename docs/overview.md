@@ -25,8 +25,8 @@ uv sync --dev --all-extras
 ```
 
 Use provider extras when selecting optional storage SDKs such as ChromaDB,
-Qdrant, Milvus, Weaviate, MongoDB, Elasticsearch, OpenSearch, Redis, Typesense,
-Pinecone, Turbopuffer, Postgres, or PGVector. Use the tokenizer extra for exact
+Qdrant, Milvus, Weaviate, MongoDB, Elasticsearch, OpenSearch, Redis, Vespa,
+Typesense, Pinecone, Turbopuffer, Postgres, or PGVector. Use the tokenizer extra for exact
 OpenAI-compatible token counting through `tiktoken`. Use `--all-extras` for
 container builds or provider compatibility checks.
 
@@ -474,6 +474,32 @@ storage:
 
 Install the optional dependency with `uv sync --extra redis`.
 
+### SQLite + Vespa
+
+Use Vespa when a deployed Vespa application already owns large-scale retrieval
+infrastructure and ai-memory-hub should feed hub-owned embeddings into it:
+
+```yaml
+providers:
+  metadata_db: sqlite
+  vector_db: vespa
+
+storage:
+  vector:
+    allow_fallback: false
+    distance: cosine
+  vector_providers:
+    vespa:
+      url: http://127.0.0.1:8080
+      token: ""
+      namespace: memory
+      schema: memory_vector
+      rank_profile: vector_similarity
+```
+
+Install the optional dependency with `uv sync --extra vespa`. Deploy the Vespa
+application package and schema before starting ai-memory-hub.
+
 ### SQLite + Typesense
 
 Use Typesense when vector storage should live in a lightweight search engine
@@ -793,7 +819,7 @@ Ollama embeddings, see `examples/postgres/pgvector/config.ollama.yaml`.
 Additional checked-in provider examples are under `examples/storage-providers`.
 They cover local LanceDB, in-memory vectors, ChromaDB, Qdrant, MongoDB metadata,
 MongoDB Atlas Vector Search, Milvus, Weaviate, Elasticsearch, OpenSearch,
-Redis/RediSearch, Typesense, Pinecone, and Turbopuffer.
+Redis/RediSearch, Vespa, Typesense, Pinecone, and Turbopuffer.
 
 ## Testing
 

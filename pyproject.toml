@@ -50,6 +50,9 @@ tokenizer = [
 turbopuffer = [
     "turbopuffer>=0.1.0",
 ]
+vespa = [
+    "pyvespa>=0.50.0",
+]
 typesense = [
     "typesense>=0.21.0",
 ]

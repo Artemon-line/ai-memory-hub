@@ -23,6 +23,7 @@ need OpenAI, Ollama, or any external model service.
 | Elasticsearch vectors | `elasticsearch` | provider workflow |
 | OpenSearch vectors | `opensearch` | provider workflow |
 | Redis/RediSearch vectors | `redis` | provider workflow |
+| Vespa vectors | `vespa` | optional deployed-application live test |
 | Typesense vectors | `typesense` | provider workflow |
 | Pinecone vectors | `pinecone` | hosted optional live test |
 | Turbopuffer vectors | `turbopuffer` | hosted optional live test |

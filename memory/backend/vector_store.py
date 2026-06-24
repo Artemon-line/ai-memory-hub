@@ -1579,6 +1579,167 @@ class TurbopufferVectorStore:
         }
 
 
+class VespaVectorStore:
+    _DISTANCE_MAP = {
+        "cosine": "angular",
+        "l2": "euclidean",
+        "inner_product": "prenormalized-angular",
+    }
+
+    def __init__(
+        self,
+        *,
+        url: str = "http://127.0.0.1:8080",
+        token: str = "",
+        namespace: str = "memory",
+        schema: str = "memory_vector",
+        rank_profile: str = "vector_similarity",
+        dimension: int = 32,
+        distance: str = "cosine",
+        client: Any | None = None,
+    ) -> None:
+        self.url = url.rstrip("/")
+        self.token = token
+        self.namespace = namespace
+        self.schema = schema
+        self.rank_profile = rank_profile
+        self.expected_dimensionality = dimension
+        self.distance = distance
+        self.metric = self._DISTANCE_MAP.get(distance)
+        if self.metric is None:
+            raise ValueError("Vespa distance must be one of: cosine, l2, inner_product")
+        self._client = client or self._create_client()
+
+    def _create_client(self) -> Any:
+        try:
+            vespa_module = import_module("vespa.application")
+        except ImportError as exc:  # pragma: no cover - depends on optional extra
+            raise RuntimeError(
+                "Vespa vector support requires installing the 'vespa' extra"
+            ) from exc
+        kwargs: dict[str, Any] = {"url": self.url}
+        if self.token:
+            kwargs["vespa_cloud_secret_token"] = self.token
+        return vespa_module.Vespa(**kwargs)
+
+    def insert(
+        self,
+        metadata_id: str,
+        chunks: list[dict[str, Any]],
+        *,
+        replace: bool = False,
+    ) -> None:
+        if replace:
+            self.delete([metadata_id])
+        for item in chunks:
+            vector = [float(value) for value in item[VectorPayloadKey.VECTOR.value]]
+            _validate_vector_length(
+                vector, expected=self.expected_dimensionality, operation="insert"
+            )
+            payload = _vector_payload(metadata_id, item)
+            document_id = _stable_point_id(
+                str(payload[VectorPayloadKey.MEMORY_ID.value]),
+                str(payload[VectorPayloadKey.CHUNK_ID.value]),
+            )
+            response = self._client.feed_data_point(
+                schema=self.schema,
+                namespace=self.namespace,
+                data_id=document_id,
+                fields={
+                    "id": document_id,
+                    **payload,
+                    VectorPayloadKey.VECTOR.value: vector,
+                },
+            )
+            _raise_if_vespa_response_failed(response, operation="feed")
+
+    def replace(self, metadata_id: str, chunks: list[dict[str, Any]]) -> None:
+        self.delete([metadata_id])
+        self.insert(metadata_id, chunks)
+
+    def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
+        _validate_vector_length(
+            query_vector, expected=self.expected_dimensionality, operation="search"
+        )
+        body = {
+            "yql": (
+                f"select * from {self.schema} where "
+                f"({{targetHits:{int(top_k)}}}nearestNeighbor("
+                f"{VectorPayloadKey.VECTOR.value}, q))"
+            ),
+            "hits": int(top_k),
+            "ranking": self.rank_profile,
+            "input.query(q)": {"values": [float(value) for value in query_vector]},
+        }
+        response = self._client.query(body=body)
+        _raise_if_vespa_response_failed(response, operation="query")
+        return [_row_from_vespa_hit(hit) for hit in _vespa_hits(response)]
+
+    def delete(self, ids: list[str]) -> None:
+        if not ids:
+            return
+        for document_id in self._document_ids_for_memory_ids(ids):
+            response = self._client.delete_data(
+                schema=self.schema,
+                namespace=self.namespace,
+                data_id=document_id,
+            )
+            _raise_if_vespa_response_failed(response, operation="delete")
+
+    def get_stats(self) -> dict[str, Any]:
+        rows = None
+        try:
+            response = self._client.query(
+                body={"yql": f"select * from {self.schema} where true", "hits": 0}
+            )
+            rows = _vespa_total_count(response)
+        except Exception:
+            rows = None
+        return {
+            VectorStatsKey.PROVIDER.value: VectorProviderName.VESPA.value,
+            VectorStatsKey.ROWS.value: rows,
+            VectorStatsKey.EXPECTED_DIMENSIONALITY.value: self.expected_dimensionality,
+            "namespace": self.namespace,
+            "schema": self.schema,
+            "rank_profile": self.rank_profile,
+            VectorStatsKey.DISTANCE.value: self.distance,
+        }
+
+    def capabilities(self) -> ProviderCapabilities:
+        return ProviderCapabilities(supports_metadata_indexing=True)
+
+    def health(self) -> dict[str, Any]:
+        return {
+            VectorStatsKey.PROVIDER.value: VectorProviderName.VESPA.value,
+            VectorStatsKey.EXPECTED_DIMENSIONALITY.value: self.expected_dimensionality,
+            "namespace": self.namespace,
+            "schema": self.schema,
+            "rank_profile": self.rank_profile,
+            VectorStatsKey.DISTANCE.value: self.distance,
+            VectorStatsKey.STATS.value: self.get_stats(),
+        }
+
+    def _document_ids_for_memory_ids(self, ids: list[str]) -> list[str]:
+        document_ids: list[str] = []
+        for memory_id in ids:
+            response = self._client.query(
+                body={
+                    "yql": (
+                        f"select id from {self.schema} where "
+                        f'{VectorPayloadKey.MEMORY_ID.value} contains "{memory_id}"'
+                    ),
+                    "hits": 10000,
+                }
+            )
+            _raise_if_vespa_response_failed(response, operation="delete lookup")
+            for hit in _vespa_hits(response):
+                fields = dict(hit.get("fields", {}) or {})
+                document_id = fields.get("id") or hit.get("id")
+                if document_id:
+                    document_ids.append(_vespa_document_id_tail(str(document_id)))
+        return document_ids
+
+
 class TypesenseVectorStore:
     def __init__(
         self,
@@ -2660,6 +2821,57 @@ def _row_from_turbopuffer_match(match: Any) -> dict[str, Any]:
         score = 1.0 - float(distance or 0.0)
     row[VectorPayloadKey.SCORE.value] = float(score or 0.0)
     return row
+
+
+def _vespa_hits(response: Any) -> list[dict[str, Any]]:
+    hits = getattr(response, "hits", None)
+    if hits is None and isinstance(response, dict):
+        hits = response.get("hits")
+    if hits is None:
+        json_method = getattr(response, "get_json", None)
+        if callable(json_method):
+            data = json_method() or {}
+            if isinstance(data, dict):
+                root = data.get("root", {})
+                if isinstance(root, dict):
+                    hits = root.get("children", [])
+    return list(hits or [])
+
+
+def _vespa_total_count(response: Any) -> int | None:
+    json_method = getattr(response, "get_json", None)
+    data = json_method() if callable(json_method) else response
+    if not isinstance(data, dict):
+        return None
+    root = data.get("root", {})
+    root_fields = root.get("fields", {}) if isinstance(root, dict) else {}
+    total_count = root_fields.get("totalCount")
+    if total_count is None:
+        total_count = data.get("totalCount")
+    return int(total_count) if total_count is not None else None
+
+
+def _row_from_vespa_hit(hit: dict[str, Any]) -> dict[str, Any]:
+    fields = dict(hit.get("fields", {}) or {})
+    row = _row_from_vector_payload(fields)
+    relevance = hit.get("relevance", fields.get("relevance"))
+    row[VectorPayloadKey.SCORE.value] = float(relevance or 0.0)
+    return row
+
+
+def _raise_if_vespa_response_failed(response: Any, *, operation: str) -> None:
+    success_method = getattr(response, "is_successful", None)
+    if callable(success_method) and not success_method():
+        status = getattr(response, "status_code", "unknown")
+        json_method = getattr(response, "get_json", None)
+        detail = json_method() if callable(json_method) else response
+        raise RuntimeError(f"Vespa {operation} failed with status {status}: {detail}")
+
+
+def _vespa_document_id_tail(document_id: str) -> str:
+    if "::" in document_id:
+        return document_id.rsplit("::", 1)[1]
+    return document_id.rsplit("/", 1)[-1]
 
 
 def _turbopuffer_approx_row_count(namespace: Any) -> int | None:

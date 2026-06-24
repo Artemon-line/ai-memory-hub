@@ -34,6 +34,7 @@ RUN python -m pip install --no-cache-dir uv && \
       --extra redis \
       --extra tokenizer \
       --extra turbopuffer \
+      --extra vespa \
       --extra typesense \
       --extra weaviate \
       --no-install-project && \
@@ -55,6 +56,7 @@ RUN uv sync --frozen --no-dev \
       --extra redis \
       --extra tokenizer \
       --extra turbopuffer \
+      --extra vespa \
       --extra typesense \
       --extra weaviate && \
     test -x /app/.venv/bin/aim && \

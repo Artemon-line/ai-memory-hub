@@ -62,6 +62,12 @@ storage:
       api_key: ""
       namespace: memory-vectors
       region: gcp-us-central1
+    vespa:
+      url: http://127.0.0.1:8080
+      token: ""
+      namespace: memory
+      schema: memory_vector
+      rank_profile: vector_similarity
     typesense:
       url: http://127.0.0.1:8108
       api_key: ""
@@ -95,7 +101,7 @@ providers:
   metadata_db: sqlite # sqlite | postgres | mongodb
   metadata_dsn: '' # required when metadata_db=postgres
   # lancedb | chromadb | qdrant | milvus | weaviate | mongodb_atlas |
-  # elasticsearch | opensearch | redis | pinecone | turbopuffer | typesense | pgvector | memory | in_memory
+  # elasticsearch | opensearch | redis | pinecone | turbopuffer | vespa | typesense | pgvector | memory | in_memory
   vector_db: lancedb
   agent: mvp # Phase 1 ingestion agent (deterministic pipeline)
 
@@ -335,7 +341,27 @@ openai:
 # Install with:
 #   uv sync --extra turbopuffer
 #
-# 12) Typesense vectors
+# 12) Vespa vectors
+#
+# providers:
+#   vector_db: vespa
+#
+# storage:
+#   vector:
+#     allow_fallback: false
+#     distance: cosine
+#   vector_providers:
+#     vespa:
+#       url: http://127.0.0.1:8080
+#       token: "${VESPA_TOKEN}"
+#       namespace: memory
+#       schema: memory_vector
+#       rank_profile: vector_similarity
+#
+# Install with:
+#   uv sync --extra vespa
+#
+# 13) Typesense vectors
 #
 # providers:
 #   vector_db: typesense
@@ -353,7 +379,7 @@ openai:
 # Install with:
 #   uv sync --extra typesense
 #
-# 13) MongoDB metadata + Atlas Vector Search
+# 14) MongoDB metadata + Atlas Vector Search
 #
 # providers:
 #   metadata_db: mongodb
@@ -374,26 +400,26 @@ openai:
 # Install with:
 #   uv sync --extra mongodb
 #
-# 10) Strict production startup (no vector fallback)
+# 15) Strict production startup (no vector fallback)
 #
 # storage:
 #   dry_run: false
 #   vector:
 #     allow_fallback: false
 #
-# 11) Dry-run mode for ingestion validation
+# 16) Dry-run mode for ingestion validation
 #
 # storage:
 #   dry_run: true
 #   vector:
 #     allow_fallback: true
 #
-# 14) In-memory vectors path
+# 17) In-memory vectors path
 #
 # providers:
 #   vector_db: in_memory
 #
-# 15) Custom conversation schema
+# 18) Custom conversation schema
 #
 # schema:
 #   file: "./memory/schema/conversation.schema.json"

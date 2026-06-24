@@ -1,0 +1,21 @@
+providers:
+  embeddings: local
+  metadata_db: sqlite
+  vector_db: vespa
+
+storage:
+  data_dir: ./data
+  vector:
+    allow_fallback: false
+    distance: cosine
+  vector_providers:
+    vespa:
+      url: http://127.0.0.1:8080
+      token: ""
+      namespace: memory
+      schema: memory_vector
+      rank_profile: vector_similarity
+
+api:
+  host: 0.0.0.0
+  port: 8000

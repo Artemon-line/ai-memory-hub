@@ -31,7 +31,7 @@ Implemented:
 - Token-budgeted `memory_ask` through config or request `max_context_tokens`.
 - Storage providers: SQLite/Postgres/MongoDB metadata,
   LanceDB/ChromaDB/Qdrant/Milvus/Weaviate/PGVector/MongoDB Atlas/
-  Elasticsearch/OpenSearch/Redis/Typesense/Pinecone/Turbopuffer/in-memory vectors.
+  Elasticsearch/OpenSearch/Redis/Vespa/Typesense/Pinecone/Turbopuffer/in-memory vectors.
 - Storage safety: provider capabilities, schema-version checks, vector dimensionality checks,
   policy-gated fallback, degraded health, dry-run wrappers, and secret-safe fallback logging.
 - MCP smoke profiles for Codex, Gemini, VS Code Copilot, and opencode.
@@ -47,7 +47,7 @@ Planned or partial:
 - Prefer MCP tools when running inside an MCP-capable client.
 - Use HTTP endpoints only when MCP is unavailable.
 - Do not write directly to SQLite, Postgres, LanceDB, ChromaDB, PGVector,
-  Redis, or data files.
+  Redis, Vespa, or data files.
 - Omit `id` unless the user or upstream system requires a specific UUID.
 - Treat the returned `id` as canonical for retrieve/search citations.
 - Call `memory_validate` before `memory_insert` when using MCP.

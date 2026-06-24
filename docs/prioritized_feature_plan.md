@@ -527,7 +527,7 @@ Implementation sequence:
 - [x] Redis/RediSearch adapter for teams already running Redis Stack.
 - [x] Pinecone adapter for managed/serverless vector search.
 - [x] Turbopuffer adapter for serverless, object-storage-backed vector search.
-- [ ] Vespa adapter for large-scale hybrid retrieval.
+- [x] Vespa adapter for large-scale hybrid retrieval.
 - [x] Typesense adapter after confirming vector API maturity and filtering
       semantics.
 - [ ] Meilisearch adapter after confirming direct user-provided vector CRUD and

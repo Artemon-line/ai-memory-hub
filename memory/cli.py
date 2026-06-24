@@ -97,6 +97,12 @@ _PROVIDER_SECRET_PATHS = (
     (
         _STORAGE_CONFIG_KEY,
         ProviderConfigSection.VECTOR_PROVIDERS.value,
+        VectorProviderConfigKey.VESPA.value,
+        SecretConfigKey.TOKEN.value,
+    ),
+    (
+        _STORAGE_CONFIG_KEY,
+        ProviderConfigSection.VECTOR_PROVIDERS.value,
         VectorProviderConfigKey.TYPESENSE.value,
         SecretConfigKey.API_KEY.value,
     ),

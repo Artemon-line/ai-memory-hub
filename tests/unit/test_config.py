@@ -117,6 +117,13 @@ def test_storage_provider_expansion_config_models_validate() -> None:
                         "namespace": "memory-vectors",
                         "region": "gcp-us-central1",
                     },
+                    "vespa": {
+                        "url": "https://vespa.example.com",
+                        "token": "vespa-secret",
+                        "namespace": "memory",
+                        "schema": "memory_vector",
+                        "rank_profile": "vector_similarity",
+                    },
                     "typesense": {
                         "url": "https://typesense.example.com",
                         "api_key": "typesense-secret",
@@ -150,6 +157,7 @@ def test_provider_config_accepts_implemented_expansion_providers() -> None:
         "redis",
         "pinecone",
         "turbopuffer",
+        "vespa",
         "typesense",
     ]
     mongodb_config = parse_config({"providers": {"metadata_db": "mongodb"}})
@@ -217,6 +225,13 @@ def test_storage_provider_configs_override_expansion_defaults() -> None:
                         "namespace": "custom-turbopuffer-vectors",
                         "region": "aws-us-east-1",
                     },
+                    "vespa": {
+                        "url": "https://vespa.example.com",
+                        "token": "vespa-key",
+                        "namespace": "custom_namespace",
+                        "schema": "custom_schema",
+                        "rank_profile": "custom_rank",
+                    },
                     "typesense": {
                         "url": "https://typesense.example.com",
                         "api_key": "typesense-key",
@@ -268,6 +283,11 @@ def test_storage_provider_configs_override_expansion_defaults() -> None:
         == "custom-turbopuffer-vectors"
     )
     assert config.storage.vector_providers.turbopuffer.region == "aws-us-east-1"
+    assert config.storage.vector_providers.vespa.url == "https://vespa.example.com"
+    assert config.storage.vector_providers.vespa.token == "vespa-key"
+    assert config.storage.vector_providers.vespa.namespace == "custom_namespace"
+    assert config.storage.vector_providers.vespa.schema_name == "custom_schema"
+    assert config.storage.vector_providers.vespa.rank_profile == "custom_rank"
     assert config.storage.vector_providers.typesense.url == "https://typesense.example.com"
     assert config.storage.vector_providers.typesense.api_key == "typesense-key"
     assert config.storage.vector_providers.typesense.collection == "custom_typesense_vectors"

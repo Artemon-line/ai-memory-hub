@@ -326,6 +326,31 @@ class TurbopufferVectorConfig(BaseModel):
         )
 
 
+class VespaVectorConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str = "http://127.0.0.1:8080"
+    token: str = ""
+    namespace: str = "memory"
+    schema_name: str = Field(default="memory_vector", alias="schema")
+    rank_profile: str = "vector_similarity"
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, value: str) -> str:
+        if value:
+            _validate_absolute_uri(value, field_name="storage.vector.vespa.url")
+        return value.rstrip("/")
+
+    @field_validator("namespace", "schema_name", "rank_profile")
+    @classmethod
+    def validate_names(cls, value: str, info: Any) -> str:
+        field_name = "schema" if info.field_name == "schema_name" else info.field_name
+        return _validate_provider_name(
+            value, field_name=f"storage.vector.vespa.{field_name}"
+        )
+
+
 class TypesenseVectorConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -390,6 +415,10 @@ class VectorProviderConfigs(BaseModel):
     turbopuffer: TurbopufferVectorConfig = Field(
         default_factory=TurbopufferVectorConfig,
         alias=VectorProviderConfigKey.TURBOPUFFER.value,
+    )
+    vespa: VespaVectorConfig = Field(
+        default_factory=VespaVectorConfig,
+        alias=VectorProviderConfigKey.VESPA.value,
     )
     typesense: TypesenseVectorConfig = Field(
         default_factory=TypesenseVectorConfig,

@@ -27,7 +27,7 @@ Implemented and verified in the codebase:
 - Metadata stores: SQLite, Postgres, and MongoDB.
 - Vector stores: LanceDB, ChromaDB, Qdrant, Milvus/Zilliz, Weaviate,
   PGVector, MongoDB Atlas Vector Search, Elasticsearch, OpenSearch, Redis,
-  Pinecone, Turbopuffer, Typesense, and in-memory.
+  Pinecone, Turbopuffer, Vespa, Typesense, and in-memory.
 - Provider capabilities, schema-version checks, vector dimensionality checks, fallback policy, degraded health state, and dry-run wrappers.
 - Search result grouping by conversation score.
 - `memory_ask` returns structured `results`, human-readable `answer`, and `citations`.
@@ -99,8 +99,8 @@ Supported providers:
 
 - Metadata: SQLite, Postgres, MongoDB
 - Vectors: LanceDB, ChromaDB, Qdrant, Milvus/Zilliz, Weaviate, PGVector,
-  MongoDB Atlas Vector Search, Elasticsearch, OpenSearch, Redis, Typesense,
-  Pinecone, Turbopuffer,
+  MongoDB Atlas Vector Search, Elasticsearch, OpenSearch, Redis, Vespa,
+  Typesense, Pinecone, Turbopuffer,
   in-memory
 
 Implemented storage safety:
@@ -187,7 +187,8 @@ Bring Your Own Stack means embedding and storage providers are selected through 
   Embeddings: openai | local
   Metadata: sqlite | postgres | mongodb
   Vectors: lancedb | chromadb | qdrant | milvus | weaviate | pgvector |
-           mongodb_atlas | elasticsearch | opensearch | memory
+           mongodb_atlas | elasticsearch | opensearch | redis | vespa |
+           typesense | pinecone | turbopuffer | memory
        |
        v
 [Consumers]

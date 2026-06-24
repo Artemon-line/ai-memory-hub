@@ -318,8 +318,9 @@ Candidate vector-provider backlog from `improvements/vector_dbs.md`:
 - [x] Turbopuffer: serverless, object-storage-backed vector search with explicit
       API-key/namespace/region config, fake-client contract coverage, hosted
       live-test gate, and docs that call out namespace isolation.
-- [ ] Vespa: large-scale hybrid retrieval; validate schema deployment,
-      document lifecycle, hybrid scoring, and operational complexity.
+- [x] Vespa: large-scale hybrid retrieval with explicit URL/token/schema/
+      namespace/rank-profile config, fake-client contract coverage, optional
+      live-test gate, and docs that keep schema deployment operator-managed.
 - [x] Typesense: lightweight search engine with vector support, explicit
       URL/API-key/collection config, fake-client contract coverage, optional
       live test gate, and local Docker Compose example.
@@ -478,6 +479,11 @@ storage:
   - [x] `AMH_TEST_TURBOPUFFER_API_KEY`
   - [x] `AMH_TEST_TURBOPUFFER_NAMESPACE`
   - [x] `AMH_TEST_TURBOPUFFER_REGION`
+  - [x] `AMH_TEST_VESPA_URL`
+  - [x] `AMH_TEST_VESPA_TOKEN`
+  - [x] `AMH_TEST_VESPA_NAMESPACE`
+  - [x] `AMH_TEST_VESPA_SCHEMA`
+  - [x] `AMH_TEST_VESPA_RANK_PROFILE`
   - [x] `AMH_TEST_TYPESENSE_URL`
   - [x] `AMH_TEST_TYPESENSE_API_KEY`
 

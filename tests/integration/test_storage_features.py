@@ -37,6 +37,7 @@ from memory.backend.vector_store import (
     RedisVectorStore,
     TurbopufferVectorStore,
     TypesenseVectorStore,
+    VespaVectorStore,
     WeaviateVectorStore,
 )
 from memory.ingestion import mvp_ingestion
@@ -453,6 +454,7 @@ def _assert_vector_store_contract(store: Any) -> None:
         "redis",
         "pinecone",
         "turbopuffer",
+        "vespa",
         "typesense",
         "weaviate",
         "fake",
@@ -1163,6 +1165,84 @@ class FakeTypesenseClient:
         self.collections = FakeTypesenseCollections()
 
 
+class FakeVespaResponse:
+    def __init__(
+        self,
+        *,
+        hits: list[dict[str, Any]] | None = None,
+        total_count: int | None = None,
+        successful: bool = True,
+    ) -> None:
+        self.hits = hits or []
+        self.status_code = 200 if successful else 500
+        self._successful = successful
+        self._total_count = total_count if total_count is not None else len(self.hits)
+
+    def is_successful(self) -> bool:
+        return self._successful
+
+    def get_json(self) -> dict[str, Any]:
+        return {
+            "root": {
+                "fields": {"totalCount": self._total_count},
+                "children": self.hits,
+            }
+        }
+
+
+class FakeVespaClient:
+    def __init__(self) -> None:
+        self.rows: dict[str, dict[str, Any]] = {}
+        self.deletes: list[str] = []
+
+    def feed_data_point(
+        self,
+        *,
+        schema: str,
+        namespace: str,
+        data_id: str,
+        fields: dict[str, Any],
+    ) -> FakeVespaResponse:
+        _ = (schema, namespace)
+        self.rows[data_id] = dict(fields)
+        return FakeVespaResponse()
+
+    def query(self, *, body: dict[str, Any]) -> FakeVespaResponse:
+        yql = str(body.get("yql", ""))
+        if "nearestNeighbor" in yql:
+            vector = list(body["input.query(q)"]["values"])
+            rows = sorted(
+                self.rows.values(),
+                key=lambda row: _test_cosine_distance(vector, row["vector"]),
+            )
+            hits = [
+                {
+                    "id": f"id:memory:memory_vector::{row['id']}",
+                    "relevance": 1.0 - _test_cosine_distance(vector, row["vector"]),
+                    "fields": dict(row),
+                }
+                for row in rows[: int(body.get("hits", 5))]
+            ]
+            return FakeVespaResponse(hits=hits, total_count=len(rows))
+        if "where true" in yql:
+            return FakeVespaResponse(total_count=len(self.rows))
+        memory_id = yql.split('contains "', 1)[1].split('"', 1)[0]
+        hits = [
+            {"id": f"id:memory:memory_vector::{row['id']}", "fields": {"id": row["id"]}}
+            for row in self.rows.values()
+            if row["memory_id"] == memory_id
+        ]
+        return FakeVespaResponse(hits=hits, total_count=len(hits))
+
+    def delete_data(
+        self, *, schema: str, namespace: str, data_id: str
+    ) -> FakeVespaResponse:
+        _ = (schema, namespace)
+        self.deletes.append(data_id)
+        self.rows.pop(data_id, None)
+        return FakeVespaResponse()
+
+
 class FakeWeaviateMetadata:
     def __init__(self, *, distance: float) -> None:
         self.distance = distance
@@ -1448,6 +1528,10 @@ def _apply_update(doc: dict[str, Any], update: dict[str, Any]) -> None:
             ),
         ),
         (
+            "vespa",
+            lambda tmp_path: VespaVectorStore(client=FakeVespaClient(), dimension=3),
+        ),
+        (
             "typesense",
             lambda tmp_path: TypesenseVectorStore(
                 client=FakeTypesenseClient(), dimension=3
@@ -1675,6 +1759,25 @@ def test_live_turbopuffer_vector_contract() -> None:
                 )
             ),
             region=str(os.getenv("AMH_TEST_TURBOPUFFER_REGION", "gcp-us-central1")),
+            dimension=3,
+        )
+    )
+
+
+@pytest.mark.skipif(
+    not os.getenv("AMH_TEST_VESPA_URL"),
+    reason="AMH_TEST_VESPA_URL is not set",
+)
+def test_live_vespa_vector_contract() -> None:
+    _assert_vector_store_contract(
+        VespaVectorStore(
+            url=str(os.environ["AMH_TEST_VESPA_URL"]),
+            token=str(os.getenv("AMH_TEST_VESPA_TOKEN", "")),
+            namespace=str(os.getenv("AMH_TEST_VESPA_NAMESPACE", "memory")),
+            schema=str(os.getenv("AMH_TEST_VESPA_SCHEMA", "memory_vector")),
+            rank_profile=str(
+                os.getenv("AMH_TEST_VESPA_RANK_PROFILE", "vector_similarity")
+            ),
             dimension=3,
         )
     )
@@ -1969,6 +2072,11 @@ def test_build_runtime_chromadb_fallback_disabled_raises(
             "turbopuffer unavailable api_key=turbopuffer-secret",
         ),
         (
+            "vespa",
+            "VespaVectorStore",
+            "vespa unavailable token=vespa-secret",
+        ),
+        (
             "typesense",
             "TypesenseVectorStore",
             "typesense unavailable api_key=typesense-secret",
@@ -2009,6 +2117,7 @@ def test_build_runtime_expansion_vector_fallback_uses_memory_provider(
                     "redis": {"url": "redis://:redis-secret@localhost:6379/0"},
                     "pinecone": {"api_key": "pinecone-secret"},
                     "turbopuffer": {"api_key": "turbopuffer-secret"},
+                    "vespa": {"token": "vespa-secret"},
                     "typesense": {"api_key": "typesense-secret"},
                 },
             },
@@ -2028,6 +2137,7 @@ def test_build_runtime_expansion_vector_fallback_uses_memory_provider(
     assert "redis-secret" not in " ".join(runtime.health_state["reasons"])
     assert "pinecone-secret" not in " ".join(runtime.health_state["reasons"])
     assert "turbopuffer-secret" not in " ".join(runtime.health_state["reasons"])
+    assert "vespa-secret" not in " ".join(runtime.health_state["reasons"])
     assert "typesense-secret" not in " ".join(runtime.health_state["reasons"])
 
 
@@ -2043,6 +2153,7 @@ def test_build_runtime_expansion_vector_fallback_uses_memory_provider(
         ("redis", "RedisVectorStore"),
         ("pinecone", "PineconeVectorStore"),
         ("turbopuffer", "TurbopufferVectorStore"),
+        ("vespa", "VespaVectorStore"),
         ("typesense", "TypesenseVectorStore"),
     ],
 )

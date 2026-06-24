@@ -38,6 +38,7 @@ from memory.backend.vector_store import (
     RedisVectorStore,
     TurbopufferVectorStore,
     TypesenseVectorStore,
+    VespaVectorStore,
     WeaviateVectorStore,
 )
 from memory.config import HubConfig, ensure_token_hash_secret, load_config, parse_config
@@ -546,6 +547,17 @@ def _build_vector_store(
             api_key=turbopuffer_config.api_key,
             namespace=turbopuffer_config.namespace,
             region=turbopuffer_config.region,
+            dimension=expected_dimension,
+            distance=cfg.storage.vector.distance,
+        )
+    if provider == VectorProviderName.VESPA.value:
+        vespa_config = cfg.storage.vector_providers.vespa
+        return VespaVectorStore(
+            url=vespa_config.url,
+            token=vespa_config.token,
+            namespace=vespa_config.namespace,
+            schema=vespa_config.schema_name,
+            rank_profile=vespa_config.rank_profile,
             dimension=expected_dimension,
             distance=cfg.storage.vector.distance,
         )
