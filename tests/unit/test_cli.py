@@ -451,6 +451,8 @@ def test_config_show_redacts_secrets(capsys, tmp_path) -> None:
                 "      api_key: pinecone-secret",
                 "    turbopuffer:",
                 "      api_key: turbopuffer-secret",
+                "    typesense:",
+                "      api_key: typesense-secret",
                 "  metadata_providers:",
                 "    mongodb:",
                 "      uri: mongodb://user:mongo-secret@127.0.0.1:27017/app",
@@ -478,6 +480,7 @@ def test_config_show_redacts_secrets(capsys, tmp_path) -> None:
     assert vector_providers["redis"]["url"] == "***"
     assert vector_providers["pinecone"]["api_key"] == "***"
     assert vector_providers["turbopuffer"]["api_key"] == "***"
+    assert vector_providers["typesense"]["api_key"] == "***"
     assert body["config"]["storage"]["metadata_providers"]["mongodb"]["uri"] == "***"
 
 

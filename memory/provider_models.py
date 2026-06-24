@@ -22,6 +22,7 @@ class VectorProviderName(StrEnum):
     REDIS = "redis"
     PINECONE = "pinecone"
     TURBOPUFFER = "turbopuffer"
+    TYPESENSE = "typesense"
 
 
 class VectorProviderAlias(StrEnum):
@@ -50,6 +51,7 @@ class VectorProviderConfigKey(StrEnum):
     REDIS = "redis"
     PINECONE = "pinecone"
     TURBOPUFFER = "turbopuffer"
+    TYPESENSE = "typesense"
 
 
 class MetadataProviderConfigKey(StrEnum):

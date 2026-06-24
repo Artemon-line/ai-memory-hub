@@ -1475,6 +1475,176 @@ class TurbopufferVectorStore:
         }
 
 
+class TypesenseVectorStore:
+    def __init__(
+        self,
+        *,
+        url: str = "http://127.0.0.1:8108",
+        api_key: str = "",
+        collection_name: str = "memory_vectors",
+        dimension: int = 32,
+        distance: str = "cosine",
+        client: Any | None = None,
+    ) -> None:
+        self.url = url.rstrip("/")
+        self.api_key = api_key
+        self.collection_name = collection_name
+        self.expected_dimensionality = dimension
+        self.distance = distance
+        self._client = client or self._create_client()
+        self._ensure_collection()
+
+    def _create_client(self) -> Any:
+        try:
+            typesense_module = import_module("typesense")
+        except ImportError as exc:  # pragma: no cover - depends on optional extra
+            raise RuntimeError(
+                "Typesense vector support requires installing the 'typesense' extra"
+            ) from exc
+        parsed = urlparse(self.url)
+        return typesense_module.Client(
+            {
+                "nodes": [
+                    {
+                        "host": parsed.hostname or "127.0.0.1",
+                        "port": str(parsed.port or (443 if parsed.scheme == "https" else 80)),
+                        "protocol": parsed.scheme or "http",
+                    }
+                ],
+                "api_key": self.api_key,
+                "connection_timeout_seconds": 5,
+            }
+        )
+
+    def insert(
+        self,
+        metadata_id: str,
+        chunks: list[dict[str, Any]],
+        *,
+        replace: bool = False,
+    ) -> None:
+        if replace:
+            self.delete([metadata_id])
+        documents = []
+        for item in chunks:
+            vector = [float(value) for value in item[VectorPayloadKey.VECTOR.value]]
+            _validate_vector_length(
+                vector, expected=self.expected_dimensionality, operation="insert"
+            )
+            payload = _vector_payload(metadata_id, item)
+            documents.append(
+                {
+                    "id": _stable_point_id(
+                        str(payload[VectorPayloadKey.MEMORY_ID.value]),
+                        str(payload[VectorPayloadKey.CHUNK_ID.value]),
+                    ),
+                    **payload,
+                    VectorPayloadKey.VECTOR.value: vector,
+                }
+            )
+        if not documents:
+            return
+        collection = self._collection()
+        import_method = getattr(collection.documents, "import_", None)
+        if callable(import_method):
+            import_method(documents, {"action": "upsert"})
+            return
+        for document in documents:
+            collection.documents.upsert(document)
+
+    def replace(self, metadata_id: str, chunks: list[dict[str, Any]]) -> None:
+        self.delete([metadata_id])
+        self.insert(metadata_id, chunks)
+
+    def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
+        _validate_vector_length(
+            query_vector, expected=self.expected_dimensionality, operation="search"
+        )
+        vector = ",".join(str(float(value)) for value in query_vector)
+        result = self._collection().documents.search(
+            {
+                "q": "*",
+                "query_by": VectorPayloadKey.TEXT.value,
+                "vector_query": (
+                    f"{VectorPayloadKey.VECTOR.value}:([{vector}], k:{int(top_k)})"
+                ),
+                "per_page": int(top_k),
+                "exclude_fields": VectorPayloadKey.VECTOR.value,
+            }
+        )
+        return [_row_from_typesense_hit(hit) for hit in result.get("hits", [])]
+
+    def delete(self, ids: list[str]) -> None:
+        if not ids:
+            return
+        filter_values = ",".join(_typesense_filter_escape(str(item)) for item in ids)
+        self._collection().documents.delete(
+            {"filter_by": f"{VectorPayloadKey.MEMORY_ID.value}:=[{filter_values}]"}
+        )
+
+    def get_stats(self) -> dict[str, Any]:
+        rows = None
+        try:
+            rows = int(self._collection().retrieve().get("num_documents", 0))
+        except Exception:
+            rows = None
+        return {
+            VectorStatsKey.PROVIDER.value: VectorProviderName.TYPESENSE.value,
+            VectorStatsKey.ROWS.value: rows,
+            VectorStatsKey.EXPECTED_DIMENSIONALITY.value: self.expected_dimensionality,
+            VectorStatsKey.COLLECTION.value: self.collection_name,
+            VectorStatsKey.DISTANCE.value: self.distance,
+        }
+
+    def capabilities(self) -> ProviderCapabilities:
+        return ProviderCapabilities(supports_metadata_indexing=True)
+
+    def health(self) -> dict[str, Any]:
+        return {
+            VectorStatsKey.PROVIDER.value: VectorProviderName.TYPESENSE.value,
+            VectorStatsKey.EXPECTED_DIMENSIONALITY.value: self.expected_dimensionality,
+            VectorStatsKey.COLLECTION.value: self.collection_name,
+            VectorStatsKey.DISTANCE.value: self.distance,
+            VectorStatsKey.STATS.value: self.get_stats(),
+        }
+
+    def _ensure_collection(self) -> None:
+        if self._collection_exists():
+            return
+        self._client.collections.create(
+            {
+                "name": self.collection_name,
+                "fields": [
+                    {"name": VectorPayloadKey.MEMORY_ID.value, "type": "string", "facet": True},
+                    {"name": VectorPayloadKey.PROJECT_ID.value, "type": "string", "facet": True},
+                    {"name": VectorPayloadKey.OWNER_ID.value, "type": "string", "facet": True},
+                    {"name": VectorPayloadKey.CHUNK_ID.value, "type": "string"},
+                    {"name": VectorPayloadKey.CHUNK_INDEX.value, "type": "int32"},
+                    {"name": VectorPayloadKey.MESSAGE_HASH.value, "type": "string"},
+                    {"name": VectorPayloadKey.ROLE.value, "type": "string", "facet": True},
+                    {"name": VectorPayloadKey.TEXT.value, "type": "string"},
+                    {
+                        "name": VectorPayloadKey.VECTOR.value,
+                        "type": "float[]",
+                        "num_dim": self.expected_dimensionality,
+                    },
+                ],
+            }
+        )
+
+    def _collection_exists(self) -> bool:
+        try:
+            self._collection().retrieve()
+        except Exception as exc:
+            if _is_typesense_not_found(exc):
+                return False
+            raise
+        return True
+
+    def _collection(self) -> Any:
+        return self._client.collections[self.collection_name]
+
+
 class WeaviateVectorStore:
     def __init__(
         self,
@@ -2366,6 +2536,31 @@ def _turbopuffer_approx_row_count(namespace: Any) -> int | None:
     if count is None:
         return None
     return int(count)
+
+
+def _row_from_typesense_hit(hit: dict[str, Any]) -> dict[str, Any]:
+    document = dict(hit.get("document", {}) or {})
+    row = _row_from_vector_payload(document)
+    distance = hit.get("vector_distance", hit.get("_vector_distance"))
+    if distance is not None:
+        row["vector_distance"] = float(distance)
+        row[VectorPayloadKey.SCORE.value] = 1.0 - float(distance)
+    else:
+        row[VectorPayloadKey.SCORE.value] = float(hit.get("text_match", 0.0) or 0.0)
+    return row
+
+
+def _typesense_filter_escape(value: str) -> str:
+    return "`" + value.replace("`", "\\`") + "`"
+
+
+def _is_typesense_not_found(exc: Exception) -> bool:
+    if exc.__class__.__name__ == "ObjectNotFound":
+        return True
+    status = getattr(exc, "status_code", None)
+    if status is not None and int(status) == 404:
+        return True
+    return "not found" in str(exc).lower()
 
 
 def _vector_payload_fields() -> list[str]:

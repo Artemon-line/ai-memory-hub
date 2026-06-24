@@ -25,8 +25,8 @@ uv sync --dev --all-extras
 ```
 
 Use provider extras when selecting optional storage SDKs such as ChromaDB,
-Qdrant, Milvus, Weaviate, MongoDB, Elasticsearch, OpenSearch, Redis, Pinecone,
-Turbopuffer, Postgres, or PGVector. Use the tokenizer extra for exact
+Qdrant, Milvus, Weaviate, MongoDB, Elasticsearch, OpenSearch, Redis, Typesense,
+Pinecone, Turbopuffer, Postgres, or PGVector. Use the tokenizer extra for exact
 OpenAI-compatible token counting through `tiktoken`. Use `--all-extras` for
 container builds or provider compatibility checks.
 
@@ -474,6 +474,29 @@ storage:
 
 Install the optional dependency with `uv sync --extra redis`.
 
+### SQLite + Typesense
+
+Use Typesense when vector storage should live in a lightweight search engine
+with first-class filtering and faceting:
+
+```yaml
+providers:
+  metadata_db: sqlite
+  vector_db: typesense
+
+storage:
+  vector:
+    allow_fallback: false
+    distance: cosine
+  vector_providers:
+    typesense:
+      url: http://127.0.0.1:8108
+      api_key: ""
+      collection: memory_vectors
+```
+
+Install the optional dependency with `uv sync --extra typesense`.
+
 ### SQLite + Pinecone
 
 Use Pinecone when vector storage should live in hosted managed/serverless
@@ -770,7 +793,7 @@ Ollama embeddings, see `examples/postgres/pgvector/config.ollama.yaml`.
 Additional checked-in provider examples are under `examples/storage-providers`.
 They cover local LanceDB, in-memory vectors, ChromaDB, Qdrant, MongoDB metadata,
 MongoDB Atlas Vector Search, Milvus, Weaviate, Elasticsearch, OpenSearch,
-Redis/RediSearch, Pinecone, and Turbopuffer.
+Redis/RediSearch, Typesense, Pinecone, and Turbopuffer.
 
 ## Testing
 

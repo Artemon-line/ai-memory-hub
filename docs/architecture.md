@@ -27,7 +27,7 @@ Implemented and verified in the codebase:
 - Metadata stores: SQLite, Postgres, and MongoDB.
 - Vector stores: LanceDB, ChromaDB, Qdrant, Milvus/Zilliz, Weaviate,
   PGVector, MongoDB Atlas Vector Search, Elasticsearch, OpenSearch, Redis,
-  Pinecone, Turbopuffer, and in-memory.
+  Pinecone, Turbopuffer, Typesense, and in-memory.
 - Provider capabilities, schema-version checks, vector dimensionality checks, fallback policy, degraded health state, and dry-run wrappers.
 - Search result grouping by conversation score.
 - `memory_ask` returns structured `results`, human-readable `answer`, and `citations`.
@@ -99,7 +99,8 @@ Supported providers:
 
 - Metadata: SQLite, Postgres, MongoDB
 - Vectors: LanceDB, ChromaDB, Qdrant, Milvus/Zilliz, Weaviate, PGVector,
-  MongoDB Atlas Vector Search, Elasticsearch, OpenSearch, Redis, Pinecone, Turbopuffer,
+  MongoDB Atlas Vector Search, Elasticsearch, OpenSearch, Redis, Typesense,
+  Pinecone, Turbopuffer,
   in-memory
 
 Implemented storage safety:

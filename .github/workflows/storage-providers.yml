@@ -380,6 +380,52 @@ jobs:
           path: reports/junit/*.xml
           if-no-files-found: warn
 
+  typesense:
+    name: Typesense Live Storage
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      typesense:
+        image: typesense/typesense:29.0
+        ports:
+          - 8108:8108
+        env:
+          TYPESENSE_API_KEY: local-typesense-key
+          TYPESENSE_DATA_DIR: /tmp/typesense-data
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      - run: uv sync --dev --extra typesense
+      - name: Wait for Typesense
+        run: |
+          for i in {1..30}; do
+            curl -fsS http://127.0.0.1:8108/health && exit 0
+            sleep 2
+          done
+          exit 1
+      - name: Run Typesense live test
+        env:
+          PYTHONHASHSEED: "0"
+          AMH_TEST_TYPESENSE_URL: http://127.0.0.1:8108
+          AMH_TEST_TYPESENSE_API_KEY: local-typesense-key
+        run: |
+          mkdir -p reports/junit
+          uv run pytest -q tests/integration/test_storage_features.py \
+            -k live_typesense_vector_contract \
+            --junitxml=reports/junit/pytest-typesense-live.xml
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: pytest-typesense-live-report
+          path: reports/junit/*.xml
+          if-no-files-found: warn
+
   milvus:
     name: Milvus Live Storage
     runs-on: ubuntu-latest

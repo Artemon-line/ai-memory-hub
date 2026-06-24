@@ -37,6 +37,7 @@ from memory.backend.vector_store import (
     QdrantVectorStore,
     RedisVectorStore,
     TurbopufferVectorStore,
+    TypesenseVectorStore,
     WeaviateVectorStore,
 )
 from memory.config import HubConfig, ensure_token_hash_secret, load_config, parse_config
@@ -545,6 +546,15 @@ def _build_vector_store(
             api_key=turbopuffer_config.api_key,
             namespace=turbopuffer_config.namespace,
             region=turbopuffer_config.region,
+            dimension=expected_dimension,
+            distance=cfg.storage.vector.distance,
+        )
+    if provider == VectorProviderName.TYPESENSE.value:
+        typesense_config = cfg.storage.vector_providers.typesense
+        return TypesenseVectorStore(
+            url=typesense_config.url,
+            api_key=typesense_config.api_key,
+            collection_name=typesense_config.collection,
             dimension=expected_dimension,
             distance=cfg.storage.vector.distance,
         )

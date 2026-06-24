@@ -24,6 +24,7 @@ For production-quality semantic search, switch to a real embedding model and set
 | SQLite + Elasticsearch | `examples/storage-providers/elasticsearch` | Local single-node Elasticsearch |
 | SQLite + OpenSearch | `examples/storage-providers/opensearch` | Local single-node OpenSearch |
 | SQLite + Redis/RediSearch | `examples/storage-providers/redis` | Local Redis Stack service |
+| SQLite + Typesense | `examples/storage-providers/typesense` | Local Typesense service |
 | SQLite + Pinecone | `examples/storage-providers/pinecone` | Hosted managed vector search |
 | SQLite + Turbopuffer | `examples/storage-providers/turbopuffer` | Hosted object-storage-backed vector search |
 
@@ -41,6 +42,7 @@ adapter and metadata provider. The dedicated provider workflow
 - Elasticsearch
 - OpenSearch
 - Redis/RediSearch
+- Typesense
 
 Pinecone and Turbopuffer use the same live test entry point but require
 externally supplied credentials. Pinecone also requires either an existing index

@@ -528,8 +528,10 @@ Implementation sequence:
 - [x] Pinecone adapter for managed/serverless vector search.
 - [x] Turbopuffer adapter for serverless, object-storage-backed vector search.
 - [ ] Vespa adapter for large-scale hybrid retrieval.
-- [ ] Typesense and/or Meilisearch adapter after confirming vector API maturity
-      and filtering semantics.
+- [x] Typesense adapter after confirming vector API maturity and filtering
+      semantics.
+- [ ] Meilisearch adapter after confirming direct user-provided vector CRUD and
+      search semantics fit the hub-owned embedding contract.
 - [ ] DuckDB VSS and/or sqlite-vec embedded adapter for local analytical or
       single-file deployments.
 - [ ] Keep Faiss, ScaNN, and HNSWlib out of the advertised provider matrix

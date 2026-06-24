@@ -303,6 +303,7 @@ Current implemented provider matrix:
 - [x] Vectors: Redis/RediSearch
 - [x] Vectors: Pinecone
 - [x] Vectors: Turbopuffer
+- [x] Vectors: Typesense
 
 Candidate vector-provider backlog from `improvements/vector_dbs.md`:
 
@@ -319,9 +320,11 @@ Candidate vector-provider backlog from `improvements/vector_dbs.md`:
       live-test gate, and docs that call out namespace isolation.
 - [ ] Vespa: large-scale hybrid retrieval; validate schema deployment,
       document lifecycle, hybrid scoring, and operational complexity.
-- [ ] Typesense/Meilisearch: lighter search engines with vector support; pick
-      only after confirming stable vector APIs, filtering, delete, and score
-      semantics.
+- [x] Typesense: lightweight search engine with vector support, explicit
+      URL/API-key/collection config, fake-client contract coverage, optional
+      live test gate, and local Docker Compose example.
+- [ ] Meilisearch: confirm direct user-provided vector CRUD and search semantics
+      fit the hub-owned embedding contract before implementing.
 - [ ] DuckDB VSS and sqlite-vec: embedded/analytical options; treat as local
       deployment adapters with explicit persistence and extension-loading
       requirements.
@@ -373,6 +376,7 @@ Status: `PARTIAL`
   - [x] `redis`
   - [x] `pinecone`
   - [x] `turbopuffer`
+  - [x] `typesense`
 - [x] Extend `providers.metadata_db` accepted values:
   - [x] `mongodb`
   - [ ] optional future `elasticsearch`/`opensearch` only if metadata semantics are fully mapped
@@ -433,6 +437,10 @@ storage:
       api_key: ""
       namespace: memory-vectors
       region: gcp-us-central1
+    typesense:
+      url: http://127.0.0.1:8108
+      api_key: ""
+      collection: memory_vectors
   metadata_providers:
     mongodb:
       uri: mongodb://127.0.0.1:27017
@@ -470,6 +478,8 @@ storage:
   - [x] `AMH_TEST_TURBOPUFFER_API_KEY`
   - [x] `AMH_TEST_TURBOPUFFER_NAMESPACE`
   - [x] `AMH_TEST_TURBOPUFFER_REGION`
+  - [x] `AMH_TEST_TYPESENSE_URL`
+  - [x] `AMH_TEST_TYPESENSE_API_KEY`
 
 ### Phase 6b: Shared Provider Contract Tests
 

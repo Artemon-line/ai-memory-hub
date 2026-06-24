@@ -326,6 +326,28 @@ class TurbopufferVectorConfig(BaseModel):
         )
 
 
+class TypesenseVectorConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str = "http://127.0.0.1:8108"
+    api_key: str = ""
+    collection: str = "memory_vectors"
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, value: str) -> str:
+        if value:
+            _validate_absolute_uri(value, field_name="storage.vector.typesense.url")
+        return value.rstrip("/")
+
+    @field_validator("collection")
+    @classmethod
+    def validate_collection(cls, value: str) -> str:
+        return _validate_provider_index(
+            value, field_name="storage.vector.typesense.collection"
+        )
+
+
 class VectorProviderConfigs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -368,6 +390,10 @@ class VectorProviderConfigs(BaseModel):
     turbopuffer: TurbopufferVectorConfig = Field(
         default_factory=TurbopufferVectorConfig,
         alias=VectorProviderConfigKey.TURBOPUFFER.value,
+    )
+    typesense: TypesenseVectorConfig = Field(
+        default_factory=TypesenseVectorConfig,
+        alias=VectorProviderConfigKey.TYPESENSE.value,
     )
 
 

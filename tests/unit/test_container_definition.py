@@ -25,6 +25,7 @@ def test_containerfile_installs_project_after_copying_package() -> None:
         "redis",
         "tokenizer",
         "turbopuffer",
+        "typesense",
         "weaviate",
     ):
         assert f"--extra {extra}" in containerfile

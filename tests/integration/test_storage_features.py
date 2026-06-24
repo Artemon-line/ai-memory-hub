@@ -36,6 +36,7 @@ from memory.backend.vector_store import (
     QdrantVectorStore,
     RedisVectorStore,
     TurbopufferVectorStore,
+    TypesenseVectorStore,
     WeaviateVectorStore,
 )
 from memory.ingestion import mvp_ingestion
@@ -452,6 +453,7 @@ def _assert_vector_store_contract(store: Any) -> None:
         "redis",
         "pinecone",
         "turbopuffer",
+        "typesense",
         "weaviate",
         "fake",
     }
@@ -1080,6 +1082,87 @@ class FakeTurbopufferClient:
         return self.namespaces[name]
 
 
+class FakeTypesenseNotFound(Exception):
+    status_code = 404
+
+
+class FakeTypesenseDocuments:
+    def __init__(self, collection: "FakeTypesenseCollection") -> None:
+        self.collection = collection
+
+    def import_(self, documents: list[dict[str, Any]], options: dict[str, Any]) -> None:
+        assert options["action"] == "upsert"
+        for document in documents:
+            self.collection.rows[str(document["id"])] = dict(document)
+
+    def upsert(self, document: dict[str, Any]) -> None:
+        self.collection.rows[str(document["id"])] = dict(document)
+
+    def search(self, params: dict[str, Any]) -> dict[str, Any]:
+        vector_query = str(params["vector_query"])
+        query_text = vector_query.split("[", 1)[1].split("]", 1)[0]
+        query_vector = [float(value) for value in query_text.split(",") if value]
+        rows = sorted(
+            self.collection.rows.values(),
+            key=lambda row: _test_cosine_distance(query_vector, row["vector"]),
+        )
+        return {
+            "hits": [
+                {
+                    "document": {
+                        key: value
+                        for key, value in row.items()
+                        if key != "vector"
+                    },
+                    "vector_distance": _test_cosine_distance(query_vector, row["vector"]),
+                }
+                for row in rows[: int(params["per_page"])]
+            ]
+        }
+
+    def delete(self, params: dict[str, Any]) -> None:
+        filter_by = str(params["filter_by"])
+        raw_ids = filter_by.split("[", 1)[1].split("]", 1)[0]
+        ids = {item.strip().strip("`") for item in raw_ids.split(",") if item.strip()}
+        self.collection.rows = {
+            row_id: row
+            for row_id, row in self.collection.rows.items()
+            if row["memory_id"] not in ids
+        }
+
+
+class FakeTypesenseCollection:
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.rows: dict[str, dict[str, Any]] = {}
+        self.documents = FakeTypesenseDocuments(self)
+
+    def retrieve(self) -> dict[str, Any]:
+        return {"name": self.name, "num_documents": len(self.rows)}
+
+
+class FakeTypesenseCollections:
+    def __init__(self) -> None:
+        self.items: dict[str, FakeTypesenseCollection] = {}
+        self.created: list[dict[str, Any]] = []
+
+    def __getitem__(self, name: str) -> FakeTypesenseCollection:
+        if name not in self.items:
+            raise FakeTypesenseNotFound(name)
+        return self.items[name]
+
+    def create(self, schema: dict[str, Any]) -> FakeTypesenseCollection:
+        self.created.append(dict(schema))
+        collection = FakeTypesenseCollection(str(schema["name"]))
+        self.items[collection.name] = collection
+        return collection
+
+
+class FakeTypesenseClient:
+    def __init__(self) -> None:
+        self.collections = FakeTypesenseCollections()
+
+
 class FakeWeaviateMetadata:
     def __init__(self, *, distance: float) -> None:
         self.distance = distance
@@ -1365,6 +1448,12 @@ def _apply_update(doc: dict[str, Any], update: dict[str, Any]) -> None:
             ),
         ),
         (
+            "typesense",
+            lambda tmp_path: TypesenseVectorStore(
+                client=FakeTypesenseClient(), dimension=3
+            ),
+        ),
+        (
             "fake-sdk",
             lambda tmp_path: FakeSDKVectorStore(
                 client=FakeVectorClient(), dimension=3
@@ -1586,6 +1675,21 @@ def test_live_turbopuffer_vector_contract() -> None:
                 )
             ),
             region=str(os.getenv("AMH_TEST_TURBOPUFFER_REGION", "gcp-us-central1")),
+            dimension=3,
+        )
+    )
+
+
+@pytest.mark.skipif(
+    not os.getenv("AMH_TEST_TYPESENSE_URL"),
+    reason="AMH_TEST_TYPESENSE_URL is not set",
+)
+def test_live_typesense_vector_contract() -> None:
+    _assert_vector_store_contract(
+        TypesenseVectorStore(
+            url=str(os.environ["AMH_TEST_TYPESENSE_URL"]),
+            api_key=str(os.getenv("AMH_TEST_TYPESENSE_API_KEY", "")),
+            collection_name=f"memory_vectors_{uuid4().hex}",
             dimension=3,
         )
     )
@@ -1864,6 +1968,11 @@ def test_build_runtime_chromadb_fallback_disabled_raises(
             "TurbopufferVectorStore",
             "turbopuffer unavailable api_key=turbopuffer-secret",
         ),
+        (
+            "typesense",
+            "TypesenseVectorStore",
+            "typesense unavailable api_key=typesense-secret",
+        ),
     ],
 )
 def test_build_runtime_expansion_vector_fallback_uses_memory_provider(
@@ -1900,6 +2009,7 @@ def test_build_runtime_expansion_vector_fallback_uses_memory_provider(
                     "redis": {"url": "redis://:redis-secret@localhost:6379/0"},
                     "pinecone": {"api_key": "pinecone-secret"},
                     "turbopuffer": {"api_key": "turbopuffer-secret"},
+                    "typesense": {"api_key": "typesense-secret"},
                 },
             },
         }
@@ -1918,6 +2028,7 @@ def test_build_runtime_expansion_vector_fallback_uses_memory_provider(
     assert "redis-secret" not in " ".join(runtime.health_state["reasons"])
     assert "pinecone-secret" not in " ".join(runtime.health_state["reasons"])
     assert "turbopuffer-secret" not in " ".join(runtime.health_state["reasons"])
+    assert "typesense-secret" not in " ".join(runtime.health_state["reasons"])
 
 
 @pytest.mark.parametrize(
@@ -1932,6 +2043,7 @@ def test_build_runtime_expansion_vector_fallback_uses_memory_provider(
         ("redis", "RedisVectorStore"),
         ("pinecone", "PineconeVectorStore"),
         ("turbopuffer", "TurbopufferVectorStore"),
+        ("typesense", "TypesenseVectorStore"),
     ],
 )
 def test_build_runtime_expansion_vector_fallback_disabled_raises(

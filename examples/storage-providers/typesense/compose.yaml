@@ -1,0 +1,21 @@
+services:
+  typesense:
+    image: typesense/typesense:29.0
+    command:
+      - --data-dir
+      - /data
+      - --api-key
+      - local-typesense-key
+      - --enable-cors
+    ports:
+      - "127.0.0.1:8108:8108"
+    volumes:
+      - typesense-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8108/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  typesense-data:

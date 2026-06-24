@@ -34,6 +34,7 @@ RUN python -m pip install --no-cache-dir uv && \
       --extra redis \
       --extra tokenizer \
       --extra turbopuffer \
+      --extra typesense \
       --extra weaviate \
       --no-install-project && \
     mkdir -p "$TIKTOKEN_CACHE_DIR" && \
@@ -54,6 +55,7 @@ RUN uv sync --frozen --no-dev \
       --extra redis \
       --extra tokenizer \
       --extra turbopuffer \
+      --extra typesense \
       --extra weaviate && \
     test -x /app/.venv/bin/aim && \
     mkdir -p /app/data /app/logs /app/.uv-cache "$TIKTOKEN_CACHE_DIR" && \

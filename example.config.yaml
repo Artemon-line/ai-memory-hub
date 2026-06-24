@@ -62,6 +62,10 @@ storage:
       api_key: ""
       namespace: memory-vectors
       region: gcp-us-central1
+    typesense:
+      url: http://127.0.0.1:8108
+      api_key: ""
+      collection: memory_vectors
   metadata_providers:
     mongodb:
       uri: ""
@@ -91,7 +95,7 @@ providers:
   metadata_db: sqlite # sqlite | postgres | mongodb
   metadata_dsn: '' # required when metadata_db=postgres
   # lancedb | chromadb | qdrant | milvus | weaviate | mongodb_atlas |
-  # elasticsearch | opensearch | redis | pinecone | turbopuffer | pgvector | memory | in_memory
+  # elasticsearch | opensearch | redis | pinecone | turbopuffer | typesense | pgvector | memory | in_memory
   vector_db: lancedb
   agent: mvp # Phase 1 ingestion agent (deterministic pipeline)
 
@@ -331,7 +335,25 @@ openai:
 # Install with:
 #   uv sync --extra turbopuffer
 #
-# 12) MongoDB metadata + Atlas Vector Search
+# 12) Typesense vectors
+#
+# providers:
+#   vector_db: typesense
+#
+# storage:
+#   vector:
+#     allow_fallback: false
+#     distance: cosine
+#   vector_providers:
+#     typesense:
+#       url: http://127.0.0.1:8108
+#       api_key: "${TYPESENSE_API_KEY}"
+#       collection: memory_vectors
+#
+# Install with:
+#   uv sync --extra typesense
+#
+# 13) MongoDB metadata + Atlas Vector Search
 #
 # providers:
 #   metadata_db: mongodb
