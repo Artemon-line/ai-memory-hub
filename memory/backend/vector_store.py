@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import math
 import re
+import struct
 import time
 import uuid
 from importlib import import_module
@@ -1173,6 +1174,8 @@ class RedisVectorStore:
             },
         )
         rows = [_row_from_redis_document(document) for document in result.docs]
+        if not rows:
+            rows = self._fallback_scan_search(query_vector)
         rows.sort(key=lambda row: float(row.get(RedisVectorField.DISTANCE.value, 0.0)))
         return rows[:top_k]
 
@@ -1254,6 +1257,36 @@ class RedisVectorStore:
             self._client.execute_command("FT.ADDHASH", self.index_name, key, "1.0", "REPLACE")
         except Exception:
             logger.debug("Redis explicit hash indexing failed", exc_info=True)
+
+    def _fallback_scan_search(self, query_vector: list[float]) -> list[dict[str, Any]]:
+        try:
+            keys = list(self._client.scan_iter(match=f"{self.key_prefix}*", count=1000))
+        except Exception:
+            logger.debug("Redis fallback scan failed", exc_info=True)
+            return []
+
+        rows: list[dict[str, Any]] = []
+        for key in keys:
+            try:
+                raw_payload = self._client.hgetall(key)
+            except Exception:
+                logger.debug("Redis fallback hash read failed", exc_info=True)
+                continue
+            payload = _decode_redis_mapping(raw_payload)
+            vector_bytes = payload.pop(RedisVectorField.VECTOR.value, b"")
+            if not isinstance(vector_bytes, bytes):
+                continue
+            vector = _float32_vector_from_bytes(vector_bytes)
+            if len(vector) != len(query_vector):
+                continue
+            row = _row_from_vector_payload(payload)
+            distance = _redis_vector_distance(
+                query_vector, vector, distance_name=self.distance
+            )
+            row[RedisVectorField.DISTANCE.value] = distance
+            row[VectorPayloadKey.SCORE.value] = 1.0 - distance
+            rows.append(row)
+        return rows
 
 
 class PineconeVectorStore:
@@ -2449,6 +2482,12 @@ def _float32_vector_bytes(vector: list[float]) -> bytes:
     return pa.array(vector, type=pa.float32()).to_numpy(zero_copy_only=False).tobytes()
 
 
+def _float32_vector_from_bytes(value: bytes) -> list[float]:
+    if len(value) % 4:
+        return []
+    return list(struct.unpack(f"{len(value) // 4}f", value))
+
+
 def _row_from_redis_document(document: Any) -> dict[str, Any]:
     payload = {
         field: _decode_redis_value(getattr(document, field, ""))
@@ -2467,6 +2506,36 @@ def _decode_redis_value(value: Any) -> Any:
     if isinstance(value, bytes):
         return value.decode("utf-8")
     return value
+
+
+def _decode_redis_mapping(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    decoded: dict[str, Any] = {}
+    for item_key, item_value in value.items():
+        key = _decode_redis_value(item_key)
+        if key == RedisVectorField.VECTOR.value:
+            decoded[str(key)] = item_value
+        else:
+            decoded[str(key)] = _decode_redis_value(item_value)
+    return decoded
+
+
+def _redis_vector_distance(
+    query_vector: list[float], stored_vector: list[float], *, distance_name: str
+) -> float:
+    if distance_name == "l2":
+        return math.sqrt(
+            sum((left - right) ** 2 for left, right in zip(query_vector, stored_vector))
+        )
+    dot = sum(left * right for left, right in zip(query_vector, stored_vector))
+    if distance_name == "inner_product":
+        return -dot
+    left_norm = math.sqrt(sum(value * value for value in query_vector))
+    right_norm = math.sqrt(sum(value * value for value in stored_vector))
+    if not left_norm or not right_norm:
+        return 1.0
+    return 1.0 - (dot / (left_norm * right_norm))
 
 
 def _is_redis_missing_index_error(exc: Exception) -> bool:
