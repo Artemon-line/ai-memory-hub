@@ -1211,9 +1211,12 @@ class RedisVectorStore:
 
     def _delete_memory_id(self, memory_id: str) -> None:
         query = f"@{VectorPayloadKey.MEMORY_ID.value}:{{{_redis_tag_escape(memory_id)}}}"
-        result = self._client.ft(self.index_name).search(query)
-        for document in result.docs:
-            self._client.delete(document.id)
+        try:
+            result = self._client.ft(self.index_name).search(query)
+            for document in result.docs:
+                self._client.delete(document.id)
+        except Exception:
+            logger.debug("Redis indexed delete failed", exc_info=True)
         for key in self._keys_for_memory_id(memory_id):
             self._client.delete(key)
 
