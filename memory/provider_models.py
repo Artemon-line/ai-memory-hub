@@ -20,6 +20,8 @@ class VectorProviderName(StrEnum):
     ELASTICSEARCH = "elasticsearch"
     OPENSEARCH = "opensearch"
     REDIS = "redis"
+    PINECONE = "pinecone"
+    TURBOPUFFER = "turbopuffer"
 
 
 class VectorProviderAlias(StrEnum):
@@ -46,6 +48,8 @@ class VectorProviderConfigKey(StrEnum):
     ELASTICSEARCH = "elasticsearch"
     OPENSEARCH = "opensearch"
     REDIS = "redis"
+    PINECONE = "pinecone"
+    TURBOPUFFER = "turbopuffer"
 
 
 class MetadataProviderConfigKey(StrEnum):

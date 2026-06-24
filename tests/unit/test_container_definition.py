@@ -20,9 +20,11 @@ def test_containerfile_installs_project_after_copying_package() -> None:
         "mongodb",
         "opensearch",
         "postgres",
+        "pinecone",
         "qdrant",
         "redis",
         "tokenizer",
+        "turbopuffer",
         "weaviate",
     ):
         assert f"--extra {extra}" in containerfile

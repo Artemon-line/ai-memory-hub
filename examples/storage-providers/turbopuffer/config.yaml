@@ -1,0 +1,36 @@
+# SQLite metadata + Turbopuffer vectors.
+storage:
+  dry_run: false
+  allow_trusted_appends: false
+  metadata_schema_versions: [1]
+  vector:
+    allow_fallback: false
+    distance: cosine
+  vector_providers:
+    turbopuffer:
+      api_key: ""
+      namespace: memory-vectors
+      region: gcp-us-central1
+
+providers:
+  embeddings: local
+  embedding_model: local-hash
+  embedding_dimension: 32
+  metadata_db: sqlite
+  vector_db: turbopuffer
+
+interfaces:
+  mcp: true
+  api: true
+
+paths:
+  data_dir: ./data/turbopuffer
+  logs_dir: ./logs/turbopuffer
+
+schema:
+  file: ./memory/schema/conversation.schema.json
+
+api:
+  host: 127.0.0.1
+  port: 8000
+  auth: none

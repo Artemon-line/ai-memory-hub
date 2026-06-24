@@ -525,8 +525,8 @@ Use `storage_agnostic_byoa_plan.md` as the source of truth, with
 Implementation sequence:
 
 - [x] Redis/RediSearch adapter for teams already running Redis Stack.
-- [ ] Pinecone adapter for managed/serverless vector search.
-- [ ] Turbopuffer adapter for serverless, object-storage-backed vector search.
+- [x] Pinecone adapter for managed/serverless vector search.
+- [x] Turbopuffer adapter for serverless, object-storage-backed vector search.
 - [ ] Vespa adapter for large-scale hybrid retrieval.
 - [ ] Typesense and/or Meilisearch adapter after confirming vector API maturity
       and filtering semantics.

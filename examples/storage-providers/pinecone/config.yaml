@@ -1,0 +1,39 @@
+# SQLite metadata + Pinecone vectors.
+storage:
+  dry_run: false
+  allow_trusted_appends: false
+  metadata_schema_versions: [1]
+  vector:
+    allow_fallback: false
+    distance: cosine
+  vector_providers:
+    pinecone:
+      api_key: ""
+      index: memory-vectors
+      namespace: default
+      cloud: aws
+      region: us-east-1
+      create_index: false
+
+providers:
+  embeddings: local
+  embedding_model: local-hash
+  embedding_dimension: 32
+  metadata_db: sqlite
+  vector_db: pinecone
+
+interfaces:
+  mcp: true
+  api: true
+
+paths:
+  data_dir: ./data/pinecone
+  logs_dir: ./logs/pinecone
+
+schema:
+  file: ./memory/schema/conversation.schema.json
+
+api:
+  host: 127.0.0.1
+  port: 8000
+  auth: none

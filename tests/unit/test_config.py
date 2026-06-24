@@ -104,6 +104,19 @@ def test_storage_provider_expansion_config_models_validate() -> None:
                         "index": "memory_vectors",
                         "key_prefix": "memory_vectors:",
                     },
+                    "pinecone": {
+                        "api_key": "pinecone-secret",
+                        "index": "memory-vectors",
+                        "namespace": "project-a",
+                        "cloud": "aws",
+                        "region": "us-east-1",
+                        "create_index": True,
+                    },
+                    "turbopuffer": {
+                        "api_key": "turbopuffer-secret",
+                        "namespace": "memory-vectors",
+                        "region": "gcp-us-central1",
+                    },
                 },
                 "metadata_providers": {
                     "mongodb": {
@@ -130,6 +143,8 @@ def test_provider_config_accepts_implemented_expansion_providers() -> None:
         "elasticsearch",
         "opensearch",
         "redis",
+        "pinecone",
+        "turbopuffer",
     ]
     mongodb_config = parse_config({"providers": {"metadata_db": "mongodb"}})
 
@@ -183,6 +198,19 @@ def test_storage_provider_configs_override_expansion_defaults() -> None:
                         "index": "custom_redis_vectors",
                         "key_prefix": "custom_vectors:",
                     },
+                    "pinecone": {
+                        "api_key": "pinecone-key",
+                        "index": "custom-pinecone-vectors",
+                        "namespace": "custom_namespace",
+                        "cloud": "gcp",
+                        "region": "us-central1",
+                        "create_index": True,
+                    },
+                    "turbopuffer": {
+                        "api_key": "turbopuffer-key",
+                        "namespace": "custom-turbopuffer-vectors",
+                        "region": "aws-us-east-1",
+                    },
                 }
             }
         }
@@ -217,6 +245,18 @@ def test_storage_provider_configs_override_expansion_defaults() -> None:
     )
     assert config.storage.vector_providers.redis.index == "custom_redis_vectors"
     assert config.storage.vector_providers.redis.key_prefix == "custom_vectors:"
+    assert config.storage.vector_providers.pinecone.api_key == "pinecone-key"
+    assert config.storage.vector_providers.pinecone.index == "custom-pinecone-vectors"
+    assert config.storage.vector_providers.pinecone.namespace == "custom_namespace"
+    assert config.storage.vector_providers.pinecone.cloud == "gcp"
+    assert config.storage.vector_providers.pinecone.region == "us-central1"
+    assert config.storage.vector_providers.pinecone.create_index is True
+    assert config.storage.vector_providers.turbopuffer.api_key == "turbopuffer-key"
+    assert (
+        config.storage.vector_providers.turbopuffer.namespace
+        == "custom-turbopuffer-vectors"
+    )
+    assert config.storage.vector_providers.turbopuffer.region == "aws-us-east-1"
 
 
 def test_storage_provider_config_rejects_invalid_urls_and_names() -> None:

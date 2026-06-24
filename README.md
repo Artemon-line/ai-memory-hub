@@ -56,7 +56,7 @@ You choose three things:
 | --- | --- | --- |
 | Embeddings | Deterministic local embeddings for smoke tests and demos | Use a real embedding model for useful semantic search, especially multilingual memory |
 | Metadata storage | SQLite | Use Postgres for shared durable server setups, or MongoDB when it already owns application persistence |
-| Vector storage | LanceDB, ChromaDB, Qdrant, Milvus, Weaviate, PGVector, MongoDB Atlas, Elasticsearch, OpenSearch, Redis/RediSearch, or in-memory | Use the backend that already fits your local or hosted operations stack |
+| Vector storage | LanceDB, ChromaDB, Qdrant, Milvus, Weaviate, PGVector, MongoDB Atlas, Elasticsearch, OpenSearch, Redis/RediSearch, Pinecone, Turbopuffer, or in-memory | Use the backend that already fits your local or hosted operations stack |
 
 For multilingual chat history, choose an embedding model that supports the
 languages you actually use. The embedding provider/model and vector dimension
@@ -79,6 +79,9 @@ Storage guidance:
   the application's persistence layer.
 - Use Milvus/Zilliz, Weaviate, Elasticsearch, OpenSearch, or Redis/RediSearch
   when those systems already own vector infrastructure in your environment.
+- Use Pinecone or Turbopuffer when managed/serverless vector search is preferred
+  and hosted
+  credentials, namespace policy, and cost controls are already in place.
 - Use in-memory vectors only for tests, demos, and disposable container smoke
   runs.
 
@@ -165,7 +168,8 @@ runbook in the checked-in Compose example directory for the exact commands.
 
 Other checked-in provider examples live under `examples/storage-providers`:
 ChromaDB, Qdrant, MongoDB, MongoDB Atlas, Milvus, Weaviate, Elasticsearch,
-OpenSearch, Redis/RediSearch, local LanceDB, and in-memory vectors.
+OpenSearch, Redis/RediSearch, Pinecone, Turbopuffer, local LanceDB, and
+in-memory vectors.
 
 Example:
 
@@ -203,7 +207,7 @@ uv run python -m mkdocs build --strict
 The project currently includes deterministic ingestion, MCP tools/resources/prompts,
 HTTP endpoints, CLI commands, fact-backed answers, SQLite/Postgres/MongoDB
 metadata, LanceDB/ChromaDB/Qdrant/Milvus/Weaviate/PGVector/MongoDB Atlas/
-Elasticsearch/OpenSearch/Redis/in-memory vectors, token-budgeted ask, container CI,
+Elasticsearch/OpenSearch/Redis/Pinecone/Turbopuffer/in-memory vectors, token-budgeted ask, container CI,
 provider live-test CI, and GitHub Pages docs publishing.
 
 Planned work includes broader importers, richer summaries, deletion/update

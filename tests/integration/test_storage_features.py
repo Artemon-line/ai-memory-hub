@@ -32,8 +32,10 @@ from memory.backend.vector_store import (
     MongoDBAtlasVectorStore,
     OpenSearchVectorStore,
     PGVectorStore,
+    PineconeVectorStore,
     QdrantVectorStore,
     RedisVectorStore,
+    TurbopufferVectorStore,
     WeaviateVectorStore,
 )
 from memory.ingestion import mvp_ingestion
@@ -448,6 +450,8 @@ def _assert_vector_store_contract(store: Any) -> None:
         "mongodb_atlas",
         "opensearch",
         "redis",
+        "pinecone",
+        "turbopuffer",
         "weaviate",
         "fake",
     }
@@ -952,6 +956,130 @@ def _fake_redis_query_text(value: Any) -> str:
     return str(getattr(value, "_query_string", value))
 
 
+class FakePineconeIndex:
+    def __init__(self) -> None:
+        self.rows: dict[str, dict[str, Any]] = {}
+
+    def upsert(self, *, vectors: list[dict[str, Any]], namespace: str) -> None:
+        _ = namespace
+        for vector in vectors:
+            self.rows[str(vector["id"])] = dict(vector)
+
+    def query(
+        self,
+        *,
+        vector: list[float],
+        top_k: int,
+        namespace: str,
+        include_metadata: bool,
+    ) -> Any:
+        _ = (namespace, include_metadata)
+        rows = sorted(
+            self.rows.values(),
+            key=lambda row: _test_cosine_distance(vector, row["values"]),
+        )
+        return {
+            "matches": [
+                {
+                    "metadata": row["metadata"],
+                    "score": 1.0 - _test_cosine_distance(vector, row["values"]),
+                }
+                for row in rows[:top_k]
+            ]
+        }
+
+    def delete(self, *, filter: dict[str, Any], namespace: str) -> None:
+        _ = namespace
+        ids = set(filter["memory_id"]["$in"])
+        self.rows = {
+            key: row
+            for key, row in self.rows.items()
+            if row["metadata"]["memory_id"] not in ids
+        }
+
+    def describe_index_stats(self) -> dict[str, Any]:
+        return {"namespaces": {"default": {"vector_count": len(self.rows)}}}
+
+
+class FakePineconeIndexes:
+    def __init__(self, names: list[str]) -> None:
+        self._names = names
+
+    def names(self) -> list[str]:
+        return self._names
+
+
+class FakePineconeClient:
+    def __init__(self) -> None:
+        self.index = FakePineconeIndex()
+        self.indexes = FakePineconeIndexes([])
+        self.created: list[dict[str, Any]] = []
+
+    def list_indexes(self) -> FakePineconeIndexes:
+        return self.indexes
+
+    def create_index(self, **kwargs: Any) -> None:
+        self.created.append(dict(kwargs))
+        self.indexes = FakePineconeIndexes([str(kwargs["name"])])
+
+    def Index(self, name: str) -> FakePineconeIndex:
+        _ = name
+        return self.index
+
+
+class FakeTurbopufferNamespace:
+    def __init__(self) -> None:
+        self.rows: dict[str, dict[str, Any]] = {}
+
+    def write(self, **kwargs: Any) -> None:
+        upsert_rows = kwargs.get("upsert_rows") or []
+        for row in upsert_rows:
+            self.rows[str(row["id"])] = dict(row)
+        delete_filter = kwargs.get("delete_by_filter")
+        if delete_filter:
+            _field, _operator, values = delete_filter
+            ids = {str(value) for value in values}
+            self.rows = {
+                row_id: row
+                for row_id, row in self.rows.items()
+                if row["memory_id"] not in ids
+            }
+
+    def query(self, **kwargs: Any) -> Any:
+        _field, _operator, query_vector = kwargs["rank_by"]
+        limit = int(kwargs["limit"])
+        rows = sorted(
+            self.rows.values(),
+            key=lambda row: _test_cosine_distance(query_vector, row["vector"]),
+        )
+        return types.SimpleNamespace(
+            rows=[
+                types.SimpleNamespace(
+                    **{
+                        key: value
+                        for key, value in row.items()
+                        if key != "vector"
+                    },
+                    **{"$dist": _test_cosine_distance(query_vector, row["vector"])},
+                )
+                for row in rows[:limit]
+            ]
+        )
+
+    def metadata(self) -> Any:
+        return types.SimpleNamespace(approx_row_count=len(self.rows))
+
+
+class FakeTurbopufferClient:
+    def __init__(self) -> None:
+        self.namespaces: dict[str, FakeTurbopufferNamespace] = {}
+
+    def namespace(self, name: str) -> FakeTurbopufferNamespace:
+        if name not in self.namespaces:
+            self.namespaces[name] = FakeTurbopufferNamespace()
+        return self.namespaces[name]
+
+
 class FakeWeaviateMetadata:
     def __init__(self, *, distance: float) -> None:
         self.distance = distance
@@ -1225,6 +1353,18 @@ def _apply_update(doc: dict[str, Any], update: dict[str, Any]) -> None:
             lambda tmp_path: RedisVectorStore(client=FakeRedisClient(), dimension=3),
         ),
         (
+            "pinecone",
+            lambda tmp_path: PineconeVectorStore(
+                client=FakePineconeClient(), dimension=3
+            ),
+        ),
+        (
+            "turbopuffer",
+            lambda tmp_path: TurbopufferVectorStore(
+                client=FakeTurbopufferClient(), dimension=3
+            ),
+        ),
+        (
             "fake-sdk",
             lambda tmp_path: FakeSDKVectorStore(
                 client=FakeVectorClient(), dimension=3
@@ -1408,6 +1548,44 @@ def test_live_redis_vector_contract() -> None:
             url=str(os.environ["AMH_TEST_REDIS_URL"]),
             index_name=f"memory_vectors_{uuid4().hex}",
             key_prefix=f"memory_vectors:{uuid4().hex}:",
+            dimension=3,
+        )
+    )
+
+
+@pytest.mark.skipif(
+    not os.getenv("AMH_TEST_PINECONE_API_KEY"),
+    reason="AMH_TEST_PINECONE_API_KEY is not set",
+)
+def test_live_pinecone_vector_contract() -> None:
+    _assert_vector_store_contract(
+        PineconeVectorStore(
+            api_key=str(os.environ["AMH_TEST_PINECONE_API_KEY"]),
+            index_name=str(os.getenv("AMH_TEST_PINECONE_INDEX", "ai-memory-hub-test")),
+            namespace=f"test-{uuid4().hex}",
+            dimension=3,
+            create_index=os.getenv("AMH_TEST_PINECONE_CREATE_INDEX") == "1",
+            cloud=str(os.getenv("AMH_TEST_PINECONE_CLOUD", "aws")),
+            region=str(os.getenv("AMH_TEST_PINECONE_REGION", "us-east-1")),
+        )
+    )
+
+
+@pytest.mark.skipif(
+    not os.getenv("AMH_TEST_TURBOPUFFER_API_KEY"),
+    reason="AMH_TEST_TURBOPUFFER_API_KEY is not set",
+)
+def test_live_turbopuffer_vector_contract() -> None:
+    _assert_vector_store_contract(
+        TurbopufferVectorStore(
+            api_key=str(os.environ["AMH_TEST_TURBOPUFFER_API_KEY"]),
+            namespace=str(
+                os.getenv(
+                    "AMH_TEST_TURBOPUFFER_NAMESPACE",
+                    f"ai-memory-hub-test-{uuid4().hex}",
+                )
+            ),
+            region=str(os.getenv("AMH_TEST_TURBOPUFFER_REGION", "gcp-us-central1")),
             dimension=3,
         )
     )
@@ -1676,6 +1854,16 @@ def test_build_runtime_chromadb_fallback_disabled_raises(
             "RedisVectorStore",
             "redis unavailable redis://:redis-secret@localhost:6379/0",
         ),
+        (
+            "pinecone",
+            "PineconeVectorStore",
+            "pinecone unavailable api_key=pinecone-secret",
+        ),
+        (
+            "turbopuffer",
+            "TurbopufferVectorStore",
+            "turbopuffer unavailable api_key=turbopuffer-secret",
+        ),
     ],
 )
 def test_build_runtime_expansion_vector_fallback_uses_memory_provider(
@@ -1710,6 +1898,8 @@ def test_build_runtime_expansion_vector_fallback_uses_memory_provider(
                         "password": "opensearch-secret",
                     },
                     "redis": {"url": "redis://:redis-secret@localhost:6379/0"},
+                    "pinecone": {"api_key": "pinecone-secret"},
+                    "turbopuffer": {"api_key": "turbopuffer-secret"},
                 },
             },
         }
@@ -1726,6 +1916,8 @@ def test_build_runtime_expansion_vector_fallback_uses_memory_provider(
     assert "elastic-secret" not in " ".join(runtime.health_state["reasons"])
     assert "opensearch-secret" not in " ".join(runtime.health_state["reasons"])
     assert "redis-secret" not in " ".join(runtime.health_state["reasons"])
+    assert "pinecone-secret" not in " ".join(runtime.health_state["reasons"])
+    assert "turbopuffer-secret" not in " ".join(runtime.health_state["reasons"])
 
 
 @pytest.mark.parametrize(
@@ -1738,6 +1930,8 @@ def test_build_runtime_expansion_vector_fallback_uses_memory_provider(
         ("elasticsearch", "ElasticsearchVectorStore"),
         ("opensearch", "OpenSearchVectorStore"),
         ("redis", "RedisVectorStore"),
+        ("pinecone", "PineconeVectorStore"),
+        ("turbopuffer", "TurbopufferVectorStore"),
     ],
 )
 def test_build_runtime_expansion_vector_fallback_disabled_raises(

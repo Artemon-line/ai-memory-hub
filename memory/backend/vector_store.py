@@ -6,7 +6,7 @@ import re
 import uuid
 from importlib import import_module
 from pathlib import Path
-from typing import Any, Callable, Protocol
+from typing import Any, Callable, Protocol, cast
 from urllib.parse import urlparse
 
 import pyarrow as pa
@@ -1212,6 +1212,269 @@ class RedisVectorStore:
         )
 
 
+class PineconeVectorStore:
+    _METRIC_MAP = {
+        "cosine": "cosine",
+        "l2": "euclidean",
+        "inner_product": "dotproduct",
+    }
+
+    def __init__(
+        self,
+        *,
+        api_key: str = "",
+        index_name: str = "memory-vectors",
+        namespace: str = "default",
+        dimension: int = 32,
+        distance: str = "cosine",
+        cloud: str = "aws",
+        region: str = "us-east-1",
+        create_index: bool = False,
+        client: Any | None = None,
+        index: Any | None = None,
+        serverless_spec: Any | None = None,
+    ) -> None:
+        self.index_name = index_name
+        self.namespace = namespace
+        self.expected_dimensionality = dimension
+        self.distance = distance
+        self.metric = self._METRIC_MAP.get(distance, "cosine")
+        self._client = client or self._create_client(api_key)
+        self._serverless_spec = serverless_spec
+        if create_index:
+            self._ensure_index(cloud=cloud, region=region)
+        self._index = index or self._client.Index(index_name)
+
+    def _create_client(self, api_key: str) -> Any:
+        try:
+            pinecone_module = import_module("pinecone")
+        except ImportError as exc:  # pragma: no cover - depends on optional extra
+            raise RuntimeError(
+                "Pinecone vector support requires installing the 'pinecone' extra"
+            ) from exc
+        return pinecone_module.Pinecone(api_key=api_key)
+
+    def _ensure_index(self, *, cloud: str, region: str) -> None:
+        if self.index_name in _pinecone_index_names(self._client.list_indexes()):
+            return
+        spec = self._serverless_spec or _pinecone_serverless_spec(
+            cloud=cloud, region=region
+        )
+        self._client.create_index(
+            name=self.index_name,
+            dimension=self.expected_dimensionality,
+            metric=self.metric,
+            spec=spec,
+        )
+
+    def insert(
+        self,
+        metadata_id: str,
+        chunks: list[dict[str, Any]],
+        *,
+        replace: bool = False,
+    ) -> None:
+        if replace:
+            self.delete([metadata_id])
+        vectors = []
+        for item in chunks:
+            embedding = [float(value) for value in item[VectorPayloadKey.VECTOR.value]]
+            _validate_vector_length(
+                embedding, expected=self.expected_dimensionality, operation="insert"
+            )
+            payload = _vector_payload(metadata_id, item)
+            vectors.append(
+                {
+                    "id": _stable_point_id(
+                        str(payload[VectorPayloadKey.MEMORY_ID.value]),
+                        str(payload[VectorPayloadKey.CHUNK_ID.value]),
+                    ),
+                    "values": embedding,
+                    "metadata": payload,
+                }
+            )
+        if vectors:
+            self._index.upsert(vectors=vectors, namespace=self.namespace)
+
+    def replace(self, metadata_id: str, chunks: list[dict[str, Any]]) -> None:
+        self.delete([metadata_id])
+        self.insert(metadata_id, chunks)
+
+    def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
+        _validate_vector_length(
+            query_vector, expected=self.expected_dimensionality, operation="search"
+        )
+        result = self._index.query(
+            vector=query_vector,
+            top_k=top_k,
+            namespace=self.namespace,
+            include_metadata=True,
+        )
+        return [_row_from_pinecone_match(match) for match in _pinecone_matches(result)]
+
+    def delete(self, ids: list[str]) -> None:
+        if not ids:
+            return
+        self._index.delete(
+            filter={VectorPayloadKey.MEMORY_ID.value: {"$in": [str(item) for item in ids]}},
+            namespace=self.namespace,
+        )
+
+    def get_stats(self) -> dict[str, Any]:
+        rows = None
+        try:
+            rows = _pinecone_namespace_count(
+                self._index.describe_index_stats(), namespace=self.namespace
+            )
+        except Exception:
+            rows = None
+        return {
+            VectorStatsKey.PROVIDER.value: VectorProviderName.PINECONE.value,
+            VectorStatsKey.ROWS.value: rows,
+            VectorStatsKey.EXPECTED_DIMENSIONALITY.value: self.expected_dimensionality,
+            VectorStatsKey.INDEX.value: self.index_name,
+            "namespace": self.namespace,
+            VectorStatsKey.DISTANCE.value: self.distance,
+        }
+
+    def capabilities(self) -> ProviderCapabilities:
+        return ProviderCapabilities(supports_metadata_indexing=True)
+
+    def health(self) -> dict[str, Any]:
+        return {
+            VectorStatsKey.PROVIDER.value: VectorProviderName.PINECONE.value,
+            VectorStatsKey.EXPECTED_DIMENSIONALITY.value: self.expected_dimensionality,
+            VectorStatsKey.INDEX.value: self.index_name,
+            "namespace": self.namespace,
+            VectorStatsKey.DISTANCE.value: self.distance,
+            VectorStatsKey.STATS.value: self.get_stats(),
+        }
+
+
+class TurbopufferVectorStore:
+    _METRIC_MAP = {
+        "cosine": "cosine_distance",
+        "l2": "euclidean_squared",
+        "inner_product": "cosine_distance",
+    }
+
+    def __init__(
+        self,
+        *,
+        api_key: str = "",
+        namespace: str = "memory-vectors",
+        region: str = "gcp-us-central1",
+        dimension: int = 32,
+        distance: str = "cosine",
+        client: Any | None = None,
+        namespace_client: Any | None = None,
+    ) -> None:
+        self.namespace = namespace
+        self.region = region
+        self.expected_dimensionality = dimension
+        self.distance = distance
+        self.metric = self._METRIC_MAP.get(distance, "cosine_distance")
+        self._client = client or self._create_client(api_key=api_key, region=region)
+        self._namespace = namespace_client or self._client.namespace(namespace)
+
+    def _create_client(self, *, api_key: str, region: str) -> Any:
+        try:
+            turbopuffer_module = import_module("turbopuffer")
+        except ImportError as exc:  # pragma: no cover - depends on optional extra
+            raise RuntimeError(
+                "Turbopuffer vector support requires installing the 'turbopuffer' extra"
+            ) from exc
+        return turbopuffer_module.Turbopuffer(api_key=api_key, region=region)
+
+    def insert(
+        self,
+        metadata_id: str,
+        chunks: list[dict[str, Any]],
+        *,
+        replace: bool = False,
+    ) -> None:
+        if replace:
+            self.delete([metadata_id])
+        rows = []
+        for item in chunks:
+            embedding = [float(value) for value in item[VectorPayloadKey.VECTOR.value]]
+            _validate_vector_length(
+                embedding, expected=self.expected_dimensionality, operation="insert"
+            )
+            payload = _vector_payload(metadata_id, item)
+            rows.append(
+                {
+                    "id": _stable_point_id(
+                        str(payload[VectorPayloadKey.MEMORY_ID.value]),
+                        str(payload[VectorPayloadKey.CHUNK_ID.value]),
+                    ),
+                    VectorPayloadKey.VECTOR.value: embedding,
+                    **payload,
+                }
+            )
+        if rows:
+            self._namespace.write(
+                upsert_rows=rows,
+                distance_metric=self.metric,
+                schema={
+                    VectorPayloadKey.VECTOR.value: {
+                        "type": f"[{self.expected_dimensionality}]f32",
+                        "ann": True,
+                    }
+                },
+            )
+
+    def replace(self, metadata_id: str, chunks: list[dict[str, Any]]) -> None:
+        self.delete([metadata_id])
+        self.insert(metadata_id, chunks)
+
+    def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
+        _validate_vector_length(
+            query_vector, expected=self.expected_dimensionality, operation="search"
+        )
+        result = self._namespace.query(
+            rank_by=(VectorPayloadKey.VECTOR.value, "ANN", query_vector),
+            limit=top_k,
+            include_attributes=_vector_payload_fields(),
+        )
+        return [_row_from_turbopuffer_match(match) for match in _turbopuffer_rows(result)]
+
+    def delete(self, ids: list[str]) -> None:
+        if not ids:
+            return
+        self._namespace.write(
+            delete_by_filter=(
+                VectorPayloadKey.MEMORY_ID.value,
+                "In",
+                [str(item) for item in ids],
+            ),
+            delete_by_filter_allow_partial=True,
+        )
+
+    def get_stats(self) -> dict[str, Any]:
+        return {
+            VectorStatsKey.PROVIDER.value: VectorProviderName.TURBOPUFFER.value,
+            VectorStatsKey.ROWS.value: _turbopuffer_approx_row_count(self._namespace),
+            VectorStatsKey.EXPECTED_DIMENSIONALITY.value: self.expected_dimensionality,
+            "namespace": self.namespace,
+            "region": self.region,
+            VectorStatsKey.DISTANCE.value: self.distance,
+        }
+
+    def capabilities(self) -> ProviderCapabilities:
+        return ProviderCapabilities(supports_metadata_indexing=True)
+
+    def health(self) -> dict[str, Any]:
+        return {
+            VectorStatsKey.PROVIDER.value: VectorProviderName.TURBOPUFFER.value,
+            VectorStatsKey.EXPECTED_DIMENSIONALITY.value: self.expected_dimensionality,
+            "namespace": self.namespace,
+            "region": self.region,
+            VectorStatsKey.DISTANCE.value: self.distance,
+            VectorStatsKey.STATS.value: self.get_stats(),
+        }
+
+
 class WeaviateVectorStore:
     def __init__(
         self,
@@ -2019,6 +2282,90 @@ def _redis_search_query(query: str) -> Any:
         .sort_by(RedisVectorField.DISTANCE.value)
         .dialect(2)
     )
+
+
+def _pinecone_serverless_spec(*, cloud: str, region: str) -> Any:
+    pinecone_module = import_module("pinecone")
+    return pinecone_module.ServerlessSpec(cloud=cloud, region=region)
+
+
+def _pinecone_index_names(indexes: Any) -> set[str]:
+    names_method = getattr(indexes, "names", None)
+    if callable(names_method):
+        return {str(name) for name in cast(Any, names_method)()}
+    names: set[str] = set()
+    for item in indexes or []:
+        name = item.get("name") if isinstance(item, dict) else getattr(item, "name", None)
+        if name:
+            names.add(str(name))
+    return names
+
+
+def _pinecone_matches(result: Any) -> list[Any]:
+    if isinstance(result, dict):
+        return list(result.get("matches", []) or [])
+    return list(getattr(result, "matches", []) or [])
+
+
+def _row_from_pinecone_match(match: Any) -> dict[str, Any]:
+    metadata = _mapping_from_object_or_dict(match, "metadata") or {}
+    row = _row_from_vector_payload(dict(metadata))
+    row[VectorPayloadKey.SCORE.value] = float(
+        _mapping_from_object_or_dict(match, "score") or 0.0
+    )
+    return row
+
+
+def _pinecone_namespace_count(stats: Any, *, namespace: str) -> int | None:
+    namespaces = _mapping_from_object_or_dict(stats, "namespaces") or {}
+    namespace_stats = namespaces.get(namespace) if isinstance(namespaces, dict) else None
+    if namespace_stats is not None:
+        count = _mapping_from_object_or_dict(namespace_stats, "vector_count")
+        if count is not None:
+            return int(count)
+    total = _mapping_from_object_or_dict(stats, "total_vector_count")
+    if total is None:
+        return None
+    return int(total)
+
+
+def _turbopuffer_rows(result: Any) -> list[Any]:
+    rows = _mapping_from_object_or_dict(result, "rows")
+    if rows is None:
+        rows = _mapping_from_object_or_dict(result, "results")
+    if rows is None and isinstance(result, list):
+        rows = result
+    return list(rows or [])
+
+
+def _row_from_turbopuffer_match(match: Any) -> dict[str, Any]:
+    payload = {
+        field: _mapping_from_object_or_dict(match, field)
+        for field in _vector_payload_fields()
+    }
+    row = _row_from_vector_payload(payload)
+    score = _mapping_from_object_or_dict(match, VectorPayloadKey.SCORE.value)
+    if score is None:
+        distance = _mapping_from_object_or_dict(match, "$dist")
+        score = 1.0 - float(distance or 0.0)
+    row[VectorPayloadKey.SCORE.value] = float(score or 0.0)
+    return row
+
+
+def _turbopuffer_approx_row_count(namespace: Any) -> int | None:
+    metadata_method = getattr(namespace, "metadata", None)
+    if not callable(metadata_method):
+        return None
+    try:
+        metadata = metadata_method()
+    except Exception:
+        return None
+    count = _mapping_from_object_or_dict(metadata, "approx_row_count")
+    if count is None:
+        count = _mapping_from_object_or_dict(metadata, "row_count")
+    if count is None:
+        return None
+    return int(count)
 
 
 def _vector_payload_fields() -> list[str]:

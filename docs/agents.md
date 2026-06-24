@@ -31,7 +31,7 @@ Implemented:
 - Token-budgeted `memory_ask` through config or request `max_context_tokens`.
 - Storage providers: SQLite/Postgres/MongoDB metadata,
   LanceDB/ChromaDB/Qdrant/Milvus/Weaviate/PGVector/MongoDB Atlas/
-  Elasticsearch/OpenSearch/Redis/in-memory vectors.
+  Elasticsearch/OpenSearch/Redis/Pinecone/Turbopuffer/in-memory vectors.
 - Storage safety: provider capabilities, schema-version checks, vector dimensionality checks,
   policy-gated fallback, degraded health, dry-run wrappers, and secret-safe fallback logging.
 - MCP smoke profiles for Codex, Gemini, VS Code Copilot, and opencode.
@@ -291,7 +291,8 @@ are selected at startup:
 
 - Metadata: `sqlite`, `postgres`, or `mongodb`
 - Vectors: `lancedb`, `chromadb`, `qdrant`, `milvus`, `weaviate`,
-  `pgvector`, `mongodb_atlas`, `elasticsearch`, `opensearch`, or `memory`
+  `pgvector`, `mongodb_atlas`, `elasticsearch`, `opensearch`, `redis`,
+  `pinecone`, `turbopuffer`, or `memory`
 - Embeddings: `openai` or `local`
 
 Agents can inspect `memory://health` or API health behavior when available, but storage provider

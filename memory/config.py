@@ -270,6 +270,62 @@ class RedisVectorConfig(BaseModel):
         return normalized
 
 
+class PineconeVectorConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    api_key: str = ""
+    index: str = "memory-vectors"
+    namespace: str = "default"
+    cloud: str = "aws"
+    region: str = "us-east-1"
+    create_index: bool = False
+
+    @field_validator("index")
+    @classmethod
+    def validate_index(cls, value: str) -> str:
+        return _validate_provider_index(value, field_name="storage.vector.pinecone.index")
+
+    @field_validator("namespace")
+    @classmethod
+    def validate_namespace(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("storage.vector.pinecone.namespace must not be empty")
+        return normalized
+
+    @field_validator("cloud", "region")
+    @classmethod
+    def validate_name(cls, value: str, info: Any) -> str:
+        return _validate_provider_name(
+            value, field_name=f"storage.vector.pinecone.{info.field_name}"
+        )
+
+
+class TurbopufferVectorConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    api_key: str = ""
+    namespace: str = "memory-vectors"
+    region: str = "gcp-us-central1"
+
+    @field_validator("namespace")
+    @classmethod
+    def validate_namespace(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("storage.vector.turbopuffer.namespace must not be empty")
+        return _validate_provider_index(
+            normalized, field_name="storage.vector.turbopuffer.namespace"
+        )
+
+    @field_validator("region")
+    @classmethod
+    def validate_region(cls, value: str) -> str:
+        return _validate_provider_name(
+            value, field_name="storage.vector.turbopuffer.region"
+        )
+
+
 class VectorProviderConfigs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -304,6 +360,14 @@ class VectorProviderConfigs(BaseModel):
     redis: RedisVectorConfig = Field(
         default_factory=RedisVectorConfig,
         alias=VectorProviderConfigKey.REDIS.value,
+    )
+    pinecone: PineconeVectorConfig = Field(
+        default_factory=PineconeVectorConfig,
+        alias=VectorProviderConfigKey.PINECONE.value,
+    )
+    turbopuffer: TurbopufferVectorConfig = Field(
+        default_factory=TurbopufferVectorConfig,
+        alias=VectorProviderConfigKey.TURBOPUFFER.value,
     )
 
 

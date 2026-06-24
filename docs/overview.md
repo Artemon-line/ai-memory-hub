@@ -25,10 +25,10 @@ uv sync --dev --all-extras
 ```
 
 Use provider extras when selecting optional storage SDKs such as ChromaDB,
-Qdrant, Milvus, Weaviate, MongoDB, Elasticsearch, OpenSearch, Redis, Postgres,
-or PGVector. Use the tokenizer extra for exact OpenAI-compatible token counting
-through `tiktoken`. Use `--all-extras` for container builds or provider
-compatibility checks.
+Qdrant, Milvus, Weaviate, MongoDB, Elasticsearch, OpenSearch, Redis, Pinecone,
+Turbopuffer, Postgres, or PGVector. Use the tokenizer extra for exact
+OpenAI-compatible token counting through `tiktoken`. Use `--all-extras` for
+container builds or provider compatibility checks.
 
 ## How It Works
 
@@ -474,6 +474,55 @@ storage:
 
 Install the optional dependency with `uv sync --extra redis`.
 
+### SQLite + Pinecone
+
+Use Pinecone when vector storage should live in hosted managed/serverless
+infrastructure:
+
+```yaml
+providers:
+  metadata_db: sqlite
+  vector_db: pinecone
+
+storage:
+  vector:
+    allow_fallback: false
+    distance: cosine
+  vector_providers:
+    pinecone:
+      api_key: ""
+      index: memory-vectors
+      namespace: default
+      cloud: aws
+      region: us-east-1
+      create_index: false
+```
+
+Install the optional dependency with `uv sync --extra pinecone`.
+
+### SQLite + Turbopuffer
+
+Use Turbopuffer when vector storage should live in hosted object-storage-backed
+search infrastructure:
+
+```yaml
+providers:
+  metadata_db: sqlite
+  vector_db: turbopuffer
+
+storage:
+  vector:
+    allow_fallback: false
+    distance: cosine
+  vector_providers:
+    turbopuffer:
+      api_key: ""
+      namespace: memory-vectors
+      region: gcp-us-central1
+```
+
+Install the optional dependency with `uv sync --extra turbopuffer`.
+
 ### MongoDB Metadata And Atlas Vectors
 
 Use MongoDB for metadata when Mongo already owns application persistence, and
@@ -720,8 +769,8 @@ Ollama embeddings, see `examples/postgres/pgvector/config.ollama.yaml`.
 
 Additional checked-in provider examples are under `examples/storage-providers`.
 They cover local LanceDB, in-memory vectors, ChromaDB, Qdrant, MongoDB metadata,
-MongoDB Atlas Vector Search, Milvus, Weaviate, Elasticsearch, OpenSearch, and
-Redis/RediSearch.
+MongoDB Atlas Vector Search, Milvus, Weaviate, Elasticsearch, OpenSearch,
+Redis/RediSearch, Pinecone, and Turbopuffer.
 
 ## Testing
 

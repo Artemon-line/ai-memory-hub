@@ -301,6 +301,8 @@ Current implemented provider matrix:
 - [x] Vectors: Elasticsearch
 - [x] Vectors: OpenSearch
 - [x] Vectors: Redis/RediSearch
+- [x] Vectors: Pinecone
+- [x] Vectors: Turbopuffer
 
 Candidate vector-provider backlog from `improvements/vector_dbs.md`:
 
@@ -308,10 +310,13 @@ Candidate vector-provider backlog from `improvements/vector_dbs.md`:
       Stack; implemented with RediSearch HNSW over HASH storage, configurable
       index/key prefix, fake-client contract coverage, optional live test gate,
       and secret-safe fallback/config diagnostics.
-- [ ] Pinecone: managed/serverless vector search; validate namespace semantics,
-      metadata filtering, deletion consistency, and cost-safe live tests.
-- [ ] Turbopuffer: serverless, object-storage-backed vector search; validate
-      batch write/read latency, consistency, and namespace/index lifecycle.
+- [x] Pinecone: managed/serverless vector search with explicit API-key config,
+      index/namespace controls, optional index creation, fake-client contract
+      coverage, hosted live-test gate, and cost-safe docs that default to using
+      an existing index.
+- [x] Turbopuffer: serverless, object-storage-backed vector search with explicit
+      API-key/namespace/region config, fake-client contract coverage, hosted
+      live-test gate, and docs that call out namespace isolation.
 - [ ] Vespa: large-scale hybrid retrieval; validate schema deployment,
       document lifecycle, hybrid scoring, and operational complexity.
 - [ ] Typesense/Meilisearch: lighter search engines with vector support; pick
@@ -366,6 +371,8 @@ Status: `PARTIAL`
   - [x] `elasticsearch`
   - [x] `opensearch`
   - [x] `redis`
+  - [x] `pinecone`
+  - [x] `turbopuffer`
 - [x] Extend `providers.metadata_db` accepted values:
   - [x] `mongodb`
   - [ ] optional future `elasticsearch`/`opensearch` only if metadata semantics are fully mapped
@@ -415,6 +422,17 @@ storage:
       url: redis://127.0.0.1:6379/0
       index: memory_vectors
       key_prefix: "memory_vectors:"
+    pinecone:
+      api_key: ""
+      index: memory-vectors
+      namespace: default
+      cloud: aws
+      region: us-east-1
+      create_index: false
+    turbopuffer:
+      api_key: ""
+      namespace: memory-vectors
+      region: gcp-us-central1
   metadata_providers:
     mongodb:
       uri: mongodb://127.0.0.1:27017
@@ -444,6 +462,14 @@ storage:
   - [x] `AMH_TEST_OPENSEARCH_USERNAME`
   - [x] `AMH_TEST_OPENSEARCH_PASSWORD`
   - [x] `AMH_TEST_REDIS_URL`
+  - [x] `AMH_TEST_PINECONE_API_KEY`
+  - [x] `AMH_TEST_PINECONE_INDEX`
+  - [x] `AMH_TEST_PINECONE_CREATE_INDEX`
+  - [x] `AMH_TEST_PINECONE_CLOUD`
+  - [x] `AMH_TEST_PINECONE_REGION`
+  - [x] `AMH_TEST_TURBOPUFFER_API_KEY`
+  - [x] `AMH_TEST_TURBOPUFFER_NAMESPACE`
+  - [x] `AMH_TEST_TURBOPUFFER_REGION`
 
 ### Phase 6b: Shared Provider Contract Tests
 

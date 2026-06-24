@@ -35,6 +35,9 @@ opensearch = [
 postgres = [
     "psycopg[binary]>=3.2.4",
 ]
+pinecone = [
+    "pinecone>=7.0.0",
+]
 qdrant = [
     "qdrant-client>=1.12.1",
 ]
@@ -43,6 +46,9 @@ redis = [
 ]
 tokenizer = [
     "tiktoken>=0.13.0",
+]
+turbopuffer = [
+    "turbopuffer>=0.1.0",
 ]
 weaviate = [
     "weaviate-client>=4.9.0",

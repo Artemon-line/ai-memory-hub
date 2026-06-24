@@ -84,6 +84,18 @@ _PROVIDER_SECRET_PATHS = (
     ),
     (
         _STORAGE_CONFIG_KEY,
+        ProviderConfigSection.VECTOR_PROVIDERS.value,
+        VectorProviderConfigKey.PINECONE.value,
+        SecretConfigKey.API_KEY.value,
+    ),
+    (
+        _STORAGE_CONFIG_KEY,
+        ProviderConfigSection.VECTOR_PROVIDERS.value,
+        VectorProviderConfigKey.TURBOPUFFER.value,
+        SecretConfigKey.API_KEY.value,
+    ),
+    (
+        _STORAGE_CONFIG_KEY,
         ProviderConfigSection.METADATA_PROVIDERS.value,
         MetadataProviderConfigKey.MONGODB.value,
         SecretConfigKey.URI.value,

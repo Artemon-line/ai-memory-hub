@@ -33,8 +33,10 @@ from memory.backend.vector_store import (
     MongoDBAtlasVectorStore,
     OpenSearchVectorStore,
     PGVectorStore,
+    PineconeVectorStore,
     QdrantVectorStore,
     RedisVectorStore,
+    TurbopufferVectorStore,
     WeaviateVectorStore,
 )
 from memory.config import HubConfig, ensure_token_hash_secret, load_config, parse_config
@@ -522,6 +524,27 @@ def _build_vector_store(
             url=redis_config.url,
             index_name=redis_config.index,
             key_prefix=redis_config.key_prefix,
+            dimension=expected_dimension,
+            distance=cfg.storage.vector.distance,
+        )
+    if provider == VectorProviderName.PINECONE.value:
+        pinecone_config = cfg.storage.vector_providers.pinecone
+        return PineconeVectorStore(
+            api_key=pinecone_config.api_key,
+            index_name=pinecone_config.index,
+            namespace=pinecone_config.namespace,
+            dimension=expected_dimension,
+            distance=cfg.storage.vector.distance,
+            cloud=pinecone_config.cloud,
+            region=pinecone_config.region,
+            create_index=pinecone_config.create_index,
+        )
+    if provider == VectorProviderName.TURBOPUFFER.value:
+        turbopuffer_config = cfg.storage.vector_providers.turbopuffer
+        return TurbopufferVectorStore(
+            api_key=turbopuffer_config.api_key,
+            namespace=turbopuffer_config.namespace,
+            region=turbopuffer_config.region,
             dimension=expected_dimension,
             distance=cfg.storage.vector.distance,
         )

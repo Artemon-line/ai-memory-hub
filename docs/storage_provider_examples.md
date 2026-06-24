@@ -24,6 +24,8 @@ For production-quality semantic search, switch to a real embedding model and set
 | SQLite + Elasticsearch | `examples/storage-providers/elasticsearch` | Local single-node Elasticsearch |
 | SQLite + OpenSearch | `examples/storage-providers/opensearch` | Local single-node OpenSearch |
 | SQLite + Redis/RediSearch | `examples/storage-providers/redis` | Local Redis Stack service |
+| SQLite + Pinecone | `examples/storage-providers/pinecone` | Hosted managed vector search |
+| SQLite + Turbopuffer | `examples/storage-providers/turbopuffer` | Hosted object-storage-backed vector search |
 
 ## CI Coverage
 
@@ -39,6 +41,10 @@ adapter and metadata provider. The dedicated provider workflow
 - Elasticsearch
 - OpenSearch
 - Redis/RediSearch
+
+Pinecone and Turbopuffer use the same live test entry point but require
+externally supplied credentials. Pinecone also requires either an existing index
+or `AMH_TEST_PINECONE_CREATE_INDEX=1`.
 
 Postgres and PGVector live tests remain in the main CI workflow because they are
 also used by Bruno API/MCP integration tests.
