@@ -1,0 +1,38 @@
+# SQLite metadata + Typesense vectors.
+storage:
+  dry_run: false
+  allow_trusted_appends: false
+  # Metadata schema compatibility allow-list. Version 1 is current; migrations
+  # may temporarily allow multiple versions, e.g. [1, 2].
+  metadata_schema_versions: [1]
+  vector:
+    allow_fallback: false
+    distance: cosine
+  vector_providers:
+    typesense:
+      url: http://127.0.0.1:8108
+      api_key: local-typesense-key
+      collection: memory_vectors
+
+providers:
+  embeddings: local
+  embedding_model: local-hash
+  embedding_dimension: 32
+  metadata_db: sqlite
+  vector_db: typesense
+
+interfaces:
+  mcp: true
+  api: true
+
+paths:
+  data_dir: ./data/typesense
+  logs_dir: ./logs/typesense
+
+schema:
+  file: ./memory/schema/conversation.schema.json
+
+api:
+  host: 127.0.0.1
+  port: 8000
+  auth: none

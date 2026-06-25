@@ -36,6 +36,38 @@ It is built for:
 - SQLite/LanceDB by default, with optional Postgres, MongoDB, and vector-store providers
 - Bring-your-own embedding model, local or hosted
 
+## Provider Selection Rule
+
+At runtime, ai-memory-hub uses one metadata provider and one vector provider.
+The active providers are selected by `providers.metadata_db` and
+`providers.vector_db`. Provider blocks under `storage.metadata_providers` and
+`storage.vector_providers` are only configuration candidates; listing a block
+there does not activate that provider.
+
+```yaml
+providers:
+  metadata_db: postgres
+  vector_db: pgvector
+
+storage:
+  metadata_providers:
+    postgres:
+      url: postgresql://memory:memory@postgres:5432/memory
+  vector_providers:
+    pgvector:
+      url: postgresql://memory:memory@postgres:5432/memory
+      table_name: memory_vectors
+```
+
+Optional provider SDKs are installed through extras, not by the presence of a
+config block. For example, use `uv sync --extra postgres` for Postgres/PGVector
+or `uv sync --extra qdrant` for Qdrant. The checked-in `Containerfile` installs
+all provider extras intentionally so one image can run any supported provider,
+but a local/dev install only downloads the extras you request. The free local
+Compose examples for PostgreSQL/PGVector, MongoDB, Redis, ChromaDB, and
+SQLite/LanceDB use provider-local Containerfiles so they install only the extras
+needed by that example.
+
 ## What It Does
 
 - Stores structured conversations with validation and deduplication
@@ -151,7 +183,7 @@ docker run --rm -p 8000:8000 ai-memory-hub:local
 Run with Postgres and PGVector:
 
 ```bash
-cd examples/postgres/pgvector
+cd examples/storage_providers/postgres-pgvector
 docker compose up --build
 ```
 
@@ -167,15 +199,15 @@ it on a LAN, create a bearer token in the metadata database and change
 `Authorization: Bearer <token>` to both HTTP and MCP endpoints. See the PGVector
 runbook in the checked-in Compose example directory for the exact commands.
 
-Other checked-in provider examples live under `examples/storage-providers`:
+Other checked-in provider examples live under `examples/storage_providers`:
 ChromaDB, Qdrant, MongoDB, MongoDB Atlas, Milvus, Weaviate, Elasticsearch,
-OpenSearch, Redis/RediSearch, Vespa, Typesense, Pinecone, Turbopuffer, local LanceDB, and
-in-memory vectors.
+OpenSearch, Redis/RediSearch, Vespa, Typesense, Pinecone, Turbopuffer,
+SQLite/LanceDB, and in-memory vectors.
 
 Example:
 
 ```bash
-cd examples/storage-providers/qdrant
+cd examples/storage_providers/qdrant
 docker compose up --build
 ```
 

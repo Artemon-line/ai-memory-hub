@@ -6,12 +6,18 @@
 # -------------------------
 storage:
   dry_run: false
+  # Metadata schema compatibility allow-list. Version 1 is current; migrations
+  # may temporarily allow multiple versions, e.g. [1, 2].
   metadata_schema_versions: [1]
   vector:
     # set false in production to fail fast on vector init errors
     allow_fallback: true
     distance: cosine
+  # Candidate vector-provider settings. Only providers.vector_db is active.
   vector_providers:
+    pgvector:
+      url: ""
+      table_name: memory_vectors
     chromadb:
       path: ./data/chromadb
       url: ""
@@ -71,7 +77,10 @@ storage:
       url: http://127.0.0.1:8108
       api_key: ""
       collection: memory_vectors
+  # Candidate metadata-provider settings. Only providers.metadata_db is active.
   metadata_providers:
+    postgres:
+      url: ""
     mongodb:
       uri: ""
       database: ai_memory_hub
@@ -101,17 +110,16 @@ chunking:
   overlap_tokens: 80
 
 # -------------------------
-# PROVIDERS (BYOS/BYOA)
+# ACTIVE PROVIDERS (BYOS/BYOA)
 # -------------------------
 providers:
   embeddings: openai # Embedding provider used for chunk vectors
   embedding_model: 'nomic-embed-text'
   embedding_dimension: 768
-  metadata_db: sqlite # sqlite | postgres | mongodb
-  metadata_dsn: '' # required when metadata_db=postgres
+  metadata_db: sqlite # active metadata provider: sqlite | postgres | mongodb
   # lancedb | chromadb | qdrant | milvus | weaviate | mongodb_atlas |
   # elasticsearch | opensearch | redis | pinecone | turbopuffer | vespa | typesense | pgvector | memory | in_memory
-  vector_db: lancedb
+  vector_db: lancedb # active vector provider
   agent: mvp # Phase 1 ingestion agent (deterministic pipeline)
 
 # -------------------------

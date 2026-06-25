@@ -30,6 +30,15 @@ Typesense, Pinecone, Turbopuffer, Postgres, or PGVector. Use the tokenizer extra
 OpenAI-compatible token counting through `tiktoken`. Use `--all-extras` for
 container builds or provider compatibility checks.
 
+Provider config blocks do not install dependencies. Dependencies are installed
+only by the `uv sync` extras you choose, or by container images that explicitly
+install extras. The checked-in `Containerfile` installs all provider extras so
+the same image can run any supported storage backend; a local/dev install should
+usually install only the extra for the provider you actually select. The free
+local Compose examples for PostgreSQL/PGVector, MongoDB, Redis, ChromaDB, and
+SQLite/LanceDB use provider-local Containerfiles so they install only the extras
+needed by that example.
+
 ## How It Works
 
 ```text
@@ -306,6 +315,26 @@ The same memory operations remain available through HTTP API endpoints, so agent
 clients and direct service clients can share one backend.
 
 ## Storage Backends
+
+The runtime uses one metadata provider and one vector provider. Select them with
+`providers.metadata_db` and `providers.vector_db`. The blocks under
+`storage.metadata_providers` and `storage.vector_providers` only hold settings
+for possible providers; they are not active unless selected.
+
+```yaml
+providers:
+  metadata_db: postgres
+  vector_db: pgvector
+
+storage:
+  metadata_providers:
+    postgres:
+      url: postgresql://user:password@127.0.0.1:5432/memory
+  vector_providers:
+    pgvector:
+      url: postgresql://user:password@127.0.0.1:5432/memory
+      table_name: memory_vectors
+```
 
 ### SQLite + LanceDB
 
@@ -605,8 +634,12 @@ Use Postgres for conversation metadata:
 ```yaml
 providers:
   metadata_db: postgres
-  metadata_dsn: postgresql://user:password@127.0.0.1:5432/memory
   vector_db: lancedb
+
+storage:
+  metadata_providers:
+    postgres:
+      url: postgresql://user:password@127.0.0.1:5432/memory
 ```
 
 ### PGVector
@@ -616,8 +649,16 @@ Use PGVector for vector storage:
 ```yaml
 providers:
   metadata_db: postgres
-  metadata_dsn: postgresql://user:password@127.0.0.1:5432/memory
   vector_db: pgvector
+
+storage:
+  metadata_providers:
+    postgres:
+      url: postgresql://user:password@127.0.0.1:5432/memory
+  vector_providers:
+    pgvector:
+      url: postgresql://user:password@127.0.0.1:5432/memory
+      table_name: memory_vectors
 ```
 
 ### In-Memory Vectors
@@ -640,12 +681,12 @@ providers:
   embedding_model: nomic-embed-text
   embedding_dimension: 768
   metadata_db: sqlite
-  metadata_dsn: ""
   vector_db: lancedb
 
 storage:
   dry_run: false
   allow_trusted_appends: false
+  # Metadata schema compatibility allow-list. Version 1 is current.
   metadata_schema_versions: [1]
   vector:
     allow_fallback: true
@@ -723,6 +764,12 @@ openai:
   api_key: dummy_key
   model: gpt-4.1
 ```
+
+`metadata_schema_versions` means "this app build supports these metadata store
+schema versions." It is an array so future rolling migrations can temporarily
+support old and new database layouts, for example `[1, 2]`. Version `1` is the
+first and current metadata schema version. Startup fails if the active metadata
+store reports a version outside this list.
 
 The default `chunking.strategy: message` keeps one chunk per normalized message.
 Set `chunking.strategy: token` to split long messages into token windows with
@@ -807,17 +854,17 @@ For a reusable Docker/Podman Compose setup that runs ai-memory-hub with Postgres
 metadata and PGVector vectors:
 
 ```bash
-cd examples/postgres/pgvector
+cd examples/storage_providers/postgres-pgvector
 docker compose up --build
 ```
 
 The example binds ai-memory-hub on host port `8000` for LAN clients. Use
 `http://<HOST_LAN_IP>:8000/mcp/` from another PC on the same network. It also
 enables tokenizer budgeting with the optional `tiktoken` extra. For remote
-Ollama embeddings, see `examples/postgres/pgvector/config.ollama.yaml`.
+Ollama embeddings, see `examples/storage_providers/postgres-pgvector/config.ollama.yaml`.
 
-Additional checked-in provider examples are under `examples/storage-providers`.
-They cover local LanceDB, in-memory vectors, ChromaDB, Qdrant, MongoDB metadata,
+Additional checked-in provider examples are under `examples/storage_providers`.
+They cover SQLite/LanceDB, in-memory vectors, ChromaDB, Qdrant, MongoDB metadata,
 MongoDB Atlas Vector Search, Milvus, Weaviate, Elasticsearch, OpenSearch,
 Redis/RediSearch, Vespa, Typesense, Pinecone, and Turbopuffer.
 

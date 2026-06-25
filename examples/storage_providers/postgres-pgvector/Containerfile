@@ -1,0 +1,52 @@
+FROM python:3.14-slim
+
+ARG VERSION=0.1.0
+ARG REVISION=unknown
+ARG SOURCE=https://github.com/Artemon-line/ai-memory-hub
+
+LABEL org.opencontainers.image.title="ai-memory-hub-pgvector-example" \
+      org.opencontainers.image.description="ai-memory-hub Postgres metadata and PGVector example image" \
+      org.opencontainers.image.source="${SOURCE}" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.licenses="MIT"
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    HOME=/tmp \
+    TIKTOKEN_CACHE_DIR=/opt/tiktoken-cache \
+    UV_CACHE_DIR=/app/.uv-cache
+
+WORKDIR /app
+
+COPY pyproject.toml uv.lock README.md ./
+
+RUN python -m pip install --no-cache-dir uv && \
+    uv sync --frozen --no-dev \
+      --extra postgres \
+      --extra tokenizer \
+      --no-install-project && \
+    mkdir -p "$TIKTOKEN_CACHE_DIR" && \
+    uv run python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"
+
+COPY memory ./memory
+COPY examples/container/config.yaml /app/config.yaml
+
+RUN uv sync --frozen --no-dev \
+      --extra postgres \
+      --extra tokenizer && \
+    test -x /app/.venv/bin/aim && \
+    mkdir -p /app/data /app/logs /app/.uv-cache "$TIKTOKEN_CACHE_DIR" && \
+    useradd --uid 1001 --gid 0 --home-dir /tmp --no-create-home \
+      --shell /usr/sbin/nologin ai-memory-hub && \
+    chgrp -R 0 /app "$TIKTOKEN_CACHE_DIR" && \
+    chmod -R g=u /app "$TIKTOKEN_CACHE_DIR" && \
+    chown -R 1001:0 /tmp/.uv-cache || true && \
+    chown -R 1001:0 /app/.uv-cache && \
+    chmod -R g=u /app/.uv-cache
+
+EXPOSE 8000
+
+USER 1001
+
+CMD ["uv", "run", "aim", "serve", "--host", "0.0.0.0", "--port", "8000"]

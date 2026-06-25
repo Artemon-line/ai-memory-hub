@@ -120,9 +120,17 @@ scheduled real-client MCP smoke lane.
 - Do not require vendor credentials for the default pipeline.
 - Keep the MCP server as the source of truth for validation, ID generation, hashing, embedding, dedupe, and storage.
 
-## External Integration References
+## Native Agent Candidate Discovery
 
-- Ollama Claude Code integration documents `ollama launch claude` and a non-interactive `--yes -- -p` mode.
-- Ollama Copilot CLI integration documents `ollama launch copilot` and a non-interactive `--yes -- -p` mode.
-- Ollama Codex CLI integration documents `ollama launch codex`, `--config`, `--restore`, and profile-based setup.
-- Ollama OpenCode integration documents `ollama launch opencode` and `--config`.
+Ollama's launcher catalog is useful for discovering popular agent tools, but it
+is not the ai-memory-hub support matrix. Use native install, config, and run
+paths when evaluating real-client support.
+
+Track Hermes Agent, NVIDIA OpenShell, Codex App, OpenClaw, Droid, and Pi as
+native real-client candidates in `real_client_mcp_smoke_plan.md`. The preferred
+path is documented native setup, manual validation, ai-memory-hub fixes from
+real findings, then supported status. Add automated real-client coverage after
+the manual workflow is stable. Add mocked/profile coverage only when real
+testing reveals payload or response-shape quirks worth preserving.
+
+OpenClaw native setup is tracked in `openclaw_native_mcp_setup.md`.

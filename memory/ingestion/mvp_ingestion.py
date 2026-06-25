@@ -341,7 +341,9 @@ def build_runtime(
         raise
     data_dir = Path(cfg.paths.data_dir)
     if cfg.providers.metadata_db == "postgres":
-        metadata_store = PostgresMetadataStore(cfg.providers.metadata_dsn)
+        metadata_store = PostgresMetadataStore(
+            cfg.storage.metadata_providers.postgres.url
+        )
     elif cfg.providers.metadata_db == "mongodb":
         mongodb_config = cfg.storage.metadata_providers.mongodb
         metadata_store = MongoDBMetadataStore(
@@ -571,9 +573,10 @@ def _build_vector_store(
             distance=cfg.storage.vector.distance,
         )
     if provider == VectorProviderName.PGVECTOR.value:
-        dsn = cfg.providers.metadata_dsn
+        pgvector_config = cfg.storage.vector_providers.pgvector
         return PGVectorStore(
-            dsn,
+            pgvector_config.url,
+            table_name=pgvector_config.table_name,
             dimension=expected_dimension,
             distance=cfg.storage.vector.distance,
         )

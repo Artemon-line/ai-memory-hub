@@ -62,6 +62,10 @@ def test_storage_provider_expansion_config_models_validate() -> None:
         {
             "storage": {
                 "vector_providers": {
+                    "pgvector": {
+                        "url": "postgresql://user:pass@127.0.0.1:5432/app",
+                        "table_name": "memory_vectors_dev",
+                    },
                     "chromadb": {
                         "path": "./data/chroma",
                         "collection": "memory_vectors_dev",
@@ -131,6 +135,9 @@ def test_storage_provider_expansion_config_models_validate() -> None:
                     },
                 },
                 "metadata_providers": {
+                    "postgres": {
+                        "url": "postgresql://user:pass@127.0.0.1:5432/app",
+                    },
                     "mongodb": {
                         "uri": "mongodb://user:pass@127.0.0.1:27017/app",
                         "database": "ai_memory_hub",
@@ -141,8 +148,15 @@ def test_storage_provider_expansion_config_models_validate() -> None:
         }
     )
 
+    assert config.storage.vector_providers.pgvector.url == (
+        "postgresql://user:pass@127.0.0.1:5432/app"
+    )
+    assert config.storage.vector_providers.pgvector.table_name == "memory_vectors_dev"
     assert config.storage.vector_providers.qdrant.url == "https://qdrant.example.com"
     assert config.storage.vector_providers.chromadb.collection == "memory_vectors_dev"
+    assert config.storage.metadata_providers.postgres.url == (
+        "postgresql://user:pass@127.0.0.1:5432/app"
+    )
     assert config.storage.metadata_providers.mongodb.database == "ai_memory_hub"
 
 
@@ -173,6 +187,10 @@ def test_storage_provider_configs_override_expansion_defaults() -> None:
         {
             "storage": {
                 "vector_providers": {
+                    "pgvector": {
+                        "url": "postgresql://vector:secret@example.com/app",
+                        "table_name": "custom_pgvector_vectors",
+                    },
                     "qdrant": {
                         "url": "https://qdrant.example.com",
                         "api_key": "qdrant-key",
@@ -237,11 +255,22 @@ def test_storage_provider_configs_override_expansion_defaults() -> None:
                         "api_key": "typesense-key",
                         "collection": "custom_typesense_vectors",
                     },
-                }
+                },
+                "metadata_providers": {
+                    "postgres": {
+                        "url": "postgresql://metadata:secret@example.com/app",
+                    }
+                },
             }
         }
     )
 
+    assert config.storage.vector_providers.pgvector.url == (
+        "postgresql://vector:secret@example.com/app"
+    )
+    assert config.storage.vector_providers.pgvector.table_name == (
+        "custom_pgvector_vectors"
+    )
     assert config.storage.vector_providers.qdrant.url == "https://qdrant.example.com"
     assert config.storage.vector_providers.qdrant.api_key == "qdrant-key"
     assert config.storage.vector_providers.qdrant.collection == "custom_qdrant_vectors"
@@ -291,6 +320,9 @@ def test_storage_provider_configs_override_expansion_defaults() -> None:
     assert config.storage.vector_providers.typesense.url == "https://typesense.example.com"
     assert config.storage.vector_providers.typesense.api_key == "typesense-key"
     assert config.storage.vector_providers.typesense.collection == "custom_typesense_vectors"
+    assert config.storage.metadata_providers.postgres.url == (
+        "postgresql://metadata:secret@example.com/app"
+    )
 
 
 def test_storage_provider_config_rejects_invalid_urls_and_names() -> None:
@@ -305,6 +337,27 @@ def test_storage_provider_config_rejects_invalid_urls_and_names() -> None:
                 }
             }
         )
+
+    with pytest.raises(ValueError, match="storage.vector.pgvector.table_name"):
+        parse_config(
+            {
+                "storage": {
+                    "vector_providers": {"pgvector": {"table_name": "bad-name"}}
+                }
+            }
+        )
+
+    with pytest.raises(ValueError, match="storage.metadata.postgres.url"):
+        parse_config(
+            {
+                "storage": {
+                    "metadata_providers": {"postgres": {"url": "localhost/db"}}
+                }
+            }
+        )
+
+    with pytest.raises(ValueError, match="metadata_dsn"):
+        parse_config({"providers": {"metadata_dsn": "postgresql://example/db"}})
 
 
 def test_tokenizer_and_ask_config_defaults():

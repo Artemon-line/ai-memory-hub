@@ -16,7 +16,7 @@ uv run aim serve --config examples/container/config.yaml --host 127.0.0.1 --port
 Or use the Postgres/PGVector Compose example:
 
 ```bash
-cd examples/postgres/pgvector
+cd examples/storage_providers/postgres-pgvector
 docker compose up --build
 ```
 

@@ -1955,10 +1955,12 @@ def test_build_runtime_pgvector_fallback_uses_memory_provider(
             "providers": {
                 "embeddings": "local",
                 "vector_db": "pgvector",
-                "metadata_dsn": "postgres://example",
             },
             "paths": {"data_dir": str(tmp_path)},
-            "storage": {"vector": {"allow_fallback": True}},
+            "storage": {
+                "vector": {"allow_fallback": True},
+                "vector_providers": {"pgvector": {"url": "postgres://example"}},
+            },
         }
     )
 
@@ -1983,10 +1985,12 @@ def test_build_runtime_pgvector_fallback_disabled_raises(
                 "providers": {
                     "embeddings": "local",
                     "vector_db": "pgvector",
-                    "metadata_dsn": "postgres://example",
                 },
                 "paths": {"data_dir": str(tmp_path)},
-                "storage": {"vector": {"allow_fallback": False}},
+                "storage": {
+                    "vector": {"allow_fallback": False},
+                    "vector_providers": {"pgvector": {"url": "postgres://example"}},
+                },
             }
         )
 
@@ -2725,10 +2729,14 @@ def test_build_runtime_fails_on_incompatible_postgres_schema(
                     "embeddings": "local",
                     "vector_db": "in_memory",
                     "metadata_db": "postgres",
-                    "metadata_dsn": "postgres://example",
                 },
                 "paths": {"data_dir": str(tmp_path)},
-                "storage": {"metadata_schema_versions": [1]},
+                "storage": {
+                    "metadata_schema_versions": [1],
+                    "metadata_providers": {
+                        "postgres": {"url": "postgres://example"}
+                    },
+                },
             }
         )
 
@@ -2825,11 +2833,14 @@ def test_runtime_postgres_pgvector_live_integration_when_dsn_provided(
             "providers": {
                 "embeddings": "local",
                 "metadata_db": "postgres",
-                "metadata_dsn": dsn,
                 "vector_db": "pgvector",
             },
             "paths": {"data_dir": str(tmp_path)},
-            "storage": {"vector": {"allow_fallback": False}},
+            "storage": {
+                "vector": {"allow_fallback": False},
+                "metadata_providers": {"postgres": {"url": dsn}},
+                "vector_providers": {"pgvector": {"url": dsn}},
+            },
         }
     )
     unique_text = f"postgres pgvector contract {uuid4().hex}"

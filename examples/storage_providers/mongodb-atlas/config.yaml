@@ -1,0 +1,51 @@
+# MongoDB metadata + MongoDB Atlas Vector Search.
+#
+# Replace the URI and index settings before use. The Atlas vector index must
+# already exist and must target the `vector` field with the configured embedding
+# dimension.
+storage:
+  dry_run: false
+  allow_trusted_appends: false
+  # Metadata schema compatibility allow-list. Version 1 is current; migrations
+  # may temporarily allow multiple versions, e.g. [1, 2].
+  metadata_schema_versions: [1]
+  vector:
+    allow_fallback: false
+    distance: cosine
+  metadata_providers:
+    mongodb:
+      uri: mongodb+srv://user:password@example.mongodb.net/app
+      database: ai_memory_hub
+      conversations_collection: conversations
+      facts_collection: facts
+      generated_summaries_collection: generated_summaries
+      schema_collection: schema_versions
+  vector_providers:
+    mongodb_atlas:
+      uri: mongodb+srv://user:password@example.mongodb.net/app
+      database: ai_memory_hub
+      collection: memory_vectors
+      index: memory_vector_index
+
+providers:
+  embeddings: local
+  embedding_model: local-hash
+  embedding_dimension: 32
+  metadata_db: mongodb
+  vector_db: mongodb_atlas
+
+interfaces:
+  mcp: true
+  api: true
+
+paths:
+  data_dir: ./data/mongodb-atlas
+  logs_dir: ./logs/mongodb-atlas
+
+schema:
+  file: ./memory/schema/conversation.schema.json
+
+api:
+  host: 127.0.0.1
+  port: 8000
+  auth: none

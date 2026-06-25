@@ -427,10 +427,10 @@ def test_config_show_redacts_secrets(capsys, tmp_path) -> None:
             [
                 "openai:",
                 "  api_key: secret",
-                "providers:",
-                "  metadata_dsn: postgresql://u:p@localhost/db",
                 "storage:",
                 "  vector_providers:",
+                "    pgvector:",
+                "      url: postgresql://vector:secret@localhost/db",
                 "    qdrant:",
                 "      api_key: qdrant-secret",
                 "    milvus:",
@@ -456,6 +456,8 @@ def test_config_show_redacts_secrets(capsys, tmp_path) -> None:
                 "    typesense:",
                 "      api_key: typesense-secret",
                 "  metadata_providers:",
+                "    postgres:",
+                "      url: postgresql://metadata:secret@localhost/db",
                 "    mongodb:",
                 "      uri: mongodb://user:mongo-secret@127.0.0.1:27017/app",
                 "",
@@ -469,8 +471,8 @@ def test_config_show_redacts_secrets(capsys, tmp_path) -> None:
     body = json.loads(capsys.readouterr().out)
     assert exit_code == 0
     assert body["config"]["openai"]["api_key"] == "***"
-    assert body["config"]["providers"]["metadata_dsn"] == "***"
     vector_providers = body["config"]["storage"]["vector_providers"]
+    assert vector_providers["pgvector"]["url"] == "***"
     assert vector_providers["qdrant"]["api_key"] == "***"
     assert vector_providers["milvus"]["token"] == "***"
     assert vector_providers["weaviate"]["api_key"] == "***"
@@ -484,6 +486,7 @@ def test_config_show_redacts_secrets(capsys, tmp_path) -> None:
     assert vector_providers["turbopuffer"]["api_key"] == "***"
     assert vector_providers["vespa"]["token"] == "***"
     assert vector_providers["typesense"]["api_key"] == "***"
+    assert body["config"]["storage"]["metadata_providers"]["postgres"]["url"] == "***"
     assert body["config"]["storage"]["metadata_providers"]["mongodb"]["uri"] == "***"
 
 

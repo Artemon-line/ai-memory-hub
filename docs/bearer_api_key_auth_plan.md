@@ -479,7 +479,7 @@ Security tests:
 Update:
 
 - README security section.
-- `examples/postgres/pgvector/codex_opencode_docker_pgvector_test.md`.
+- `examples/storage_providers/postgres-pgvector/codex_opencode_docker_pgvector_test.md`.
 - `docs/agents.md`.
 - `docs/mcp_plan.md`.
 

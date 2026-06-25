@@ -1,33 +1,48 @@
 # Storage Provider Examples
 
-Checked-in examples live under `examples/storage-providers` and
-`examples/postgres/pgvector`.
+Checked-in examples live under `examples/storage_providers` and
+`examples/storage_providers/postgres-pgvector`.
 
 These examples use `providers.embeddings: local` so storage smoke tests are
 credential-free and do not require OpenAI, Ollama, or another model service.
 For production-quality semantic search, switch to a real embedding model and set
 `providers.embedding_dimension` to match it.
 
+Each running hub uses one metadata provider and one vector provider. The active
+providers are selected by `providers.metadata_db` and `providers.vector_db`.
+Provider settings under `storage.metadata_providers` and
+`storage.vector_providers` are configuration candidates; listing a provider
+block there does not activate it.
+
+Installing dependencies is separate from configuration. Optional SDKs are
+downloaded only when you install their extras, such as `uv sync --extra qdrant`
+or `uv sync --extra postgres`, or when using a container image that deliberately
+installs all provider extras.
+
+The API-key-free local Compose examples for PostgreSQL/PGVector, MongoDB,
+Redis, ChromaDB, and SQLite/LanceDB use provider-local Containerfiles. Those
+images install only the optional dependency extras needed by that example.
+
 ## Example Matrix
 
 | Provider setup | Path | Notes |
 | --- | --- | --- |
-| SQLite + LanceDB | `examples/storage-providers/local-lancedb` | Default local persistent setup |
-| SQLite + in-memory vectors | `examples/storage-providers/memory` | Disposable vector storage for tests |
-| Postgres + PGVector | `examples/postgres/pgvector` | Full runbook for Docker/Podman and MCP handoff |
-| SQLite + ChromaDB | `examples/storage-providers/chromadb` | Local Chroma HTTP service |
-| SQLite + Qdrant | `examples/storage-providers/qdrant` | Local Qdrant service |
-| MongoDB metadata + LanceDB | `examples/storage-providers/mongodb` | MongoDB owns metadata only |
-| MongoDB metadata + Atlas vectors | `examples/storage-providers/mongodb-atlas` | Hosted Atlas Vector Search |
-| SQLite + Milvus | `examples/storage-providers/milvus` | Milvus standalone with etcd and MinIO |
-| SQLite + Weaviate | `examples/storage-providers/weaviate` | Weaviate with no provider-side vectorizer |
-| SQLite + Elasticsearch | `examples/storage-providers/elasticsearch` | Local single-node Elasticsearch |
-| SQLite + OpenSearch | `examples/storage-providers/opensearch` | Local single-node OpenSearch |
-| SQLite + Redis/RediSearch | `examples/storage-providers/redis` | Local Redis Stack service |
-| SQLite + Vespa | `examples/storage-providers/vespa` | Existing deployed Vespa application |
-| SQLite + Typesense | `examples/storage-providers/typesense` | Local Typesense service |
-| SQLite + Pinecone | `examples/storage-providers/pinecone` | Hosted managed vector search |
-| SQLite + Turbopuffer | `examples/storage-providers/turbopuffer` | Hosted object-storage-backed vector search |
+| SQLite + LanceDB | `examples/storage_providers/sqlite-lancedb` | Default local persistent setup |
+| SQLite + in-memory vectors | `examples/storage_providers/memory` | Disposable vector storage for tests |
+| Postgres + PGVector | `examples/storage_providers/postgres-pgvector` | Full runbook for Docker/Podman and MCP handoff |
+| SQLite + ChromaDB | `examples/storage_providers/chromadb` | Local Chroma HTTP service |
+| SQLite + Qdrant | `examples/storage_providers/qdrant` | Local Qdrant service |
+| MongoDB metadata + LanceDB | `examples/storage_providers/mongodb` | MongoDB owns metadata only |
+| MongoDB metadata + Atlas vectors | `examples/storage_providers/mongodb-atlas` | Hosted Atlas Vector Search |
+| SQLite + Milvus | `examples/storage_providers/milvus` | Milvus standalone with etcd and MinIO |
+| SQLite + Weaviate | `examples/storage_providers/weaviate` | Weaviate with no provider-side vectorizer |
+| SQLite + Elasticsearch | `examples/storage_providers/elasticsearch` | Local single-node Elasticsearch |
+| SQLite + OpenSearch | `examples/storage_providers/opensearch` | Local single-node OpenSearch |
+| SQLite + Redis/RediSearch | `examples/storage_providers/redis` | Local Redis Stack service |
+| SQLite + Vespa | `examples/storage_providers/vespa` | Existing deployed Vespa application |
+| SQLite + Typesense | `examples/storage_providers/typesense` | Local Typesense service |
+| SQLite + Pinecone | `examples/storage_providers/pinecone` | Hosted managed vector search |
+| SQLite + Turbopuffer | `examples/storage_providers/turbopuffer` | Hosted object-storage-backed vector search |
 
 ## CI Coverage
 
@@ -48,7 +63,7 @@ adapter and metadata provider. The dedicated provider workflow
 Pinecone, Turbopuffer, and Vespa use the same live test entry point but require
 externally supplied credentials or services. Pinecone also requires either an
 existing index or `AMH_TEST_PINECONE_CREATE_INDEX=1`. Vespa requires a deployed
-application package matching `examples/storage-providers/vespa/config.yaml`.
+application package matching `examples/storage_providers/vespa/config.yaml`.
 
 Postgres and PGVector live tests remain in the main CI workflow because they are
 also used by Bruno API/MCP integration tests.
@@ -58,6 +73,25 @@ but it requires externally supplied credentials and an existing Atlas vector
 index.
 
 ## Common Smoke
+
+API-key-free local Compose examples:
+
+```bash
+cd examples/storage_providers/sqlite-lancedb
+docker compose up --build
+
+cd examples/storage_providers/chromadb
+docker compose up --build
+
+cd examples/storage_providers/mongodb
+docker compose up --build
+
+cd examples/storage_providers/redis
+docker compose up --build
+
+cd examples/storage_providers/postgres-pgvector
+docker compose up --build
+```
 
 After starting any local Compose example:
 

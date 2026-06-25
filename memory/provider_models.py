@@ -42,6 +42,7 @@ class ProviderConfigSection(StrEnum):
 
 
 class VectorProviderConfigKey(StrEnum):
+    PGVECTOR = "pgvector"
     CHROMADB = "chromadb"
     QDRANT = "qdrant"
     MILVUS = "milvus"
@@ -57,6 +58,7 @@ class VectorProviderConfigKey(StrEnum):
 
 
 class MetadataProviderConfigKey(StrEnum):
+    POSTGRES = "postgres"
     MONGODB = "mongodb"
 
 

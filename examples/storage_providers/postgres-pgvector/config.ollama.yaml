@@ -1,0 +1,79 @@
+# ai-memory-hub Docker/Podman Compose config for Postgres + PGVector + remote Ollama embeddings.
+# This file is mounted over /app/config.yaml when you want Ollama-backed embeddings.
+# This default targets Ollama running on the same host PC as Docker.
+# From inside a container, localhost is the container itself; use host.docker.internal
+# to reach the host.
+# Podman users may need http://host.containers.internal:11434/v1 instead.
+
+storage:
+  dry_run: false
+  allow_trusted_appends: false
+  # Metadata schema compatibility allow-list. Version 1 is current; migrations
+  # may temporarily allow multiple versions, e.g. [1, 2].
+  metadata_schema_versions: [1]
+  vector:
+    allow_fallback: false
+    distance: cosine
+  metadata_providers:
+    postgres:
+      url: postgresql://memory:memory@postgres:5432/memory
+  vector_providers:
+    pgvector:
+      url: postgresql://memory:memory@postgres:5432/memory
+      table_name: memory_vectors
+
+tokenizer:
+  enabled: true
+  encoding: cl100k_base
+
+ask:
+  max_context_tokens: 2000
+
+retrieval:
+  vector_score_threshold: 7.5
+  keyword_enabled: true
+  keyword_candidate_limit: 50
+  keyword_weight: 0.25
+  metadata_weight: 0.15
+  candidate_multiplier: 3
+
+chunking:
+  strategy: message
+  max_tokens: 800
+  overlap_tokens: 80
+
+providers:
+  # Ollama exposes an OpenAI-compatible embeddings API at /v1/embeddings.
+  embeddings: openai
+  embedding_model: nomic-embed-text
+  embedding_dimension: 768
+  metadata_db: postgres
+  vector_db: pgvector
+  agent: mvp
+
+interfaces:
+  mcp: true
+  api: true
+
+paths:
+  data_dir: /data
+  logs_dir: /logs
+
+schema:
+  file: /app/memory/schema/conversation.schema.json
+
+mcp:
+  host: 0.0.0.0
+  port: 8765
+
+api:
+  host: 0.0.0.0
+  port: 8000
+  # Local smoke-test default. Before using this 0.0.0.0 Compose stack from
+  # another PC, seed a token in Postgres and change this to bearer_token.
+  # Clients must then send Authorization: Bearer <token> to /memory/* and /mcp/*.
+  auth: none
+
+openai:
+  base_url: http://host.docker.internal:11434/v1
+  api_key: ollama

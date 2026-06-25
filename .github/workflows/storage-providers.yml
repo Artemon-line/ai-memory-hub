@@ -5,8 +5,8 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/storage-providers.yml"
-      - "examples/storage-providers/**"
-      - "examples/postgres/pgvector/**"
+      - "examples/storage_providers/**"
+      - "examples/storage_providers/postgres-pgvector/**"
       - "memory/backend/**"
       - "memory/config.py"
       - "memory/ingestion/mvp_ingestion.py"
@@ -444,7 +444,7 @@ jobs:
       - run: uv sync --dev --extra milvus
       - name: Start Milvus dependencies
         run: |
-          docker compose -f examples/storage-providers/milvus/compose.yaml up -d etcd minio milvus
+          docker compose -f examples/storage_providers/milvus/compose.yaml up -d etcd minio milvus
       - name: Wait for Milvus
         run: |
           for i in {1..120}; do
@@ -453,7 +453,7 @@ jobs:
               && exit 0 || true
             sleep 2
           done
-          docker compose -f examples/storage-providers/milvus/compose.yaml logs milvus
+          docker compose -f examples/storage_providers/milvus/compose.yaml logs milvus
           exit 1
       - name: Run Milvus live test
         env:
@@ -466,7 +466,7 @@ jobs:
             --junitxml=reports/junit/pytest-milvus-live.xml
       - name: Stop Milvus
         if: always()
-        run: docker compose -f examples/storage-providers/milvus/compose.yaml down -v
+        run: docker compose -f examples/storage_providers/milvus/compose.yaml down -v
       - uses: actions/upload-artifact@v7
         if: always()
         with:

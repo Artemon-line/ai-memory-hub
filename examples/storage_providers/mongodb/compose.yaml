@@ -1,0 +1,27 @@
+services:
+  mongodb:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+
+  ai-memory-hub:
+    build:
+      context: ../../..
+      dockerfile: examples/storage_providers/mongodb/Containerfile
+    restart: on-failure
+    depends_on:
+      - mongodb
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro,Z
+      - hub_data:/data
+      - hub_logs:/logs
+
+volumes:
+  mongodb_data:
+  hub_data:
+  hub_logs:

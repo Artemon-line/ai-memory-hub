@@ -31,6 +31,12 @@ _PROVIDER_SECRET_PATHS = (
     (
         _STORAGE_CONFIG_KEY,
         ProviderConfigSection.VECTOR_PROVIDERS.value,
+        VectorProviderConfigKey.PGVECTOR.value,
+        SecretConfigKey.URL.value,
+    ),
+    (
+        _STORAGE_CONFIG_KEY,
+        ProviderConfigSection.VECTOR_PROVIDERS.value,
         VectorProviderConfigKey.QDRANT.value,
         SecretConfigKey.API_KEY.value,
     ),
@@ -105,6 +111,12 @@ _PROVIDER_SECRET_PATHS = (
         ProviderConfigSection.VECTOR_PROVIDERS.value,
         VectorProviderConfigKey.TYPESENSE.value,
         SecretConfigKey.API_KEY.value,
+    ),
+    (
+        _STORAGE_CONFIG_KEY,
+        ProviderConfigSection.METADATA_PROVIDERS.value,
+        MetadataProviderConfigKey.POSTGRES.value,
+        SecretConfigKey.URL.value,
     ),
     (
         _STORAGE_CONFIG_KEY,
@@ -987,7 +999,6 @@ def _capabilities(store: Any) -> dict[str, Any]:
 def _redact_config(config: HubConfig) -> dict[str, Any]:
     data = config.model_dump(by_alias=True)
     _redact_config_path(data, ("openai", "api_key"))
-    _redact_config_path(data, ("providers", "metadata_dsn"))
     for path in _PROVIDER_SECRET_PATHS:
         _redact_config_path(data, path)
     return data

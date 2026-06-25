@@ -66,7 +66,7 @@ def main() -> None:
         [
             Path(".github/workflows/bruno-integration.yml"),
             Path(".github/workflows/storage-providers.yml"),
-            *Path("examples/storage-providers").rglob("*.yaml"),
+            *Path("examples/storage_providers").rglob("*.yaml"),
         ]
     )
     json_files = [path for path in root.rglob("*.json") if not _is_generated(path)]

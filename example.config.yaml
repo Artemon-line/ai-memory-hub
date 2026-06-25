@@ -7,12 +7,18 @@
 # -------------------------
 storage:
   dry_run: false
+  # Metadata schema compatibility allow-list. Version 1 is current; migrations
+  # may temporarily allow multiple versions, e.g. [1, 2].
   metadata_schema_versions: [1]
   vector:
     # set false in production to fail fast on vector init errors
     allow_fallback: true
     distance: cosine
+  # Candidate vector-provider settings. Only providers.vector_db is active.
   vector_providers:
+    pgvector:
+      url: ""
+      table_name: memory_vectors
     chromadb:
       path: ./data/chromadb
       url: ""
@@ -72,7 +78,10 @@ storage:
       url: http://127.0.0.1:8108
       api_key: ""
       collection: memory_vectors
+  # Candidate metadata-provider settings. Only providers.metadata_db is active.
   metadata_providers:
+    postgres:
+      url: ""
     mongodb:
       uri: ""
       database: ai_memory_hub
@@ -92,17 +101,16 @@ retrieval:
   candidate_multiplier: 3
 
 # -------------------------
-# PROVIDERS (BYOS/BYOA)
+# ACTIVE PROVIDERS (BYOS/BYOA)
 # -------------------------
 providers:
   embeddings: openai # Embedding provider used for chunk vectors
   embedding_model: 'text-embedding-3-small' # open_ai embedding_model
   embedding_dimension: 1536 # text-embedding-3-small embedding dimension
-  metadata_db: sqlite # sqlite | postgres | mongodb
-  metadata_dsn: '' # required when metadata_db=postgres
+  metadata_db: sqlite # active metadata provider: sqlite | postgres | mongodb
   # lancedb | chromadb | qdrant | milvus | weaviate | mongodb_atlas |
   # elasticsearch | opensearch | redis | pinecone | turbopuffer | vespa | typesense | pgvector | memory | in_memory
-  vector_db: lancedb
+  vector_db: lancedb # active vector provider
   agent: mvp # Phase 1 ingestion agent (deterministic pipeline)
 
 # -------------------------
@@ -158,11 +166,11 @@ openai:
 # providers:
 #   embeddings: local
 #   metadata_db: sqlite
-#   metadata_dsn: ""
 #   vector_db: lancedb
 #
 # storage:
 #   dry_run: false
+#   # Metadata schema compatibility allow-list; version 1 is current.
 #   metadata_schema_versions: [1]
 #   vector:
 #     allow_fallback: true
@@ -171,11 +179,14 @@ openai:
 #
 # providers:
 #   metadata_db: postgres
-#   metadata_dsn: "postgresql://user:password@127.0.0.1:5432/memory"
 #   vector_db: lancedb
 #
 # storage:
+#   # Metadata schema compatibility allow-list; version 1 is current.
 #   metadata_schema_versions: [1]
+#   metadata_providers:
+#     postgres:
+#       url: postgresql://user:password@127.0.0.1:5432/memory
 #
 # 3) ChromaDB vectors
 #
@@ -379,7 +390,28 @@ openai:
 # Install with:
 #   uv sync --extra typesense
 #
-# 14) MongoDB metadata + Atlas Vector Search
+# 14) Postgres metadata + PGVector vectors
+#
+# providers:
+#   metadata_db: postgres
+#   vector_db: pgvector
+#
+# storage:
+#   vector:
+#     allow_fallback: false
+#     distance: cosine
+#   metadata_providers:
+#     postgres:
+#       url: postgresql://user:password@127.0.0.1:5432/memory
+#   vector_providers:
+#     pgvector:
+#       url: postgresql://user:password@127.0.0.1:5432/memory
+#       table_name: memory_vectors
+#
+# Install with:
+#   uv sync --extra postgres
+#
+# 15) MongoDB metadata + Atlas Vector Search
 #
 # providers:
 #   metadata_db: mongodb
@@ -400,26 +432,26 @@ openai:
 # Install with:
 #   uv sync --extra mongodb
 #
-# 15) Strict production startup (no vector fallback)
+# 16) Strict production startup (no vector fallback)
 #
 # storage:
 #   dry_run: false
 #   vector:
 #     allow_fallback: false
 #
-# 16) Dry-run mode for ingestion validation
+# 17) Dry-run mode for ingestion validation
 #
 # storage:
 #   dry_run: true
 #   vector:
 #     allow_fallback: true
 #
-# 17) In-memory vectors path
+# 18) In-memory vectors path
 #
 # providers:
 #   vector_db: in_memory
 #
-# 18) Custom conversation schema
+# 19) Custom conversation schema
 #
 # schema:
 #   file: "./memory/schema/conversation.schema.json"

@@ -3,7 +3,6 @@ providers:
   embedding_model: local-hash
   embedding_dimension: 32
   metadata_db: postgres
-  metadata_dsn: postgresql://test:test@127.0.0.1:5432/memory
   vector_db: pgvector
   agent: mvp
 
@@ -11,6 +10,13 @@ storage:
   dry_run: false
   vector:
     allow_fallback: false
+  metadata_providers:
+    postgres:
+      url: postgresql://test:test@127.0.0.1:5432/memory
+  vector_providers:
+    pgvector:
+      url: postgresql://test:test@127.0.0.1:5432/memory
+      table_name: memory_vectors
 
 retrieval:
   vector_score_threshold: 7.5

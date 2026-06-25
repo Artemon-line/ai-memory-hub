@@ -94,6 +94,57 @@ non-interactive mode.
 - [x] Gemini CLI: track the client in the weekly lane and skip it explicitly
   until local-gateway, no-vendor-credential support is confirmed.
 
+## Native Agent Candidate Triage
+
+Ollama's launcher list is useful as a discovery source for popular agents, but
+ai-memory-hub should test those agents through their native install, config, and
+run paths. Do not use `ollama launch` as the compatibility path for this smoke
+lane.
+
+Promote agents one by one after verifying that they can use ai-memory-hub
+through MCP or an equivalent native tool bridge. The primary deliverable is a
+well-documented native setup that a user can run manually. Mark an agent
+supported only after manual validation has exposed and resolved the integration
+issues.
+
+Promotion path:
+
+- [ ] Research native MCP/tool support, install path, config files, auth/header
+  behavior, and model/provider requirements.
+- [ ] Add a documented native setup example for the agent, including
+  ai-memory-hub MCP URL, auth notes, and a minimal save/search/ask prompt.
+- [ ] Manually validate the documented setup against a real ai-memory-hub
+  instance.
+- [ ] Fix ai-memory-hub issues found during manual validation before marking the
+  agent supported.
+- [ ] Mark the agent supported only after the manual workflow works end to end.
+- [ ] Add automated native real-client coverage on top when the agent has a
+  stable non-interactive or scriptable command.
+- [ ] Add mocked/profile coverage only for payload or response-shape quirks
+  discovered during real testing.
+- [ ] Keep any automated CI slot skip-safe until the native command is stable
+  across releases.
+
+Candidate order:
+
+| Agent | Native support status | Manual validation | Automated coverage | Next research question |
+|-------|-----------------------|-------------------|--------------------|------------------------|
+| Hermes Agent | Candidate | Not started | Not started | Determine whether Hermes supports MCP tools or another native tool protocol that can call ai-memory-hub. |
+| NVIDIA OpenShell | Candidate | Not started | Not started | Determine whether OpenShell supports MCP tools or another native tool protocol that can call ai-memory-hub. |
+| Claude Code | Tracked | Planned | Weekly slot implemented when configured | Keep validating the native CLI command and MCP config path. |
+| Codex CLI | Tracked | Partially validated through prior local use | Weekly slot implemented when configured | Confirm the native CLI command template can use temporary `CODEX_HOME` with MCP and local provider config. |
+| Codex App | Candidate | Not started | Not started | Determine whether it exposes MCP config and scriptable delegation suitable for repeatable smoke. |
+| Copilot CLI | Tracked | Planned | Weekly slot implemented when configured | Keep validating the native command template and provider override path. |
+| OpenCode | Tracked | Partially validated through prior local use | Weekly slot implemented when configured | Confirm the native config path can reliably provide MCP and provider settings. |
+| Gemini CLI | Tracked | Not started | Skipped by default pending provider support | Confirm a native no-vendor-credential local-provider path. |
+| OpenClaw | Setup documented | Not started | Not started | Run `openclaw mcp probe ai-memory-hub --json`, then manually validate an agent turn using `openclaw_native_mcp_setup.md`. |
+| Droid | Candidate | Not started | Not started | Determine whether Droid has headless execution and external MCP/tool configuration. |
+| Pi | Candidate | Not started | Not started | Determine whether Pi plugins can call streamable HTTP MCP tools and run non-interactively. |
+
+Do not advertise a candidate as supported until the documented native setup has
+been manually validated. Add automated coverage only after manual validation has
+made the integration behavior clear.
+
 ## Minimal Smoke Prompt
 
 Each client should receive a prompt equivalent to:

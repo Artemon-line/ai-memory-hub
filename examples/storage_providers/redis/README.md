@@ -1,0 +1,16 @@
+# Redis/RediSearch
+
+This stack runs Redis Stack for vectors and SQLite for metadata.
+
+```bash
+cd examples/storage_providers/redis
+docker compose up --build
+```
+
+Redis is bound to `127.0.0.1:6379`; ai-memory-hub is bound to
+`127.0.0.1:8000`.
+
+The hub image is built from this directory's Containerfile and installs only
+the `redis` optional dependency extra.
+
+Run the common smoke commands from `examples/storage_providers/README.md`.

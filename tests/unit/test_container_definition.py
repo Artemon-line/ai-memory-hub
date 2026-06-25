@@ -34,6 +34,70 @@ def test_containerfile_installs_project_after_copying_package() -> None:
     assert "useradd --uid 1001 --gid 0" in containerfile
 
 
+def test_pgvector_example_uses_slim_containerfile() -> None:
+    compose = Path("examples/storage_providers/postgres-pgvector/compose.yaml").read_text(
+        encoding="utf-8"
+    )
+    containerfile = Path("examples/storage_providers/postgres-pgvector/Containerfile").read_text(
+        encoding="utf-8"
+    )
+
+    assert "dockerfile: examples/storage_providers/postgres-pgvector/Containerfile" in compose
+    assert "--extra postgres" in containerfile
+    assert "--extra tokenizer" in containerfile
+    for extra in (
+        "chromadb",
+        "elasticsearch",
+        "milvus",
+        "mongodb",
+        "opensearch",
+        "pinecone",
+        "qdrant",
+        "redis",
+        "turbopuffer",
+        "vespa",
+        "typesense",
+        "weaviate",
+    ):
+        assert f"--extra {extra}" not in containerfile
+
+
+def test_free_provider_examples_use_provider_local_containerfiles() -> None:
+    expected_extras = {
+        "chromadb": {"chromadb"},
+        "mongodb": {"mongodb"},
+        "redis": {"redis"},
+        "sqlite-lancedb": set(),
+    }
+    all_optional_extras = {
+        "chromadb",
+        "elasticsearch",
+        "milvus",
+        "mongodb",
+        "opensearch",
+        "pinecone",
+        "postgres",
+        "qdrant",
+        "redis",
+        "tokenizer",
+        "turbopuffer",
+        "vespa",
+        "typesense",
+        "weaviate",
+    }
+
+    for example, enabled_extras in expected_extras.items():
+        example_dir = Path("examples/storage_providers") / example
+        compose = (example_dir / "compose.yaml").read_text(encoding="utf-8")
+        containerfile = (example_dir / "Containerfile").read_text(encoding="utf-8")
+
+        assert f"dockerfile: examples/storage_providers/{example}/Containerfile" in compose
+        for extra in enabled_extras:
+            assert f"--extra {extra}" in containerfile
+        for extra in all_optional_extras - enabled_extras:
+            assert f"--extra {extra}" not in containerfile
+
+
 def test_project_declares_build_backend_for_console_script() -> None:
     with Path("pyproject.toml").open("rb") as pyproject_file:
         pyproject = tomllib.load(pyproject_file)

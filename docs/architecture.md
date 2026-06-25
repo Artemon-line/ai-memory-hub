@@ -197,7 +197,22 @@ Bring Your Own Stack means embedding and storage providers are selected through 
 
 ## Config-Driven Provider System
 
-All providers are wired from config at startup.
+All providers are configured from one config file at startup, but the runtime
+uses only one metadata provider and one vector provider. The active providers
+are selected by `providers.metadata_db` and `providers.vector_db`. The
+`storage.metadata_providers` and `storage.vector_providers` sections hold
+provider-specific settings for possible providers; entries in those sections are
+not active unless selected.
+
+Multiple active metadata or vector stores are not supported in the normal write
+and query path. Migration, dual-write validation, backups, or federated search
+should be implemented as explicit tools or modes rather than inferred from
+multiple configured provider blocks.
+
+Provider dependencies are installed by package extras, not by config. For local
+development install only the extra for the provider you select, such as
+`uv sync --extra postgres` or `uv sync --extra qdrant`. Container images may
+install all provider extras deliberately for runtime flexibility.
 
 Example:
 

@@ -143,7 +143,7 @@ uv run aim serve --host 127.0.0.1 --port 8000
 2. The reusable Postgres/PGVector Compose stack:
 
 ```bash
-cd examples/postgres/pgvector
+cd examples/storage_providers/postgres-pgvector
 docker compose up --build
 ```
 

@@ -28,17 +28,18 @@ VECTOR_PROVIDER_VALUES = tuple(item.value for item in VectorProviderName)
 METADATA_PROVIDER_VALUES = tuple(item.value for item in MetadataProviderName)
 _VALID_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]*$")
 _VALID_INDEX_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]*$")
+_VALID_SQL_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 class ProvidersConfig(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     embeddings: str = EmbeddingProviderName.OPENAI.value
     embedding_model: str = "nomic-embed-text"
     embedding_dimension: int = 768
     vector_db: str = VectorProviderName.LANCEDB.value
     metadata_db: str = MetadataProviderName.SQLITE.value
-    metadata_dsn: str = ""
+    agent: str = "mvp"
 
     @field_validator("embeddings")
     @classmethod
@@ -270,6 +271,27 @@ class RedisVectorConfig(BaseModel):
         return normalized
 
 
+class PGVectorConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str = ""
+    table_name: str = "memory_vectors"
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, value: str) -> str:
+        if value:
+            _validate_absolute_uri(value, field_name="storage.vector.pgvector.url")
+        return value
+
+    @field_validator("table_name")
+    @classmethod
+    def validate_table_name(cls, value: str) -> str:
+        return _validate_sql_identifier(
+            value, field_name="storage.vector.pgvector.table_name"
+        )
+
+
 class PineconeVectorConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -376,6 +398,10 @@ class TypesenseVectorConfig(BaseModel):
 class VectorProviderConfigs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    pgvector: PGVectorConfig = Field(
+        default_factory=PGVectorConfig,
+        alias=VectorProviderConfigKey.PGVECTOR.value,
+    )
     chromadb: ChromaDBVectorConfig = Field(
         default_factory=ChromaDBVectorConfig,
         alias=VectorProviderConfigKey.CHROMADB.value,
@@ -457,9 +483,26 @@ class MongoDBMetadataConfig(BaseModel):
         )
 
 
+class PostgresMetadataConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str = ""
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, value: str) -> str:
+        if value:
+            _validate_absolute_uri(value, field_name="storage.metadata.postgres.url")
+        return value
+
+
 class MetadataProviderConfigs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    postgres: PostgresMetadataConfig = Field(
+        default_factory=PostgresMetadataConfig,
+        alias=MetadataProviderConfigKey.POSTGRES.value,
+    )
     mongodb: MongoDBMetadataConfig = Field(
         default_factory=MongoDBMetadataConfig,
         alias=MetadataProviderConfigKey.MONGODB.value,
@@ -709,5 +752,17 @@ def _validate_provider_index(value: str, *, field_name: str) -> str:
         raise ValueError(
             f"{field_name} must start with a letter and contain only letters, "
             "numbers, underscores, dashes, or dots"
+        )
+    return normalized
+
+
+def _validate_sql_identifier(value: str, *, field_name: str) -> str:
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError(f"{field_name} must not be empty")
+    if not _VALID_SQL_IDENTIFIER_RE.fullmatch(normalized):
+        raise ValueError(
+            f"{field_name} must start with a letter or underscore and contain only "
+            "letters, numbers, or underscores"
         )
     return normalized
