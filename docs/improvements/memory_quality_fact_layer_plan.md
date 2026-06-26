@@ -16,7 +16,7 @@ Implemented:
 - [x] Ask responses can track selected and dropped chunks for token-budgeted context building.
 - [x] `memory_ask` returns `confidence`, `answer_basis`, and compact `provenance`.
 - [x] `memory_search` and `memory_ask` accept `result_mode` with `chunks`, `compact`, and `conversations`.
-- [x] SQLite and Postgres metadata stores persist deterministic extracted facts.
+- [x] SQLite, Postgres, and MongoDB metadata stores persist deterministic extracted facts.
 - [x] MCP and HTTP expose fact search, profile get, and fact supersession operations.
 - [x] Direct fact questions can use the fact layer before conversation retrieval.
 - [x] Superseded facts are hidden from normal profile/fact answers and retained for audit.

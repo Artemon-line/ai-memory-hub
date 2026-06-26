@@ -22,6 +22,15 @@ installs all provider extras.
 The API-key-free local Compose examples for PostgreSQL/PGVector, MongoDB,
 Redis, ChromaDB, and SQLite/LanceDB use provider-local Containerfiles. Those
 images install only the optional dependency extras needed by that example.
+For Redis and MongoDB specifically, the checked-in directories include all
+local-run assets:
+
+- `examples/storage_providers/redis/compose.yaml`
+- `examples/storage_providers/redis/Containerfile`
+- `examples/storage_providers/redis/config.yaml`
+- `examples/storage_providers/mongodb/compose.yaml`
+- `examples/storage_providers/mongodb/Containerfile`
+- `examples/storage_providers/mongodb/config.yaml`
 
 ## Example Matrix
 

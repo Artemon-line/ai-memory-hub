@@ -23,11 +23,10 @@ controlled fallback behavior, and dry-run support.
 
 - Redesigning domain workflows.
 - Changing public API/MCP contracts.
-- Broad provider expansion beyond SQLite, Postgres, LanceDB, pgvector, and in-memory fallback.
 
-Provider expansion is now tracked as follow-up work in Phase 6. Those adapters must preserve
-the same storage contracts, API/MCP response shapes, fallback policy, health semantics, and
-dry-run behavior.
+Provider expansion is tracked in Phase 6. Implemented adapters preserve the
+same storage contracts, API/MCP response shapes, fallback policy, health
+semantics, and dry-run behavior.
 
 ## Target Architecture
 
@@ -303,6 +302,7 @@ Current implemented provider matrix:
 - [x] Vectors: Redis/RediSearch
 - [x] Vectors: Pinecone
 - [x] Vectors: Turbopuffer
+- [x] Vectors: Vespa
 - [x] Vectors: Typesense
 
 Candidate vector-provider backlog from `improvements/vector_dbs.md`:
@@ -377,6 +377,7 @@ Status: `PARTIAL`
   - [x] `redis`
   - [x] `pinecone`
   - [x] `turbopuffer`
+  - [x] `vespa`
   - [x] `typesense`
 - [x] Extend `providers.metadata_db` accepted values:
   - [x] `mongodb`
@@ -438,6 +439,12 @@ storage:
       api_key: ""
       namespace: memory-vectors
       region: gcp-us-central1
+    vespa:
+      url: http://127.0.0.1:8080
+      token: ""
+      namespace: memory
+      schema: memory
+      rank_profile: vector_similarity
     typesense:
       url: http://127.0.0.1:8108
       api_key: ""

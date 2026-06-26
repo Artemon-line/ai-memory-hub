@@ -1,5 +1,10 @@
 # Vector Database Options
 
+Status: Qdrant, Weaviate, Pinecone, Vespa, Turbopuffer, Redis/RediSearch,
+Elasticsearch/OpenSearch, MongoDB Atlas Vector Search, and Typesense are
+implemented. Meilisearch, DuckDB VSS, sqlite-vec, and library-only adapters
+remain candidate work.
+
 - Qdrant — Rust-based, strong filtering
 - Weaviate — hybrid search, GraphQL
 - Pinecone — managed/serverless

@@ -21,7 +21,7 @@ Each phase ends with a **milestone** you can demo or ship.
 | Phase | Focus | Milestone (one line) |
 |-------|--------|----------------------|
 | 1 | Core MVP: MCP-native ingestion, normalize, store, search, retrieve | MCP tools/resources + HTTP `/memory/*` over SQLite + LanceDB |
-| 1.5 | Storage abstraction | PGVector provider + unified storage interface |
+| 1.5 | Storage abstraction | Unified metadata/vector provider interfaces with local, hosted, and existing-stack backends |
 | 2 | Multi-source ingestion | One hub across platforms, including those without official exports (e.g. Copilot) |
 | 3 | Intelligence: summaries, topics, timelines, consolidation | Knowledge engine, not just storage |
 | 4 | UI & DX | Dashboard + SDKs + packaging |
@@ -37,7 +37,7 @@ When planning or estimating work, treat phases as **ordered capability layers**:
 
 - **Phase 1** defines the minimum **pipeline**: **schema-first ingestion** (MCP/API payloads) → **unified schema** → **embeddings** → **vector search** → **HTTP** `/memory/search`, 
 `/memory/retrieve` + MCP `memory_*` tools/resources.
-- **Phase 1.5** promotes storage to a **first-class subsystem**: `VectorStore` interface → LanceDB/ChromaDB/Qdrant/Milvus/Weaviate/PGVector/MongoDB Atlas/Elasticsearch/OpenSearch/in-memory providers → deterministic startup checks → fallback behavior.
+- **Phase 1.5** promotes storage to a **first-class subsystem**: `VectorStore` interface → LanceDB/ChromaDB/Qdrant/Milvus/Weaviate/PGVector/MongoDB Atlas/Elasticsearch/OpenSearch/Redis/Pinecone/Turbopuffer/Vespa/Typesense/in-memory providers → deterministic startup checks → fallback behavior.
 - **Phase 2** adds **platform-specific ingestion** (Gemini Takeout, Copilot workarounds, Claude HTML, local LLM logs);
 **schema and storage stay stable** if normalization boundaries are respected.
 - Browser extension capture is a planned Phase 2-compatible ingestion option:
@@ -45,7 +45,7 @@ extension repos parse ChatGPT, Microsoft Copilot, Claude, Gemini, and similar
 web UIs, then post normalized payloads to `POST /memory/insert`.
 - **Phase 3** is **offline/batch intelligence** on top of stored chunks (summaries, clustering, timelines).
 - **Phase 4** is **presentation and distribution** (UI, SDKs, OpenAPI, pip).
-- **Phase 5** aligns with [agents.md](agents.md): external agent frameworks consume the same memory API/MCP backend with their choice of LanceDB, ChromaDB, PGVector, or ephemeral in-memory vectors.
+- **Phase 5** aligns with [agents.md](agents.md): external agent frameworks consume the same memory API/MCP backend with their choice of supported metadata and vector providers.
 - **Phases 6–7** are **extensions**; **local-first** remains default until Phase 7 is explicitly enabled.
 
 ---
@@ -90,9 +90,9 @@ web UIs, then post normalized payloads to `POST /memory/insert`.
 
 ---
 
-## Phase 1.5 — Storage abstraction and PGVector provider
+## Phase 1.5 — Storage abstraction and provider expansion
 
-**Goal:** Make storage pluggable and introduce PGVector as a first-class vector backend.
+**Goal:** Make storage pluggable and keep every storage backend behind stable metadata and vector interfaces.
 
 ### 1.5.1 Storage abstraction layer
 
@@ -107,7 +107,7 @@ web UIs, then post normalized payloads to `POST /memory/insert`.
 
 ### 1.5.2 PGVector provider
 
-- [x] Reuse existing Postgres metadata DSN when available
+- [x] Configure PGVector through `storage.vector_providers.pgvector.url`
 - [x] Create vector table (for example, `memory_vectors`)
 - [x] Support cosine, L2, and inner product distance modes
 - [x] Add HNSW index creation
@@ -123,8 +123,8 @@ web UIs, then post normalized payloads to `POST /memory/insert`.
 
 ### 1.5.3 Config changes
 
-- [x] `providers.vector_db: lancedb | chromadb | qdrant | milvus | weaviate | pgvector | mongodb_atlas | elasticsearch | opensearch | memory`
-- [x] `providers.metadata_db: sqlite | postgres`
+- [x] `providers.vector_db: lancedb | chromadb | qdrant | milvus | weaviate | pgvector | mongodb_atlas | elasticsearch | opensearch | redis | pinecone | turbopuffer | vespa | typesense | memory`
+- [x] `providers.metadata_db: sqlite | postgres | mongodb`
 - [x] `storage.vector.allow_fallback: true`
 - [x] `storage.vector.distance: cosine | l2 | inner_product`
 
@@ -334,7 +334,7 @@ PGVector and Postgres enable future hybrid search, SQL-based memory analytics, a
 Evolution path:
 
 1. **MVP** — ingest, store, search, RAG
-2. **Storage abstraction** — LanceDB, ChromaDB, PGVector, and in-memory providers behind one interface
+2. **Storage abstraction** — supported metadata and vector providers behind stable interfaces
 3. **Multi-source ingestion**
 4. **Intelligence layer**
 5. **UI and developer experience**

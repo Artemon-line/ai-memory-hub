@@ -271,6 +271,20 @@ storage:
       cloud: aws
       region: us-east-1
       create_index: false
+    turbopuffer:
+      api_key: ""
+      namespace: memory-vectors
+      region: gcp-us-central1
+    vespa:
+      url: http://127.0.0.1:8080
+      token: ""
+      namespace: memory
+      schema: memory
+      rank_profile: vector_similarity
+    typesense:
+      url: http://127.0.0.1:8108
+      api_key: ""
+      collection: memory_vectors
   metadata_providers:
     mongodb:
       uri: ""

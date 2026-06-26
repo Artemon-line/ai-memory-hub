@@ -204,6 +204,17 @@ ChromaDB, Qdrant, MongoDB, MongoDB Atlas, Milvus, Weaviate, Elasticsearch,
 OpenSearch, Redis/RediSearch, Vespa, Typesense, Pinecone, Turbopuffer,
 SQLite/LanceDB, and in-memory vectors.
 
+The local MongoDB and Redis examples include their own Compose stack and
+provider-local hub `Containerfile`, so they avoid building the all-extras image:
+
+```bash
+cd examples/storage_providers/mongodb
+docker compose up --build
+
+cd examples/storage_providers/redis
+docker compose up --build
+```
+
 Example:
 
 ```bash

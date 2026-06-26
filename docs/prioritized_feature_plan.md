@@ -34,7 +34,7 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P2 | MongoDB metadata and MongoDB Atlas Vector Search | Implemented | `storage_agnostic_byoa_plan.md` |
 | P3 | Elasticsearch/OpenSearch vector providers | Implemented | `storage_agnostic_byoa_plan.md` |
 | P3 | Milvus/Zilliz and Weaviate vector providers | Implemented | `storage_agnostic_byoa_plan.md` |
-| P3 | Next vector provider candidates: Redis/RediSearch, Pinecone, Turbopuffer, Vespa, Typesense/Meilisearch, DuckDB VSS, sqlite-vec | Partial | `storage_agnostic_byoa_plan.md`, `improvements/vector_dbs.md` |
+| P3 | Provider backlog: Redis/RediSearch, Pinecone, Turbopuffer, Vespa, and Typesense implemented; Meilisearch, DuckDB VSS, and sqlite-vec remain planned | Partial | `storage_agnostic_byoa_plan.md`, `improvements/vector_dbs.md` |
 | P3 | Release notes, image scanning, SBOM, and provenance | Planned | `release_container_docs_plan.md` |
 | P3 | Topic/project summaries, digests, consolidation | Planned here | This doc and `roadmap.md` |
 | P3 | UI and developer experience | Planned here | This doc and `roadmap.md` |
