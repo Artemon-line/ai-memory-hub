@@ -7,6 +7,12 @@ Use them from the repository root unless a provider README says otherwise.
 All examples use deterministic local embeddings so provider smoke tests do not
 need OpenAI, Ollama, or any external model service.
 
+For real semantic or multilingual retrieval, switch to an embedding model that
+supports the languages you store and query, and set the matching dimension. If
+you change embedding model/provider/options on persistent vector data, reindex
+or use a separate vector namespace/index; same-dimension model swaps can still
+break ranking.
+
 ## Supported Providers
 
 | Provider | Example | CI coverage |

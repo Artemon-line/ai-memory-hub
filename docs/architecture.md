@@ -24,6 +24,8 @@ Implemented and verified in the codebase:
 - Deterministic ingestion with message hashes, conversation hashes, duplicate detection, same-thread append handling, append-only chunking, and indexing state updates.
 - Message-level chunking by default, plus opt-in token-window chunking for long messages.
 - Embedding providers: OpenAI and local deterministic embeddings.
+- Multilingual retrieval is supported when the configured embedding model
+  supports the languages involved; ai-memory-hub itself is not English-only.
 - Metadata stores: SQLite, Postgres, and MongoDB.
 - Vector stores: LanceDB, ChromaDB, Qdrant, Milvus/Zilliz, Weaviate,
   PGVector, MongoDB Atlas Vector Search, Elasticsearch, OpenSearch, Redis,
@@ -170,6 +172,13 @@ Hybrid keyword/vector scoring, similarity thresholds, and metadata-aware reranki
 ## Bring Your Own Stack Model
 
 Bring Your Own Stack means embedding and storage providers are selected through config while the ingestion, API, and MCP contracts stay stable.
+
+The embedding provider is part of the storage contract. Stored vectors and query
+vectors must come from the same embedding provider, model, dimension, and
+configuration. Multilingual memory depends on choosing a multilingual-capable
+embedding model. Changing the embedding model or provider for an existing vector
+index requires an explicit reindex or a separate vector namespace/index, even
+when the new model has the same dimensionality.
 
 ```text
 [Clients]

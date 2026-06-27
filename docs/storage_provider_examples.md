@@ -8,6 +8,12 @@ credential-free and do not require OpenAI, Ollama, or another model service.
 For production-quality semantic search, switch to a real embedding model and set
 `providers.embedding_dimension` to match it.
 
+Multilingual retrieval is supported when the selected embedding model supports
+the languages you store and query. Use the same embedding provider/model/options
+for both ingestion and search. If you switch models on a persistent vector
+store, reindex the data or use a separate vector namespace/index; same-dimension
+model swaps can still corrupt ranking.
+
 Each running hub uses one metadata provider and one vector provider. The active
 providers are selected by `providers.metadata_db` and `providers.vector_db`.
 Provider settings under `storage.metadata_providers` and

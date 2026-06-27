@@ -54,6 +54,10 @@ Planned or partial:
 - Include full user and assistant turns that should be remembered. You may add a short factual `metadata.summary` retrieval hint, but do not use it instead of `messages`.
 - Do not include tool output, debug logs, or operational planning text as conversation messages unless the user explicitly wants that stored.
 - Do not supply client-side embeddings, message hashes, or conversation hashes. The hub computes them.
+- Do not assume memory is English-only. Multilingual retrieval is available when
+  the hub's configured embedding model supports the relevant languages.
+- Do not change the hub embedding model for an existing persistent vector index
+  without reindexing or using a separate vector namespace/index.
 - Never expose raw stored secrets in messages or metadata.
 
 After implementing any new agent-facing feature, update `README.md` and this document in the same change.
@@ -294,6 +298,13 @@ are selected at startup:
   `pgvector`, `mongodb_atlas`, `elasticsearch`, `opensearch`, `redis`,
   `typesense`, `pinecone`, `turbopuffer`, or `memory`
 - Embeddings: `openai` or `local`
+
+For multilingual conversations, retrieval quality is a property of the
+configured embedding model. The agent should send normal Unicode text through
+MCP/API and let the hub embed it. If the operator changes the embedding model,
+provider, dimension, or model options, existing persistent vectors must be
+reindexed or isolated in a separate namespace/index before mixed retrieval is
+trusted.
 
 Agents can inspect `memory://health` or API health behavior when available, but storage provider
 details should only inform diagnostics, not payload shape.

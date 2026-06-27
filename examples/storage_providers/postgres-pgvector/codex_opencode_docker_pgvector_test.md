@@ -76,7 +76,7 @@ For this test, `examples/storage_providers/postgres-pgvector/compose.yaml` mount
 `examples/storage_providers/postgres-pgvector/config.yaml` over `/app/config.yaml` at runtime.
 The config bind mount uses the `:Z` SELinux relabel option so rootless Podman works on SELinux-enabled Linux hosts. Docker accepts this option on Linux.
 
-The config uses `providers.embeddings: local` to avoid requiring Ollama or OpenAI embeddings for this handoff test. It also enables `tokenizer.enabled: true` with `cl100k_base`, so `memory_ask` returns token-budget diagnostics using `tiktoken` when available. That keeps the test focused on MCP, Postgres, PGVector, tokenizer budgeting, and cross-client access.
+The config uses `providers.embeddings: local` to avoid requiring Ollama or OpenAI embeddings for this handoff test. It also enables `tokenizer.enabled: true` with `cl100k_base`, so `memory_ask` returns token-budget diagnostics using `tiktoken` when available. That keeps the test focused on MCP, Postgres, PGVector, tokenizer budgeting, and cross-client access. For real semantic or multilingual retrieval, use an embedding model that supports the languages you store and query.
 
 If you want to use Ollama embeddings from the same PC that runs Docker instead
 of deterministic local embeddings, start Compose with `config.ollama.yaml`:
@@ -459,7 +459,7 @@ docker compose down -v
 
 - Codex and opencode must be explicitly prompted to use the MCP server. ai-memory-hub does not automatically capture their transcripts.
 - The current `save_conversation` MCP prompt helps agents build payloads, but the client still decides whether and how to call tools.
-- The Docker/Podman instructions use `providers.embeddings: local` with 32-dimensional deterministic embeddings. That is best for this integration test. For more realistic semantic retrieval, switch to OpenAI or Ollama-compatible embeddings and set `embedding_dimension` to match the embedding model.
+- The Docker/Podman instructions use `providers.embeddings: local` with 32-dimensional deterministic embeddings. That is best for this integration test. For more realistic semantic or multilingual retrieval, switch to OpenAI or Ollama-compatible embeddings, choose a model that supports your languages, and set `embedding_dimension` to match the embedding model. Reindex or use a separate vector namespace/index if you change embedding model/provider/options on persistent data.
 - The example `Containerfile` installs `psycopg` through the `postgres` extra
   before using Postgres in containers.
 - The example `Containerfile` installs `tiktoken` through the `tokenizer` extra

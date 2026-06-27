@@ -74,6 +74,8 @@ needed by that example.
 - Searches semantic memory with conversation-aware grouping
 - Answers questions with citations, confidence, and provenance
 - Extracts useful profile/project facts for direct answers
+- Supports multilingual memory when the configured embedding model supports the
+  languages involved
 - Serves both FastAPI endpoints and an MCP server
 - Runs locally, in containers, or against your selected storage backend
 
@@ -91,13 +93,23 @@ You choose three things:
 | Metadata storage | SQLite | Use Postgres for shared durable server setups, or MongoDB when it already owns application persistence |
 | Vector storage | LanceDB, ChromaDB, Qdrant, Milvus, Weaviate, PGVector, MongoDB Atlas, Elasticsearch, OpenSearch, Redis/RediSearch, Vespa, Typesense, Pinecone, Turbopuffer, or in-memory | Use the backend that already fits your local or hosted operations stack |
 
-For multilingual chat history, choose an embedding model that supports the
-languages you actually use. The embedding provider/model and vector dimension
-must match the model you configure. Today the real embedding path is
-OpenAI-compatible: configure an OpenAI-compatible embedding endpoint through the
-OpenAI client, such as OpenAI itself or a local Ollama-compatible `/v1`
-endpoint. The deterministic local embedding mode is for smoke tests and demos,
-not production-quality semantic retrieval.
+## Multilingual Retrieval Rule
+
+ai-memory-hub is not English-only. It stores Unicode text and uses the
+configured embedding model for semantic retrieval. Multilingual retrieval works
+when the configured embedding model supports the languages you store and query.
+
+Use the same embedding provider, model, dimension, and options for ingestion and
+query-time retrieval. If you change the embedding model, provider, dimension, or
+embedding options for an existing persistent vector index, reindex the stored
+memory or use a separate vector namespace/index. Do not mix vectors from
+different embedding spaces, even when two models have the same dimension.
+
+Today the real embedding path is OpenAI-compatible: configure an
+OpenAI-compatible embedding endpoint through the OpenAI client, such as OpenAI
+itself or a local Ollama-compatible `/v1` endpoint. The deterministic local
+embedding mode is for smoke tests and demos, not production-quality semantic or
+multilingual retrieval.
 
 Storage guidance:
 
@@ -191,7 +203,9 @@ That Compose stack uses Postgres for metadata and PGVector for vectors. The
 default checked-in config keeps embeddings deterministic and credential-free for
 local smoke testing. For real memory quality, switch the embedding provider to a
 real OpenAI-compatible local or hosted embedding model and set the matching
-embedding dimension.
+embedding dimension. For multilingual memory, choose an embedding model that
+supports your languages. Reindex or use a separate vector namespace/index if
+you change embedding model/provider/options on persistent data.
 
 The Compose example is unauthenticated for local smoke testing. Before exposing
 it on a LAN, create a bearer token in the metadata database and change

@@ -99,6 +99,19 @@ Postgres version table policy:
 
 Extend vector contract with expected dimensionality and strict validation.
 
+Multilingual retrieval is a model capability, not a storage-provider special
+case. ai-memory-hub stores Unicode text and uses hub-owned embeddings. If the
+selected embedding model is multilingual, multilingual memory should work
+through the same API/MCP contracts. Storage providers must not reinterpret text
+or run their own vectorizer unless a future explicit provider-side embedding
+mode is designed.
+
+Dimension checks are necessary but not sufficient. A user can switch to a
+different embedding model with the same output dimension, producing vectors that
+look compatible but live in a different embedding space. Persistent vector
+stores need embedding provider/model/config metadata and should fail, require
+reindex, or use a separate namespace/index when that metadata changes.
+
 Contract additions:
 
 - `expected_dimensionality: int`

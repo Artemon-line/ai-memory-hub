@@ -335,6 +335,13 @@ Rules:
 - Use configured embedding provider only.
 - Validate vector dimensionality against vector store expected dimensionality.
 - Store embedding provider name, model, and dimension in chunk metadata.
+- Store and process Unicode text; ai-memory-hub is not English-only.
+- Treat multilingual quality as an embedding-model capability. If the configured
+  model supports the relevant languages, ingestion/search/ask use the same
+  pipeline as English content.
+- Changing embedding provider, model, dimension, or model options for an
+  existing vector index requires explicit reindexing or an isolated vector
+  namespace/index.
 - Re-embed only chunks created from new messages.
 
 Recommended local embedding target:

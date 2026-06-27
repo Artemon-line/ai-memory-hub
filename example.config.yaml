@@ -104,8 +104,11 @@ retrieval:
 # ACTIVE PROVIDERS (BYOS/BYOA)
 # -------------------------
 providers:
-  embeddings: openai # Embedding provider used for chunk vectors
-  embedding_model: 'text-embedding-3-small' # open_ai embedding_model
+  # Embedding provider used for chunk vectors. Multilingual retrieval depends on
+  # choosing a model that supports your languages. Reindex or use a separate
+  # vector namespace/index when changing model/provider/options on persistent data.
+  embeddings: openai
+  embedding_model: 'text-embedding-3-small' # OpenAI-compatible embedding model
   embedding_dimension: 1536 # text-embedding-3-small embedding dimension
   metadata_db: sqlite # active metadata provider: sqlite | postgres | mongodb
   # lancedb | chromadb | qdrant | milvus | weaviate | mongodb_atlas |

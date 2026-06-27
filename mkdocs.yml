@@ -56,4 +56,5 @@ nav:
       - Context Building Plan: docs/improvements/context_building_plan.md
       - Conversation Grouping Plan: docs/improvements/conversation_grouping_plan.md
       - Memory Quality And Fact Layer Plan: docs/improvements/memory_quality_fact_layer_plan.md
+      - Edge Case Test Coverage Plan: docs/improvements/edge_case_test_coverage_plan.md
       - Vector Database Options: docs/improvements/vector_dbs.md

@@ -321,6 +321,20 @@ The runtime uses one metadata provider and one vector provider. Select them with
 `storage.metadata_providers` and `storage.vector_providers` only hold settings
 for possible providers; they are not active unless selected.
 
+## Multilingual Retrieval
+
+ai-memory-hub is not English-only. It stores Unicode text and uses the
+configured embedding model for semantic retrieval. Multilingual retrieval works
+when the configured embedding model supports the languages in the stored
+conversation and the user's query.
+
+The embedding provider, model, dimension, and relevant options form one vector
+space. Use the same embedding configuration for ingestion and query-time
+retrieval. If a persistent vector index was built with a different embedding
+model or provider, reindex it or use a separate vector namespace/index. Dimension
+checks catch many unsafe swaps, but same-dimension model changes can still
+corrupt ranking if mixed silently.
+
 ```yaml
 providers:
   metadata_db: postgres

@@ -10,7 +10,8 @@ Source date: `28-05-2026`
 4. [Context Building Plan](./improvements/context_building_plan.md)
 5. [Conversation Grouping Plan](./improvements/conversation_grouping_plan.md)
 6. [Memory Quality And Fact Layer Plan](./improvements/memory_quality_fact_layer_plan.md)
-7. [Vector Database Options](./improvements/vector_dbs.md)
+7. [Edge Case Test Coverage Plan](./improvements/edge_case_test_coverage_plan.md)
+8. [Vector Database Options](./improvements/vector_dbs.md)
 
 ## Notes
 
