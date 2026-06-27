@@ -326,6 +326,11 @@ _NAME_LIKE_PREDICATES = {
 }
 
 
+def _redacted_startup_error(component: str, exc: Exception) -> RuntimeError:
+    message = redact_secrets(f"{component} initialization failed: {type(exc).__name__}: {exc}")
+    return RuntimeError(message)
+
+
 def build_runtime(
     config: HubConfig | dict[str, Any] | None = None,
 ) -> RuntimeDependencies:
@@ -340,21 +345,24 @@ def build_runtime(
         set_schema_path(None)
         raise
     data_dir = Path(cfg.paths.data_dir)
-    if cfg.providers.metadata_db == "postgres":
-        metadata_store = PostgresMetadataStore(
-            cfg.storage.metadata_providers.postgres.url
-        )
-    elif cfg.providers.metadata_db == "mongodb":
-        mongodb_config = cfg.storage.metadata_providers.mongodb
-        metadata_store = MongoDBMetadataStore(
-            uri=mongodb_config.uri,
-            database=mongodb_config.database,
-            conversations_collection=mongodb_config.conversations_collection,
-            facts_collection=mongodb_config.facts_collection,
-            generated_summaries_collection=mongodb_config.generated_summaries_collection,
-        )
-    else:
-        metadata_store = SQLiteMetadataStore(data_dir / "metadata.sqlite3")
+    try:
+        if cfg.providers.metadata_db == "postgres":
+            metadata_store = PostgresMetadataStore(
+                cfg.storage.metadata_providers.postgres.url
+            )
+        elif cfg.providers.metadata_db == "mongodb":
+            mongodb_config = cfg.storage.metadata_providers.mongodb
+            metadata_store = MongoDBMetadataStore(
+                uri=mongodb_config.uri,
+                database=mongodb_config.database,
+                conversations_collection=mongodb_config.conversations_collection,
+                facts_collection=mongodb_config.facts_collection,
+                generated_summaries_collection=mongodb_config.generated_summaries_collection,
+            )
+        else:
+            metadata_store = SQLiteMetadataStore(data_dir / "metadata.sqlite3")
+    except Exception as exc:
+        raise _redacted_startup_error("Metadata provider", exc) from exc
     _validate_metadata_schema(
         metadata_store=metadata_store,
         supported_versions=cfg.storage.metadata_schema_versions,
@@ -390,7 +398,7 @@ def build_runtime(
             )
         except Exception as exc:
             if not cfg.storage.vector.allow_fallback:
-                raise
+                raise _redacted_startup_error("Vector provider", exc) from exc
             logger.warning(
                 "Vector store initialization failed (%s); falling back to in-memory provider",
                 redact_secrets(f"{type(exc).__name__}: {exc}"),

@@ -4,7 +4,7 @@ import logging
 import re
 
 _URI_CREDENTIALS = re.compile(
-    r"([a-z][a-z0-9+.-]*://[^:\s/@]+:)([^@\s/]+)(@)", re.IGNORECASE
+    r"([a-z][a-z0-9+.-]*://[^:\s/@]*:)([^@\s/]+)(@)", re.IGNORECASE
 )
 _KV_SECRETS = re.compile(
     r"(?i)\b(password|pwd|token|api_key|apikey|api-key|secret)\s*=\s*([^\s;]+)"

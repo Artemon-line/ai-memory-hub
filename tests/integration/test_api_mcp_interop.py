@@ -78,6 +78,32 @@ def _call_tool(
     return _tool_payload(response)
 
 
+def _read_resource(
+    client: TestClient,
+    headers: dict[str, str],
+    *,
+    request_id: int,
+    uri: str,
+) -> dict[str, Any]:
+    response = client.post(
+        "/mcp/",
+        json={
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": "resources/read",
+            "params": {"uri": uri},
+        },
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    result = _event_result_json(response.text)["result"]
+    contents = result["contents"]
+    assert isinstance(contents, list) and contents
+    text = contents[0]["text"]
+    assert isinstance(text, str)
+    return json.loads(text)
+
+
 def _conversation(*, memory_id: str | None = None, text: str, source: str = "pytest") -> dict[str, Any]:
     return {
         "id": memory_id or str(uuid4()),
@@ -88,13 +114,17 @@ def _conversation(*, memory_id: str | None = None, text: str, source: str = "pyt
     }
 
 
-def _runtime(metadata_store: Any) -> mvp_ingestion.RuntimeDependencies:
+def _runtime(
+    metadata_store: Any,
+    *,
+    health_state: dict[str, Any] | None = None,
+) -> mvp_ingestion.RuntimeDependencies:
     embedding_provider = mvp_ingestion.LocalEmbeddingProvider()
     return mvp_ingestion.RuntimeDependencies(
         embedding_provider=embedding_provider,
         metadata_store=metadata_store,
         vector_store=InMemoryVectorStore(dimension=embedding_provider.dimension),
-        health_state={"mode": "ok", "vector_fallback_active": False},
+        health_state=health_state or {"mode": "ok", "vector_fallback_active": False},
     )
 
 
@@ -103,12 +133,14 @@ def _client(
     tmp_path: Path | None = None,
     config: dict[str, Any] | None = None,
     metadata_store: Any | None = None,
+    runtime: mvp_ingestion.RuntimeDependencies | None = None,
 ) -> TestClient:
-    if metadata_store is None:
-        if tmp_path is None:
-            raise ValueError("tmp_path is required when metadata_store is omitted")
-        metadata_store = SQLiteMetadataStore(tmp_path / "metadata.sqlite")
-    runtime = _runtime(metadata_store)
+    if runtime is None:
+        if metadata_store is None:
+            if tmp_path is None:
+                raise ValueError("tmp_path is required when metadata_store is omitted")
+            metadata_store = SQLiteMetadataStore(tmp_path / "metadata.sqlite")
+        runtime = _runtime(metadata_store)
     agent = MVPIngestionAgent(
         config={"providers": {"agent": "mvp"}, "interfaces": {"api": True, "mcp": True}},
         runtime=runtime,
@@ -170,6 +202,48 @@ def _assert_ask_shape(result: dict[str, Any], expected_id: str) -> None:
     assert result["answer"]
     assert result["confidence"] in {"high", "medium", "low"}
     assert result["answer_basis"] in {"direct_memory", "mixed", "fact_layer", "conflict"}
+
+
+def test_degraded_vector_health_is_consistent_across_api_and_mcp(
+    tmp_path: Path,
+) -> None:
+    runtime = _runtime(
+        SQLiteMetadataStore(tmp_path / "metadata.sqlite"),
+        health_state={
+            "mode": "degraded",
+            "metadata_provider": "sqlite",
+            "vector_provider": "memory",
+            "requested_vector_provider": "redis",
+            "vector_fallback_active": True,
+            "reasons": ["RuntimeError"],
+        },
+    )
+
+    with _client(runtime=runtime) as client:
+        ready = client.get("/ready")
+        headers = _initialize_mcp(client)
+        mcp_health = _read_resource(
+            client,
+            headers,
+            request_id=2,
+            uri="memory://health",
+        )
+
+    assert ready.status_code == 200
+    assert "redis-secret" not in ready.text
+    ready_payload = ready.json()
+    assert ready_payload["status"] == "ok"
+    assert ready_payload["mode"] == "degraded"
+    assert ready_payload["health"]["requested_vector_provider"] == "redis"
+    assert ready_payload["health"]["vector_provider"] == "memory"
+    assert ready_payload["health"]["vector_fallback_active"] is True
+
+    assert "redis-secret" not in json.dumps(mcp_health)
+    assert mcp_health["status"] == "ok"
+    assert mcp_health["mode"] == "degraded"
+    assert mcp_health["health"]["requested_vector_provider"] == "redis"
+    assert mcp_health["health"]["vector_provider"] == "memory"
+    assert mcp_health["health"]["vector_fallback_active"] is True
 
 
 def test_api_insert_can_be_read_through_mcp(tmp_path: Path) -> None:

@@ -23,6 +23,7 @@ PROJECT_ROLE_ORDER = {
     PROJECT_ROLE_WRITER: 2,
     PROJECT_ROLE_ADMIN: 3,
 }
+_PROJECT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 
 
 class SQLiteMetadataStore:
@@ -1513,6 +1514,11 @@ def _validate_project_id(project_id: str) -> str:
         raise ValueError("project_id must be non-empty")
     if len(value) > 128:
         raise ValueError("project_id exceeds max length 128")
+    if not _PROJECT_ID_RE.fullmatch(value):
+        raise ValueError(
+            "project_id must start with an alphanumeric character and contain only "
+            "alphanumeric characters, dots, underscores, colons, or hyphens"
+        )
     return value
 
 

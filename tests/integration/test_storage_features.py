@@ -1967,6 +1967,7 @@ def test_build_runtime_pgvector_fallback_uses_memory_provider(
     assert runtime.health_state["mode"] == "degraded"
     assert runtime.health_state["vector_provider"] == "memory"
     assert runtime.health_state["requested_vector_provider"] == "pgvector"
+    assert runtime.health_state["vector_fallback_active"] is True
     assert runtime.vector_store.expected_dimensionality == runtime.embedding_provider.dimension
 
 
@@ -2131,6 +2132,7 @@ def test_build_runtime_expansion_vector_fallback_uses_memory_provider(
     assert runtime.health_state["mode"] == "degraded"
     assert runtime.health_state["vector_provider"] == "memory"
     assert runtime.health_state["requested_vector_provider"] == provider
+    assert runtime.health_state["vector_fallback_active"] is True
     assert runtime.vector_store.expected_dimensionality == runtime.embedding_provider.dimension
     assert "qdrant-secret" not in " ".join(runtime.health_state["reasons"])
     assert "milvus-secret" not in " ".join(runtime.health_state["reasons"])
@@ -2187,6 +2189,36 @@ def test_build_runtime_expansion_vector_fallback_disabled_raises(
                 },
             }
         )
+
+
+def test_vector_fallback_disabled_startup_error_redacts_credentials(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    class BrokenRedisVectorStore:
+        def __init__(self, **kwargs: Any) -> None:
+            _ = kwargs
+            raise RuntimeError("redis unavailable redis://:redis-secret@localhost:6379/0")
+
+    monkeypatch.setattr(mvp_ingestion, "RedisVectorStore", BrokenRedisVectorStore)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        mvp_ingestion.build_runtime(
+            {
+                "providers": {"embeddings": "local", "vector_db": "redis"},
+                "paths": {"data_dir": str(tmp_path)},
+                "storage": {
+                    "vector": {"allow_fallback": False},
+                    "vector_providers": {
+                        "redis": {"url": "redis://:redis-secret@localhost:6379/0"}
+                    },
+                },
+            }
+        )
+
+    message = str(exc_info.value)
+    assert "redis unavailable" in message
+    assert "redis-secret" not in message
+    assert "redis://:***@localhost:6379/0" in message
 
 
 def test_dry_run_write_is_noop(tmp_path: Path) -> None:
@@ -2394,6 +2426,9 @@ def test_runtime_health_reports_degraded_on_fallback(
     assert health["mode"] == "degraded"
     assert health["vector_fallback_active"] is True
     assert health["vector_provider"] == "memory"
+    assert health["requested_vector_provider"] == "lancedb"
+    assert health["vector_health"]["provider"] == "memory"
+    assert health["vector_health"]["stats"]["provider"] == "memory"
 
 
 def test_runtime_health_reports_dry_run(tmp_path: Path) -> None:
@@ -2437,6 +2472,45 @@ def test_metadata_init_failure_fails_startup(
                 "paths": {"data_dir": str(tmp_path)},
             }
         )
+
+
+def test_postgres_metadata_init_failure_fails_startup_without_fallback(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    class BrokenPostgresMetadataStore:
+        def __init__(self, *_args, **_kwargs):
+            raise RuntimeError(
+                "postgres metadata unavailable postgres://user:pg-secret@db/app"
+            )
+
+    monkeypatch.setattr(
+        mvp_ingestion,
+        "PostgresMetadataStore",
+        BrokenPostgresMetadataStore,
+    )
+
+    with pytest.raises(RuntimeError) as exc_info:
+        mvp_ingestion.build_runtime(
+            {
+                "providers": {
+                    "embeddings": "local",
+                    "metadata_db": "postgres",
+                    "vector_db": "in_memory",
+                },
+                "paths": {"data_dir": str(tmp_path)},
+                "storage": {
+                    "metadata_providers": {
+                        "postgres": {"url": "postgres://user:pg-secret@db/app"}
+                    },
+                    "vector": {"allow_fallback": True},
+                },
+            }
+        )
+
+    message = str(exc_info.value)
+    assert "postgres metadata unavailable" in message
+    assert "pg-secret" not in message
+    assert "postgres://user:***@db/app" in message
 
 
 class _FakeCursor:

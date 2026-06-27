@@ -307,6 +307,14 @@ def _validate_result_mode(result_mode: str) -> str:
     return result_mode
 
 
+def _ingest_value_error_code(message: str) -> str:
+    if message.startswith("duplicate_conflict"):
+        return "duplicate_conflict"
+    if message.startswith("unauthorized_update"):
+        return "unauthorized_update"
+    return "invalid_input"
+
+
 def _register_resources(mcp: Any, agent: BaseIngestionAgent) -> None:
     @mcp.resource("memory://conversation/example")
     async def conversation_example_resource() -> dict[str, Any]:
@@ -384,7 +392,8 @@ def _register_resources(mcp: Any, agent: BaseIngestionAgent) -> None:
 
     @mcp.resource("memory://health")
     async def health():
-        return {"status": "ok"}
+        health_state = redact_content_hashes(await agent.health())
+        return {"status": "ok", "mode": health_state.get("mode"), "health": health_state}
 
     @mcp.resource("memory://timeline/{day}")
     async def timeline_resource(
@@ -595,6 +604,20 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
             result = await agent.ingest_messages(
                 normalized, owner_id=owner_id(), project_id=project_id
             )
+        except ValueError as exc:
+            error_message = str(exc)
+            error_code = _ingest_value_error_code(error_message)
+            await _emit_mcp_tool_log(
+                ctx,
+                tool_name="memory_insert",
+                status="error",
+                error_code=error_code,
+            )
+            return _envelope(
+                status="error",
+                error_code=error_code,
+                error_message=error_message,
+            )
         except Exception as exc:
             logger.exception("MCP memory_insert failed")
             await _emit_mcp_tool_log(
@@ -717,7 +740,20 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 error_code="invalid_input",
                 error_message="id must be a non-empty string",
             )
-        memory = await agent.retrieve(id, owner_id=owner_id(), project_id=project_id)
+        try:
+            memory = await agent.retrieve(id, owner_id=owner_id(), project_id=project_id)
+        except ValueError as exc:
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message=str(exc),
+            )
+        except PermissionError as exc:
+            return _envelope(
+                status="error",
+                error_code="permission_denied",
+                error_message=str(exc),
+            )
 
         if memory is None:
             return _envelope(

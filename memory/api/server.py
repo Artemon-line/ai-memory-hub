@@ -170,6 +170,8 @@ def _register_api_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
             conversation = await agent.retrieve(
                 payload.id, owner_id=owner_id(request), project_id=payload.project_id
             )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         except PermissionError as exc:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
         if conversation is None:

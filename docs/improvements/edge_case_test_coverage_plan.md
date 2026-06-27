@@ -74,18 +74,18 @@ Expected policy:
 
 Add or verify tests:
 
-- [ ] Postgres metadata unavailable at startup fails app/runtime creation.
-- [ ] Redis vector unavailable at startup with `allow_fallback=false` fails
+- [x] Postgres metadata unavailable at startup fails app/runtime creation.
+- [x] Redis vector unavailable at startup with `allow_fallback=false` fails
   app/runtime creation.
-- [ ] Redis vector unavailable at startup with `allow_fallback=true` starts in
+- [x] Redis vector unavailable at startup with `allow_fallback=true` starts in
   degraded mode and reports `requested_vector_provider=redis`,
   `vector_provider=memory`, and `vector_fallback_active=true`.
-- [ ] PGVector unavailable at startup follows the same disabled/enabled fallback
+- [x] PGVector unavailable at startup follows the same disabled/enabled fallback
   policy.
-- [ ] Degraded vector fallback does not claim durable vector persistence.
-- [ ] API `/ready` reflects degraded vector state consistently.
-- [ ] MCP `memory://health` reflects degraded vector state consistently.
-- [ ] Provider credentials are redacted in startup exceptions, health reasons,
+- [x] Degraded vector fallback does not claim durable vector persistence.
+- [x] API `/ready` reflects degraded vector state consistently.
+- [x] MCP `memory://health` reflects degraded vector state consistently.
+- [x] Provider credentials are redacted in startup exceptions, health reasons,
   and MCP/API error envelopes.
 
 Preferred locations:
@@ -116,21 +116,21 @@ lock this down.
 
 Add tests:
 
-- [ ] Bearer-token insert into owner default project, restart/recreate app with
+- [x] Bearer-token insert into owner default project, restart/recreate app with
   the same persistent store and `api.auth: none`, unauthenticated API search
   returns no owner-scoped result.
-- [ ] Same scenario for unauthenticated API retrieve by ID returns 404.
-- [ ] Same scenario for unauthenticated API ask does not use owner-scoped facts
+- [x] Same scenario for unauthenticated API retrieve by ID returns 404.
+- [x] Same scenario for unauthenticated API ask does not use owner-scoped facts
   or conversations.
-- [ ] Same scenario through MCP search, retrieve, and ask.
-- [ ] Explicit `project_id` for the authenticated owner's default project is
+- [x] Same scenario through MCP search, retrieve, and ask.
+- [x] Explicit `project_id` for the authenticated owner's default project is
   rejected under `auth=none`.
-- [ ] OAuth resource-server insert using `sub=owner-a`, restart/recreate app
+- [x] OAuth resource-server insert using `sub=owner-a`, restart/recreate app
   with `auth=none`, unauthenticated API/MCP reads do not return owner-scoped
   data.
-- [ ] Authenticated shared-project data is not readable under `auth=none` unless
+- [x] Authenticated shared-project data is not readable under `auth=none` unless
   the project is the synthetic `local-default` project.
-- [ ] Existing unauthenticated local-default data remains readable after restart
+- [x] Existing unauthenticated local-default data remains readable after restart
   with `auth=none`.
 
 Preferred location:
@@ -145,33 +145,33 @@ real persistence, not only in-process stubs.
 Existing tests cover invalid schemas, malformed MCP payloads, invalid IDs, and
 some injection-like IDs. Add cross-surface negative cases:
 
-- [ ] API accepts no client-supplied `owner_id`; server stamps authenticated
+- [x] API accepts no client-supplied `owner_id`; server stamps authenticated
   owner.
-- [ ] MCP accepts no client-supplied `owner_id`; server stamps authenticated
+- [x] MCP accepts no client-supplied `owner_id`; server stamps authenticated
   owner.
-- [ ] API and MCP reject invalid `project_id` formats consistently.
-- [ ] API and MCP reject unknown `result_mode` consistently.
-- [ ] API and MCP cap or reject extreme `top_k`, `limit`, and
+- [x] API and MCP reject invalid `project_id` formats consistently.
+- [x] API and MCP reject unknown `result_mode` consistently.
+- [x] API and MCP cap or reject extreme `top_k`, `limit`, and
   `max_context_tokens` consistently.
-- [ ] API and MCP preserve date/tag/thread filters consistently.
-- [ ] Tool and API error messages remain actionable but do not include payload
+- [x] API and MCP preserve date/tag/thread filters consistently.
+- [x] Tool and API error messages remain actionable but do not include payload
   text, credentials, full queries, or provider URLs with secrets.
 
 ## P1: Deduplication And Append Across Surfaces
 
 Add tests for mixed client workflows:
 
-- [ ] API inserts a conversation, MCP retries the same conversation and gets the
+- [x] API inserts a conversation, MCP retries the same conversation and gets the
   deduplicated result.
-- [ ] MCP inserts a conversation, API retries the same conversation and gets the
+- [x] MCP inserts a conversation, API retries the same conversation and gets the
   deduplicated result.
-- [ ] API inserts an initial thread, MCP appends messages using the same upstream
+- [x] API inserts an initial thread, MCP appends messages using the same upstream
   thread metadata.
-- [ ] MCP inserts an initial thread, API appends messages using the same upstream
+- [x] MCP inserts an initial thread, API appends messages using the same upstream
   thread metadata.
-- [ ] Same-id/different-content conflicts return deterministic errors through
+- [x] Same-id/different-content conflicts return deterministic errors through
   both surfaces.
-- [ ] Same conversation hash in different projects is allowed and remains
+- [x] Same conversation hash in different projects is allowed and remains
   isolated.
 
 ## P1: Facts And Profile Cross-Surface Behavior
