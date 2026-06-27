@@ -267,6 +267,15 @@ class SQLiteMetadataStore:
                 )
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS runtime_metadata (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
             for column, declaration in (
                 ("source_quality", "TEXT"),
                 ("confidence_reason", "TEXT"),
@@ -983,6 +992,31 @@ class SQLiteMetadataStore:
             "provider": "sqlite",
             "schema_version": self.schema_version,
         }
+
+    def get_runtime_metadata(self, key: str) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT value FROM runtime_metadata WHERE key = ?",
+                (str(key),),
+            ).fetchone()
+        if row is None:
+            return None
+        value = json.loads(str(row["value"]))
+        return value if isinstance(value, dict) else None
+
+    def set_runtime_metadata(self, key: str, value: dict[str, Any]) -> None:
+        payload = json.dumps(value, sort_keys=True)
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO runtime_metadata (key, value, updated_at)
+                VALUES (?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(key) DO UPDATE SET
+                    value = excluded.value,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (str(key), payload),
+            )
 
     def batch_insert(self, conversations: list[dict[str, Any]]) -> list[str]:
         # SQLite adapter supports transactional batch writes.

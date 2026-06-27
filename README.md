@@ -105,6 +105,13 @@ embedding options for an existing persistent vector index, reindex the stored
 memory or use a separate vector namespace/index. Do not mix vectors from
 different embedding spaces, even when two models have the same dimension.
 
+For persistent vector stores, startup records a redacted embedding/vector-index
+compatibility fingerprint in the metadata store. If the fingerprint changes for
+an index that already contains vectors, startup fails with a reindex-required
+message. To migrate intentionally, point the new configuration at an empty
+vector table, collection, index, or namespace and re-ingest/reindex the memory
+from durable metadata or source transcripts.
+
 Today the real embedding path is OpenAI-compatible: configure an
 OpenAI-compatible embedding endpoint through the OpenAI client, such as OpenAI
 itself or a local Ollama-compatible `/v1` endpoint. The deterministic local

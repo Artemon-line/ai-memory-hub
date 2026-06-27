@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 import struct
@@ -1862,6 +1863,107 @@ def test_build_runtime_vector_fallback_uses_same_dimension(
         runtime.vector_store.expected_dimensionality
         == runtime.embedding_provider.dimension
     )
+
+
+def test_build_runtime_records_embedding_index_metadata_for_persistent_vectors(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    class EmptyLanceDB:
+        expected_dimensionality = 32
+
+        def __init__(self, db_path: Path, table_name: str = "memory_vectors", dimension: int = 32):
+            self.db_path = db_path
+            self.table_name = table_name
+            self.expected_dimensionality = dimension
+
+        def health(self) -> dict[str, Any]:
+            return {
+                "provider": "lancedb",
+                "expected_dimensionality": self.expected_dimensionality,
+                "stats": {"rows": 0},
+            }
+
+        def get_stats(self) -> dict[str, Any]:
+            return {"rows": 0, "expected_dimensionality": self.expected_dimensionality}
+
+    monkeypatch.setattr(mvp_ingestion, "LanceDBVectorStore", EmptyLanceDB)
+    runtime = mvp_ingestion.build_runtime(
+        {
+            "providers": {"embeddings": "local", "vector_db": "lancedb"},
+            "paths": {"data_dir": str(tmp_path)},
+        }
+    )
+
+    records = list(
+        runtime.metadata_store._connect().execute(
+            "SELECT value FROM runtime_metadata WHERE key LIKE 'vector_index_compatibility:%'"
+        )
+    )
+    assert len(records) == 1
+    metadata = json.loads(records[0]["value"])
+    assert metadata["embedding"] == {
+        "provider": "local",
+        "model": "local-deterministic-hash",
+        "dimension": 32,
+        "options": {},
+    }
+    assert runtime.health_state["embedding"] == metadata["embedding"]
+    assert runtime.health_state["embedding_index_mismatch"] is False
+
+
+def test_build_runtime_fails_on_same_dimension_embedding_model_drift(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    class PopulatedLanceDB:
+        expected_dimensionality = 32
+
+        def __init__(self, db_path: Path, table_name: str = "memory_vectors", dimension: int = 32):
+            self.db_path = db_path
+            self.table_name = table_name
+            self.expected_dimensionality = dimension
+
+        def health(self) -> dict[str, Any]:
+            return {
+                "provider": "lancedb",
+                "expected_dimensionality": self.expected_dimensionality,
+                "stats": {"rows": 3},
+            }
+
+        def get_stats(self) -> dict[str, Any]:
+            return {"rows": 3, "expected_dimensionality": self.expected_dimensionality}
+
+    vector_store = PopulatedLanceDB(tmp_path / "lancedb")
+    vector_index_id = mvp_ingestion._vector_index_id(
+        provider="lancedb",
+        vector_store=vector_store,
+        vector_health=vector_store.health(),
+    )
+    store = SQLiteMetadataStore(tmp_path / "metadata.sqlite3")
+    store.set_runtime_metadata(
+        f"vector_index_compatibility:{vector_index_id}",
+        {
+            "embedding": {
+                "provider": "openai",
+                "model": "old-same-dimension-model",
+                "dimension": 32,
+                "options": {"base_url": "http://localhost:11434/v1"},
+            },
+            "vector_index": {
+                "provider": "lancedb",
+                "id": vector_index_id,
+                "distance": "cosine",
+            },
+        },
+    )
+
+    monkeypatch.setattr(mvp_ingestion, "LanceDBVectorStore", PopulatedLanceDB)
+    with pytest.raises(RuntimeError, match="Embedding index metadata mismatch"):
+        mvp_ingestion.build_runtime(
+            {
+                "providers": {"embeddings": "local", "vector_db": "lancedb"},
+                "paths": {"data_dir": str(tmp_path)},
+            }
+        )
 
 
 def test_log_redaction_for_dsn_and_keyvalue_secrets() -> None:

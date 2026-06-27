@@ -169,6 +169,13 @@ CREATE TABLE IF NOT EXISTS facts (
     deleted_at TIMESTAMPTZ NULL
 )
 """
+CREATE_RUNTIME_METADATA_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS runtime_metadata (
+    key TEXT PRIMARY KEY,
+    value JSONB NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)
+"""
 CREATE_FACTS_INDEX_SQL = """
 CREATE INDEX IF NOT EXISTS idx_facts_subject_predicate
 ON facts(subject, predicate)
@@ -267,6 +274,7 @@ class PostgresMetadataStore:
                 cur.execute(CREATE_DEFAULT_PROJECT_OWNER_INDEX_SQL)
                 cur.execute(CREATE_DEFAULT_PROJECT_LOCAL_INDEX_SQL)
                 cur.execute(CREATE_FACTS_TABLE_SQL)
+                cur.execute(CREATE_RUNTIME_METADATA_TABLE_SQL)
                 cur.execute("ALTER TABLE facts ADD COLUMN IF NOT EXISTS superseded_at TIMESTAMPTZ NULL")
                 cur.execute("ALTER TABLE facts ADD COLUMN IF NOT EXISTS source_quality TEXT NULL")
                 cur.execute("ALTER TABLE facts ADD COLUMN IF NOT EXISTS confidence_reason TEXT NULL")
@@ -976,6 +984,32 @@ class PostgresMetadataStore:
             "provider": "postgres",
             "schema_version": self.schema_version,
         }
+
+    def get_runtime_metadata(self, key: str) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT value FROM runtime_metadata WHERE key = %s", (str(key),))
+                row = cur.fetchone()
+        if row is None:
+            return None
+        value = row[0]
+        if isinstance(value, str):
+            value = json.loads(value)
+        return value if isinstance(value, dict) else None
+
+    def set_runtime_metadata(self, key: str, value: dict[str, Any]) -> None:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO runtime_metadata (key, value, updated_at)
+                    VALUES (%s, %s, NOW())
+                    ON CONFLICT (key) DO UPDATE SET
+                        value = EXCLUDED.value,
+                        updated_at = NOW()
+                    """,
+                    (str(key), json.dumps(value, sort_keys=True)),
+                )
 
     def _validate_memory_id(self, memory_id: Any) -> str:
         value = str(memory_id)

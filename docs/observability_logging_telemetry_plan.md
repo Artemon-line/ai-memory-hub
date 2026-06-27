@@ -20,7 +20,7 @@ Implemented:
 Not implemented yet:
 
 - [ ] Global logging configuration for JSON/text format, log level, and access logs.
-- [ ] Request or operation correlation IDs.
+- [x] Request or operation correlation IDs.
 - [ ] Trace IDs in logs.
 - [ ] OpenTelemetry SDK setup.
 - [ ] FastAPI, HTTP client, and psycopg instrumentation.
@@ -94,7 +94,7 @@ observability:
 - [ ] Add `memory/observability/logging.py`.
 - [ ] Configure root logger once during app startup.
 - [ ] Support text logs for humans and JSON logs for containers.
-- [ ] Add request-id middleware for FastAPI HTTP requests.
+- [x] Add request-id middleware for FastAPI HTTP requests.
 - [ ] Include `request_id`, `trace_id`, `span_id`, `operation`, and `provider`
   fields when available.
 - [ ] Standardize exception logs:
@@ -317,10 +317,10 @@ share the same pipeline.
 After traces are active:
 
 - [ ] Add trace id and span id to every application log record.
-- [ ] Add request id to every HTTP log.
+- [x] Add request id to every HTTP log.
 - [ ] Add MCP tool call id when available.
-- [ ] Ensure exception logs include `exc_info=True` through `logger.exception`.
-- [ ] Add one integration test proving a failed MCP insert logs an exception with
+- [x] Ensure exception logs include `exc_info=True` through `logger.exception`.
+- [x] Add one integration test proving a failed MCP insert logs an exception with
   operation and error code.
 
 ## Phase 7: Privacy And Redaction
@@ -342,13 +342,13 @@ Unit tests:
 
 - [ ] Logging config chooses text or JSON format.
 - [ ] Secret redaction applies to structured log extras.
-- [ ] Request ID middleware uses incoming `x-request-id` or generates one.
+- [x] Request ID middleware uses incoming `x-request-id` or generates one.
 - [ ] OTel setup is no-op when disabled.
 - [ ] OTel setup does not raise when exporter endpoint is unavailable.
 
 Integration tests:
 
-- [ ] Failed MCP insert logs stack trace and stable error envelope.
+- [x] Failed MCP insert logs stack trace and stable error envelope.
 - [ ] `GET /health` and `GET /ready` return expected mode.
 - [ ] Manual spans are created for ingestion stages with safe attributes.
 - [ ] Metrics counters increment for successful and failed MCP tools.

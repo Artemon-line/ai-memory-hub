@@ -119,7 +119,7 @@ MCP logging support should include:
 - [x] Emit `notifications/message` for safe operational events.
 - [x] Respect minimum log level per client session where the framework exposes
       session state.
-- [ ] Rate limit log notifications.
+- [x] Rate limit log notifications.
 - [x] Reuse the repository's secret redaction behavior.
 
 Safe event examples:

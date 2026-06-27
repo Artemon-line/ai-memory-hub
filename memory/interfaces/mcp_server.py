@@ -11,6 +11,7 @@ from fastmcp import Context as FastMCPContext
 from pydantic import Field
 
 from memory.auth import current_owner_id
+from memory.backend.log_safety import redact_secrets
 from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig
 from memory.ingestion.base_agent import BaseIngestionAgent
@@ -26,6 +27,8 @@ ToolFn = Callable[..., Awaitable[dict[str, Any]]]
 
 logger = logging.getLogger(__name__)
 MCP_LOGGER_NAME = "ai-memory-hub.mcp"
+MCP_LOG_NOTIFICATION_LIMIT = 100
+_MCP_LOG_NOTIFICATION_COUNT_ATTR = "_amh_mcp_log_notification_count"
 ConversationJsonArg = Annotated[
     Any, Field(json_schema_extra={"type": "object", "additionalProperties": True})
 ]
@@ -160,6 +163,24 @@ async def _emit_mcp_tool_log(
 ) -> None:
     if ctx is None:
         return
+    notification_count = int(getattr(ctx, _MCP_LOG_NOTIFICATION_COUNT_ATTR, 0))
+    if notification_count >= MCP_LOG_NOTIFICATION_LIMIT:
+        return
+    setattr(ctx, _MCP_LOG_NOTIFICATION_COUNT_ATTR, notification_count + 1)
+    if notification_count == MCP_LOG_NOTIFICATION_LIMIT - 1:
+        try:
+            await ctx.log(
+                "mcp log notifications rate limited",
+                level="warning",
+                logger_name=MCP_LOGGER_NAME,
+                extra={
+                    "event": "mcp_log_notifications_rate_limited",
+                    "limit": MCP_LOG_NOTIFICATION_LIMIT,
+                },
+            )
+        except Exception:
+            logger.debug("MCP client log notification failed", exc_info=True)
+        return
     data: dict[str, Any] = {"tool": tool_name, "status": status}
     if error_code:
         data["error_code"] = error_code
@@ -173,6 +194,18 @@ async def _emit_mcp_tool_log(
         )
     except Exception:
         logger.debug("MCP client log notification failed", exc_info=True)
+
+
+def _log_mcp_tool_failure(*, operation: str, error_code: str, exc: Exception) -> None:
+    logger.exception(
+        "MCP tool failed",
+        extra={
+            "event": "mcp_tool_failed",
+            "operation": operation,
+            "error_code": error_code,
+        },
+        exc_info=(type(exc), RuntimeError(redact_secrets(str(exc))), exc.__traceback__),
+    )
 
 
 def _format_schema_error(exc: jsonschema.ValidationError) -> str:
@@ -619,7 +652,9 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 error_message=error_message,
             )
         except Exception as exc:
-            logger.exception("MCP memory_insert failed")
+            _log_mcp_tool_failure(
+                operation="memory_insert", error_code="insert_failed", exc=exc
+            )
             await _emit_mcp_tool_log(
                 ctx,
                 tool_name="memory_insert",
@@ -629,7 +664,7 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
             return _envelope(
                 status="error",
                 error_code="insert_failed",
-                error_message=str(exc),
+                error_message=redact_secrets(str(exc)),
             )
 
         return _with_envelope_defaults(result)
@@ -714,7 +749,9 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 error_message=str(exc),
             )
         except Exception as exc:
-            logger.exception("MCP memory_search failed")
+            _log_mcp_tool_failure(
+                operation="memory_search", error_code="search_failed", exc=exc
+            )
             await _emit_mcp_tool_log(
                 ctx,
                 tool_name="memory_search",
@@ -724,7 +761,7 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
             return _envelope(
                 status="error",
                 error_code="search_failed",
-                error_message=str(exc),
+                error_message=redact_secrets(str(exc)),
             )
 
         await _emit_mcp_tool_log(ctx, tool_name="memory_search", status="ok")
@@ -856,7 +893,9 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
                 error_message=str(exc),
             )
         except Exception as exc:
-            logger.exception("MCP memory_ask failed")
+            _log_mcp_tool_failure(
+                operation="memory_ask", error_code="ask_failed", exc=exc
+            )
             await _emit_mcp_tool_log(
                 ctx,
                 tool_name="memory_ask",
@@ -866,7 +905,7 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
             return _envelope(
                 status="error",
                 error_code="ask_failed",
-                error_message=str(exc),
+                error_message=redact_secrets(str(exc)),
             )
         await _emit_mcp_tool_log(ctx, tool_name="memory_ask", status="ok")
         return _with_envelope_defaults(result)

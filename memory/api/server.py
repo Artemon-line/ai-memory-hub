@@ -1,19 +1,24 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
+from uuid import uuid4
 
 import jsonschema
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from memory.auth import install_auth_middleware, protected_resource_metadata
-from memory.backend.log_safety import install_secret_redaction_filter
+from memory.backend.log_safety import install_secret_redaction_filter, redact_secrets
 from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig, ensure_token_hash_secret, normalize_config
 from memory.ingestion.base_agent import BaseIngestionAgent
 from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
 from memory.ingestion.thread_models import SearchResultMode
 from memory.interfaces.mcp_server import create_mcp_server
+
+logger = logging.getLogger(__name__)
+REQUEST_ID_HEADER = "x-request-id"
 
 
 class SearchRequest(BaseModel):
@@ -111,10 +116,70 @@ def _register_protected_resource_metadata_routes(app: FastAPI, config: HubConfig
     app.get("/.well-known/oauth-protected-resource/mcp")(mcp_metadata)
 
 
+def _register_request_failure_logging(app: FastAPI, config: HubConfig) -> None:
+    @app.middleware("http")
+    async def log_request_failures(request: Request, call_next: Any) -> Any:
+        request_id = _request_id(request)
+        request.state.request_id = request_id
+        try:
+            response = await call_next(request)
+        except Exception:
+            logger.exception(
+                "memory request failed",
+                extra={
+                    "event": "http_request_failed",
+                    "method": request.method,
+                    "path": request.url.path,
+                    "auth_mode": config.api.auth,
+                    "status_code": 500,
+                    "request_id": request_id,
+                },
+            )
+            raise
+        response.headers[REQUEST_ID_HEADER] = request_id
+        if response.status_code >= 400:
+            logger.info(
+                "memory request returned error",
+                extra={
+                    "event": "http_request_error",
+                    "method": request.method,
+                    "path": request.url.path,
+                    "auth_mode": config.api.auth,
+                    "status_code": response.status_code,
+                    "request_id": request_id,
+                },
+            )
+        return response
+
+
+def _request_id(request: Request) -> str:
+    value = request.headers.get(REQUEST_ID_HEADER, "").strip()
+    if value and "\r" not in value and "\n" not in value and len(value) <= 128:
+        return value
+    return str(uuid4())
+
+
 def _register_api_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
     def owner_id(request: Request) -> str | None:
         auth = getattr(request.state, "auth", None)
         return getattr(auth, "owner_id", None)
+
+    def provider_failure(operation: str, error_code: str, exc: Exception) -> HTTPException:
+        logger.exception(
+            "memory operation failed",
+            extra={
+                "event": "memory_operation_failed",
+                "operation": operation,
+                "error_code": error_code,
+            },
+        )
+        return HTTPException(
+            status_code=503,
+            detail={
+                "error_code": error_code,
+                "error_message": redact_secrets(str(exc)),
+            },
+        )
 
     async def memory_insert(
         conversation_json: dict[str, Any], request: Request
@@ -139,6 +204,8 @@ def _register_api_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise provider_failure("insert", "insert_failed", exc) from exc
 
     app.post("/memory/insert")(memory_insert)
 
@@ -162,6 +229,8 @@ def _register_api_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise provider_failure("search", "search_failed", exc) from exc
 
     app.post("/memory/search")(memory_search)
 
@@ -201,6 +270,8 @@ def _register_api_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise provider_failure("ask", "ask_failed", exc) from exc
 
     app.post("/memory/ask")(memory_ask)
 
@@ -314,6 +385,7 @@ def create_app(
     )
 
     install_auth_middleware(app, config=cfg, agent=agent)
+    _register_request_failure_logging(app, cfg)
 
     if mcp_app is not None:
         app.mount("/mcp", mcp_app)

@@ -95,10 +95,10 @@ Preferred locations:
 
 Follow-up candidate:
 
-- Add mid-run outage tests with fake providers that fail on `insert` or `search`.
+- [x] Add mid-run outage tests with fake providers that fail on `insert` or `search`.
   Startup fallback does not cover this case. Runtime operation failures should
   return deterministic API/MCP errors and should not silently switch providers
-  after writes have started.
+  after writes have started. Covered by `tests/integration/test_midrun_provider_failures.py`.
 
 ## P0: Auth-Mode Transition Behavior
 
@@ -178,14 +178,14 @@ Add tests for mixed client workflows:
 
 Add tests proving the fact layer obeys the same boundaries:
 
-- [ ] API insert extracts facts, MCP profile/fact search can read them under the
+- [x] API insert extracts facts, MCP profile/fact search can read them under the
   same owner/project.
-- [ ] MCP insert extracts facts, API profile/fact endpoints can read them under
+- [x] MCP insert extracts facts, API profile/fact endpoints can read them under
   the same owner/project.
-- [ ] Cross-owner fact/profile queries do not leak facts.
-- [ ] `auth=none` cannot read owner-scoped facts created under bearer or OAuth
+- [x] Cross-owner fact/profile queries do not leak facts.
+- [x] `auth=none` cannot read owner-scoped facts created under bearer or OAuth
   auth.
-- [ ] Supersession through one surface is visible through the other.
+- [x] Supersession through one surface is visible through the other.
 
 ## P1: Multilingual And Embedding Model Drift
 
@@ -211,21 +211,21 @@ Current guardrails:
 
 Add tests and implementation checks:
 
-- [ ] English insert, English query works with the configured model.
-- [ ] Non-English insert, same-language query works when using the same
+- [x] English insert, English query works with the configured model.
+- [x] Non-English insert, same-language query works when using the same
   multilingual-capable test embedder.
-- [ ] Non-English insert, English query works only as a model-quality smoke test,
+- [x] Non-English insert, English query works only as a model-quality smoke test,
   not as a deterministic correctness guarantee.
-- [ ] Unicode normalization edge cases do not crash ingestion, hashing, chunking,
+- [x] Unicode normalization edge cases do not crash ingestion, hashing, chunking,
   search, ask, facts, or profile extraction.
-- [ ] Startup records embedding provider, model, dimension, and relevant options
+- [x] Startup records embedding provider, model, dimension, and relevant options
   as vector-index metadata where the provider supports it.
-- [ ] Startup fails or enters an explicit "reindex required" state when existing
+- [x] Startup fails or enters an explicit "reindex required" state when existing
   vector-index metadata does not match the configured embedding provider/model,
   even if dimensions match.
-- [ ] API and MCP health expose the active embedding provider/model/dimension and
+- [x] API and MCP health expose the active embedding provider/model/dimension and
   any embedding-index mismatch state without leaking provider credentials.
-- [ ] Reindex command or runbook is documented before allowing a configured model
+- [x] Reindex command or runbook is documented before allowing a configured model
   swap on persistent vector stores.
 
 Preferred locations:
@@ -239,13 +239,13 @@ Preferred locations:
 
 Add tests or smoke checks for:
 
-- [ ] `/health` and `/ready` remain public and secret-free under every auth mode.
-- [ ] MCP protected-resource metadata remains public and secret-free in OAuth
+- [x] `/health` and `/ready` remain public and secret-free under every auth mode.
+- [x] MCP protected-resource metadata remains public and secret-free in OAuth
   mode.
-- [ ] Request failures emit structured logs without payload, token, query, or DSN
+- [x] Request failures emit structured logs without payload, token, query, or DSN
   leakage.
-- [ ] Startup logs clearly state fallback policy and dry-run state.
-- [ ] Production-oriented config with `allow_fallback=true` emits a warning once
+- [x] Startup logs clearly state fallback policy and dry-run state.
+- [x] Production-oriented config with `allow_fallback=true` emits a warning once
   that fallback may make vector data non-durable.
 
 ## Suggested Execution Order

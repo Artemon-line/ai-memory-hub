@@ -4,6 +4,7 @@ import pytest
 
 from memory.ingestion import mvp_ingestion
 from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
+from memory.interfaces import mcp_server
 from memory.interfaces.mcp_server import (
     _deterministic_sort,
     _emit_mcp_tool_log,
@@ -154,6 +155,38 @@ async def test_mcp_tool_log_payload_is_sanitized() -> None:
                 "error_code": "insert_failed",
             },
         }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_mcp_tool_log_notifications_are_rate_limited(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(mcp_server, "MCP_LOG_NOTIFICATION_LIMIT", 3)
+    ctx = StubMCPContext()
+
+    for index in range(5):
+        await _emit_mcp_tool_log(ctx, tool_name=f"memory_search_{index}", status="ok")
+
+    assert ctx.logs == [
+        {
+            "message": "mcp tool completed",
+            "level": "info",
+            "logger_name": "ai-memory-hub.mcp",
+            "extra": {"tool": "memory_search_0", "status": "ok"},
+        },
+        {
+            "message": "mcp tool completed",
+            "level": "info",
+            "logger_name": "ai-memory-hub.mcp",
+            "extra": {"tool": "memory_search_1", "status": "ok"},
+        },
+        {
+            "message": "mcp log notifications rate limited",
+            "level": "warning",
+            "logger_name": "ai-memory-hub.mcp",
+            "extra": {"event": "mcp_log_notifications_rate_limited", "limit": 3},
+        },
     ]
 
 

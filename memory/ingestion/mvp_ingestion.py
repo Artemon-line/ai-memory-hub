@@ -139,6 +139,10 @@ class RuntimeDependencies:
     fact_extractor: Any | None = None
 
 
+_VECTOR_COMPATIBILITY_METADATA_PREFIX = "vector_index_compatibility:"
+_FALLBACK_POLICY_WARNED: set[str] = set()
+
+
 @dataclass(frozen=True)
 class ConversationFilters:
     source: str | None = None
@@ -384,6 +388,7 @@ def build_runtime(
         if cfg.providers.vector_db == VectorProviderAlias.IN_MEMORY.value
         else cfg.providers.vector_db
     )
+    _log_startup_policy(cfg=cfg, requested_vector_provider=requested_vector_provider)
     vector_fallback_active = False
     fallback_reasons: list[str] = []
     if requested_vector_provider == VectorProviderName.MEMORY.value:
@@ -410,6 +415,24 @@ def build_runtime(
     _validate_vector_dimension(
         embedding_dimension=expected_dimension, vector_store=vector_store
     )
+    actual_vector_provider = (
+        VectorProviderName.MEMORY.value if vector_fallback_active else requested_vector_provider
+    )
+    vector_health = vector_store.health() if hasattr(vector_store, "health") else {}
+    embedding_index_metadata = _embedding_index_metadata(
+        cfg=cfg,
+        embedding_provider=embedding_provider,
+        vector_provider=actual_vector_provider,
+        vector_store=vector_store,
+        vector_health=vector_health,
+    )
+    embedding_index_mismatch = _validate_embedding_index_metadata(
+        metadata_store=metadata_store,
+        vector_provider=actual_vector_provider,
+        vector_store=vector_store,
+        vector_health=vector_health,
+        embedding_index_metadata=embedding_index_metadata,
+    )
 
     if cfg.storage.dry_run:
         logger.warning("DRY-RUN enabled: write operations will be skipped")
@@ -424,12 +447,13 @@ def build_runtime(
     health_state = {
         "mode": mode,
         "metadata_provider": cfg.providers.metadata_db,
-        "vector_provider": VectorProviderName.MEMORY.value
-        if vector_fallback_active
-        else requested_vector_provider,
+        "vector_provider": actual_vector_provider,
         "requested_vector_provider": requested_vector_provider,
         "vector_fallback_active": vector_fallback_active,
         "reasons": fallback_reasons,
+        "embedding": embedding_index_metadata["embedding"],
+        "vector_index": embedding_index_metadata["vector_index"],
+        "embedding_index_mismatch": embedding_index_mismatch,
     }
 
     return RuntimeDependencies(
@@ -3761,6 +3785,150 @@ def _validate_metadata_schema(
         raise SchemaVersionError(
             f"Incompatible metadata schema version: {version}. Supported versions: [{supported}]"
         )
+
+
+def _log_startup_policy(*, cfg: HubConfig, requested_vector_provider: str) -> None:
+    logger.info(
+        "Runtime startup policy",
+        extra={
+            "event": "runtime_startup_policy",
+            "vector_provider": requested_vector_provider,
+            "vector_fallback_allowed": cfg.storage.vector.allow_fallback,
+            "dry_run": cfg.storage.dry_run,
+        },
+    )
+    if (
+        cfg.storage.vector.allow_fallback
+        and requested_vector_provider != VectorProviderName.MEMORY.value
+        and requested_vector_provider not in _FALLBACK_POLICY_WARNED
+    ):
+        logger.warning(
+            "storage.vector.allow_fallback=true for persistent vector provider %s; "
+            "startup may fall back to in-memory vectors, making vector data non-durable",
+            requested_vector_provider,
+            extra={
+                "event": "vector_fallback_policy_warning",
+                "vector_provider": requested_vector_provider,
+                "vector_fallback_allowed": True,
+                "non_durable_fallback_possible": True,
+            },
+        )
+        _FALLBACK_POLICY_WARNED.add(requested_vector_provider)
+
+
+def _embedding_index_metadata(
+    *,
+    cfg: HubConfig,
+    embedding_provider: EmbeddingProvider,
+    vector_provider: str,
+    vector_store: Any,
+    vector_health: dict[str, Any],
+) -> dict[str, Any]:
+    embedding_provider_name = str(cfg.providers.embeddings)
+    embedding_model = _active_embedding_model(cfg=cfg, embedding_provider=embedding_provider)
+    embedding_options = _embedding_options(cfg=cfg, embedding_provider_name=embedding_provider_name)
+    vector_index = {
+        "provider": vector_provider,
+        "id": _vector_index_id(
+            provider=vector_provider,
+            vector_store=vector_store,
+            vector_health=vector_health,
+        ),
+        "distance": _optional_string(vector_health.get("distance") or cfg.storage.vector.distance),
+    }
+    return {
+        "embedding": {
+            "provider": embedding_provider_name,
+            "model": embedding_model,
+            "dimension": int(embedding_provider.dimension),
+            "options": embedding_options,
+        },
+        "vector_index": vector_index,
+    }
+
+
+def _validate_embedding_index_metadata(
+    *,
+    metadata_store: Any,
+    vector_provider: str,
+    vector_store: Any,
+    vector_health: dict[str, Any],
+    embedding_index_metadata: dict[str, Any],
+) -> bool:
+    if vector_provider == VectorProviderName.MEMORY.value:
+        return False
+    if not hasattr(metadata_store, "get_runtime_metadata") or not hasattr(
+        metadata_store, "set_runtime_metadata"
+    ):
+        return False
+    key = _vector_compatibility_metadata_key(embedding_index_metadata["vector_index"])
+    existing = metadata_store.get_runtime_metadata(key)
+    if existing == embedding_index_metadata:
+        return False
+    rows = _vector_row_count(vector_store=vector_store, vector_health=vector_health)
+    if existing is not None and rows != 0:
+        raise RuntimeError(
+            "Embedding index metadata mismatch: persistent vector index was built "
+            "with a different embedding provider, model, dimension, or options. "
+            "Reindex the vector data or use a separate vector namespace/index."
+        )
+    metadata_store.set_runtime_metadata(key, embedding_index_metadata)
+    return existing is not None
+
+
+def _active_embedding_model(*, cfg: HubConfig, embedding_provider: EmbeddingProvider) -> str:
+    model = getattr(embedding_provider, "embedding_model", None)
+    if isinstance(model, str) and model.strip():
+        return model.strip()
+    if cfg.providers.embeddings == "local":
+        return "local-deterministic-hash"
+    return str(cfg.providers.embedding_model)
+
+
+def _embedding_options(*, cfg: HubConfig, embedding_provider_name: str) -> dict[str, Any]:
+    if embedding_provider_name == "openai":
+        return {"base_url": redact_secrets(cfg.openai.base_url)}
+    return {}
+
+
+def _vector_index_id(*, provider: str, vector_store: Any, vector_health: dict[str, Any]) -> str:
+    candidates = {
+        "provider": provider,
+        "db_path": _optional_string(getattr(vector_store, "db_path", None)),
+        "table_name": _optional_string(getattr(vector_store, "table_name", None)),
+        "collection": _optional_string(
+            vector_health.get("collection") or getattr(vector_store, "collection_name", None)
+        ),
+        "index": _optional_string(vector_health.get("index") or getattr(vector_store, "index_name", None)),
+        "namespace": _optional_string(
+            vector_health.get("namespace") or getattr(vector_store, "namespace", None)
+        ),
+        "schema": _optional_string(vector_health.get("schema") or getattr(vector_store, "schema", None)),
+    }
+    material = {key: value for key, value in candidates.items() if value}
+    return "sha256:" + hashlib.sha256(json_dumps(material).encode("utf-8")).hexdigest()
+
+
+def _vector_compatibility_metadata_key(vector_index: dict[str, Any]) -> str:
+    return _VECTOR_COMPATIBILITY_METADATA_PREFIX + str(vector_index["id"])
+
+
+def _vector_row_count(*, vector_store: Any, vector_health: dict[str, Any]) -> int | None:
+    rows = vector_health.get("rows")
+    if rows is None:
+        stats = vector_health.get("stats")
+        if isinstance(stats, dict):
+            rows = stats.get("rows")
+    if rows is None and hasattr(vector_store, "get_stats"):
+        stats = vector_store.get_stats()
+        if isinstance(stats, dict):
+            rows = stats.get("rows")
+    if rows is None:
+        return None
+    try:
+        return int(rows)
+    except (TypeError, ValueError):
+        return None
 
 
 def _validate_vector_dimension(*, embedding_dimension: int, vector_store: Any) -> None:

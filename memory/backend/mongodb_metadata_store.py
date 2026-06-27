@@ -41,6 +41,7 @@ class MongoDBMetadataStore:
         self._conversations = db[self.conversations_collection]
         self._facts = db[self.facts_collection]
         self._summaries = db[self.generated_summaries_collection]
+        self._runtime_metadata = db["runtime_metadata"]
         self._ensure_indexes()
 
     def insert(self, conversation_json: dict[str, Any]) -> str:
@@ -230,6 +231,20 @@ class MongoDBMetadataStore:
             "collection": self.conversations_collection,
         }
 
+    def get_runtime_metadata(self, key: str) -> dict[str, Any] | None:
+        row = self._runtime_metadata.find_one({"key": str(key)})
+        if not isinstance(row, dict):
+            return None
+        value = row.get("value")
+        return value if isinstance(value, dict) else None
+
+    def set_runtime_metadata(self, key: str, value: dict[str, Any]) -> None:
+        self._runtime_metadata.replace_one(
+            {"key": str(key)},
+            {"key": str(key), "value": dict(value), "updated_at": _utc_now()},
+            upsert=True,
+        )
+
     def _create_client(self) -> Any:
         try:
             from pymongo import MongoClient  # type: ignore
@@ -245,6 +260,7 @@ class MongoDBMetadataStore:
         self._conversations.create_index([("project_id", 1), ("source", 1), ("upstream_thread_id", 1)])
         self._facts.create_index([("subject", 1), ("predicate", 1), ("project_id", 1)])
         self._summaries.create_index("id", unique=True)
+        self._runtime_metadata.create_index("key", unique=True)
 
     def _prepare_conversation(self, conversation_json: dict[str, Any]) -> dict[str, Any]:
         payload = dict(conversation_json)
