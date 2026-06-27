@@ -36,17 +36,22 @@ provider failure behavior, and explicit negative cases for degraded state.
 Add tests proving API and MCP are interchangeable clients for the same memory
 store.
 
-- [ ] API insert, MCP search, MCP retrieve, MCP ask.
-- [ ] MCP insert, API search, API retrieve, API ask.
-- [ ] API insert with `project_id`, MCP read with the same `project_id`.
-- [ ] MCP insert with `project_id`, API read with the same `project_id`.
-- [ ] API bearer-token insert, MCP bearer-token read under the same owner.
-- [ ] MCP bearer-token insert, API bearer-token read under the same owner.
-- [ ] Cross-owner negative checks for both directions: API writes must not leak
+- [x] API insert, MCP search, MCP retrieve, MCP ask.
+- [x] MCP insert, API search, API retrieve, API ask.
+- [x] API insert with `project_id`, MCP read with the same `project_id`.
+- [x] MCP insert with `project_id`, API read with the same `project_id`.
+- [x] API bearer-token insert, MCP bearer-token read under the same owner.
+- [x] MCP bearer-token insert, API bearer-token read under the same owner.
+- [x] Cross-owner negative checks for both directions: API writes must not leak
   through MCP reads, and MCP writes must not leak through API reads.
-- [ ] Response-shape equivalence checks for shared fields: `status`, `id`,
+- [x] Response-shape equivalence checks for shared fields: `status`, `id`,
   `results`, `memory`, `answer`, `citations`, `confidence`, and
   `answer_basis`.
+
+Implemented in `tests/integration/test_api_mcp_interop.py`. Note: MCP search
+exposes `cursor`; HTTP API search currently does not, so the interop test checks
+`cursor` on MCP and compares the actual shared public fields across both
+surfaces.
 
 Preferred location:
 
