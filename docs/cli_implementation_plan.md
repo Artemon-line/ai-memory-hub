@@ -15,7 +15,7 @@ Implemented:
 - [x] `tokenizer-check --json`.
 - [x] Unit tests for tokenizer diagnostic CLI output.
 
-Not implemented yet:
+Implemented since the initial tokenizer diagnostic baseline:
 
 - [x] Distributable console script name.
 - [x] Global CLI options shared by all commands.
@@ -31,15 +31,16 @@ Not implemented yet:
 
 Use `python -m memory.cli` as the guaranteed development entrypoint.
 
-Add a console script only after the command contract stabilizes. Preferred final command name:
+The packaged console script name is:
 
 - `aim`
 
-Fallback if the name is unavailable or too ambiguous:
+Historical fallback if the name ever becomes unavailable or too ambiguous:
 
 - `ai-memory-hub`
 
-Do not document a console script as the primary path until packaging metadata exposes it.
+Packaging metadata exposes `aim`; `python -m memory.cli` remains the guaranteed
+development entrypoint.
 
 ## Global Options
 
@@ -158,8 +159,6 @@ Implemented diagnostics:
 
 - [x] `tokenizer-check`
 
-Planned diagnostics:
-
 - [x] `health` for storage/provider initialization.
 - [x] `config-show` for normalized configuration with secrets redacted.
 - [x] `storage-check` for metadata/vector store capability checks.
@@ -178,7 +177,7 @@ Command shape:
 python -m memory.cli serve --host 127.0.0.1 --port 8000
 ```
 
-Future packaged command shape:
+Packaged command shape:
 
 ```bash
 aim serve --host 127.0.0.1 --port 8000

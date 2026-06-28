@@ -22,12 +22,17 @@ Implemented:
 - [x] Superseded facts are hidden from normal profile/fact answers and retained for audit.
 - [x] Conflicting active facts produce `answer_basis: "conflict"`.
 
-Not implemented yet:
+Implemented since the initial fact-layer baseline:
 
 - [x] LLM-assisted fact extraction hook beyond the initial deterministic rules.
 - [x] Rich subject/entity resolution for project-specific fact questions.
 - [x] Recurring-topic fact extraction.
 - [x] CLI workflows for reviewing and superseding facts.
+
+Remaining work:
+
+- [ ] Hosted LLM extractor implementation with prompt/schema tuning.
+- [ ] UI workflows for fact review, edit/supersession, and audit.
 
 ## Problems Observed
 

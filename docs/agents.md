@@ -35,10 +35,11 @@ Implemented:
 - Storage safety: provider capabilities, schema-version checks, vector dimensionality checks,
   policy-gated fallback, degraded health, dry-run wrappers, and secret-safe fallback logging.
 - MCP smoke profiles for Codex, Gemini, VS Code Copilot, and opencode.
+- CLI agent workflows: `tokenizer-check`, `ingest`, `search`, `retrieve`,
+  `ask`, and `serve`.
 
 Planned or partial:
 
-- CLI agent workflows are partial. `python -m memory.cli tokenizer-check` exists; ingest/search/retrieve/ask/serve commands are planned.
 - Claude MCP smoke profile and negative client payload cases are planned.
 - Platform-specific importers, summaries, timeline intelligence, graph memory, shared memory, plugins, and cloud sync are planned.
 
@@ -314,7 +315,6 @@ fallback to in-memory storage when explicitly allowed by config.
 
 ## Future Agent Features
 
-- Full CLI ingest/search/retrieve/ask/serve commands.
 - Real-client smoke tests for more agent CLIs.
 - Platform-specific importers.
 - Memory consolidation and long-term distillation.

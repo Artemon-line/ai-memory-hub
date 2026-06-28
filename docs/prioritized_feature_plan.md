@@ -134,9 +134,9 @@ Implementation sequence:
       operations by `owner_id`.
 - [x] Prevent cross-user leakage from vector candidates by filtering against
       metadata ownership before returning or answering.
-- [ ] Redact bearer tokens from logs, errors, and diagnostics.
-- [ ] Keep `auth=none` for CI and loopback-only local development.
-- [ ] Leave Google/Apple/Meta OAuth for later `oauth_resource_server` mode or a
+- [x] Redact bearer tokens from logs, errors, and diagnostics.
+- [x] Keep `auth=none` for CI and loopback-only local development.
+- [x] Leave Google/Apple/Meta OAuth for later `oauth_resource_server` mode or a
       trusted identity-aware reverse proxy.
 
 Acceptance criteria:
@@ -480,7 +480,7 @@ Implemented:
 
 Remaining sequence:
 
-- [ ] Log `allow_fallback` and `dry_run` startup policy consistently, including disabled state.
+- [x] Log `allow_fallback` and `dry_run` startup policy consistently, including disabled state.
 - [ ] Warn when `allow_fallback=true` is used under a production profile.
 - [ ] Emit structured audit events for fallback activation and dry-run skipped writes.
 - [ ] Consider changing the default `storage.vector.allow_fallback` to `false` for production-oriented configs.

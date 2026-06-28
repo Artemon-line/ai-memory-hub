@@ -38,7 +38,7 @@ Implemented:
 - [x] README/config guidance for `TIKTOKEN_CACHE_DIR` and one-time cache prewarm.
 - [x] Tokenizer preflight check that reports whether the configured encoding resolves through `tiktoken` or the heuristic fallback.
 
-Not implemented yet:
+Remaining work:
 
 - None.
 

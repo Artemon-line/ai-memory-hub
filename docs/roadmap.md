@@ -83,8 +83,11 @@ web UIs, then post normalized payloads to `POST /memory/insert`.
 
 ### 1.6 CLI (optional)
 
-- [ ] `aim ingest <file>`
-- [ ] `aim search "<query>"`
+- [x] `aim ingest <file>`
+- [x] `aim search "<query>"`
+- [x] `aim retrieve <id>`
+- [x] `aim ask "<question>"`
+- [x] `aim serve`
 
 **Milestone:** Ingest via MCP/API, validate against unified schema, store in SQLite+vector DB, and retrieve via HTTP or MCP.
 

@@ -14,6 +14,13 @@ Implemented:
 - [x] Standard Python loggers exist in some modules.
 - [x] Secret redaction helper exists for DSNs and key-value secrets.
 - [x] Storage health helpers exist for metadata and vector providers.
+- [x] `/health` and `/ready` HTTP endpoints.
+- [x] Request-id middleware for FastAPI HTTP requests.
+- [x] Structured HTTP failure logs include method, path, status, auth mode, and
+  request id without logging request bodies or query-string values.
+- [x] Startup logs fallback/dry-run policy state.
+- [x] Persistent vector providers with fallback enabled emit a warning about
+  non-durable fallback.
 - [x] MCP `memory_insert`, `memory_search`, and `memory_ask` now log unexpected
   exceptions with stack traces before returning stable error envelopes.
 
@@ -27,7 +34,7 @@ Not implemented yet:
 - [ ] Manual spans around MCP tools and ingestion stages.
 - [ ] Metrics for tool/API latency, insert/search/ask outcomes, provider failures,
   vector rows, and fallback state.
-- [ ] `/health` and `/ready` HTTP endpoints.
+- [x] `/health` and `/ready` HTTP endpoints.
 - [ ] Docker Compose observability profile with OTel Collector and Jaeger.
 - [ ] Documentation for local and LAN observability usage.
 
@@ -153,10 +160,10 @@ Response shape:
 
 Tasks:
 
-- [ ] Reuse `mvp_ingestion.runtime_health()`.
+- [x] Reuse `mvp_ingestion.runtime_health()`.
 - [ ] Add lightweight embedding-provider readiness check that does not perform a
   real embedding call unless explicitly configured.
-- [ ] Add tests for ok/degraded/dry-run readiness.
+- [x] Add tests for ok/degraded/dry-run readiness.
 - [ ] Update Compose healthcheck to call `/ready` once available.
 
 ## Phase 3: OpenTelemetry Tracing
@@ -349,7 +356,7 @@ Unit tests:
 Integration tests:
 
 - [x] Failed MCP insert logs stack trace and stable error envelope.
-- [ ] `GET /health` and `GET /ready` return expected mode.
+- [x] `GET /health` and `GET /ready` return expected mode.
 - [ ] Manual spans are created for ingestion stages with safe attributes.
 - [ ] Metrics counters increment for successful and failed MCP tools.
 

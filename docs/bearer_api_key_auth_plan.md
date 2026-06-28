@@ -12,7 +12,7 @@ Supported modes:
 - `api.auth: none` for CI and loopback-only local testing.
 - `api.auth: bearer_token` for local/LAN deployments that need simple personal
   access tokens and per-user memory isolation.
-- `api.auth: oauth_resource_server` later for MCP-compliant OAuth authorization.
+- `api.auth: oauth_resource_server` for MCP-compliant OAuth authorization.
 
 Source: https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization
 
@@ -59,7 +59,7 @@ Implemented:
 - [x] Vector candidates are filtered through metadata ownership before returning
       or answering.
 
-Not implemented yet:
+Implemented since the initial bearer-token baseline:
 
 - [x] Admin CLI commands for user, bearer-token, project, and membership
       management.

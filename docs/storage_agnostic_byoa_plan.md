@@ -575,7 +575,10 @@ Target: local-first vector provider with optional HTTP client mode.
 
 ### Phase 6d: Qdrant Vector Adapter
 
-Status: `IMPLEMENTED`
+Status: `PARTIAL`
+
+The core Qdrant adapter is implemented. Startup validation and hardening tasks
+below remain open.
 
 Target: local Docker or Qdrant Cloud vector provider.
 
@@ -606,7 +609,10 @@ Target: local Docker or Qdrant Cloud vector provider.
 
 ### Phase 6e: MongoDB Metadata And Atlas Vector Search
 
-Status: `IMPLEMENTED`
+Status: `PARTIAL`
+
+The core MongoDB metadata and MongoDB Atlas vector adapters are implemented.
+Schema/index validation and readiness hardening tasks below remain open.
 
 Target: MongoDB as a metadata provider, with optional Atlas Vector Search as a vector provider.
 
@@ -659,7 +665,11 @@ Atlas Vector Search adapter:
 
 ### Phase 6f: Elasticsearch And OpenSearch Vector Adapters
 
-Status: `IMPLEMENTED`
+Status: `PARTIAL`
+
+The core Elasticsearch and OpenSearch adapters are implemented. Mapping
+validation, read-after-write documentation, and provider hardening tasks below
+remain open.
 
 Target: vector search for users already running Elastic/OpenSearch, with a path toward hybrid retrieval.
 
@@ -702,7 +712,10 @@ Hybrid-search follow-up:
 
 ### Phase 6g: Milvus/Zilliz Vector Adapter
 
-Status: `IMPLEMENTED`
+Status: `PARTIAL`
+
+The core Milvus/Zilliz adapter is implemented. Collection schema/index
+validation and readiness hardening tasks below remain open.
 
 Target: larger vector deployments via self-hosted Milvus or managed Zilliz.
 
@@ -740,7 +753,10 @@ Target: larger vector deployments via self-hosted Milvus or managed Zilliz.
 
 ### Phase 6h: Weaviate Vector Adapter
 
-Status: `IMPLEMENTED`
+Status: `PARTIAL`
+
+The core Weaviate adapter is implemented. Existing class schema validation and
+provider hardening tasks below remain open.
 
 Target: schema-rich vector deployments with self-hosted or cloud Weaviate.
 
@@ -821,7 +837,7 @@ Status: `PARTIAL`
 - [x] Treat metadata initialization errors as fatal.
 - [x] Treat vector initialization errors as fatal unless `storage.vector.allow_fallback=true`.
 - [x] Treat schema incompatibility and vector dimension mismatch as hard errors.
-- [ ] Log `allow_fallback` and `dry_run` startup policy consistently even when disabled.
+- [x] Log `allow_fallback` and `dry_run` startup policy consistently even when disabled.
 - [ ] Warn when `allow_fallback=true` is used under a production profile.
 - [ ] Emit structured audit events for fallback activation and dry-run skipped writes, not only warning strings.
 - [ ] Consider changing the default `storage.vector.allow_fallback` to `false` for production-oriented configs.
