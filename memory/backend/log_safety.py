@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Mapping
+
+type LogArgs = tuple[object, ...] | Mapping[str, object] | None
 
 _URI_CREDENTIALS = re.compile(
     r"([a-z][a-z0-9+.-]*://[^:\s/@]*:)([^@\s/]+)(@)", re.IGNORECASE
@@ -26,9 +29,23 @@ def redact_secrets(text: str) -> str:
 
 class SecretRedactionFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
+        if record.name == "uvicorn.access":
+            record.args = _redact_log_args(record.args)
+            return True
         record.msg = redact_secrets(record.getMessage())
         record.args = ()
         return True
+
+
+def _redact_log_args(args: LogArgs) -> LogArgs:
+    if isinstance(args, tuple):
+        return tuple(redact_secrets(item) if isinstance(item, str) else item for item in args)
+    if isinstance(args, dict):
+        return {
+            key: redact_secrets(value) if isinstance(value, str) else value
+            for key, value in args.items()
+        }
+    return args
 
 
 def install_secret_redaction_filter() -> None:

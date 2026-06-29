@@ -854,7 +854,7 @@ docker run --rm -p 8000:8000 ai-memory-hub:local
 The image exposes the API and MCP service on port `8000` and starts with:
 
 ```bash
-uv run aim serve --host 0.0.0.0 --port 8000
+/app/.venv/bin/aim serve --host 0.0.0.0 --port 8000
 ```
 
 The built-in container configuration uses deterministic local embeddings, SQLite

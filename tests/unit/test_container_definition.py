@@ -32,6 +32,8 @@ def test_containerfile_installs_project_after_copying_package() -> None:
         assert f"--extra {extra}" in containerfile
     assert "COPY examples/container/config.yaml /app/config.yaml" in containerfile
     assert "useradd --uid 1001 --gid 0" in containerfile
+    assert 'CMD ["/app/.venv/bin/aim", "serve", "--host", "0.0.0.0", "--port", "8000"]' in containerfile
+    assert 'CMD ["uv", "run", "aim"' not in containerfile
 
 
 def test_pgvector_example_uses_slim_containerfile() -> None:
@@ -45,6 +47,8 @@ def test_pgvector_example_uses_slim_containerfile() -> None:
     assert "dockerfile: examples/storage_providers/postgres-pgvector/Containerfile" in compose
     assert "--extra postgres" in containerfile
     assert "--extra tokenizer" in containerfile
+    assert 'CMD ["/app/.venv/bin/aim", "serve", "--host", "0.0.0.0", "--port", "8000"]' in containerfile
+    assert 'CMD ["uv", "run", "aim"' not in containerfile
     for extra in (
         "chromadb",
         "elasticsearch",
@@ -92,6 +96,8 @@ def test_free_provider_examples_use_provider_local_containerfiles() -> None:
         containerfile = (example_dir / "Containerfile").read_text(encoding="utf-8")
 
         assert f"dockerfile: examples/storage_providers/{example}/Containerfile" in compose
+        assert 'CMD ["/app/.venv/bin/aim", "serve", "--host", "0.0.0.0", "--port", "8000"]' in containerfile
+        assert 'CMD ["uv", "run", "aim"' not in containerfile
         for extra in enabled_extras:
             assert f"--extra {extra}" in containerfile
         for extra in all_optional_extras - enabled_extras:

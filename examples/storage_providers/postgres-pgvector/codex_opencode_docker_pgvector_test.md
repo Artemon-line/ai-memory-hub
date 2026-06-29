@@ -12,7 +12,7 @@ It uses Docker or Podman for ai-memory-hub and Postgres with PGVector.
 
 ## Current Codebase State
 
-- The API server is `memory.api.server:app`.
+- The direct ASGI app is `memory.api.asgi:app`; the container starts the same app through `aim serve`.
 - The MCP endpoint is mounted at `http://127.0.0.1:8000/mcp/` when `interfaces.mcp: true`.
 - MCP tools currently implemented:
   - `memory_validate`
@@ -112,7 +112,7 @@ openai:
 ```
 
 If Ollama is on a different PC, replace `host.docker.internal` with that PC's
-LAN hostname or IP, for example `http://impression-pc:11434/v1`.
+LAN hostname or IP, for example `http://ollama-host.local:11434/v1`.
 
 ## Start The Stack
 

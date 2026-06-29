@@ -185,7 +185,7 @@ aim serve --host 127.0.0.1 --port 8000
 
 Scope:
 
-- [x] Start the same FastAPI/MCP application currently launched with `uvicorn memory.api.server:app`.
+- [x] Start the same FastAPI/MCP application exposed by `memory.api.asgi:app`.
 - [x] Support `--host`.
 - [x] Support `--port`.
 - [x] Support `--config <path>`.

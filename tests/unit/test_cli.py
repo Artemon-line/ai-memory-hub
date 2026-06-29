@@ -709,6 +709,33 @@ def test_serve_cli_uses_config_host_port(capsys, monkeypatch, tmp_path) -> None:
     assert "serving ai-memory-hub" in capsys.readouterr().out
 
 
+def test_cli_app_factory_prints_startup_banner_once(capsys, tmp_path) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "providers:",
+                "  embeddings: local",
+                "  embedding_dimension: 32",
+                "  metadata_db: sqlite",
+                "  vector_db: memory",
+                "interfaces:",
+                "  mcp: false",
+                "  api: true",
+                "paths:",
+                f"  data_dir: {(tmp_path / 'data').as_posix()}",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    config = cli.load_config(str(config_path))
+
+    app = cli._create_cli_app(config)
+
+    assert app is not None
+    assert capsys.readouterr().out.count("ai-memory-hub  |  RUNNING") == 1
+
+
 def test_cli_ingest_search_retrieve_ask_with_temporary_storage(capsys, tmp_path) -> None:
     data_dir = (tmp_path / "data").as_posix()
     config_path = tmp_path / "config.yaml"
