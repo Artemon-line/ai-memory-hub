@@ -101,6 +101,15 @@
           "description": "Optional short client-provided factual summary used as a retrieval hint. Raw messages remain the source of truth.",
           "maxLength": 2000
         },
+        "save_intent": {
+          "type": "string",
+          "enum": [
+            "explicit_user_request",
+            "user_confirmed",
+            "client_auto_save"
+          ],
+          "description": "Client-declared reason for saving this memory. Required when memory.insert_policy is require_save_intent."
+        },
         "model": {
           "type": "string",
           "description": "Model used to generate assistant messages (e.g., gpt-4.1, claude-3-opus)."

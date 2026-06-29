@@ -404,6 +404,17 @@ def test_retrieval_config_defaults_and_validation():
         parse_config({"retrieval": {"vector_score_threshold": -1}})
 
 
+def test_memory_insert_policy_defaults_and_validation() -> None:
+    config = parse_config({})
+    assert config.memory.insert_policy == "permissive"
+
+    strict = parse_config({"memory": {"insert_policy": "require_save_intent"}})
+    assert strict.memory.insert_policy == "require_save_intent"
+
+    with pytest.raises(ValueError, match="memory.insert_policy"):
+        parse_config({"memory": {"insert_policy": "silent_auto_save"}})
+
+
 def test_chunking_config_defaults_and_validation():
     config = parse_config({})
 

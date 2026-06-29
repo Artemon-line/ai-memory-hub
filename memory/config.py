@@ -4,6 +4,7 @@ import logging
 import os
 import re
 import secrets
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -29,6 +30,11 @@ METADATA_PROVIDER_VALUES = tuple(item.value for item in MetadataProviderName)
 _VALID_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]*$")
 _VALID_INDEX_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]*$")
 _VALID_SQL_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+class InsertPolicy(StrEnum):
+    PERMISSIVE = "permissive"
+    REQUIRE_SAVE_INTENT = "require_save_intent"
 
 
 class ProvidersConfig(BaseModel):
@@ -542,6 +548,21 @@ class RetrievalConfig(BaseModel):
     candidate_multiplier: int = Field(default=3, ge=1, le=20)
 
 
+class MemoryConfig(BaseModel):
+    insert_policy: str = InsertPolicy.PERMISSIVE.value
+
+    @field_validator("insert_policy")
+    @classmethod
+    def validate_insert_policy(cls, value: str) -> str:
+        normalized = value.lower()
+        allowed = {item.value for item in InsertPolicy}
+        if normalized not in allowed:
+            raise ValueError(
+                "memory.insert_policy must be one of: " + ", ".join(sorted(allowed))
+            )
+        return normalized
+
+
 class ChunkingConfig(BaseModel):
     strategy: str = "message"
     max_tokens: int = Field(default=800, ge=1)
@@ -669,6 +690,7 @@ class HubConfig(BaseModel):
     tokenizer: TokenizerConfig = Field(default_factory=TokenizerConfig)
     ask: AskConfig = Field(default_factory=AskConfig)
     retrieval: RetrievalConfig = Field(default_factory=RetrievalConfig)
+    memory: MemoryConfig = Field(default_factory=MemoryConfig)
     chunking: ChunkingConfig = Field(default_factory=ChunkingConfig)
     openai: OpenAIConfig = Field(default_factory=OpenAIConfig)
     mcp: MCPConfig = Field(default_factory=MCPConfig)

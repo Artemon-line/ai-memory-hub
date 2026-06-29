@@ -14,6 +14,7 @@ from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig, ensure_token_hash_secret, normalize_config
 from memory.ingestion.base_agent import BaseIngestionAgent
 from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
+from memory.ingestion.save_intent import SaveIntentError, validate_insert_save_intent
 from memory.ingestion.thread_models import SearchResultMode
 from memory.interfaces.mcp_server import create_mcp_server
 
@@ -159,7 +160,9 @@ def _request_id(request: Request) -> str:
     return str(uuid4())
 
 
-def _register_api_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
+def _register_api_routes(
+    app: FastAPI, agent: BaseIngestionAgent, config: HubConfig
+) -> None:
     def owner_id(request: Request) -> str | None:
         auth = getattr(request.state, "auth", None)
         return getattr(auth, "owner_id", None)
@@ -191,6 +194,10 @@ def _register_api_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
             if isinstance(metadata, dict):
                 value = metadata.get("project_id")
                 project_id = str(value) if value is not None else project_id
+            validate_insert_save_intent(
+                conversation_json,
+                insert_policy=config.memory.insert_policy,
+            )
             return redact_content_hashes(
                 await agent.ingest_messages(
                     conversation_json,
@@ -200,6 +207,14 @@ def _register_api_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
             )
         except jsonschema.ValidationError as exc:
             raise HTTPException(status_code=400, detail=exc.message) from exc
+        except SaveIntentError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error_code": exc.error_code,
+                    "error_message": str(exc),
+                },
+            ) from exc
         except PermissionError as exc:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
         except ValueError as exc:
@@ -395,7 +410,7 @@ def create_app(
 
     # ⭐ Only enable API if config says so
     if cfg.interfaces.api:
-        _register_api_routes(app, agent)
+        _register_api_routes(app, agent, cfg)
 
     print(
         "\n"

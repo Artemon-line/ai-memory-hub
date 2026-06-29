@@ -13,10 +13,13 @@ from memory.backend.metadata_store import SQLiteMetadataStore
 from memory.config import ensure_token_hash_secret, parse_config
 
 
-def _config(tmp_path: Path, *, auth: str = "none") -> dict[str, Any]:
+def _config(
+    tmp_path: Path, *, auth: str = "none", insert_policy: str = "permissive"
+) -> dict[str, Any]:
     return {
         "api": {"auth": auth},
         "interfaces": {"api": True, "mcp": True},
+        "memory": {"insert_policy": insert_policy},
         "paths": {"data_dir": str(tmp_path / "data")},
         "providers": {
             "embeddings": "local",
@@ -39,6 +42,10 @@ def _client(tmp_path: Path) -> TestClient:
     return TestClient(create_app(config=_config(tmp_path)))
 
 
+def _strict_save_intent_client(tmp_path: Path) -> TestClient:
+    return TestClient(create_app(config=_config(tmp_path, insert_policy="require_save_intent")))
+
+
 def _conversation(
     *,
     text: str,
@@ -47,12 +54,15 @@ def _conversation(
     timestamp: str = "2026-06-27T12:00:00Z",
     tags: list[str] | None = None,
     thread_id: str | None = None,
+    save_intent: str | None = None,
 ) -> dict[str, Any]:
     metadata: dict[str, Any] = {}
     if tags is not None:
         metadata["tags"] = tags
     if thread_id is not None:
         metadata["thread_id"] = thread_id
+    if save_intent is not None:
+        metadata["save_intent"] = save_intent
     return {
         "id": memory_id or str(uuid4()),
         "source": source,
@@ -406,3 +416,111 @@ def test_api_and_mcp_validation_errors_do_not_echo_sensitive_payload_text(
     assert mcp_insert["status"] == "error"
     assert mcp_insert["error_code"] == "invalid_input"
     assert secret not in json.dumps(mcp_insert)
+
+
+def test_api_and_mcp_insert_remain_permissive_by_default(tmp_path: Path) -> None:
+    api_payload = _conversation(text="Default permissive API insert phrase.")
+    mcp_payload = _conversation(text="Default permissive MCP insert phrase.")
+
+    with _client(tmp_path) as client:
+        api_insert = client.post("/memory/insert", json=api_payload)
+        headers = _initialize_mcp(client)
+        mcp_insert = _call_tool(
+            client,
+            headers,
+            request_id=2,
+            name="memory_insert",
+            arguments={"conversation_json": mcp_payload},
+        )
+
+    assert api_insert.status_code == 200, api_insert.text
+    assert mcp_insert["status"] == "ok"
+
+
+def test_api_and_mcp_require_save_intent_when_policy_is_strict(tmp_path: Path) -> None:
+    secret_text = "save-intent-secret-phrase"
+
+    with _strict_save_intent_client(tmp_path) as client:
+        api_insert = client.post(
+            "/memory/insert",
+            json=_conversation(text=secret_text),
+        )
+        headers = _initialize_mcp(client)
+        mcp_insert = _call_tool(
+            client,
+            headers,
+            request_id=2,
+            name="memory_insert",
+            arguments={"conversation_json": _conversation(text=secret_text)},
+        )
+        api_search = client.post("/memory/search", json={"query": secret_text})
+
+    assert api_insert.status_code == 400
+    assert api_insert.json()["detail"]["error_code"] == "save_intent_required"
+    assert secret_text not in api_insert.text
+    assert api_search.status_code == 200
+    assert api_search.json()["results"] == []
+    assert mcp_insert["status"] == "error"
+    assert mcp_insert["error_code"] == "save_intent_required"
+    assert "metadata.save_intent" in mcp_insert["error_message"]
+    assert secret_text not in json.dumps(mcp_insert)
+
+
+def test_api_and_mcp_accept_known_save_intents_when_policy_is_strict(
+    tmp_path: Path,
+) -> None:
+    allowed = ["explicit_user_request", "user_confirmed", "client_auto_save"]
+
+    with _strict_save_intent_client(tmp_path) as client:
+        headers = _initialize_mcp(client)
+        for index, save_intent in enumerate(allowed):
+            api_insert = client.post(
+                "/memory/insert",
+                json=_conversation(
+                    text=f"API strict save intent {save_intent}",
+                    save_intent=save_intent,
+                ),
+            )
+            mcp_insert = _call_tool(
+                client,
+                headers,
+                request_id=index + 2,
+                name="memory_insert",
+                arguments={
+                    "conversation_json": _conversation(
+                        text=f"MCP strict save intent {save_intent}",
+                        save_intent=save_intent,
+                    )
+                },
+            )
+            assert api_insert.status_code == 200, api_insert.text
+            assert mcp_insert["status"] == "ok"
+
+
+def test_api_and_mcp_reject_unknown_save_intent_values(tmp_path: Path) -> None:
+    with _strict_save_intent_client(tmp_path) as client:
+        api_insert = client.post(
+            "/memory/insert",
+            json=_conversation(
+                text="Unknown save intent API phrase.",
+                save_intent="agent_felt_like_it",
+            ),
+        )
+        headers = _initialize_mcp(client)
+        mcp_insert = _call_tool(
+            client,
+            headers,
+            request_id=2,
+            name="memory_insert",
+            arguments={
+                "conversation_json": _conversation(
+                    text="Unknown save intent MCP phrase.",
+                    save_intent="agent_felt_like_it",
+                )
+            },
+        )
+
+    assert api_insert.status_code == 400
+    assert api_insert.json()["detail"]["error_code"] == "invalid_save_intent"
+    assert mcp_insert["status"] == "error"
+    assert mcp_insert["error_code"] == "invalid_save_intent"

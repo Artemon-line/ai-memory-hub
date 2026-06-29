@@ -16,6 +16,7 @@ from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig
 from memory.ingestion.base_agent import BaseIngestionAgent
 from memory.ingestion.mvp_ingestion import normalize_conversation_json
+from memory.ingestion.save_intent import SaveIntentError, validate_insert_save_intent
 from memory.ingestion.thread_models import (
     SearchResultMode,
     result_mode_error_message,
@@ -41,6 +42,8 @@ SERVER_INSTRUCTIONS = (
     "Save one complete conversation per insert; do not split one thread into bulk items. "
     "Include metadata.summary as a short factual retrieval hint when available, while "
     "still preserving all source messages. "
+    "Only call memory_insert when the user asked to save, confirmed a save, or enabled auto-save; "
+    "include metadata.save_intent as explicit_user_request, user_confirmed, or client_auto_save. "
     "Pass project_id when saving to or reading from a shared project; omit it for the default private project. "
     "memory_search and memory_ask support source, date_from, date_to, tags, and thread_id filters "
     "when narrowing recall. "
@@ -60,6 +63,7 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "omit `id` unless it is a valid UUID, use message `text` or `content` fields, "
         "include the whole conversation in one object rather than splitting it into batches, "
         "optionally include a short factual `metadata.summary` retrieval hint, "
+        "include `metadata.save_intent` when the user asked to save, confirmed saving, or enabled auto-save, "
         "and optionally pass `project_id` for a shared workspace."
     ),
     "memory_search": (
@@ -94,6 +98,7 @@ CONVERSATION_JSON_TOOL_META: dict[str, Any] = {
                 "If id is supplied, it must be a valid UUID.",
                 "Messages may use text or content; content is normalized to text.",
                 "Optional metadata.summary should be a short factual retrieval hint, not a substitute for messages.",
+                "Include metadata.save_intent when saving intentionally: explicit_user_request, user_confirmed, or client_auto_save.",
             ],
             "minimal_example": {
                 "source": "opencode",
@@ -104,6 +109,7 @@ CONVERSATION_JSON_TOOL_META: dict[str, Any] = {
                 "metadata": {
                     "tags": ["guitar", "opencode"],
                     "summary": "User said they own a Gibson Special.",
+                    "save_intent": "explicit_user_request",
                 },
             },
         }
@@ -472,6 +478,7 @@ def _register_prompts(mcp: Any) -> None:
             "You MUST include ALL user and assistant messages, including code blocks, SQL, Python, multi-line text, and long responses. Do NOT filter or summarize any messages.\n"
             "Save the whole conversation as one `conversation_json` object; do not split this thread into multiple inserts or batch-shaped payloads.\n"
             "Add a short factual `metadata.summary` when useful for retrieval, but never use it instead of full `messages`.\n"
+            "Set `metadata.save_intent` to `explicit_user_request` because this prompt is an explicit save request.\n"
             "Before insert, call `memory_validate` with argument `conversation_json`.\n"
             "Only call `memory_insert` after validation passes (do not use curl or config-file reads).\n"
             "Never include the save command itself in messages.\n"
@@ -524,7 +531,9 @@ def _register_prompts(mcp: Any) -> None:
         )
 
 
-def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
+def build_tool_handlers(
+    agent: BaseIngestionAgent, *, config: HubConfig | None = None
+) -> dict[str, ToolFn]:
     def owner_id() -> str | None:
         return current_owner_id()
 
@@ -620,12 +629,22 @@ def build_tool_handlers(agent: BaseIngestionAgent) -> dict[str, ToolFn]:
 
         try:
             normalized = normalize_conversation_json(conversation_json, source="mcp")
+            insert_policy = (
+                config.memory.insert_policy if config is not None else "permissive"
+            )
+            validate_insert_save_intent(normalized, insert_policy=insert_policy)
             validate_conversation(normalized)
         except jsonschema.ValidationError as exc:
             return _envelope(
                 status="error",
                 error_code="invalid_input",
                 error_message=_format_schema_error(exc),
+            )
+        except SaveIntentError as exc:
+            return _envelope(
+                status="error",
+                error_code=exc.error_code,
+                error_message=str(exc),
             )
         except ValueError as exc:
             return _envelope(
@@ -1041,7 +1060,7 @@ def create_mcp_server(*, config: HubConfig, agent: BaseIngestionAgent):
         instructions=SERVER_INSTRUCTIONS,
         list_page_size=config.mcp.list_page_size,
     )
-    handlers = build_tool_handlers(agent)
+    handlers = build_tool_handlers(agent, config=config)
 
     for tool_name, tool_fn in handlers.items():
         meta = (

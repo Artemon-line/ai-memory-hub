@@ -109,6 +109,11 @@ or `metadata.thread_id`. The server preserves upstream IDs, derives
 `metadata.thread_id` when needed, and accepts optional
 `metadata.parent_conversation_id` plus `metadata.related_conversation_ids` as
 conversation UUID references.
+`metadata.save_intent` declares why a client is saving a conversation. Accepted
+values are `explicit_user_request`, `user_confirmed`, and `client_auto_save`.
+When `memory.insert_policy: require_save_intent` is configured, API and MCP
+inserts without an accepted marker are rejected before storage, vector indexing,
+or fact extraction.
 
 Store one complete conversation per insert. Do not split one thread into
 multiple batch items. If an importer has many independent source conversations,
@@ -781,6 +786,9 @@ retrieval:
   keyword_weight: 0.25
   metadata_weight: 0.15
   candidate_multiplier: 3
+
+memory:
+  insert_policy: permissive
 
 chunking:
   strategy: message

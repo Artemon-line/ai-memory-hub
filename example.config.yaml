@@ -100,6 +100,12 @@ retrieval:
   metadata_weight: 0.15
   candidate_multiplier: 3
 
+memory:
+  # permissive | require_save_intent
+  # Use require_save_intent for personal deployments where clients must include
+  # metadata.save_intent before writes are accepted.
+  insert_policy: permissive
+
 # -------------------------
 # ACTIVE PROVIDERS (BYOS/BYOA)
 # -------------------------

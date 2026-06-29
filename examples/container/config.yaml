@@ -9,6 +9,9 @@ storage:
   vector:
     allow_fallback: false
 
+memory:
+  insert_policy: permissive
+
 paths:
   data_dir: ./data
   logs_dir: ./logs

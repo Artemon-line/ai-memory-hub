@@ -37,9 +37,12 @@ Allowed values:
 
 - `permissive`: current behavior. No save-intent marker required.
 - `require_save_intent`: reject inserts unless the client sends an accepted save-intent marker.
-- `review_pending`: accept inserts without explicit save intent, but mark them pending so they are not returned by default search, ask, facts, or profile reads until approved.
 
-Recommended default for the first implementation: `permissive`, to avoid breaking existing clients. Recommended documented mode for personal memory deployments: `require_save_intent`.
+Implemented values are `permissive` and `require_save_intent`. `review_pending`
+remains planned as a later workflow because it needs pending storage, approval,
+and fact visibility semantics.
+
+Default: `permissive`, to avoid breaking existing clients. Recommended mode for personal memory deployments: `require_save_intent`.
 
 ## Save-Intent Contract
 
@@ -75,12 +78,12 @@ Do not require clients to send raw prompt history as evidence. Evidence should b
 
 ## P0: Server-Side Policy Enforcement
 
-- [ ] Add a typed config model for insert policy.
-- [ ] Validate `metadata.save_intent` on API insert and MCP `memory_insert`.
-- [ ] Keep `permissive` fully backward compatible.
-- [ ] In `require_save_intent`, return a deterministic validation error when the marker is missing or unknown.
+- [x] Add a typed config model for insert policy.
+- [x] Validate `metadata.save_intent` on API insert and MCP `memory_insert`.
+- [x] Keep `permissive` fully backward compatible.
+- [x] In `require_save_intent`, return a deterministic validation error when the marker is missing or unknown.
+- [x] Ensure errors do not echo sensitive conversation text.
 - [ ] In `review_pending`, store the conversation with pending status and exclude it from default reads.
-- [ ] Ensure errors do not echo sensitive conversation text.
 
 Suggested error shape:
 
@@ -102,11 +105,11 @@ Suggested error shape:
 
 ## P1: Documentation And Client Guidance
 
-- [ ] Document the client contract in MCP setup docs.
-- [ ] Tell clients not to call `memory_insert` for ordinary user statements unless auto-save is explicitly enabled.
+- [x] Document the client contract in MCP setup docs.
+- [x] Tell clients not to call `memory_insert` for ordinary user statements unless auto-save is explicitly enabled.
 - [ ] Add suggested prompts/config notes for opencode, Codex, Claude, and other clients.
-- [ ] Document `require_save_intent` as the recommended mode for personal deployments.
-- [ ] Document `permissive` as a compatibility mode for trusted local workflows.
+- [x] Document `require_save_intent` as the recommended mode for personal deployments.
+- [x] Document `permissive` as a compatibility mode for trusted local workflows.
 
 ## P2: Fact-Layer Integration
 
@@ -117,15 +120,15 @@ Suggested error shape:
 
 ## Testing
 
-- [ ] API insert without `metadata.save_intent` succeeds under `permissive`.
-- [ ] MCP insert without `metadata.save_intent` succeeds under `permissive`.
-- [ ] API insert without `metadata.save_intent` is rejected under `require_save_intent`.
-- [ ] MCP insert without `metadata.save_intent` is rejected under `require_save_intent`.
-- [ ] API and MCP inserts with `explicit_user_request`, `user_confirmed`, or `client_auto_save` succeed under `require_save_intent`.
-- [ ] Unknown save-intent values are rejected with stable errors.
+- [x] API insert without `metadata.save_intent` succeeds under `permissive`.
+- [x] MCP insert without `metadata.save_intent` succeeds under `permissive`.
+- [x] API insert without `metadata.save_intent` is rejected under `require_save_intent`.
+- [x] MCP insert without `metadata.save_intent` is rejected under `require_save_intent`.
+- [x] API and MCP inserts with `explicit_user_request`, `user_confirmed`, or `client_auto_save` succeed under `require_save_intent`.
+- [x] Unknown save-intent values are rejected with stable errors.
 - [ ] `review_pending` stores pending data but excludes it from default search, ask, fact search, and profile reads.
 - [ ] Pending approval activates search and fact/profile visibility.
-- [ ] Validation errors do not leak payload text, auth tokens, or provider credentials.
+- [x] Validation errors do not leak payload text, auth tokens, or provider credentials.
 
 ## Done When
 

@@ -104,6 +104,11 @@ retrieval:
   metadata_weight: 0.15
   candidate_multiplier: 3
 
+memory:
+  # permissive keeps existing clients compatible.
+  # require_save_intent rejects inserts without metadata.save_intent.
+  insert_policy: permissive
+
 chunking:
   strategy: message
   max_tokens: 800

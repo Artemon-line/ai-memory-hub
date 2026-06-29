@@ -33,6 +33,9 @@ retrieval:
   metadata_weight: 0.15
   candidate_multiplier: 3
 
+memory:
+  insert_policy: permissive
+
 chunking:
   strategy: message
   max_tokens: 800
