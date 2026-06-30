@@ -49,7 +49,7 @@ SERVER_INSTRUCTIONS = (
     "Only call memory_insert when the user asked to save, confirmed a save, or enabled auto-save; "
     "include metadata.save_intent as explicit_user_request, user_confirmed, or client_auto_save. "
     "Pass project_id when saving to or reading from a shared project; omit it for the default private project. "
-    "memory_search and memory_ask support source, date_from, date_to, tags, and thread_id filters "
+    "memory_search and memory_ask support source, date_from, date_to, tags, thread_id, and memory_status filters "
     "when narrowing recall. "
     "memory_fact_search and memory_profile_get support source, predicate, date range, confidence, status, "
     "source_quality, and freshness filters."
@@ -73,12 +73,12 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
     "memory_search": (
         "Search existing memory by text query. Optional filters: source, date_from, date_to, tags, "
         "and thread_id. Use project_id for a shared workspace. Use limit and cursor for paged "
-        "results. Use result_mode=threads for thread-grouped results."
+        "results. Use result_mode=threads for thread-grouped results. Use memory_status to inspect active, pending_review, rejected, or all memories."
     ),
-    "memory_retrieve": "Retrieve a stored memory item by ID, optionally within a project_id.",
+    "memory_retrieve": "Retrieve a stored memory item by ID, optionally within a project_id and memory_status filter.",
     "memory_ask": (
         "Answer a question using stored memory and facts. Optional filters: source, date_from, "
-        "date_to, tags, thread_id, and project_id."
+        "date_to, tags, thread_id, project_id, and memory_status."
     ),
     "memory_fact_search": (
         "Search normalized extracted memory facts. Optional filters: source, subject, predicate, "
@@ -710,6 +710,7 @@ def build_tool_handlers(
         tags: list[str] | None = None,
         result_mode: str = SearchResultMode.CHUNKS.value,
         project_id: str | None = None,
+        memory_status: str = "active",
         thread_id: str | None = None,
         ctx: FastMCPContext | None = None,
     ) -> dict[str, Any]:
@@ -749,6 +750,7 @@ def build_tool_handlers(
                 result_mode=result_mode,
                 owner_id=owner_id(),
                 project_id=project_id,
+                memory_status=unwrap_array(memory_status) or "active",
                 source=unwrap_array(source),
                 date_from=unwrap_array(date_from),
                 date_to=unwrap_array(date_to),
@@ -799,7 +801,10 @@ def build_tool_handlers(
         return _with_envelope_defaults(result)
 
     async def memory_retrieve(
-        id: str, project_id: str | None = None, ctx: FastMCPContext | None = None
+        id: str,
+        project_id: str | None = None,
+        memory_status: str = "active",
+        ctx: FastMCPContext | None = None,
     ) -> dict[str, Any]:
         if not isinstance(id, str) or not id.strip():
             return _envelope(
@@ -808,7 +813,12 @@ def build_tool_handlers(
                 error_message="id must be a non-empty string",
             )
         try:
-            memory = await agent.retrieve(id, owner_id=owner_id(), project_id=project_id)
+            memory = await agent.retrieve(
+                id,
+                owner_id=owner_id(),
+                project_id=project_id,
+                memory_status=unwrap_array(memory_status) or "active",
+            )
         except ValueError as exc:
             return _envelope(
                 status="error",
@@ -842,6 +852,7 @@ def build_tool_handlers(
         date_to: str | None = None,
         tags: list[str] | None = None,
         project_id: str | None = None,
+        memory_status: str = "active",
         thread_id: str | None = None,
         ctx: FastMCPContext | None = None,
     ) -> dict[str, Any]:
@@ -910,6 +921,7 @@ def build_tool_handlers(
                 result_mode=result_mode,
                 owner_id=owner_id(),
                 project_id=project_id,
+                memory_status=unwrap_array(memory_status) or "active",
                 source=unwrap_array(source),
                 date_from=unwrap_array(date_from),
                 date_to=unwrap_array(date_to),

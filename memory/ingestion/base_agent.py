@@ -46,6 +46,7 @@ class BaseIngestionAgent(ABC):
         result_mode: str = SearchResultMode.CHUNKS.value,
         owner_id: str | None = None,
         project_id: str | None = None,
+        memory_status: str = "active",
         source: str | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
@@ -55,7 +56,12 @@ class BaseIngestionAgent(ABC):
         raise NotImplementedError("search is not implemented")
 
     async def retrieve(
-        self, memory_id: str, *, owner_id: str | None = None, project_id: str | None = None
+        self,
+        memory_id: str,
+        *,
+        owner_id: str | None = None,
+        project_id: str | None = None,
+        memory_status: str = "active",
     ) -> Optional[Dict[str, Any]]:
         raise NotImplementedError("retrieve is not implemented")
 
@@ -68,6 +74,7 @@ class BaseIngestionAgent(ABC):
         result_mode: str = SearchResultMode.CHUNKS.value,
         owner_id: str | None = None,
         project_id: str | None = None,
+        memory_status: str = "active",
         source: str | None = None,
         date_from: str | None = None,
         date_to: str | None = None,

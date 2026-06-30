@@ -611,3 +611,97 @@ def test_review_pending_mcp_insert_can_be_rejected(tmp_path: Path) -> None:
     assert search["results"] == []
     assert approve_after_reject["status"] == "error"
     assert approve_after_reject["error_code"] == "memory_not_pending_review"
+
+
+def test_review_pending_api_read_filters_expose_pending_and_rejected(tmp_path: Path) -> None:
+    pending_phrase = "api pending status filter phrase"
+    rejected_phrase = "api rejected status filter phrase"
+
+    with _review_pending_client(tmp_path) as client:
+        pending_insert = client.post(
+            "/memory/insert", json=_conversation(text=f"I own an {pending_phrase}.")
+        )
+        rejected_insert = client.post(
+            "/memory/insert", json=_conversation(text=f"I own an {rejected_phrase}.")
+        )
+        assert pending_insert.status_code == 200, pending_insert.text
+        assert rejected_insert.status_code == 200, rejected_insert.text
+        pending_id = pending_insert.json()["id"]
+        rejected_id = rejected_insert.json()["id"]
+        reject = client.post("/memory/pending/reject", json={"id": rejected_id})
+        assert reject.status_code == 200, reject.text
+
+        default_search = client.post("/memory/search", json={"query": "status filter phrase"})
+        pending_search = client.post(
+            "/memory/search",
+            json={"query": pending_phrase, "memory_status": "pending_review"},
+        )
+        rejected_search = client.post(
+            "/memory/search",
+            json={"query": rejected_phrase, "memory_status": "rejected"},
+        )
+        all_search = client.post(
+            "/memory/search",
+            json={"query": "status filter phrase", "memory_status": "all", "top_k": 5},
+        )
+        pending_retrieve = client.post(
+            "/memory/retrieve",
+            json={"id": pending_id, "memory_status": "pending_review"},
+        )
+        rejected_retrieve = client.post(
+            "/memory/retrieve",
+            json={"id": rejected_id, "memory_status": "rejected"},
+        )
+
+    assert default_search.json()["results"] == []
+    assert [row["id"] for row in pending_search.json()["results"]] == [pending_id]
+    assert [row["id"] for row in rejected_search.json()["results"]] == [rejected_id]
+    assert {row["id"] for row in all_search.json()["results"]} == {pending_id, rejected_id}
+    assert pending_retrieve.status_code == 200
+    assert pending_retrieve.json()["memory"]["metadata"]["memory_status"] == "pending_review"
+    assert rejected_retrieve.status_code == 200
+    assert rejected_retrieve.json()["memory"]["metadata"]["memory_status"] == "rejected"
+
+
+def test_review_pending_mcp_read_filters_expose_pending_for_ask_and_retrieve(
+    tmp_path: Path,
+) -> None:
+    phrase = "mcp pending ask status filter phrase"
+
+    with _review_pending_client(tmp_path) as client:
+        headers = _initialize_mcp(client)
+        insert = _call_tool(
+            client,
+            headers,
+            request_id=2,
+            name="memory_insert",
+            arguments={"conversation_json": _conversation(text=f"I own a {phrase}.")},
+        )
+        memory_id = insert["id"]
+        default_retrieve = _call_tool(
+            client,
+            headers,
+            request_id=3,
+            name="memory_retrieve",
+            arguments={"id": memory_id},
+        )
+        pending_retrieve = _call_tool(
+            client,
+            headers,
+            request_id=4,
+            name="memory_retrieve",
+            arguments={"id": memory_id, "memory_status": "pending_review"},
+        )
+        pending_ask = _call_tool(
+            client,
+            headers,
+            request_id=5,
+            name="memory_ask",
+            arguments={"question": phrase, "memory_status": "pending_review"},
+        )
+
+    assert default_retrieve["status"] == "not_found"
+    assert pending_retrieve["status"] == "ok"
+    assert pending_retrieve["memory"]["metadata"]["memory_status"] == "pending_review"
+    assert pending_ask["answer_basis"] == "direct_memory"
+    assert pending_ask["results"][0]["id"] == memory_id

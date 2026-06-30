@@ -120,6 +120,12 @@ approved through `/memory/pending/approve` or the `memory_pending_approve` MCP
 tool. `/memory/pending/reject` and `memory_pending_reject` mark pending inserts
 as rejected.
 
+Conversation read operations accept `memory_status` to intentionally inspect
+review states. The default is `active`. Use `pending_review`, `rejected`, or
+`all` with `/memory/search`, `/memory/retrieve`, `/memory/ask`,
+`memory_search`, `memory_retrieve`, or `memory_ask` when reviewing held or
+rejected inserts.
+
 Store one complete conversation per insert. Do not split one thread into
 multiple batch items. If an importer has many independent source conversations,
 it should call the existing single insert path once per source conversation while

@@ -144,6 +144,13 @@ _FALLBACK_POLICY_WARNED: set[str] = set()
 _MEMORY_STATUS_ACTIVE = "active"
 _MEMORY_STATUS_PENDING_REVIEW = "pending_review"
 _MEMORY_STATUS_REJECTED = "rejected"
+_MEMORY_STATUS_ALL = "all"
+_MEMORY_STATUS_VALUES = {
+    _MEMORY_STATUS_ACTIVE,
+    _MEMORY_STATUS_PENDING_REVIEW,
+    _MEMORY_STATUS_REJECTED,
+    _MEMORY_STATUS_ALL,
+}
 
 
 @dataclass(frozen=True)
@@ -1096,6 +1103,15 @@ def _conversation_is_active(conversation: Any) -> bool:
     return _memory_status(conversation) == _MEMORY_STATUS_ACTIVE
 
 
+def _validate_memory_status_filter(memory_status: str | None) -> str:
+    normalized = str(memory_status or _MEMORY_STATUS_ACTIVE).lower()
+    if normalized not in _MEMORY_STATUS_VALUES:
+        raise ValueError(
+            "memory_status must be one of: " + ", ".join(sorted(_MEMORY_STATUS_VALUES))
+        )
+    return normalized
+
+
 def _conversation_authorized(
     conversation: Any, owner_id: str | None, project_id: str | None
 ) -> bool:
@@ -1112,6 +1128,17 @@ def _conversation_allowed(
     return _conversation_authorized(
         conversation, owner_id, project_id
     ) and _conversation_is_active(conversation)
+
+
+def _conversation_visible(
+    conversation: Any, owner_id: str | None, project_id: str | None, memory_status: str | None
+) -> bool:
+    if not _conversation_authorized(conversation, owner_id, project_id):
+        return False
+    status_filter = _validate_memory_status_filter(memory_status)
+    if status_filter == _MEMORY_STATUS_ALL:
+        return True
+    return _memory_status(conversation) == status_filter
 
 
 def _conversation_matches_filters(conversation: Any, filters: ConversationFilters) -> bool:
@@ -1751,6 +1778,7 @@ def search(
     result_mode: str = SearchResultMode.CHUNKS.value,
     owner_id: str | None = None,
     project_id: str | None = None,
+    memory_status: str = _MEMORY_STATUS_ACTIVE,
     source: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
@@ -1758,6 +1786,7 @@ def search(
     thread_id: str | None = None,
 ) -> dict[str, Any]:
     _validate_result_mode(result_mode)
+    status_filter = _validate_memory_status_filter(memory_status)
     filters = ConversationFilters.from_options(
         source=source,
         date_from=date_from,
@@ -1784,6 +1813,7 @@ def search(
         limit=runtime.retrieval_keyword_candidate_limit,
         owner_id=owner_id,
         project_id=effective_project_id,
+        memory_status=status_filter,
         filters=filters,
     )
     ids.extend(str(conversation["id"]) for conversation in keyword_conversations if "id" in conversation)
@@ -1804,7 +1834,7 @@ def search(
         memory_id = str(match["memory_id"])
         score = float(match["score"])
         conversation = conversations.get(memory_id)
-        if not _conversation_allowed(conversation, owner_id, effective_project_id):
+        if not _conversation_visible(conversation, owner_id, effective_project_id, status_filter):
             continue
         if not _conversation_matches_filters(conversation, filters):
             continue
@@ -1830,7 +1860,7 @@ def search(
         memory_id = str(conversation.get("id", ""))
         if not memory_id:
             continue
-        if not _conversation_allowed(conversation, owner_id, effective_project_id):
+        if not _conversation_visible(conversation, owner_id, effective_project_id, status_filter):
             continue
         if not _conversation_matches_filters(conversation, filters):
             continue
@@ -2009,10 +2039,12 @@ def _keyword_conversations(
     limit: int,
     owner_id: str | None = None,
     project_id: str | None = None,
+    memory_status: str = _MEMORY_STATUS_ACTIVE,
     filters: ConversationFilters | None = None,
 ) -> list[dict[str, Any]]:
     if not enabled:
         return []
+    status_filter = _validate_memory_status_filter(memory_status)
     filters = filters or ConversationFilters()
     if hasattr(metadata_store, "search_text"):
         try:
@@ -2022,7 +2054,8 @@ def _keyword_conversations(
         return [
             item
             for item in candidates
-            if isinstance(item, dict) and _conversation_allowed(item, owner_id, project_id)
+            if isinstance(item, dict)
+            and _conversation_visible(item, owner_id, project_id, status_filter)
             and _conversation_matches_filters(item, filters)
         ]
     rows = getattr(metadata_store, "by_id", None) or getattr(metadata_store, "rows", None)
@@ -2035,7 +2068,7 @@ def _keyword_conversations(
     for conversation in rows.values():
         if not isinstance(conversation, dict):
             continue
-        if not _conversation_allowed(conversation, owner_id, project_id):
+        if not _conversation_visible(conversation, owner_id, project_id, status_filter):
             continue
         if not _conversation_matches_filters(conversation, filters):
             continue
@@ -2179,14 +2212,19 @@ def _unique_strings(values: list[str]) -> list[str]:
 
 
 def retrieve(
-    memory_id: str, *, owner_id: str | None = None, project_id: str | None = None
+    memory_id: str,
+    *,
+    owner_id: str | None = None,
+    project_id: str | None = None,
+    memory_status: str = _MEMORY_STATUS_ACTIVE,
 ) -> dict[str, Any] | None:
     runtime = _runtime()
     effective_project_id = _resolve_project(
         owner_id=owner_id, project_id=project_id, required_role=PROJECT_ROLE_READER
     )
+    status_filter = _validate_memory_status_filter(memory_status)
     conversation = runtime.metadata_store.get(memory_id)
-    if not _conversation_allowed(conversation, owner_id, effective_project_id):
+    if not _conversation_visible(conversation, owner_id, effective_project_id, status_filter):
         return None
     return _with_generated_summary_metadata(conversation)
 
@@ -2198,6 +2236,7 @@ def ask(
     result_mode: str = SearchResultMode.CHUNKS.value,
     owner_id: str | None = None,
     project_id: str | None = None,
+    memory_status: str = _MEMORY_STATUS_ACTIVE,
     source: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
@@ -2215,6 +2254,7 @@ def ask(
     effective_project_id = _resolve_project(
         owner_id=owner_id, project_id=project_id, required_role=PROJECT_ROLE_READER
     )
+    status_filter = _validate_memory_status_filter(memory_status)
     fact_answer = _answer_from_facts(
         question,
         top_k=top_k,
@@ -2223,7 +2263,7 @@ def ask(
         project_id=effective_project_id,
         filters=filters,
     )
-    if fact_answer is not None:
+    if fact_answer is not None and status_filter == _MEMORY_STATUS_ACTIVE:
         return fact_answer
 
     search_result = _search_for_ask(
@@ -2232,6 +2272,7 @@ def ask(
         result_mode=result_mode,
         owner_id=owner_id,
         project_id=effective_project_id,
+        memory_status=status_filter,
         filters=filters,
     )
     matches = search_result.get("results", [])
@@ -2299,6 +2340,7 @@ def _search_for_ask(
     result_mode: str,
     owner_id: str | None = None,
     project_id: str | None = None,
+    memory_status: str = _MEMORY_STATUS_ACTIVE,
     filters: ConversationFilters | None = None,
 ) -> dict[str, Any]:
     filters = filters or ConversationFilters()
@@ -2309,6 +2351,7 @@ def _search_for_ask(
             result_mode=result_mode,
             owner_id=owner_id,
             project_id=project_id,
+            memory_status=memory_status,
             source=filters.source,
             date_from=filters.date_from,
             date_to=filters.date_to,

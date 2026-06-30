@@ -59,6 +59,7 @@ class MVPIngestionAgent(BaseIngestionAgent):
         result_mode: str = SearchResultMode.CHUNKS.value,
         owner_id: str | None = None,
         project_id: str | None = None,
+        memory_status: str = "active",
         source: str | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
@@ -71,6 +72,7 @@ class MVPIngestionAgent(BaseIngestionAgent):
             result_mode=result_mode,
             owner_id=owner_id,
             project_id=project_id,
+            memory_status=memory_status,
             source=source,
             date_from=date_from,
             date_to=date_to,
@@ -79,9 +81,19 @@ class MVPIngestionAgent(BaseIngestionAgent):
         )
 
     async def retrieve(
-        self, memory_id: str, *, owner_id: str | None = None, project_id: str | None = None
+        self,
+        memory_id: str,
+        *,
+        owner_id: str | None = None,
+        project_id: str | None = None,
+        memory_status: str = "active",
     ) -> Optional[Dict[str, Any]]:
-        return mvp_ingestion.retrieve(memory_id, owner_id=owner_id, project_id=project_id)
+        return mvp_ingestion.retrieve(
+            memory_id,
+            owner_id=owner_id,
+            project_id=project_id,
+            memory_status=memory_status,
+        )
 
     async def ask(
         self,
@@ -92,6 +104,7 @@ class MVPIngestionAgent(BaseIngestionAgent):
         result_mode: str = SearchResultMode.CHUNKS.value,
         owner_id: str | None = None,
         project_id: str | None = None,
+        memory_status: str = "active",
         source: str | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
@@ -105,6 +118,7 @@ class MVPIngestionAgent(BaseIngestionAgent):
             result_mode=result_mode,
             owner_id=owner_id,
             project_id=project_id,
+            memory_status=memory_status,
             source=source,
             date_from=date_from,
             date_to=date_to,

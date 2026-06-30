@@ -283,6 +283,9 @@ and let the server refresh auto-tags during insert or trusted append.
 required under `memory.insert_policy: require_save_intent`, and controls whether
 `memory.insert_policy: review_pending` inserts are active immediately or held
 for approval.
+Conversation read tools default to `memory_status: active`; clients that are
+building review flows may pass `pending_review`, `rejected`, or `all` to
+search, retrieve, or ask calls.
 For thread continuity, clients may send `metadata.upstream_thread_id` or
 `metadata.thread_id`. The hub preserves upstream IDs, derives `thread_id` from
 `source` plus `upstream_thread_id` when needed, and supports `thread_id` filters

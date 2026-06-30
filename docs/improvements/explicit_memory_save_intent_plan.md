@@ -97,7 +97,7 @@ Suggested error shape:
 ## P1: Pending Review Workflow
 
 - [x] Add pending memory metadata status.
-- [ ] Add read filters for pending, active, and rejected memories.
+- [x] Add read filters for pending, active, and rejected memories.
 - [x] Add API and MCP operations to approve or reject pending inserts.
 - [x] Prevent pending inserts from creating active facts until approved.
 - [x] Preserve audit metadata showing when the pending memory was received and approved.

@@ -31,6 +31,7 @@ class SearchRequest(BaseModel):
     top_k: int = Field(default=5, ge=1, le=100)
     result_mode: str = SearchResultMode.CHUNKS.value
     project_id: str | None = None
+    memory_status: str = "active"
     source: str | None = None
     date_from: str | None = None
     date_to: str | None = None
@@ -41,6 +42,7 @@ class SearchRequest(BaseModel):
 class RetrieveRequest(BaseModel):
     id: str
     project_id: str | None = None
+    memory_status: str = "active"
 
 
 class AskRequest(BaseModel):
@@ -49,6 +51,7 @@ class AskRequest(BaseModel):
     max_context_tokens: int | None = Field(default=None, ge=1)
     result_mode: str = SearchResultMode.CHUNKS.value
     project_id: str | None = None
+    memory_status: str = "active"
     source: str | None = None
     date_from: str | None = None
     date_to: str | None = None
@@ -250,6 +253,7 @@ def _register_api_routes(
                     result_mode=payload.result_mode,
                     owner_id=owner_id(request),
                     project_id=payload.project_id,
+                    memory_status=payload.memory_status,
                     source=payload.source,
                     date_from=payload.date_from,
                     date_to=payload.date_to,
@@ -269,7 +273,10 @@ def _register_api_routes(
     async def memory_retrieve(payload: RetrieveRequest, request: Request) -> dict[str, Any]:
         try:
             conversation = await agent.retrieve(
-                payload.id, owner_id=owner_id(request), project_id=payload.project_id
+                payload.id,
+                owner_id=owner_id(request),
+                project_id=payload.project_id,
+                memory_status=payload.memory_status,
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -291,6 +298,7 @@ def _register_api_routes(
                     result_mode=payload.result_mode,
                     owner_id=owner_id(request),
                     project_id=payload.project_id,
+                    memory_status=payload.memory_status,
                     source=payload.source,
                     date_from=payload.date_from,
                     date_to=payload.date_to,
