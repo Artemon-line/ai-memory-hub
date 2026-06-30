@@ -143,6 +143,8 @@ class MVPIngestionAgent(BaseIngestionAgent):
         confidence: str | None = None,
         status: str | None = None,
         source_quality: str | None = None,
+        save_intent: str | None = None,
+        save_intent_source: str | None = None,
         freshness_from: str | None = None,
         freshness_to: str | None = None,
     ) -> Dict[str, Any]:
@@ -158,6 +160,8 @@ class MVPIngestionAgent(BaseIngestionAgent):
             confidence=confidence,
             status=status,
             source_quality=source_quality,
+            save_intent=save_intent,
+            save_intent_source=save_intent_source,
             freshness_from=freshness_from,
             freshness_to=freshness_to,
         )
@@ -175,6 +179,8 @@ class MVPIngestionAgent(BaseIngestionAgent):
         confidence: str | None = None,
         status: str | None = None,
         source_quality: str | None = None,
+        save_intent: str | None = None,
+        save_intent_source: str | None = None,
         freshness_from: str | None = None,
         freshness_to: str | None = None,
     ) -> Dict[str, Any]:
@@ -189,6 +195,8 @@ class MVPIngestionAgent(BaseIngestionAgent):
             confidence=confidence,
             status=status,
             source_quality=source_quality,
+            save_intent=save_intent,
+            save_intent_source=save_intent_source,
             freshness_from=freshness_from,
             freshness_to=freshness_to,
         )

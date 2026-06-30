@@ -283,6 +283,9 @@ and let the server refresh auto-tags during insert or trusted append.
 required under `memory.insert_policy: require_save_intent`, and controls whether
 `memory.insert_policy: review_pending` inserts are active immediately or held
 for approval.
+Extracted facts retain `save_intent` and `save_intent_source` provenance from
+their source memory. Fact and profile reads can filter on those fields; facts
+derived from `client_auto_save` memories are exposed with reduced confidence.
 Conversation read tools default to `memory_status: active`; clients that are
 building review flows may pass `pending_review`, `rejected`, or `all` to
 search, retrieve, or ask calls.

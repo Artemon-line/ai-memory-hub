@@ -100,6 +100,8 @@ class BaseIngestionAgent(ABC):
         confidence: str | None = None,
         status: str | None = None,
         source_quality: str | None = None,
+        save_intent: str | None = None,
+        save_intent_source: str | None = None,
         freshness_from: str | None = None,
         freshness_to: str | None = None,
     ) -> Dict[str, Any]:
@@ -118,6 +120,8 @@ class BaseIngestionAgent(ABC):
         confidence: str | None = None,
         status: str | None = None,
         source_quality: str | None = None,
+        save_intent: str | None = None,
+        save_intent_source: str | None = None,
         freshness_from: str | None = None,
         freshness_to: str | None = None,
     ) -> Dict[str, Any]:

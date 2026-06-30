@@ -194,6 +194,8 @@ class FactFilters:
     confidence: str | None = None
     status: str = "active"
     source_quality: str | None = None
+    save_intent: str | None = None
+    save_intent_source: str | None = None
     freshness_from: str | None = None
     freshness_to: str | None = None
 
@@ -207,6 +209,8 @@ class FactFilters:
         confidence: str | None = None,
         status: str | None = None,
         source_quality: str | None = None,
+        save_intent: str | None = None,
+        save_intent_source: str | None = None,
         freshness_from: str | None = None,
         freshness_to: str | None = None,
     ) -> "FactFilters":
@@ -220,6 +224,8 @@ class FactFilters:
             confidence=str(confidence) if confidence else None,
             status=normalized_status,
             source_quality=str(source_quality) if source_quality else None,
+            save_intent=str(save_intent) if save_intent else None,
+            save_intent_source=str(save_intent_source) if save_intent_source else None,
             freshness_from=str(freshness_from) if freshness_from else None,
             freshness_to=str(freshness_to) if freshness_to else None,
         )
@@ -2788,6 +2794,7 @@ def _fact(
     normalized_qualifiers = dict(qualifiers or {})
     if source_role in {"user", "assistant"}:
         normalized_qualifiers.setdefault("source_role", source_role)
+    normalized_qualifiers.update(_save_intent_qualifiers(conversation))
     object_normalized, normalization = _normalize_fact_object(
         predicate=predicate, object_value=object_value
     )
@@ -2799,7 +2806,9 @@ def _fact(
         "predicate": predicate,
         "object": object_value,
         "qualifiers": normalized_qualifiers,
-        "confidence": "high",
+        "confidence": "medium"
+        if normalized_qualifiers.get("save_intent") == "client_auto_save"
+        else "high",
         "last_confirmed_at": now,
         "source_conversation_id": source_id,
         "owner_id": _owner_id_from_conversation(conversation),
@@ -2816,6 +2825,38 @@ def _fact(
     fact["source_quality"] = _source_quality_for_fact(fact)
     fact["confidence_reason"] = _confidence_reason_for_fact(fact)
     return fact
+
+
+def _save_intent_qualifiers(conversation: dict[str, Any]) -> dict[str, str]:
+    metadata = conversation.get("metadata", {})
+    if not isinstance(metadata, dict):
+        return {}
+    qualifiers: dict[str, str] = {}
+    for key in ("save_intent", "save_intent_source", "save_intent_evidence"):
+        value = metadata.get(key)
+        if value is not None and str(value):
+            qualifiers[key] = str(value)
+    return qualifiers
+
+
+def _fact_qualifier_value(fact: dict[str, Any], key: str) -> str | None:
+    direct = fact.get(key)
+    if direct is not None and str(direct):
+        return str(direct)
+    qualifiers = fact.get("qualifiers")
+    if not isinstance(qualifiers, dict):
+        return None
+    value = qualifiers.get(key)
+    return str(value) if value is not None and str(value) else None
+
+
+def _fact_save_intent_fields(fact: dict[str, Any]) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    for key in ("save_intent", "save_intent_source"):
+        value = _fact_qualifier_value(fact, key)
+        if value:
+            fields[key] = value
+    return fields
 
 
 def _answer_from_facts(
@@ -3039,6 +3080,13 @@ def _fact_matches_filters(
         return False
     if fact_filters.source_quality and str(fact.get("source_quality")) != fact_filters.source_quality:
         return False
+    if fact_filters.save_intent and _fact_qualifier_value(fact, "save_intent") != fact_filters.save_intent:
+        return False
+    if (
+        fact_filters.save_intent_source
+        and _fact_qualifier_value(fact, "save_intent_source") != fact_filters.save_intent_source
+    ):
+        return False
     if not _datetime_in_range(
         str(fact.get("created_at", "")),
         date_from=fact_filters.date_from,
@@ -3083,6 +3131,8 @@ def fact_search(
     confidence: str | None = None,
     status: str | None = None,
     source_quality: str | None = None,
+    save_intent: str | None = None,
+    save_intent_source: str | None = None,
     freshness_from: str | None = None,
     freshness_to: str | None = None,
 ) -> dict[str, Any]:
@@ -3093,6 +3143,8 @@ def fact_search(
         confidence=confidence,
         status=status or ("all" if include_superseded else "active"),
         source_quality=source_quality,
+        save_intent=save_intent,
+        save_intent_source=save_intent_source,
         freshness_from=freshness_from,
         freshness_to=freshness_to,
     )
@@ -3141,6 +3193,8 @@ def profile_get(
     confidence: str | None = None,
     status: str | None = None,
     source_quality: str | None = None,
+    save_intent: str | None = None,
+    save_intent_source: str | None = None,
     freshness_from: str | None = None,
     freshness_to: str | None = None,
 ) -> dict[str, Any]:
@@ -3155,6 +3209,8 @@ def profile_get(
         confidence=confidence,
         status=status,
         source_quality=source_quality,
+        save_intent=save_intent,
+        save_intent_source=save_intent_source,
         freshness_from=freshness_from,
         freshness_to=freshness_to,
     )["results"]
@@ -3174,6 +3230,8 @@ def profile_get(
             "confidence": confidence,
             "status": status or "active",
             "source_quality": source_quality,
+            "save_intent": save_intent,
+            "save_intent_source": save_intent_source,
             "freshness_from": freshness_from,
             "freshness_to": freshness_to,
         },
@@ -3682,6 +3740,7 @@ def _public_fact(fact: dict[str, Any]) -> dict[str, Any]:
         public["object_raw"] = public.get("object")
     if not public.get("object_normalized"):
         public["object_normalized"] = _normalized_fact_object(public)
+    public.update(_fact_save_intent_fields(public))
     public.setdefault("superseded_at", None)
     return public
 
@@ -3700,6 +3759,8 @@ def _source_quality_for_fact(fact: dict[str, Any]) -> str:
 
 def _confidence_reason_for_fact(fact: dict[str, Any]) -> str:
     source_quality = str(fact.get("source_quality") or _source_quality_for_fact(fact))
+    if _fact_qualifier_value(fact, "save_intent") == "client_auto_save":
+        return "Extracted from client auto-save memory, so confidence is reduced."
     if source_quality == "corrected_by_user":
         return "Extracted from a direct user correction."
     if source_quality == "direct_user_statement":
@@ -3804,7 +3865,7 @@ def _title_case_name(value: str) -> str:
 
 
 def _fact_evidence(fact: dict[str, Any], *, used_in_answer: bool) -> dict[str, Any]:
-    return {
+    evidence = {
         "type": "fact",
         "fact_id": fact.get("id"),
         "subject": fact.get("subject"),
@@ -3824,10 +3885,12 @@ def _fact_evidence(fact: dict[str, Any], *, used_in_answer: bool) -> dict[str, A
         "deleted_at": fact.get("deleted_at"),
         "used_in_answer": used_in_answer,
     }
+    evidence.update(_fact_save_intent_fields(fact))
+    return evidence
 
 
 def _fact_citation(fact: dict[str, Any]) -> dict[str, Any]:
-    return {
+    citation = {
         "id": fact.get("source_conversation_id"),
         "fact_id": fact.get("id"),
         "predicate": fact.get("predicate"),
@@ -3836,6 +3899,8 @@ def _fact_citation(fact: dict[str, Any]) -> dict[str, Any]:
         "confidence_reason": fact.get("confidence_reason"),
         "last_confirmed_at": fact.get("last_confirmed_at"),
     }
+    citation.update(_fact_save_intent_fields(fact))
+    return citation
 
 
 def _provenance_from_facts(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -3851,9 +3916,17 @@ def _provenance_from_facts(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "stored_at": None,
                 "matching_chunks": 0,
                 "used_in_answer": True,
+                "save_intents": [],
+                "save_intent_sources": [],
             },
         )
         item["matching_chunks"] += 1
+        save_intent = _fact_qualifier_value(fact, "save_intent")
+        if save_intent and save_intent not in item["save_intents"]:
+            item["save_intents"].append(save_intent)
+        save_intent_source = _fact_qualifier_value(fact, "save_intent_source")
+        if save_intent_source and save_intent_source not in item["save_intent_sources"]:
+            item["save_intent_sources"].append(save_intent_source)
     return list(grouped.values())
 
 

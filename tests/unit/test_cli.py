@@ -78,6 +78,10 @@ def test_fact_search_cli_json(capsys, monkeypatch) -> None:
             "profile_name",
             "--source-quality",
             "direct_user_statement",
+            "--save-intent",
+            "explicit_user_request",
+            "--save-intent-source",
+            "codex",
             "--status",
             "active",
             "--json",
@@ -88,6 +92,8 @@ def test_fact_search_cli_json(capsys, monkeypatch) -> None:
     assert json.loads(capsys.readouterr().out)["results"][0]["id"] == "fact-1"
     assert captured["predicate"] == "profile_name"
     assert captured["source_quality"] == "direct_user_statement"
+    assert captured["save_intent"] == "explicit_user_request"
+    assert captured["save_intent_source"] == "codex"
     assert captured["status"] == "active"
 
 

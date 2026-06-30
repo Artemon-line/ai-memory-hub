@@ -112,10 +112,10 @@ Suggested error shape:
 
 ## P2: Fact-Layer Integration
 
-- [ ] Attach save-intent metadata to extracted facts.
-- [ ] Allow fact/profile queries to filter by save-intent source.
-- [ ] Include save-intent provenance in `memory_ask` compact provenance when facts are used.
-- [ ] Consider lower confidence for facts derived from `client_auto_save` than `explicit_user_request`.
+- [x] Attach save-intent metadata to extracted facts.
+- [x] Allow fact/profile queries to filter by save-intent source.
+- [x] Include save-intent provenance in `memory_ask` compact provenance when facts are used.
+- [x] Consider lower confidence for facts derived from `client_auto_save` than `explicit_user_request`.
 
 ## Testing
 

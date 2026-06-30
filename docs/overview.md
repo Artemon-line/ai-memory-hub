@@ -174,8 +174,10 @@ Use `result_mode=threads` to group matching conversations by `metadata.thread_id
   `structured_evidence.results` contains chunk-shaped retrieval hits.
 - `facts`: active normalized facts used by fact-backed answers, including
   `source_quality`, `confidence_reason`, `created_at`, `updated_at`,
-  `last_confirmed_at`, `superseded_at`, `object_raw`, and
-  `object_normalized`.
+  `last_confirmed_at`, `superseded_at`, `object_raw`, `object_normalized`,
+  and save-intent provenance when the source memory included it. Facts derived
+  from `metadata.save_intent: client_auto_save` use lower confidence than
+  explicit user-requested saves.
 
 Pass `max_context_tokens` to `/memory/ask` to build the answer from only the
 chunks that fit the requested context budget. When budgeting is active, the
@@ -235,7 +237,7 @@ Fact review helpers:
 ```bash
 python -m memory.cli fact-search --subject user --json
 python -m memory.cli fact-search --source codex --status superseded --json
-python -m memory.cli profile-get --subject user --predicate owns_guitar --source-quality corrected_by_user --json
+python -m memory.cli profile-get --subject user --predicate owns_guitar --source-quality corrected_by_user --save-intent-source codex --json
 python -m memory.cli fact-supersede <OLD_FACT_ID> <NEW_FACT_ID> --json
 ```
 
@@ -254,13 +256,13 @@ Core tools:
 - `memory_search(query, top_k=5, limit, cursor, source, date_from, date_to, tags, thread_id)`
 - `memory_retrieve(id)`
 - `memory_ask(question, top_k=5, max_context_tokens=None, result_mode="chunks", source, date_from, date_to, tags, thread_id, project_id)`
-- `memory_fact_search(subject=None, predicate=None, include_superseded=False, source, date_from, date_to, confidence, status, source_quality, freshness_from, freshness_to, project_id)`
-- `memory_profile_get(subject="user", predicate, source, date_from, date_to, confidence, status, source_quality, freshness_from, freshness_to, project_id)`
+- `memory_fact_search(subject=None, predicate=None, include_superseded=False, source, date_from, date_to, confidence, status, source_quality, save_intent, save_intent_source, freshness_from, freshness_to, project_id)`
+- `memory_profile_get(subject="user", predicate, source, date_from, date_to, confidence, status, source_quality, save_intent, save_intent_source, freshness_from, freshness_to, project_id)`
 - `memory_fact_supersede(fact_id, superseded_by)`
 
 `memory_profile_get` returns `facts` plus a `summary` object. The summary is
 generated from active normalized facts and includes freshness, source-quality
-counts, filters, and compact fact provenance. Insert also generates
+counts, filters, save-intent filters, and compact fact provenance. Insert also generates
 conversation, topic, and project summaries from stored message text. Generated
 summaries are stored separately from raw chunks and normalized facts; the
 conversation summary is returned as `metadata.generated_summary` on search and

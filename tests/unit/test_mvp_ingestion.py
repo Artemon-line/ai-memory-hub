@@ -875,6 +875,9 @@ def test_ask_no_hit_returns_empty_structured_evidence() -> None:
 def test_ask_answers_direct_guitar_question_from_fact_layer() -> None:
     _configure_stubs()
     conversation = _valid_conversation()
+    conversation["metadata"]["save_intent"] = "explicit_user_request"
+    conversation["metadata"]["save_intent_source"] = "codex"
+    conversation["metadata"]["save_intent_evidence"] = "User asked to remember this guitar."
     conversation["messages"] = [
         {"role": "user", "text": "I own a Gibson Special with P90 pickups, cherry."}
     ]
@@ -891,13 +894,20 @@ def test_ask_answers_direct_guitar_question_from_fact_layer() -> None:
     assert result["facts"][0]["object_raw"] == result["facts"][0]["object"]
     assert result["facts"][0]["object_normalized"] == result["facts"][0]["object"]
     assert result["facts"][0]["last_confirmed_at"] == result["facts"][0]["updated_at"]
+    assert result["facts"][0]["save_intent"] == "explicit_user_request"
+    assert result["facts"][0]["save_intent_source"] == "codex"
+    assert result["facts"][0]["qualifiers"]["save_intent_evidence"] == "User asked to remember this guitar."
     assert result["evidence"][0]["type"] == "fact"
     assert result["evidence"][0]["used_in_answer"] is True
     assert result["evidence"][0]["source_quality"] == "direct_user_statement"
+    assert result["evidence"][0]["save_intent"] == "explicit_user_request"
     assert result["structured_evidence"]["facts"] == result["evidence"]
     assert result["structured_evidence"]["results"] == []
     assert result["citations"][0]["source_quality"] == "direct_user_statement"
+    assert result["citations"][0]["save_intent_source"] == "codex"
     assert result["citations"][0]["last_confirmed_at"] == result["facts"][0]["last_confirmed_at"]
+    assert result["provenance"][0]["save_intents"] == ["explicit_user_request"]
+    assert result["provenance"][0]["save_intent_sources"] == ["codex"]
 
 
 def test_fact_from_assistant_statement_exposes_source_quality() -> None:
@@ -1009,6 +1019,8 @@ def test_fact_and_profile_filters_cover_status_quality_and_freshness() -> None:
     second = _valid_conversation()
     second["id"] = "22222222-2222-4222-8222-222222222222"
     second["timestamp"] = "2026-01-02T00:00:00Z"
+    second["metadata"]["save_intent"] = "user_confirmed"
+    second["metadata"]["save_intent_source"] = "codex"
     second["messages"] = [
         {"role": "user", "text": "Actually, my Gibson Special is TV yellow, not cherry."}
     ]
@@ -1028,6 +1040,7 @@ def test_fact_and_profile_filters_cover_status_quality_and_freshness() -> None:
         "user",
         predicate="owns_guitar",
         source_quality="corrected_by_user",
+        save_intent_source="codex",
         freshness_from="2026-01-02T00:00:00Z",
     )
     assistant_facts = mvp_ingestion.fact_search(
@@ -1039,7 +1052,34 @@ def test_fact_and_profile_filters_cover_status_quality_and_freshness() -> None:
     assert len(superseded["results"]) == 1
     assert superseded["results"][0]["superseded_by"]
     assert [fact["object"] for fact in profile["facts"]] == ["Gibson Special is TV yellow"]
+    assert profile["summary"]["filters"]["save_intent_source"] == "codex"
     assert assistant_facts["results"][0]["predicate"] == "creator"
+
+
+def test_fact_save_intent_filters_and_auto_save_confidence() -> None:
+    _configure_stubs()
+    explicit = _valid_conversation()
+    explicit["id"] = "11111111-1111-4111-8111-111111111111"
+    explicit["metadata"]["save_intent"] = "explicit_user_request"
+    explicit["metadata"]["save_intent_source"] = "codex"
+    explicit["messages"] = [{"role": "user", "text": "I own a Gibson Special, cherry."}]
+    auto_saved = _valid_conversation()
+    auto_saved["id"] = "22222222-2222-4222-8222-222222222222"
+    auto_saved["metadata"]["save_intent"] = "client_auto_save"
+    auto_saved["metadata"]["save_intent_source"] = "opencode"
+    auto_saved["messages"] = [{"role": "user", "text": "My favorite holiday is midsummer."}]
+    mvp_ingestion.ingest_messages(explicit)
+    mvp_ingestion.ingest_messages(auto_saved)
+
+    explicit_facts = mvp_ingestion.fact_search(save_intent="explicit_user_request")
+    opencode_profile = mvp_ingestion.profile_get("user", save_intent_source="opencode")
+
+    assert [fact["predicate"] for fact in explicit_facts["results"]] == ["owns_guitar"]
+    assert opencode_profile["facts"][0]["predicate"] == "favorite_holiday"
+    assert opencode_profile["facts"][0]["confidence"] == "medium"
+    assert opencode_profile["facts"][0]["confidence_reason"] == (
+        "Extracted from client auto-save memory, so confidence is reduced."
+    )
 
 
 def test_conflicting_active_facts_return_conflict_basis() -> None:

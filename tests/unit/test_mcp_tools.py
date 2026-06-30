@@ -265,24 +265,31 @@ async def test_mcp_fact_tools_return_profile_facts() -> None:
     agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=runtime)
     handlers = build_tool_handlers(agent)
     payload = _conversation()
+    payload["metadata"]["save_intent"] = "explicit_user_request"
+    payload["metadata"]["save_intent_source"] = "codex"
     payload["messages"] = [
         {"role": "user", "text": "I own a Gibson Special with P90 pickups, cherry."}
     ]
 
     await handlers["memory_insert"](payload)
-    facts = await handlers["memory_fact_search"](subject="user", predicate="owns_guitar")
-    profile = await handlers["memory_profile_get"](subject="user")
+    facts = await handlers["memory_fact_search"](
+        subject="user", predicate="owns_guitar", save_intent="explicit_user_request"
+    )
+    profile = await handlers["memory_profile_get"](subject="user", save_intent_source="codex")
     ask = await handlers["memory_ask"]("What guitar do I own?", 5)
 
     assert facts["status"] == "ok"
     assert facts["results"][0]["predicate"] == "owns_guitar"
     assert facts["results"][0]["source_quality"] == "direct_user_statement"
+    assert facts["results"][0]["save_intent_source"] == "codex"
     assert profile["facts"][0]["object"] == facts["results"][0]["object"]
+    assert profile["summary"]["filters"]["save_intent_source"] == "codex"
     assert profile["summary"]["basis"] == "active_facts"
     assert "owns_guitar" in profile["summary"]["text"]
     assert ask["answer_basis"] == "fact_layer"
     assert ask["confidence_reason"] == "Extracted from a direct user statement."
     assert ask["evidence"][0]["type"] == "fact"
+    assert ask["citations"][0]["save_intent"] == "explicit_user_request"
     assert ask["structured_evidence"]["facts"][0]["source_quality"] == "direct_user_statement"
 
 

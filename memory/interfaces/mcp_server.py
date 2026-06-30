@@ -52,7 +52,7 @@ SERVER_INSTRUCTIONS = (
     "memory_search and memory_ask support source, date_from, date_to, tags, thread_id, and memory_status filters "
     "when narrowing recall. "
     "memory_fact_search and memory_profile_get support source, predicate, date range, confidence, status, "
-    "source_quality, and freshness filters."
+    "source_quality, save-intent, and freshness filters."
 )
 
 
@@ -82,12 +82,13 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
     ),
     "memory_fact_search": (
         "Search normalized extracted memory facts. Optional filters: source, subject, predicate, "
-        "date_from, date_to, confidence, status, source_quality, freshness_from, freshness_to, and project_id."
+        "date_from, date_to, confidence, status, source_quality, save_intent, save_intent_source, "
+        "freshness_from, freshness_to, and project_id."
     ),
     "memory_profile_get": (
         "Return normalized facts plus a compact fact-based summary for a subject. Optional filters: "
         "source, predicate, date_from, date_to, confidence, status, source_quality, freshness_from, "
-        "freshness_to, and project_id."
+        "freshness_to, save_intent, save_intent_source, and project_id."
     ),
     "memory_fact_supersede": "Mark one normalized fact as superseded by another fact within a project_id.",
     "memory_pending_approve": "Approve a pending memory insert so it becomes searchable and can create facts.",
@@ -962,6 +963,8 @@ def build_tool_handlers(
         confidence: str | None = None,
         status: str | None = None,
         source_quality: str | None = None,
+        save_intent: str | None = None,
+        save_intent_source: str | None = None,
         freshness_from: str | None = None,
         freshness_to: str | None = None,
         project_id: str | None = None,
@@ -980,6 +983,8 @@ def build_tool_handlers(
                 confidence=unwrap_array(confidence),
                 status=unwrap_array(status),
                 source_quality=unwrap_array(source_quality),
+                save_intent=unwrap_array(save_intent),
+                save_intent_source=unwrap_array(save_intent_source),
                 freshness_from=unwrap_array(freshness_from),
                 freshness_to=unwrap_array(freshness_to),
             )
@@ -1001,6 +1006,8 @@ def build_tool_handlers(
         confidence: str | None = None,
         status: str | None = None,
         source_quality: str | None = None,
+        save_intent: str | None = None,
+        save_intent_source: str | None = None,
         freshness_from: str | None = None,
         freshness_to: str | None = None,
         project_id: str | None = None,
@@ -1018,6 +1025,8 @@ def build_tool_handlers(
                 confidence=unwrap_array(confidence),
                 status=unwrap_array(status),
                 source_quality=unwrap_array(source_quality),
+                save_intent=unwrap_array(save_intent),
+                save_intent_source=unwrap_array(save_intent_source),
                 freshness_from=unwrap_array(freshness_from),
                 freshness_to=unwrap_array(freshness_to),
             )

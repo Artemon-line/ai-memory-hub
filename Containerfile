@@ -59,7 +59,9 @@ RUN uv sync --frozen --no-dev \
       --extra vespa \
       --extra typesense \
       --extra weaviate && \
+    uv pip install --no-deps . && \
     test -x /app/.venv/bin/aim && \
+    /app/.venv/bin/python -c "import memory; from memory.cli import main; assert callable(main)" && \
     mkdir -p /app/data /app/logs /app/.uv-cache "$TIKTOKEN_CACHE_DIR" && \
     useradd --uid 1001 --gid 0 --home-dir /tmp --no-create-home \
       --shell /usr/sbin/nologin ai-memory-hub && \

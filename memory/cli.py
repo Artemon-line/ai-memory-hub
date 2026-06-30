@@ -330,6 +330,8 @@ def _add_fact_filter_options(parser: argparse.ArgumentParser, *, include_predica
     parser.add_argument("--confidence", default=None, help="Filter by fact confidence.")
     parser.add_argument("--status", choices=["active", "superseded", "all"], default=None, help="Filter by fact status.")
     parser.add_argument("--source-quality", default=None, help="Filter by source quality.")
+    parser.add_argument("--save-intent", default=None, help="Filter by metadata save intent.")
+    parser.add_argument("--save-intent-source", default=None, help="Filter by save-intent source client.")
     parser.add_argument("--freshness-from", default=None, help="Filter facts fresh from this ISO-8601 timestamp.")
     parser.add_argument("--freshness-to", default=None, help="Filter facts fresh through this ISO-8601 timestamp.")
 
@@ -565,6 +567,8 @@ def _fact_search(args: argparse.Namespace) -> int:
         confidence=args.confidence,
         status=args.status,
         source_quality=args.source_quality,
+        save_intent=args.save_intent,
+        save_intent_source=args.save_intent_source,
         freshness_from=args.freshness_from,
         freshness_to=args.freshness_to,
     )
@@ -583,6 +587,8 @@ def _profile_get(args: argparse.Namespace) -> int:
         confidence=args.confidence,
         status=args.status,
         source_quality=args.source_quality,
+        save_intent=args.save_intent,
+        save_intent_source=args.save_intent_source,
         freshness_from=args.freshness_from,
         freshness_to=args.freshness_to,
     )

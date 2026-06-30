@@ -70,6 +70,8 @@ class FactSearchRequest(BaseModel):
     confidence: str | None = None
     status: str | None = None
     source_quality: str | None = None
+    save_intent: str | None = None
+    save_intent_source: str | None = None
     freshness_from: str | None = None
     freshness_to: str | None = None
 
@@ -84,6 +86,8 @@ class ProfileGetRequest(BaseModel):
     confidence: str | None = None
     status: str | None = None
     source_quality: str | None = None
+    save_intent: str | None = None
+    save_intent_source: str | None = None
     freshness_from: str | None = None
     freshness_to: str | None = None
 
@@ -332,6 +336,8 @@ def _register_api_routes(
                     confidence=payload.confidence,
                     status=payload.status,
                     source_quality=payload.source_quality,
+                    save_intent=payload.save_intent,
+                    save_intent_source=payload.save_intent_source,
                     freshness_from=payload.freshness_from,
                     freshness_to=payload.freshness_to,
                 )
@@ -359,6 +365,8 @@ def _register_api_routes(
                     confidence=payload.confidence,
                     status=payload.status,
                     source_quality=payload.source_quality,
+                    save_intent=payload.save_intent,
+                    save_intent_source=payload.save_intent_source,
                     freshness_from=payload.freshness_from,
                     freshness_to=payload.freshness_to,
                 )
