@@ -113,7 +113,12 @@ conversation UUID references.
 values are `explicit_user_request`, `user_confirmed`, and `client_auto_save`.
 When `memory.insert_policy: require_save_intent` is configured, API and MCP
 inserts without an accepted marker are rejected before storage, vector indexing,
-or fact extraction.
+or fact extraction. When `memory.insert_policy: review_pending` is configured,
+unmarked inserts are stored with `metadata.memory_status: pending_review` and
+excluded from default retrieve, search, ask, fact, and profile reads until
+approved through `/memory/pending/approve` or the `memory_pending_approve` MCP
+tool. `/memory/pending/reject` and `memory_pending_reject` mark pending inserts
+as rejected.
 
 Store one complete conversation per insert. Do not split one thread into
 multiple batch items. If an importer has many independent source conversations,

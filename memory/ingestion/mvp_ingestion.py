@@ -141,6 +141,9 @@ class RuntimeDependencies:
 
 _VECTOR_COMPATIBILITY_METADATA_PREFIX = "vector_index_compatibility:"
 _FALLBACK_POLICY_WARNED: set[str] = set()
+_MEMORY_STATUS_ACTIVE = "active"
+_MEMORY_STATUS_PENDING_REVIEW = "pending_review"
+_MEMORY_STATUS_REJECTED = "rejected"
 
 
 @dataclass(frozen=True)
@@ -1079,7 +1082,21 @@ def _conversation_project_matches(conversation: Any, project_id: str | None) -> 
     return conversation_project_id == project_id
 
 
-def _conversation_allowed(
+def _memory_status(conversation: Any) -> str:
+    if not isinstance(conversation, dict):
+        return _MEMORY_STATUS_ACTIVE
+    metadata = conversation.get("metadata", {})
+    if not isinstance(metadata, dict):
+        return _MEMORY_STATUS_ACTIVE
+    value = metadata.get("memory_status")
+    return str(value) if value is not None else _MEMORY_STATUS_ACTIVE
+
+
+def _conversation_is_active(conversation: Any) -> bool:
+    return _memory_status(conversation) == _MEMORY_STATUS_ACTIVE
+
+
+def _conversation_authorized(
     conversation: Any, owner_id: str | None, project_id: str | None
 ) -> bool:
     if project_id is not None:
@@ -1087,6 +1104,14 @@ def _conversation_allowed(
     return _conversation_owner_matches(conversation, owner_id) and _conversation_project_matches(
         conversation, project_id
     )
+
+
+def _conversation_allowed(
+    conversation: Any, owner_id: str | None, project_id: str | None
+) -> bool:
+    return _conversation_authorized(
+        conversation, owner_id, project_id
+    ) and _conversation_is_active(conversation)
 
 
 def _conversation_matches_filters(conversation: Any, filters: ConversationFilters) -> bool:
@@ -1595,6 +1620,102 @@ def ingest_messages(
         "embedded_chunks": len(chunks),
         "chunks": len(chunks),
     }
+
+
+def store_pending_review_memory(
+    conversation_json: Any,
+    *,
+    strict_transcript: bool = False,
+    owner_id: str | None = None,
+    project_id: str | None = None,
+) -> dict[str, Any]:
+    effective_project_id = _resolve_project(
+        owner_id=owner_id, project_id=project_id, required_role=PROJECT_ROLE_WRITER
+    )
+    conversation_json = normalize_conversation_json(
+        conversation_json, strict_transcript=strict_transcript
+    )
+    _stamp_owner(conversation_json, owner_id=owner_id)
+    _stamp_project(conversation_json, project_id=effective_project_id)
+    _scope_conversation_hash(conversation_json, project_id=effective_project_id)
+    validate_json(conversation_json)
+    enrich_topics(conversation_json)
+    enrich_auto_tags(conversation_json)
+    metadata = _ensure_metadata(conversation_json)
+    metadata["memory_status"] = _MEMORY_STATUS_PENDING_REVIEW
+    metadata["pending_review_received_at"] = _utc_now_iso()
+
+    store = _runtime().metadata_store
+    existing_by_id = store.get(str(conversation_json.get("id", ""))) if hasattr(store, "get") else None
+    if existing_by_id is not None and not _conversation_authorized(
+        existing_by_id, owner_id, effective_project_id
+    ):
+        raise ValueError("unauthorized_update: conversation id already exists")
+    if existing_by_id is not None and _conversation_hash(existing_by_id) != metadata["conversation_hash"]:
+        raise ValueError("unauthorized_update: conversation id already exists")
+
+    memory_id, inserted = _insert_new_conversation(conversation_json)
+    return {
+        "status": "pending_review",
+        "id": memory_id,
+        "memory_status": _MEMORY_STATUS_PENDING_REVIEW,
+        "inserted": inserted,
+        "chunks": 0,
+    }
+
+
+def approve_pending_memory(
+    memory_id: str, *, owner_id: str | None = None, project_id: str | None = None
+) -> dict[str, Any]:
+    effective_project_id = _resolve_project(
+        owner_id=owner_id, project_id=project_id, required_role=PROJECT_ROLE_WRITER
+    )
+    conversation = _runtime().metadata_store.get(memory_id)
+    if not _conversation_authorized(conversation, owner_id, effective_project_id):
+        return {"status": "not_found", "id": memory_id}
+    if _memory_status(conversation) != _MEMORY_STATUS_PENDING_REVIEW:
+        return {
+            "status": "error",
+            "error_code": "memory_not_pending_review",
+            "error_message": "memory is not pending review",
+            "id": memory_id,
+            "memory_status": _memory_status(conversation),
+        }
+    assert isinstance(conversation, dict)
+    metadata = _ensure_metadata(conversation)
+    metadata["memory_status"] = _MEMORY_STATUS_ACTIVE
+    metadata["approved_at"] = _utc_now_iso()
+    metadata.setdefault("save_intent", "user_confirmed")
+    _runtime().metadata_store.insert(conversation)
+    result = ingest_messages(conversation, owner_id=owner_id, project_id=effective_project_id)
+    _store_facts_for_conversation(conversation)
+    result["memory_status"] = _MEMORY_STATUS_ACTIVE
+    return result
+
+
+def reject_pending_memory(
+    memory_id: str, *, owner_id: str | None = None, project_id: str | None = None
+) -> dict[str, Any]:
+    effective_project_id = _resolve_project(
+        owner_id=owner_id, project_id=project_id, required_role=PROJECT_ROLE_WRITER
+    )
+    conversation = _runtime().metadata_store.get(memory_id)
+    if not _conversation_authorized(conversation, owner_id, effective_project_id):
+        return {"status": "not_found", "id": memory_id}
+    if _memory_status(conversation) != _MEMORY_STATUS_PENDING_REVIEW:
+        return {
+            "status": "error",
+            "error_code": "memory_not_pending_review",
+            "error_message": "memory is not pending review",
+            "id": memory_id,
+            "memory_status": _memory_status(conversation),
+        }
+    assert isinstance(conversation, dict)
+    metadata = _ensure_metadata(conversation)
+    metadata["memory_status"] = _MEMORY_STATUS_REJECTED
+    metadata["rejected_at"] = _utc_now_iso()
+    _runtime().metadata_store.insert(conversation)
+    return {"status": "ok", "id": memory_id, "memory_status": _MEMORY_STATUS_REJECTED}
 
 
 def _is_fully_indexed(metadata_id: str) -> bool:

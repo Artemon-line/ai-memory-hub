@@ -101,9 +101,10 @@ retrieval:
   candidate_multiplier: 3
 
 memory:
-  # permissive | require_save_intent
+  # permissive | require_save_intent | review_pending
   # Use require_save_intent for personal deployments where clients must include
   # metadata.save_intent before writes are accepted.
+  # Use review_pending to hold unmarked inserts outside default reads until approval.
   insert_policy: permissive
 
 # -------------------------

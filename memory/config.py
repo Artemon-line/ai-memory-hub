@@ -35,6 +35,7 @@ _VALID_SQL_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 class InsertPolicy(StrEnum):
     PERMISSIVE = "permissive"
     REQUIRE_SAVE_INTENT = "require_save_intent"
+    REVIEW_PENDING = "review_pending"
 
 
 class ProvidersConfig(BaseModel):

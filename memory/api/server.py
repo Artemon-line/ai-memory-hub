@@ -14,7 +14,11 @@ from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig, ensure_token_hash_secret, normalize_config
 from memory.ingestion.base_agent import BaseIngestionAgent
 from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
-from memory.ingestion.save_intent import SaveIntentError, validate_insert_save_intent
+from memory.ingestion.save_intent import (
+    InsertDisposition,
+    SaveIntentError,
+    validate_insert_save_intent,
+)
 from memory.ingestion.thread_models import SearchResultMode
 from memory.interfaces.mcp_server import create_mcp_server
 
@@ -84,6 +88,11 @@ class ProfileGetRequest(BaseModel):
 class FactSupersedeRequest(BaseModel):
     fact_id: str
     superseded_by: str
+    project_id: str | None = None
+
+
+class MemoryReviewRequest(BaseModel):
+    id: str
     project_id: str | None = None
 
 
@@ -194,10 +203,18 @@ def _register_api_routes(
             if isinstance(metadata, dict):
                 value = metadata.get("project_id")
                 project_id = str(value) if value is not None else project_id
-            validate_insert_save_intent(
+            disposition = validate_insert_save_intent(
                 conversation_json,
                 insert_policy=config.memory.insert_policy,
             )
+            if disposition == InsertDisposition.PENDING_REVIEW:
+                return redact_content_hashes(
+                    await agent.store_pending_review_memory(
+                        conversation_json,
+                        owner_id=owner_id(request),
+                        project_id=project_id,
+                    )
+                )
             return redact_content_hashes(
                 await agent.ingest_messages(
                     conversation_json,
@@ -361,6 +378,41 @@ def _register_api_routes(
             raise HTTPException(status_code=403, detail=str(exc)) from exc
 
     app.post("/memory/facts/supersede")(memory_fact_supersede)
+
+    async def memory_pending_approve(
+        payload: MemoryReviewRequest, request: Request
+    ) -> dict[str, Any]:
+        try:
+            return redact_content_hashes(
+                await agent.approve_pending_memory(
+                    payload.id,
+                    owner_id=owner_id(request),
+                    project_id=payload.project_id,
+                )
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    async def memory_pending_reject(
+        payload: MemoryReviewRequest, request: Request
+    ) -> dict[str, Any]:
+        try:
+            return redact_content_hashes(
+                await agent.reject_pending_memory(
+                    payload.id,
+                    owner_id=owner_id(request),
+                    project_id=payload.project_id,
+                )
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    app.post("/memory/pending/approve")(memory_pending_approve)
+    app.post("/memory/pending/reject")(memory_pending_reject)
 
 
 def _pop_insert_project_id(conversation_json: dict[str, Any]) -> str | None:

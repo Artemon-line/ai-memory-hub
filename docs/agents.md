@@ -53,7 +53,7 @@ Planned or partial:
 - Treat the returned `id` as canonical for retrieve/search citations.
 - Call `memory_validate` before `memory_insert` when using MCP.
 - Include full user and assistant turns that should be remembered. You may add a short factual `metadata.summary` retrieval hint, but do not use it instead of `messages`.
-- Do not call `memory_insert` for ordinary user statements unless the user asked to save them, confirmed a save, or explicitly enabled client auto-save. When saving intentionally, include `metadata.save_intent` with `explicit_user_request`, `user_confirmed`, or `client_auto_save`. Servers configured with `memory.insert_policy: require_save_intent` reject inserts without this marker.
+- Do not call `memory_insert` for ordinary user statements unless the user asked to save them, confirmed a save, or explicitly enabled client auto-save. When saving intentionally, include `metadata.save_intent` with `explicit_user_request`, `user_confirmed`, or `client_auto_save`. Servers configured with `memory.insert_policy: require_save_intent` reject inserts without this marker. Servers configured with `memory.insert_policy: review_pending` hold unmarked inserts outside default reads until approval.
 - Do not include tool output, debug logs, or operational planning text as conversation messages unless the user explicitly wants that stored.
 - Do not supply client-side embeddings, message hashes, or conversation hashes. The hub computes them.
 - Do not assume memory is English-only. Multilingual retrieval is available when
@@ -279,8 +279,10 @@ retrieve responses expose the conversation summary as
 itself. The hub may also return server-owned `metadata.auto_tags` and
 `metadata.tag_sources`; clients should keep user/manual tags in `metadata.tags`
 and let the server refresh auto-tags during insert or trusted append.
-`metadata.save_intent` is optional under the default `permissive` policy and
-required under `memory.insert_policy: require_save_intent`.
+`metadata.save_intent` is optional under the default `permissive` policy,
+required under `memory.insert_policy: require_save_intent`, and controls whether
+`memory.insert_policy: review_pending` inserts are active immediately or held
+for approval.
 For thread continuity, clients may send `metadata.upstream_thread_id` or
 `metadata.thread_id`. The hub preserves upstream IDs, derives `thread_id` from
 `source` plus `upstream_thread_id` when needed, and supports `thread_id` filters

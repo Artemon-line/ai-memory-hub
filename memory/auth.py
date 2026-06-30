@@ -136,7 +136,12 @@ def required_scopes_for_request(request: Request) -> set[str]:
     path = request.url.path
     if path == "/mcp" or path.startswith("/mcp/"):
         return {READ_SCOPE}
-    if path in {"/memory/insert", "/memory/facts/supersede"}:
+    if path in {
+        "/memory/insert",
+        "/memory/facts/supersede",
+        "/memory/pending/approve",
+        "/memory/pending/reject",
+    }:
         return {WRITE_SCOPE}
     if path.startswith("/memory/"):
         return {READ_SCOPE}

@@ -46,6 +46,10 @@ def _strict_save_intent_client(tmp_path: Path) -> TestClient:
     return TestClient(create_app(config=_config(tmp_path, insert_policy="require_save_intent")))
 
 
+def _review_pending_client(tmp_path: Path) -> TestClient:
+    return TestClient(create_app(config=_config(tmp_path, insert_policy="review_pending")))
+
+
 def _conversation(
     *,
     text: str,
@@ -524,3 +528,86 @@ def test_api_and_mcp_reject_unknown_save_intent_values(tmp_path: Path) -> None:
     assert api_insert.json()["detail"]["error_code"] == "invalid_save_intent"
     assert mcp_insert["status"] == "error"
     assert mcp_insert["error_code"] == "invalid_save_intent"
+
+
+def test_review_pending_api_insert_is_hidden_until_approved(tmp_path: Path) -> None:
+    phrase = "pending review api guitar phrase"
+    payload = _conversation(text=f"I own a {phrase}.")
+
+    with _review_pending_client(tmp_path) as client:
+        insert = client.post("/memory/insert", json=payload)
+        assert insert.status_code == 200, insert.text
+        memory_id = insert.json()["id"]
+        assert insert.json()["status"] == "pending_review"
+
+        retrieve = client.post("/memory/retrieve", json={"id": memory_id})
+        search = client.post("/memory/search", json={"query": phrase})
+        ask = client.post("/memory/ask", json={"question": f"What do I own about {phrase}?"})
+        facts = client.post("/memory/facts/search", json={"predicate": "owns_guitar"})
+        profile = client.post("/memory/profile/get", json={"subject": "user"})
+
+        approve = client.post("/memory/pending/approve", json={"id": memory_id})
+        approved_search = client.post("/memory/search", json={"query": phrase})
+        approved_facts = client.post("/memory/facts/search", json={"predicate": "owns_guitar"})
+        approved_profile = client.post("/memory/profile/get", json={"subject": "user"})
+
+    assert retrieve.status_code == 404
+    assert search.json()["results"] == []
+    assert ask.json()["answer_basis"] == "not_found"
+    assert facts.json()["results"] == []
+    assert profile.json()["facts"] == []
+    assert approve.status_code == 200, approve.text
+    assert approve.json()["status"] == "ok"
+    assert approve.json()["memory_status"] == "active"
+    assert [row["id"] for row in approved_search.json()["results"]] == [memory_id]
+    assert [fact["source_conversation_id"] for fact in approved_facts.json()["results"]] == [
+        memory_id
+    ]
+    assert memory_id in {
+        fact["source_conversation_id"] for fact in approved_profile.json()["facts"]
+    }
+
+
+def test_review_pending_mcp_insert_can_be_rejected(tmp_path: Path) -> None:
+    phrase = "pending review mcp rejection phrase"
+    payload = _conversation(text=f"I own a {phrase}.")
+
+    with _review_pending_client(tmp_path) as client:
+        headers = _initialize_mcp(client)
+        insert = _call_tool(
+            client,
+            headers,
+            request_id=2,
+            name="memory_insert",
+            arguments={"conversation_json": payload},
+        )
+        memory_id = insert["id"]
+        reject = _call_tool(
+            client,
+            headers,
+            request_id=3,
+            name="memory_pending_reject",
+            arguments={"id": memory_id},
+        )
+        search = _call_tool(
+            client,
+            headers,
+            request_id=4,
+            name="memory_search",
+            arguments={"query": phrase},
+        )
+        approve_after_reject = _call_tool(
+            client,
+            headers,
+            request_id=5,
+            name="memory_pending_approve",
+            arguments={"id": memory_id},
+        )
+
+    assert insert["status"] == "pending_review"
+    assert insert["memory_status"] == "pending_review"
+    assert reject["status"] == "ok"
+    assert reject["memory_status"] == "rejected"
+    assert search["results"] == []
+    assert approve_after_reject["status"] == "error"
+    assert approve_after_reject["error_code"] == "memory_not_pending_review"

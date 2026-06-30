@@ -107,6 +107,7 @@ retrieval:
 memory:
   # permissive keeps existing clients compatible.
   # require_save_intent rejects inserts without metadata.save_intent.
+  # review_pending stores inserts without metadata.save_intent for explicit approval.
   insert_policy: permissive
 
 chunking:

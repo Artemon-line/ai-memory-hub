@@ -37,10 +37,9 @@ Allowed values:
 
 - `permissive`: current behavior. No save-intent marker required.
 - `require_save_intent`: reject inserts unless the client sends an accepted save-intent marker.
+- `review_pending`: store inserts without an accepted save-intent marker as pending review and exclude them from default reads until approval.
 
-Implemented values are `permissive` and `require_save_intent`. `review_pending`
-remains planned as a later workflow because it needs pending storage, approval,
-and fact visibility semantics.
+Implemented values are `permissive`, `require_save_intent`, and `review_pending`.
 
 Default: `permissive`, to avoid breaking existing clients. Recommended mode for personal memory deployments: `require_save_intent`.
 
@@ -83,7 +82,7 @@ Do not require clients to send raw prompt history as evidence. Evidence should b
 - [x] Keep `permissive` fully backward compatible.
 - [x] In `require_save_intent`, return a deterministic validation error when the marker is missing or unknown.
 - [x] Ensure errors do not echo sensitive conversation text.
-- [ ] In `review_pending`, store the conversation with pending status and exclude it from default reads.
+- [x] In `review_pending`, store the conversation with pending status and exclude it from default reads.
 
 Suggested error shape:
 
@@ -97,11 +96,11 @@ Suggested error shape:
 
 ## P1: Pending Review Workflow
 
-- [ ] Add pending memory metadata status.
+- [x] Add pending memory metadata status.
 - [ ] Add read filters for pending, active, and rejected memories.
-- [ ] Add API and MCP operations to approve or reject pending inserts.
-- [ ] Prevent pending inserts from creating active facts until approved.
-- [ ] Preserve audit metadata showing when the pending memory was received and approved.
+- [x] Add API and MCP operations to approve or reject pending inserts.
+- [x] Prevent pending inserts from creating active facts until approved.
+- [x] Preserve audit metadata showing when the pending memory was received and approved.
 
 ## P1: Documentation And Client Guidance
 
@@ -126,8 +125,8 @@ Suggested error shape:
 - [x] MCP insert without `metadata.save_intent` is rejected under `require_save_intent`.
 - [x] API and MCP inserts with `explicit_user_request`, `user_confirmed`, or `client_auto_save` succeed under `require_save_intent`.
 - [x] Unknown save-intent values are rejected with stable errors.
-- [ ] `review_pending` stores pending data but excludes it from default search, ask, fact search, and profile reads.
-- [ ] Pending approval activates search and fact/profile visibility.
+- [x] `review_pending` stores pending data but excludes it from default search, ask, fact search, profile reads, and default retrieve.
+- [x] Pending approval activates search and fact/profile visibility.
 - [x] Validation errors do not leak payload text, auth tokens, or provider credentials.
 
 ## Done When

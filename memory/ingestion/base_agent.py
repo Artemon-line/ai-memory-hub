@@ -23,6 +23,15 @@ class BaseIngestionAgent(ABC):
     ) -> Dict[str, Any]:
         """Ingest a pre-formatted conversation JSON object."""
 
+    async def store_pending_review_memory(
+        self,
+        conversation_json: Dict[str, Any],
+        *,
+        owner_id: str | None = None,
+        project_id: str | None = None,
+    ) -> Dict[str, Any]:
+        raise NotImplementedError("store_pending_review_memory is not implemented")
+
     def preprocess_messages(self, conversation_json: Dict[str, Any]) -> Dict[str, Any]:
         return conversation_json
 
@@ -116,6 +125,16 @@ class BaseIngestionAgent(ABC):
         project_id: str | None = None,
     ) -> Dict[str, Any]:
         raise NotImplementedError("fact_supersede is not implemented")
+
+    async def approve_pending_memory(
+        self, memory_id: str, *, owner_id: str | None = None, project_id: str | None = None
+    ) -> Dict[str, Any]:
+        raise NotImplementedError("approve_pending_memory is not implemented")
+
+    async def reject_pending_memory(
+        self, memory_id: str, *, owner_id: str | None = None, project_id: str | None = None
+    ) -> Dict[str, Any]:
+        raise NotImplementedError("reject_pending_memory is not implemented")
 
     async def authenticate_bearer_token(self, token: str) -> str | None:
         raise NotImplementedError("authenticate_bearer_token is not implemented")

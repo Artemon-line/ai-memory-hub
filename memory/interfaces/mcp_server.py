@@ -16,7 +16,11 @@ from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig
 from memory.ingestion.base_agent import BaseIngestionAgent
 from memory.ingestion.mvp_ingestion import normalize_conversation_json
-from memory.ingestion.save_intent import SaveIntentError, validate_insert_save_intent
+from memory.ingestion.save_intent import (
+    InsertDisposition,
+    SaveIntentError,
+    validate_insert_save_intent,
+)
 from memory.ingestion.thread_models import (
     SearchResultMode,
     result_mode_error_message,
@@ -86,6 +90,8 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "freshness_to, and project_id."
     ),
     "memory_fact_supersede": "Mark one normalized fact as superseded by another fact within a project_id.",
+    "memory_pending_approve": "Approve a pending memory insert so it becomes searchable and can create facts.",
+    "memory_pending_reject": "Reject a pending memory insert so it remains excluded from default reads.",
 }
 
 CONVERSATION_JSON_TOOL_META: dict[str, Any] = {
@@ -632,7 +638,7 @@ def build_tool_handlers(
             insert_policy = (
                 config.memory.insert_policy if config is not None else "permissive"
             )
-            validate_insert_save_intent(normalized, insert_policy=insert_policy)
+            disposition = validate_insert_save_intent(normalized, insert_policy=insert_policy)
             validate_conversation(normalized)
         except jsonschema.ValidationError as exc:
             return _envelope(
@@ -653,9 +659,14 @@ def build_tool_handlers(
                 error_message=str(exc),
             )
         try:
-            result = await agent.ingest_messages(
-                normalized, owner_id=owner_id(), project_id=project_id
-            )
+            if disposition == InsertDisposition.PENDING_REVIEW:
+                result = await agent.store_pending_review_memory(
+                    normalized, owner_id=owner_id(), project_id=project_id
+                )
+            else:
+                result = await agent.ingest_messages(
+                    normalized, owner_id=owner_id(), project_id=project_id
+                )
         except ValueError as exc:
             error_message = str(exc)
             error_code = _ingest_value_error_code(error_message)
@@ -1034,6 +1045,36 @@ def build_tool_handlers(
         await _emit_mcp_tool_log(ctx, tool_name="memory_fact_supersede", status="ok")
         return _with_envelope_defaults(result)
 
+    async def memory_pending_approve(
+        id: str, project_id: str | None = None, ctx: FastMCPContext | None = None
+    ) -> dict[str, Any]:
+        if not isinstance(id, str) or not id.strip():
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message="id must be a non-empty string",
+            )
+        result = await agent.approve_pending_memory(
+            id, owner_id=owner_id(), project_id=project_id
+        )
+        await _emit_mcp_tool_log(ctx, tool_name="memory_pending_approve", status="ok")
+        return _with_envelope_defaults(result)
+
+    async def memory_pending_reject(
+        id: str, project_id: str | None = None, ctx: FastMCPContext | None = None
+    ) -> dict[str, Any]:
+        if not isinstance(id, str) or not id.strip():
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message="id must be a non-empty string",
+            )
+        result = await agent.reject_pending_memory(
+            id, owner_id=owner_id(), project_id=project_id
+        )
+        await _emit_mcp_tool_log(ctx, tool_name="memory_pending_reject", status="ok")
+        return _with_envelope_defaults(result)
+
     return {
         "memory_validate": memory_validate,
         "memory_insert": memory_insert,
@@ -1043,6 +1084,8 @@ def build_tool_handlers(
         "memory_fact_search": memory_fact_search,
         "memory_profile_get": memory_profile_get,
         "memory_fact_supersede": memory_fact_supersede,
+        "memory_pending_approve": memory_pending_approve,
+        "memory_pending_reject": memory_pending_reject,
     }
 
 

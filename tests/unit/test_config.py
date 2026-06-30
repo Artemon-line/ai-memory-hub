@@ -411,6 +411,9 @@ def test_memory_insert_policy_defaults_and_validation() -> None:
     strict = parse_config({"memory": {"insert_policy": "require_save_intent"}})
     assert strict.memory.insert_policy == "require_save_intent"
 
+    review = parse_config({"memory": {"insert_policy": "review_pending"}})
+    assert review.memory.insert_policy == "review_pending"
+
     with pytest.raises(ValueError, match="memory.insert_policy"):
         parse_config({"memory": {"insert_policy": "silent_auto_save"}})
 

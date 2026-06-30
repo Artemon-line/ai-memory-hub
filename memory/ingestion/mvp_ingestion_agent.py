@@ -38,6 +38,19 @@ class MVPIngestionAgent(BaseIngestionAgent):
             raise
         return self.postprocess_result(result)
 
+    async def store_pending_review_memory(
+        self,
+        conversation_json: Dict[str, Any],
+        *,
+        owner_id: str | None = None,
+        project_id: str | None = None,
+    ) -> Dict[str, Any]:
+        payload = self.preprocess_messages(conversation_json)
+        result = mvp_ingestion.store_pending_review_memory(
+            payload, owner_id=owner_id, project_id=project_id
+        )
+        return self.postprocess_result(result)
+
     async def search(
         self,
         query: str,
@@ -179,6 +192,20 @@ class MVPIngestionAgent(BaseIngestionAgent):
             superseded_by=superseded_by,
             owner_id=owner_id,
             project_id=project_id,
+        )
+
+    async def approve_pending_memory(
+        self, memory_id: str, *, owner_id: str | None = None, project_id: str | None = None
+    ) -> Dict[str, Any]:
+        return mvp_ingestion.approve_pending_memory(
+            memory_id, owner_id=owner_id, project_id=project_id
+        )
+
+    async def reject_pending_memory(
+        self, memory_id: str, *, owner_id: str | None = None, project_id: str | None = None
+    ) -> Dict[str, Any]:
+        return mvp_ingestion.reject_pending_memory(
+            memory_id, owner_id=owner_id, project_id=project_id
         )
 
     async def authenticate_bearer_token(self, token: str) -> str | None:

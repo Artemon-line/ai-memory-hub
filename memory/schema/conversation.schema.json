@@ -108,7 +108,7 @@
             "user_confirmed",
             "client_auto_save"
           ],
-          "description": "Client-declared reason for saving this memory. Required when memory.insert_policy is require_save_intent."
+          "description": "Client-declared reason for saving this memory. Required when memory.insert_policy is require_save_intent. Under review_pending, missing save_intent stores the memory pending approval."
         },
         "model": {
           "type": "string",
