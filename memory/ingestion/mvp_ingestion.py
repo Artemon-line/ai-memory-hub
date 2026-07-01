@@ -379,6 +379,7 @@ def build_runtime(
                 conversations_collection=mongodb_config.conversations_collection,
                 facts_collection=mongodb_config.facts_collection,
                 generated_summaries_collection=mongodb_config.generated_summaries_collection,
+                schema_collection=mongodb_config.schema_collection,
             )
         else:
             metadata_store = SQLiteMetadataStore(data_dir / "metadata.sqlite3")

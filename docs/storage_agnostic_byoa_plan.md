@@ -522,8 +522,8 @@ Status: `PARTIAL`
   - [x] get/get-many preserve payload shape
   - [x] upstream-thread lookup works
   - [x] schema version appears in `health()`
-  - [ ] incompatible schema version fails startup
-  - [ ] unsupported optional operations raise `NotSupportedError`
+  - [x] incompatible schema version fails startup
+  - [x] unsupported optional operations raise `NotSupportedError`
 - [x] Create reusable vector-store contract tests:
   - [x] insert/search/delete behavior parity
   - [x] replace removes previous chunks for the same memory ID
@@ -531,10 +531,10 @@ Status: `PARTIAL`
   - [x] `expected_dimensionality` is exposed
   - [x] insert/search dimension mismatches raise `VectorDimensionError`
   - [x] health exposes provider and dimensions
-  - [ ] unsupported optional operations raise `NotSupportedError`
+  - [x] unsupported optional operations raise `NotSupportedError`
 - [x] Add provider fixtures with fake SDK/client objects for unit-level tests.
-- [ ] Add live integration tests gated by environment variables.
-- [ ] Add fallback tests for each vector provider:
+- [x] Add live integration tests gated by environment variables.
+- [x] Add fallback tests for each vector provider:
   - [x] ChromaDB unavailable provider fails startup when `allow_fallback=false`
   - [x] ChromaDB unavailable provider activates in-memory fallback when `allow_fallback=true`
   - [x] ChromaDB fallback health reports `mode=degraded`
@@ -561,11 +561,11 @@ Target: local-first vector provider with optional HTTP client mode.
   - [x] `role`
   - [x] `text`
   - [x] `vector`
-- [ ] Persist collection metadata:
-  - [ ] schema version
-  - [ ] expected dimensionality
-  - [ ] distance metric, if supported by selected Chroma configuration
-- [ ] Validate existing collection metadata at startup.
+- [x] Persist collection metadata:
+  - [x] schema version
+  - [x] expected dimensionality
+  - [x] distance metric, if supported by selected Chroma configuration
+- [x] Validate existing collection metadata at startup.
 - [x] Validate dimensions on every insert/search.
 - [x] Implement replace by deleting rows for `memory_id` before adding new chunks.
 - [x] Normalize Chroma search distances into current `score` field.
@@ -574,8 +574,8 @@ Target: local-first vector provider with optional HTTP client mode.
 - [ ] Tests:
   - [x] fake-client contract tests
   - [ ] persistent local integration test
-  - [ ] HTTP-mode smoke test when `AMH_TEST_CHROMADB_URL` is set
-  - [ ] collection dimension mismatch startup failure
+  - [x] HTTP-mode smoke test when `AMH_TEST_CHROMADB_URL` is set
+  - [x] collection dimension mismatch startup failure
   - [x] fallback and redaction tests
 
 ### Phase 6d: Qdrant Vector Adapter
@@ -597,7 +597,7 @@ Target: local Docker or Qdrant Cloud vector provider.
   - [x] `l2`
   - [x] `inner_product`
 - [x] Create collection when missing with configured vector size/distance.
-- [ ] Validate existing collection vector size and distance at startup.
+- [x] Validate existing collection vector size and distance at startup.
 - [x] Store chunk payload fields in Qdrant payload.
 - [x] Use stable point IDs derived from `chunk_id` or deterministic UUID namespace.
 - [x] Implement upsert for insert.
@@ -608,7 +608,7 @@ Target: local Docker or Qdrant Cloud vector provider.
 - [ ] Tests:
   - [x] fake-client contract tests
   - [x] local/cloud live smoke when `AMH_TEST_QDRANT_URL` is set
-  - [ ] collection distance/dimension mismatch failures
+  - [x] collection distance/dimension mismatch failures
   - [x] API key redaction checks
   - [x] fallback behavior tests
 
@@ -638,18 +638,19 @@ MongoDB metadata adapter:
   - [x] deterministic import error when package is missing
 - [x] Add `MongoDBMetadataStore`.
 - [x] Store conversations in configured database/collection.
-- [ ] Add schema version document with single active version invariant.
-- [ ] Create unique indexes:
-  - [ ] `id`
-  - [ ] `metadata.conversation_hash`
-  - [ ] `(source, metadata.upstream_thread_id)` where upstream thread exists
+- [x] Add schema version document with single active version invariant.
+- [x] Create unique indexes:
+  - [x] `id`
+  - [x] `conversation_hash` (flattened from metadata)
+  - [x] `(project_id, conversation_hash)` partial unique index
+  - [x] `(project_id, source, upstream_thread_id)` partial lookup index
 - [x] Preserve insert, insert-new, append, get, get-many, conversation-hash lookup, and upstream-thread lookup semantics.
 - [x] Ensure duplicate-key errors map to deterministic behavior.
 - [x] Implement `capabilities()` and `health()`.
 - [ ] Tests:
   - [x] fake-client metadata contract tests
   - [x] optional live smoke when `AMH_TEST_MONGODB_URI` is set
-  - [ ] schema version invariant tests
+  - [x] schema version invariant tests
   - [x] duplicate/deduplication parity tests
   - [ ] URI credential redaction tests
 

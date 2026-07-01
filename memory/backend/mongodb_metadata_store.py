@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from memory.backend.contracts import ProviderCapabilities
+from memory.backend.errors import NotSupportedError
 from memory.backend.metadata_store import (
     LOCAL_DEFAULT_PROJECT_ID,
     _default_project_id,
@@ -27,6 +28,7 @@ class MongoDBMetadataStore:
         conversations_collection: str = MongoCollectionName.CONVERSATIONS.value,
         facts_collection: str = MongoCollectionName.FACTS.value,
         generated_summaries_collection: str = MongoCollectionName.GENERATED_SUMMARIES.value,
+        schema_collection: str = "schema_versions",
         client: Any | None = None,
     ):
         if not uri and client is None:
@@ -36,13 +38,16 @@ class MongoDBMetadataStore:
         self.conversations_collection = conversations_collection
         self.facts_collection = facts_collection
         self.generated_summaries_collection = generated_summaries_collection
+        self.schema_collection = schema_collection
         self._client = client or self._create_client()
         db = self._client[self.database]
         self._conversations = db[self.conversations_collection]
         self._facts = db[self.facts_collection]
         self._summaries = db[self.generated_summaries_collection]
+        self._schema_versions = db[self.schema_collection]
         self._runtime_metadata = db["runtime_metadata"]
         self._ensure_indexes()
+        self._ensure_schema_version()
 
     def insert(self, conversation_json: dict[str, Any]) -> str:
         memory_id = self._validate_memory_id(conversation_json["id"])
@@ -229,6 +234,7 @@ class MongoDBMetadataStore:
             "schema_version": self.schema_version,
             "database": self.database,
             "collection": self.conversations_collection,
+            "schema_collection": self.schema_collection,
         }
 
     def get_runtime_metadata(self, key: str) -> dict[str, Any] | None:
@@ -245,6 +251,13 @@ class MongoDBMetadataStore:
             upsert=True,
         )
 
+    def begin_transaction(self) -> None:
+        raise NotSupportedError("Metadata transactions are not exposed by this adapter API")
+
+    def set_ttl(self, memory_id: str, ttl_seconds: int) -> None:
+        _ = memory_id, ttl_seconds
+        raise NotSupportedError("TTL is not supported by this metadata adapter")
+
     def _create_client(self) -> Any:
         try:
             from pymongo import MongoClient  # type: ignore
@@ -256,11 +269,37 @@ class MongoDBMetadataStore:
 
     def _ensure_indexes(self) -> None:
         self._conversations.create_index("id", unique=True)
-        self._conversations.create_index([("project_id", 1), ("conversation_hash", 1)])
-        self._conversations.create_index([("project_id", 1), ("source", 1), ("upstream_thread_id", 1)])
+        self._conversations.create_index("conversation_hash")
+        self._conversations.create_index(
+            [("project_id", 1), ("conversation_hash", 1)],
+            unique=True,
+            partialFilterExpression={"conversation_hash": {"$type": "string"}},
+        )
+        self._conversations.create_index(
+            [("project_id", 1), ("source", 1), ("upstream_thread_id", 1)],
+            partialFilterExpression={"upstream_thread_id": {"$type": "string"}},
+        )
         self._facts.create_index([("subject", 1), ("predicate", 1), ("project_id", 1)])
         self._summaries.create_index("id", unique=True)
+        self._schema_versions.create_index("id", unique=True)
         self._runtime_metadata.create_index("key", unique=True)
+
+    def _ensure_schema_version(self) -> None:
+        row_count = self._schema_versions.count_documents({})
+        if row_count == 0:
+            self._schema_versions.insert_one({"id": 1, "version": self.schema_version})
+            return
+        if row_count != 1:
+            raise RuntimeError("MongoDB schema version invariant violation")
+        row = self._schema_versions.find_one({"id": 1})
+        if row is None:
+            raise RuntimeError("MongoDB schema version row missing for id=1")
+        version = int(row.get("version", 0))
+        if version != self.schema_version:
+            raise RuntimeError(
+                f"Incompatible MongoDB schema version: {version}. "
+                f"Supported version: {self.schema_version}"
+            )
 
     def _prepare_conversation(self, conversation_json: dict[str, Any]) -> dict[str, Any]:
         payload = dict(conversation_json)

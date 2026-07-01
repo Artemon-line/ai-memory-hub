@@ -136,6 +136,53 @@ def test_mongodb_insert_new_rejects_same_id_different_hash() -> None:
         store.insert_new(second)
 
 
+def test_mongodb_schema_version_document_and_indexes() -> None:
+    client = FakeMongoClient()
+    store = MongoDBMetadataStore(uri="mongodb://example", client=client)
+    db = client["ai_memory_hub"]
+
+    assert db["schema_versions"].find_one({"id": 1}) == {"id": 1, "version": 1}
+    assert store.health()["schema_collection"] == "schema_versions"
+
+    conversation_indexes = db["conversations"].indexes
+    assert {"args": ("id",), "kwargs": {"unique": True}} in conversation_indexes
+    assert {"args": ("conversation_hash",), "kwargs": {}} in conversation_indexes
+    assert {
+        "args": ([("project_id", 1), ("conversation_hash", 1)],),
+        "kwargs": {
+            "unique": True,
+            "partialFilterExpression": {"conversation_hash": {"$type": "string"}},
+        },
+    } in conversation_indexes
+    assert {
+        "args": ([("project_id", 1), ("source", 1), ("upstream_thread_id", 1)],),
+        "kwargs": {
+            "partialFilterExpression": {"upstream_thread_id": {"$type": "string"}}
+        },
+    } in conversation_indexes
+
+
+def test_mongodb_schema_version_invariant_failures() -> None:
+    missing_id_client = FakeMongoClient()
+    missing_id_client["ai_memory_hub"]["schema_versions"].insert_one({"id": 2, "version": 1})
+    with pytest.raises(RuntimeError, match="schema version row missing"):
+        MongoDBMetadataStore(uri="mongodb://example", client=missing_id_client)
+
+    too_many_client = FakeMongoClient()
+    too_many_client["ai_memory_hub"]["schema_versions"].insert_many(
+        [{"id": 1, "version": 1}, {"id": 2, "version": 1}]
+    )
+    with pytest.raises(RuntimeError, match="schema version invariant violation"):
+        MongoDBMetadataStore(uri="mongodb://example", client=too_many_client)
+
+    incompatible_client = FakeMongoClient()
+    incompatible_client["ai_memory_hub"]["schema_versions"].insert_one(
+        {"id": 1, "version": 99}
+    )
+    with pytest.raises(RuntimeError, match="Incompatible MongoDB schema version"):
+        MongoDBMetadataStore(uri="mongodb://example", client=incompatible_client)
+
+
 def test_sqlite_metadata_store_persists_generated_summaries_separately(tmp_path: Path) -> None:
     store = SQLiteMetadataStore(tmp_path / "metadata.sqlite3")
     summary = {
@@ -550,6 +597,10 @@ class FakeSDKVectorStore:
             supports_metadata_indexing=False,
         )
 
+    def set_ttl(self, memory_id: str, ttl_seconds: int) -> None:
+        _ = memory_id, ttl_seconds
+        raise NotSupportedError("TTL is not supported by this vector adapter")
+
     def _validate_dimension(self, vector: list[float]) -> None:
         if len(vector) != self.dimension:
             raise VectorDimensionError(
@@ -567,8 +618,9 @@ def _test_cosine_distance(a: list[float], b: list[float]) -> float:
 
 
 class FakeChromaCollection:
-    def __init__(self) -> None:
+    def __init__(self, metadata: dict[str, Any] | None = None) -> None:
         self.rows: dict[str, dict[str, Any]] = {}
+        self.metadata = dict(metadata or {})
 
     def upsert(
         self,
@@ -620,13 +672,60 @@ class FakeChromaCollection:
 
 
 class FakeChromaClient:
-    def __init__(self) -> None:
-        self.collection = FakeChromaCollection()
+    def __init__(self, collection_metadata: dict[str, Any] | None = None) -> None:
+        self.collection = FakeChromaCollection(collection_metadata)
 
     def get_or_create_collection(self, *, name: str, metadata: dict[str, Any]) -> Any:
         assert name == "memory_vectors"
-        assert metadata == {"hnsw:space": "cosine"}
+        assert metadata == {
+            "hnsw:space": "cosine",
+            "schema_version": 1,
+            "expected_dimensionality": 3,
+            "distance": "cosine",
+        }
+        if not self.collection.metadata:
+            self.collection.metadata = dict(metadata)
         return self.collection
+
+
+def test_chromadb_collection_metadata_mismatch_fails_startup() -> None:
+    with pytest.raises(RuntimeError, match="ChromaDB collection metadata mismatch"):
+        ChromaDBVectorStore(
+            client=FakeChromaClient(
+                collection_metadata={
+                    "hnsw:space": "cosine",
+                    "schema_version": 1,
+                    "expected_dimensionality": 99,
+                    "distance": "cosine",
+                }
+            ),
+            dimension=3,
+        )
+
+
+def test_qdrant_existing_collection_dimension_mismatch_fails_startup() -> None:
+    with pytest.raises(
+        VectorDimensionError, match="Qdrant collection dimensionality mismatch"
+    ):
+        QdrantVectorStore(
+            client=FakeQdrantClient(
+                existing_config=FakeQdrantModels.VectorParams(size=99, distance="Cosine")
+            ),
+            models=FakeQdrantModels,
+            dimension=3,
+        )
+
+
+def test_qdrant_existing_collection_distance_mismatch_fails_startup() -> None:
+    with pytest.raises(RuntimeError, match="Qdrant collection distance mismatch"):
+        QdrantVectorStore(
+            client=FakeQdrantClient(
+                existing_config=FakeQdrantModels.VectorParams(size=3, distance="Dot")
+            ),
+            models=FakeQdrantModels,
+            dimension=3,
+            distance="cosine",
+        )
 
 
 class FakeQdrantPoint:
@@ -666,9 +765,11 @@ class FakeQdrantModels:
 
 
 class FakeQdrantClient:
-    def __init__(self) -> None:
+    def __init__(self, existing_config: Any | None = None) -> None:
         self.rows: dict[str, Any] = {}
         self.created: dict[str, Any] = {}
+        if existing_config is not None:
+            self.created["memory_vectors"] = existing_config
 
     def collection_exists(self, collection_name: str) -> bool:
         return collection_name in self.created
@@ -709,8 +810,12 @@ class FakeQdrantClient:
         }
 
     def get_collection(self, *, collection_name: str) -> Any:
-        _ = collection_name
-        return types.SimpleNamespace(points_count=len(self.rows))
+        return types.SimpleNamespace(
+            points_count=len(self.rows),
+            config=types.SimpleNamespace(
+                params=types.SimpleNamespace(vectors=self.created.get(collection_name))
+            ),
+        )
 
 
 class FakeMilvusClient:
@@ -1339,9 +1444,10 @@ class FakeWeaviateClient:
 class FakeMongoCollection:
     def __init__(self) -> None:
         self.docs: list[dict[str, Any]] = []
+        self.indexes: list[dict[str, Any]] = []
 
-    def create_index(self, *_args: Any, **_kwargs: Any) -> None:
-        return None
+    def create_index(self, *args: Any, **kwargs: Any) -> None:
+        self.indexes.append({"args": args, "kwargs": dict(kwargs)})
 
     def replace_one(self, query: dict[str, Any], doc: dict[str, Any], upsert: bool = False) -> Any:
         for index, existing in enumerate(self.docs):
@@ -1551,7 +1657,12 @@ def test_vector_store_contract_for_local_backends(
     provider: str, factory: VectorStoreFactory, tmp_path: Path
 ) -> None:
     _ = provider
-    _assert_vector_store_contract(factory(tmp_path))
+    store = factory(tmp_path)
+    _assert_vector_store_contract(store)
+    with pytest.raises(
+        NotSupportedError, match="TTL is not supported by this vector adapter"
+    ):
+        store.set_ttl(str(uuid4()), 60)
 
 
 def test_milvus_uses_string_primary_key_for_stable_point_ids() -> None:
@@ -2378,6 +2489,7 @@ def test_dry_run_write_is_noop(
 
 def test_unsupported_operations_raise_deterministic_errors(tmp_path: Path) -> None:
     metadata = SQLiteMetadataStore(tmp_path / "metadata.sqlite3")
+    mongodb_metadata = MongoDBMetadataStore(uri="mongodb://example", client=FakeMongoClient())
     vectors = InMemoryVectorStore(dimension=3)
 
     with pytest.raises(
@@ -2389,6 +2501,15 @@ def test_unsupported_operations_raise_deterministic_errors(tmp_path: Path) -> No
         NotSupportedError, match="TTL is not supported by this metadata adapter"
     ):
         metadata.set_ttl("id-1", 60)
+    with pytest.raises(
+        NotSupportedError,
+        match="Metadata transactions are not exposed by this adapter API",
+    ):
+        mongodb_metadata.begin_transaction()
+    with pytest.raises(
+        NotSupportedError, match="TTL is not supported by this metadata adapter"
+    ):
+        mongodb_metadata.set_ttl("id-1", 60)
     with pytest.raises(
         NotSupportedError, match="TTL is not supported by this vector adapter"
     ):

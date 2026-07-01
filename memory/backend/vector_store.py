@@ -83,6 +83,9 @@ class VectorStore(Protocol):
 
 
 class ChromaDBVectorStore:
+    _SCHEMA_VERSION = 1
+    _DISTANCE = "cosine"
+
     def __init__(
         self,
         *,
@@ -103,8 +106,9 @@ class ChromaDBVectorStore:
         self._client = client or self._create_client()
         self._collection = self._client.get_or_create_collection(
             name=self.collection_name,
-            metadata={"hnsw:space": "cosine"},
+            metadata=self._collection_metadata(),
         )
+        self._validate_collection_metadata()
 
     @property
     def expected_dimensionality(self) -> int:
@@ -164,6 +168,8 @@ class ChromaDBVectorStore:
             VectorStatsKey.ROWS.value: rows,
             VectorStatsKey.EXPECTED_DIMENSIONALITY.value: self.expected_dimensionality,
             VectorStatsKey.COLLECTION.value: self.collection_name,
+            "schema_version": self._SCHEMA_VERSION,
+            VectorStatsKey.DISTANCE.value: self._DISTANCE,
             VectorStatsKey.MODE.value: (
                 ChromaClientMode.HTTP.value
                 if self.url
@@ -179,8 +185,14 @@ class ChromaDBVectorStore:
             VectorStatsKey.PROVIDER.value: VectorProviderName.CHROMADB.value,
             VectorStatsKey.EXPECTED_DIMENSIONALITY.value: self.expected_dimensionality,
             VectorStatsKey.COLLECTION.value: self.collection_name,
+            "schema_version": self._SCHEMA_VERSION,
+            VectorStatsKey.DISTANCE.value: self._DISTANCE,
             VectorStatsKey.STATS.value: self.get_stats(),
         }
+
+    def set_ttl(self, memory_id: str, ttl_seconds: int) -> None:
+        _ = memory_id, ttl_seconds
+        raise NotSupportedError("TTL is not supported by this vector adapter")
 
     def _create_client(self) -> Any:
         try:
@@ -198,6 +210,29 @@ class ChromaDBVectorStore:
             )
         self.path.mkdir(parents=True, exist_ok=True)
         return chromadb.PersistentClient(path=str(self.path))
+
+    def _collection_metadata(self) -> dict[str, str | int]:
+        return {
+            "hnsw:space": self._DISTANCE,
+            "schema_version": self._SCHEMA_VERSION,
+            VectorStatsKey.EXPECTED_DIMENSIONALITY.value: self.expected_dimensionality,
+            VectorStatsKey.DISTANCE.value: self._DISTANCE,
+        }
+
+    def _validate_collection_metadata(self) -> None:
+        metadata = getattr(self._collection, "metadata", None)
+        if not isinstance(metadata, dict):
+            return
+        expected = self._collection_metadata()
+        for key, expected_value in expected.items():
+            actual = metadata.get(key)
+            if actual is None:
+                continue
+            if str(actual) != str(expected_value):
+                raise RuntimeError(
+                    "ChromaDB collection metadata mismatch for "
+                    f"{key}: expected {expected_value}, got {actual}"
+                )
 
     def _normalize_query_result(self, result: dict[str, Any]) -> list[dict[str, Any]]:
         ids = _first_query_batch(result.get(ChromaQueryKey.IDS.value, []))
@@ -374,6 +409,7 @@ class QdrantVectorStore:
 
     def _ensure_collection(self) -> None:
         if self._collection_exists():
+            self._validate_existing_collection()
             return
         distance = self._DISTANCE_MAP.get(self.distance)
         if distance is None:
@@ -392,6 +428,39 @@ class QdrantVectorStore:
         collections = self._client.get_collections()
         names = {str(item.name) for item in getattr(collections, "collections", [])}
         return self.collection_name in names
+
+    def _validate_existing_collection(self) -> None:
+        info = self._client.get_collection(collection_name=self.collection_name)
+        vector_config = self._qdrant_vector_config(info)
+        if vector_config is None:
+            return
+        actual_size = _mapping_from_object_or_dict(vector_config, "size")
+        if actual_size is not None and int(actual_size) != self.expected_dimensionality:
+            raise VectorDimensionError(
+                "Qdrant collection dimensionality mismatch at startup: "
+                f"expected {self.expected_dimensionality}, got {actual_size}"
+            )
+        actual_distance = _mapping_from_object_or_dict(vector_config, "distance")
+        expected_distance = self._DISTANCE_MAP.get(self.distance)
+        if actual_distance is not None and expected_distance is not None:
+            if str(actual_distance).lower() != str(expected_distance).lower():
+                raise RuntimeError(
+                    "Qdrant collection distance mismatch at startup: "
+                    f"expected {expected_distance}, got {actual_distance}"
+                )
+
+    def _qdrant_vector_config(self, info: Any) -> Any | None:
+        config = _mapping_from_object_or_dict(info, "config")
+        params = _mapping_from_object_or_dict(config, "params") if config is not None else None
+        vectors = _mapping_from_object_or_dict(params, "vectors") if params is not None else None
+        if vectors is None:
+            return None
+        if isinstance(vectors, dict):
+            if "size" in vectors or "distance" in vectors:
+                return vectors
+            first = next(iter(vectors.values()), None)
+            return first
+        return vectors
 
     def _search_points(self, *, query_vector: list[float], top_k: int) -> list[Any]:
         if hasattr(self._client, "query_points"):
@@ -1209,6 +1278,10 @@ class RedisVectorStore:
             VectorStatsKey.STATS.value: self.get_stats(),
         }
 
+    def set_ttl(self, memory_id: str, ttl_seconds: int) -> None:
+        _ = memory_id, ttl_seconds
+        raise NotSupportedError("TTL is not supported by this vector adapter")
+
     def _delete_memory_id(self, memory_id: str) -> None:
         query = f"@{VectorPayloadKey.MEMORY_ID.value}:{{{_redis_tag_escape(memory_id)}}}"
         try:
@@ -1454,6 +1527,10 @@ class PineconeVectorStore:
             VectorStatsKey.STATS.value: self.get_stats(),
         }
 
+    def set_ttl(self, memory_id: str, ttl_seconds: int) -> None:
+        _ = memory_id, ttl_seconds
+        raise NotSupportedError("TTL is not supported by this vector adapter")
+
 
 class TurbopufferVectorStore:
     _METRIC_MAP = {
@@ -1577,6 +1654,10 @@ class TurbopufferVectorStore:
             VectorStatsKey.DISTANCE.value: self.distance,
             VectorStatsKey.STATS.value: self.get_stats(),
         }
+
+    def set_ttl(self, memory_id: str, ttl_seconds: int) -> None:
+        _ = memory_id, ttl_seconds
+        raise NotSupportedError("TTL is not supported by this vector adapter")
 
 
 class VespaVectorStore:
@@ -1718,6 +1799,10 @@ class VespaVectorStore:
             VectorStatsKey.DISTANCE.value: self.distance,
             VectorStatsKey.STATS.value: self.get_stats(),
         }
+
+    def set_ttl(self, memory_id: str, ttl_seconds: int) -> None:
+        _ = memory_id, ttl_seconds
+        raise NotSupportedError("TTL is not supported by this vector adapter")
 
     def _document_ids_for_memory_ids(self, ids: list[str]) -> list[str]:
         document_ids: list[str] = []
@@ -1872,6 +1957,10 @@ class TypesenseVectorStore:
             VectorStatsKey.DISTANCE.value: self.distance,
             VectorStatsKey.STATS.value: self.get_stats(),
         }
+
+    def set_ttl(self, memory_id: str, ttl_seconds: int) -> None:
+        _ = memory_id, ttl_seconds
+        raise NotSupportedError("TTL is not supported by this vector adapter")
 
     def _ensure_collection(self) -> None:
         if self._collection_exists():
