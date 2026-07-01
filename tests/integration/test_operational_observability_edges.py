@@ -209,6 +209,15 @@ def test_allow_fallback_true_for_persistent_vectors_warns_once(
     assert warning_records[0].non_durable_fallback_possible is True
     assert "non-durable" in warning_records[0].getMessage()
     assert "vector-secret" not in caplog.text
+    fallback_records = [
+        record
+        for record in caplog.records
+        if getattr(record, "event", "") == "vector_fallback_activated"
+    ]
+    assert len(fallback_records) == 2
+    assert fallback_records[0].requested_vector_provider == "lancedb"
+    assert fallback_records[0].effective_vector_provider == "memory"
+    assert fallback_records[0].error_type == "RuntimeError"
 
 
 def test_production_profile_with_vector_fallback_warns_once(

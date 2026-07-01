@@ -15,8 +15,29 @@ class DryRunMetadataStore:
 
     def insert(self, conversation_json: dict[str, Any]) -> str:
         memory_id = str(conversation_json["id"])
-        logger.warning("DRY-RUN: write skipped for %s", memory_id)
+        _log_dry_run_skip("metadata_insert", memory_id=memory_id)
         return memory_id
+
+    def insert_new(self, conversation_json: dict[str, Any]) -> tuple[str, bool]:
+        memory_id = str(conversation_json["id"])
+        _log_dry_run_skip("metadata_insert_new", memory_id=memory_id)
+        return memory_id, True
+
+    def insert_facts(self, facts: list[dict[str, Any]]) -> None:
+        _log_dry_run_skip("metadata_insert_facts", fact_count=len(facts))
+
+    def supersede_fact(
+        self, fact_id: str, superseded_by: str, project_id: str | None = None
+    ) -> bool:
+        _ = project_id
+        _log_dry_run_skip(
+            "metadata_supersede_fact", fact_id=fact_id, superseded_by=superseded_by
+        )
+        return False
+
+    def set_runtime_metadata(self, key: str, value: dict[str, Any]) -> None:
+        _ = value
+        _log_dry_run_skip("metadata_set_runtime_metadata", metadata_key=key)
 
 
 class DryRunVectorStore:
@@ -31,10 +52,22 @@ class DryRunVectorStore:
         if hasattr(self._store, "_validate_dimension"):
             for item in embeddings:
                 self._store._validate_dimension([float(v) for v in item["vector"]], operation="insert")
-        logger.warning(
-            "DRY-RUN: vector write skipped for %s (replace=%s, chunks=%d)",
-            metadata_id,
-            replace,
-            len(embeddings),
+        _log_dry_run_skip(
+            "vector_insert",
+            memory_id=metadata_id,
+            replace=replace,
+            chunk_count=len(embeddings),
         )
+
+
+def _log_dry_run_skip(operation: str, **extra: Any) -> None:
+    logger.warning(
+        "DRY-RUN: skipped %s write",
+        operation,
+        extra={
+            "event": "dry_run_write_skipped",
+            "operation": operation,
+            **extra,
+        },
+    )
 

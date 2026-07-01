@@ -55,9 +55,16 @@ def test_vector_provider_config_accepts_pgvector_and_memory_alias():
 def test_storage_profile_defaults_and_validation() -> None:
     config = parse_config({})
     assert config.storage.profile == "local"
+    assert config.storage.vector.allow_fallback is True
 
     production = parse_config({"storage": {"profile": "Production"}})
     assert production.storage.profile == "production"
+    assert production.storage.vector.allow_fallback is False
+
+    explicit_production_fallback = parse_config(
+        {"storage": {"profile": "production", "vector": {"allow_fallback": True}}}
+    )
+    assert explicit_production_fallback.storage.vector.allow_fallback is True
 
     with pytest.raises(ValueError, match="storage.profile"):
         parse_config({"storage": {"profile": "prod"}})

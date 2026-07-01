@@ -162,6 +162,8 @@ Policy:
 - `allow_fallback: true` may be used for local/dev or explicitly tolerated degraded environments.
 - `profile: production` emits a structured startup warning when `allow_fallback: true`
   is configured for a persistent vector provider.
+- When `profile: production` is set and `allow_fallback` is omitted, startup
+  defaults `allow_fallback` to `false`.
 
 ## 5) Dry-Run Mode
 
@@ -842,8 +844,8 @@ Status: `PARTIAL`
 - [x] Treat schema incompatibility and vector dimension mismatch as hard errors.
 - [x] Log `allow_fallback` and `dry_run` startup policy consistently even when disabled.
 - [x] Warn when `allow_fallback=true` is used under a production profile.
-- [ ] Emit structured audit events for fallback activation and dry-run skipped writes, not only warning strings.
-- [ ] Consider changing the default `storage.vector.allow_fallback` to `false` for production-oriented configs.
+- [x] Emit structured audit events for fallback activation and dry-run skipped writes, not only warning strings.
+- [x] Consider changing the default `storage.vector.allow_fallback` to `false` for production-oriented configs.
 
 ## Deliverables
 

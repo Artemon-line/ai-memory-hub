@@ -482,8 +482,8 @@ Remaining sequence:
 
 - [x] Log `allow_fallback` and `dry_run` startup policy consistently, including disabled state.
 - [x] Warn when `allow_fallback=true` is used under a production profile.
-- [ ] Emit structured audit events for fallback activation and dry-run skipped writes.
-- [ ] Consider changing the default `storage.vector.allow_fallback` to `false` for production-oriented configs.
+- [x] Emit structured audit events for fallback activation and dry-run skipped writes.
+- [x] Consider changing the default `storage.vector.allow_fallback` to `false` for production-oriented configs.
 
 ## P2: Storage Provider Expansion
 

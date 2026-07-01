@@ -451,6 +451,7 @@ openai:
 #   profile: production
 #   dry_run: false
 #   vector:
+#     # Optional here; production defaults this to false when omitted.
 #     allow_fallback: false
 #
 # 17) Dry-run mode for ingestion validation

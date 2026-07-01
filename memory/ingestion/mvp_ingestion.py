@@ -424,6 +424,12 @@ def build_runtime(
             logger.warning(
                 "Vector store initialization failed (%s); falling back to in-memory provider",
                 redact_secrets(f"{type(exc).__name__}: {exc}"),
+                extra={
+                    "event": "vector_fallback_activated",
+                    "requested_vector_provider": requested_vector_provider,
+                    "effective_vector_provider": VectorProviderName.MEMORY.value,
+                    "error_type": type(exc).__name__,
+                },
             )
             vector_store = InMemoryVectorStore(dimension=expected_dimension)
             vector_fallback_active = True

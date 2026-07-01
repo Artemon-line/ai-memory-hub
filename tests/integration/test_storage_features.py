@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sqlite3
 import struct
@@ -2323,29 +2324,56 @@ def test_vector_fallback_disabled_startup_error_redacts_credentials(
     assert "redis://:***@localhost:6379/0" in message
 
 
-def test_dry_run_write_is_noop(tmp_path: Path) -> None:
-    runtime = mvp_ingestion.build_runtime(
-        {
-            "providers": {"embeddings": "local", "vector_db": "in_memory"},
-            "paths": {"data_dir": str(tmp_path)},
-            "storage": {"dry_run": True},
+def test_dry_run_write_is_noop(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.WARNING, logger="memory.backend.dry_run"):
+        runtime = mvp_ingestion.build_runtime(
+            {
+                "providers": {"embeddings": "local", "vector_db": "in_memory"},
+                "paths": {"data_dir": str(tmp_path)},
+                "storage": {"dry_run": True},
+            }
+        )
+        conversation = {
+            "id": "11111111-1111-1111-1111-111111111111",
+            "source": "manual",
+            "timestamp": "2026-01-01T00:00:00Z",
+            "messages": [{"role": "user", "text": "hello"}],
+            "metadata": {"imported_at": "2026-01-01T00:00:00Z"},
         }
-    )
-    conversation = {
-        "id": "11111111-1111-1111-1111-111111111111",
-        "source": "manual",
-        "timestamp": "2026-01-01T00:00:00Z",
-        "messages": [{"role": "user", "text": "hello"}],
-        "metadata": {"imported_at": "2026-01-01T00:00:00Z"},
-    }
-    memory_id = runtime.metadata_store.insert(conversation)
-    runtime.vector_store.insert(
-        memory_id,
-        [{"chunk_index": 0, "role": "user", "text": "hello", "vector": [0.1] * 32}],
-    )
+        memory_id = runtime.metadata_store.insert(conversation)
+        inserted_id, inserted = runtime.metadata_store.insert_new(conversation)
+        runtime.metadata_store.insert_facts(
+            [{"id": "fact-1", "subject": "user", "predicate": "prefers", "object": "tea"}]
+        )
+        runtime.metadata_store.supersede_fact("fact-1", "fact-2")
+        runtime.metadata_store.set_runtime_metadata("dry-run-key", {"value": "secret"})
+        runtime.vector_store.insert(
+            memory_id,
+            [{"chunk_index": 0, "role": "user", "text": "hello", "vector": [0.1] * 32}],
+        )
 
     assert memory_id == conversation["id"]
+    assert (inserted_id, inserted) == (conversation["id"], True)
     assert runtime.metadata_store.get(memory_id) is None
+    assert runtime.metadata_store.get_runtime_metadata("dry-run-key") is None
+    records = [
+        record
+        for record in caplog.records
+        if getattr(record, "event", "") == "dry_run_write_skipped"
+    ]
+    assert [record.operation for record in records] == [
+        "metadata_insert",
+        "metadata_insert_new",
+        "metadata_insert_facts",
+        "metadata_supersede_fact",
+        "metadata_set_runtime_metadata",
+        "vector_insert",
+    ]
+    assert records[2].fact_count == 1
+    assert records[-1].chunk_count == 1
+    assert "secret" not in caplog.text
 
 
 def test_unsupported_operations_raise_deterministic_errors(tmp_path: Path) -> None:

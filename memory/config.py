@@ -541,6 +541,22 @@ class StorageConfig(BaseModel):
             )
         return normalized
 
+    @model_validator(mode="before")
+    @classmethod
+    def apply_profile_defaults(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        profile = str(data.get("profile", "local")).lower()
+        vector = data.get("vector")
+        if profile != "production":
+            return data
+        if not isinstance(vector, dict):
+            data["vector"] = {"allow_fallback": False}
+            return data
+        if "allow_fallback" not in vector:
+            data["vector"] = {**vector, "allow_fallback": False}
+        return data
+
 
 class TokenizerConfig(BaseModel):
     enabled: bool = False
