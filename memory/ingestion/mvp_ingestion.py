@@ -141,6 +141,7 @@ class RuntimeDependencies:
 
 _VECTOR_COMPATIBILITY_METADATA_PREFIX = "vector_index_compatibility:"
 _FALLBACK_POLICY_WARNED: set[str] = set()
+_PRODUCTION_FALLBACK_POLICY_WARNED: set[str] = set()
 _MEMORY_STATUS_ACTIVE = "active"
 _MEMORY_STATUS_PENDING_REVIEW = "pending_review"
 _MEMORY_STATUS_REJECTED = "rejected"
@@ -4030,6 +4031,7 @@ def _log_startup_policy(*, cfg: HubConfig, requested_vector_provider: str) -> No
         extra={
             "event": "runtime_startup_policy",
             "vector_provider": requested_vector_provider,
+            "storage_profile": cfg.storage.profile,
             "vector_fallback_allowed": cfg.storage.vector.allow_fallback,
             "dry_run": cfg.storage.dry_run,
         },
@@ -4051,6 +4053,26 @@ def _log_startup_policy(*, cfg: HubConfig, requested_vector_provider: str) -> No
             },
         )
         _FALLBACK_POLICY_WARNED.add(requested_vector_provider)
+    production_warning_key = f"{cfg.storage.profile}:{requested_vector_provider}"
+    if (
+        cfg.storage.profile == "production"
+        and cfg.storage.vector.allow_fallback
+        and requested_vector_provider != VectorProviderName.MEMORY.value
+        and production_warning_key not in _PRODUCTION_FALLBACK_POLICY_WARNED
+    ):
+        logger.warning(
+            "storage.profile=production with storage.vector.allow_fallback=true for "
+            "persistent vector provider %s; set allow_fallback=false to fail fast",
+            requested_vector_provider,
+            extra={
+                "event": "production_vector_fallback_policy_warning",
+                "storage_profile": cfg.storage.profile,
+                "vector_provider": requested_vector_provider,
+                "vector_fallback_allowed": True,
+                "recommended_vector_fallback_allowed": False,
+            },
+        )
+        _PRODUCTION_FALLBACK_POLICY_WARNED.add(production_warning_key)
 
 
 def _embedding_index_metadata(

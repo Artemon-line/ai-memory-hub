@@ -52,6 +52,17 @@ def test_vector_provider_config_accepts_pgvector_and_memory_alias():
     assert chroma_config.providers.vector_db == "chromadb"
 
 
+def test_storage_profile_defaults_and_validation() -> None:
+    config = parse_config({})
+    assert config.storage.profile == "local"
+
+    production = parse_config({"storage": {"profile": "Production"}})
+    assert production.storage.profile == "production"
+
+    with pytest.raises(ValueError, match="storage.profile"):
+        parse_config({"storage": {"profile": "prod"}})
+
+
 def test_vector_provider_config_rejects_unknown_distance():
     with pytest.raises(ValueError, match="storage.vector.distance"):
         parse_config({"storage": {"vector": {"distance": "manhattan"}}})

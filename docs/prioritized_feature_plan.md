@@ -13,7 +13,7 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P0 | Bearer-token auth and per-user memory isolation | Partial | `bearer_api_key_auth_plan.md` |
 | P0 | Project workspaces and shared collaboration boundaries | Partial | `project_workspace_collaboration_plan.md` |
 | P0 | MCP client feedback: response shape clarity, fact freshness, and source quality | Implemented | `improvements/client_feedback_improvement_plan.md` |
-| P0 | Advanced search filters for ask, facts, and profile queries | Planned | `improvements/client_feedback_improvement_plan.md` |
+| P0 | Advanced search filters for ask, facts, and profile queries | Implemented | `improvements/client_feedback_improvement_plan.md` |
 | P0 | Conversation summary metadata and profile views | Implemented | `improvements/client_feedback_improvement_plan.md` |
 | P0 | MCP client smoke coverage for Codex, Gemini, Copilot, Claude, opencode | Implemented | `mcp_client_smoke_plan.md` |
 | P0 | Weekly scheduled real-client MCP smoke coverage | Implemented | `real_client_mcp_smoke_plan.md` |
@@ -481,7 +481,7 @@ Implemented:
 Remaining sequence:
 
 - [x] Log `allow_fallback` and `dry_run` startup policy consistently, including disabled state.
-- [ ] Warn when `allow_fallback=true` is used under a production profile.
+- [x] Warn when `allow_fallback=true` is used under a production profile.
 - [ ] Emit structured audit events for fallback activation and dry-run skipped writes.
 - [ ] Consider changing the default `storage.vector.allow_fallback` to `false` for production-oriented configs.
 

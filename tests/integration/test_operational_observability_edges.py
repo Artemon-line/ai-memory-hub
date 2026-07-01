@@ -173,6 +173,7 @@ def test_startup_logs_fallback_policy_and_dry_run_state(
         if getattr(record, "event", "") == "runtime_startup_policy"
     )
     assert policy_record.vector_provider == "memory"
+    assert policy_record.storage_profile == "local"
     assert policy_record.vector_fallback_allowed is True
     assert policy_record.dry_run is True
     assert "DRY-RUN enabled" in caplog.text
@@ -207,4 +208,39 @@ def test_allow_fallback_true_for_persistent_vectors_warns_once(
     assert len(warning_records) == 1
     assert warning_records[0].non_durable_fallback_possible is True
     assert "non-durable" in warning_records[0].getMessage()
+    assert "vector-secret" not in caplog.text
+
+
+def test_production_profile_with_vector_fallback_warns_once(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    class BrokenLanceDB:
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+            raise RuntimeError("lancedb unavailable password=vector-secret")
+
+    monkeypatch.setattr(mvp_ingestion, "LanceDBVectorStore", BrokenLanceDB)
+    mvp_ingestion._FALLBACK_POLICY_WARNED.clear()
+    mvp_ingestion._PRODUCTION_FALLBACK_POLICY_WARNED.clear()
+    config = {
+        "providers": {"embeddings": "local", "vector_db": "lancedb"},
+        "paths": {"data_dir": str(tmp_path)},
+        "storage": {"profile": "production", "vector": {"allow_fallback": True}},
+    }
+
+    with caplog.at_level(logging.WARNING, logger="memory.ingestion.mvp_ingestion"):
+        mvp_ingestion.build_runtime(config)
+        mvp_ingestion.build_runtime(config)
+
+    warning_records = [
+        record
+        for record in caplog.records
+        if getattr(record, "event", "") == "production_vector_fallback_policy_warning"
+    ]
+    assert len(warning_records) == 1
+    assert warning_records[0].storage_profile == "production"
+    assert warning_records[0].vector_provider == "lancedb"
+    assert warning_records[0].vector_fallback_allowed is True
+    assert warning_records[0].recommended_vector_fallback_allowed is False
     assert "vector-secret" not in caplog.text

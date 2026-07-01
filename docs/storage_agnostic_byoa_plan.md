@@ -151,6 +151,7 @@ Configuration:
 
 ```yaml
 storage:
+  profile: local | development | test | production
   vector:
     allow_fallback: true | false
 ```
@@ -159,6 +160,8 @@ Policy:
 
 - Recommended default for production: `allow_fallback: false`.
 - `allow_fallback: true` may be used for local/dev or explicitly tolerated degraded environments.
+- `profile: production` emits a structured startup warning when `allow_fallback: true`
+  is configured for a persistent vector provider.
 
 ## 5) Dry-Run Mode
 
@@ -838,7 +841,7 @@ Status: `PARTIAL`
 - [x] Treat vector initialization errors as fatal unless `storage.vector.allow_fallback=true`.
 - [x] Treat schema incompatibility and vector dimension mismatch as hard errors.
 - [x] Log `allow_fallback` and `dry_run` startup policy consistently even when disabled.
-- [ ] Warn when `allow_fallback=true` is used under a production profile.
+- [x] Warn when `allow_fallback=true` is used under a production profile.
 - [ ] Emit structured audit events for fallback activation and dry-run skipped writes, not only warning strings.
 - [ ] Consider changing the default `storage.vector.allow_fallback` to `false` for production-oriented configs.
 

@@ -517,6 +517,7 @@ class MetadataProviderConfigs(BaseModel):
 
 
 class StorageConfig(BaseModel):
+    profile: str = "local"
     dry_run: bool = False
     allow_trusted_appends: bool = False
     metadata_schema_versions: tuple[int, ...] = (1,)
@@ -529,6 +530,16 @@ class StorageConfig(BaseModel):
         default_factory=MetadataProviderConfigs,
         alias=ProviderConfigSection.METADATA_PROVIDERS.value,
     )
+
+    @field_validator("profile")
+    @classmethod
+    def validate_profile(cls, value: str) -> str:
+        normalized = value.lower()
+        if normalized not in {"local", "development", "test", "production"}:
+            raise ValueError(
+                "storage.profile must be one of: local, development, test, production"
+            )
+        return normalized
 
 
 class TokenizerConfig(BaseModel):

@@ -6,6 +6,9 @@
 # STORAGE LAYER
 # -------------------------
 storage:
+  # local | development | test | production
+  # production emits an explicit warning if vector fallback is enabled.
+  profile: local
   dry_run: false
   # Metadata schema compatibility allow-list. Version 1 is current; migrations
   # may temporarily allow multiple versions, e.g. [1, 2].
@@ -445,6 +448,7 @@ openai:
 # 16) Strict production startup (no vector fallback)
 #
 # storage:
+#   profile: production
 #   dry_run: false
 #   vector:
 #     allow_fallback: false
