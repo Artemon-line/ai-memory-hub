@@ -8,9 +8,11 @@ platforms. The extensions parse each platform's page, normalize the visible
 conversation into the shared ai-memory-hub conversation schema, and post it to
 the existing `POST /memory/insert` API.
 
-This is a suitable optional ingestion path because the browser has access to the
-rendered chat UI when an official export or history API is missing. It should not
-replace API-first, export-based, or MCP-native ingestion where those integrations
+This is a suitable optional capture path because the browser has access to the
+rendered chat UI when an official export or history API is missing. The extension
+captures and normalizes selected content; ai-memory-hub still owns ingestion
+after the payload reaches `POST /memory/insert`. Browser capture should not
+replace API-first, export-based, or MCP-native capture where those integrations
 are available.
 
 ## Boundary
@@ -22,8 +24,10 @@ couple the memory API to unstable product markup.
 The boundary is:
 
 - Browser extension repos own platform-specific DOM parsing.
+- Browser extension repos own capture and browser-side context injection.
 - ai-memory-hub owns the stable HTTP API contract, validation, auth, dedupe,
-  trusted append behavior, indexing, and storage.
+  trusted append behavior, ingestion, retrieval, permissions, memory quality,
+  indexing, and storage.
 - Extensions send normalized conversation JSON only.
 - Raw HTML, DOM snapshots, screenshots, and selector evidence stay out of
   ai-memory-hub storage by default.
@@ -73,7 +77,7 @@ The server normalizes and validates the final payload before storage.
 ## Future API Stabilization
 
 When browser-extension work starts, stabilize this integration without adding a
-new ingestion path:
+new hub ingestion path:
 
 - Keep `POST /memory/insert` as the extension-facing contract.
 - Add typed insert request models around the current API route while preserving

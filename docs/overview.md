@@ -42,7 +42,7 @@ needed by that example.
 ## How It Works
 
 ```text
-Conversation JSON
+Captured Conversation JSON
   -> Schema Validation
   -> Chunk Messages or Token Windows
   -> Embed Chunks
@@ -50,12 +50,12 @@ Conversation JSON
   -> Search / Retrieve / Ask
 ```
 
-The hub expects structured conversation JSON. Importers convert supported
-external formats into that shared schema before using the same ingestion path.
-Manual speaker-labelled transcripts are supported; export-specific parsers are
-tracked in the roadmap. Browser extension capture is planned as a separate
-extension-repo workflow that posts normalized web chat payloads to the existing
-insert API; see the
+The hub expects structured conversation JSON. Capture/import adapters convert
+supported external formats into that shared schema before using the same hub
+ingestion path. Manual speaker-labelled transcripts are supported;
+export-specific capture/import adapters are tracked in the roadmap. Browser
+extension capture is planned as a separate extension-repo workflow that posts
+normalized web chat payloads to the existing insert API; see the
 [browser extension capture plan](browser_extension_capture_plan.md).
 
 ## API Endpoints

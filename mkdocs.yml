@@ -43,6 +43,7 @@ nav:
       - Deterministic Ingestion Plan: docs/deterministic_ingestion_plan.md
       - Token Budget Plan: docs/token_budget_plan.md
       - CLI Implementation Plan: docs/cli_implementation_plan.md
+      - Plugin Readiness Plan: docs/plugin_readiness_plan.md
       - Release, Container, and Docs Publishing Plan: docs/release_container_docs_plan.md
       - First Release Readiness Plan: docs/first_release_readiness_plan.md
       - Project Promotion Plan: docs/project_promotion_plan.md

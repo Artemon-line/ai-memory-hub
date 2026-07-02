@@ -20,9 +20,9 @@ Each phase ends with a **milestone** you can demo or ship.
 
 | Phase | Focus | Milestone (one line) |
 |-------|--------|----------------------|
-| 1 | Core MVP: MCP-native ingestion, normalize, store, search, retrieve | MCP tools/resources + HTTP `/memory/*` over SQLite + LanceDB |
+| 1 | Core MVP: MCP/API capture, normalize, store, search, retrieve | MCP tools/resources + HTTP `/memory/*` over SQLite + LanceDB |
 | 1.5 | Storage abstraction | Unified metadata/vector provider interfaces with local, hosted, and existing-stack backends |
-| 2 | Multi-source ingestion | One hub across platforms, including those without official exports (e.g. Copilot) |
+| 2 | Multi-source capture/import adapters | One hub across platforms, including those without official exports (e.g. Copilot) |
 | 3 | Intelligence: summaries, topics, timelines, consolidation | Knowledge engine, not just storage |
 | 4 | UI & DX | Dashboard + SDKs + packaging |
 | 5 | Agent integration | LangGraph, Llama Stack, Assistants using MCP/API memory backend |
@@ -35,12 +35,12 @@ Each phase ends with a **milestone** you can demo or ship.
 
 When planning or estimating work, treat phases as **ordered capability layers**:
 
-- **Phase 1** defines the minimum **pipeline**: **schema-first ingestion** (MCP/API payloads) → **unified schema** → **embeddings** → **vector search** → **HTTP** `/memory/search`, 
+- **Phase 1** defines the minimum **pipeline**: **capture through MCP/API payloads** → **schema-first ingestion** → **unified schema** → **embeddings** → **vector search** → **HTTP** `/memory/search`, 
 `/memory/retrieve` + MCP `memory_*` tools/resources.
 - **Phase 1.5** promotes storage to a **first-class subsystem**: `VectorStore` interface → LanceDB/ChromaDB/Qdrant/Milvus/Weaviate/PGVector/MongoDB Atlas/Elasticsearch/OpenSearch/Redis/Pinecone/Turbopuffer/Vespa/Typesense/in-memory providers → deterministic startup checks → fallback behavior.
-- **Phase 2** adds **platform-specific ingestion** (Gemini Takeout, Copilot workarounds, Claude HTML, local LLM logs);
+- **Phase 2** adds **platform-specific capture/import adapters** (Gemini Takeout, Copilot workarounds, Claude HTML, local LLM logs);
 **schema and storage stay stable** if normalization boundaries are respected.
-- Browser extension capture is a planned Phase 2-compatible ingestion option:
+- Browser extension capture is a planned Phase 2-compatible adapter option:
 extension repos parse ChatGPT, Microsoft Copilot, Claude, Gemini, and similar
 web UIs, then post normalized payloads to `POST /memory/insert`.
 - **Phase 3** is **offline/batch intelligence** on top of stored chunks (summaries, clustering, timelines).
@@ -52,7 +52,8 @@ web UIs, then post normalized payloads to `POST /memory/insert`.
 
 ## Phase 1 — Core MVP (Minimum Viable Product)
 
-**Goal:** A working memory engine with MCP/API ingestion, storage, search, and retrieval.
+**Goal:** A working memory engine with MCP/API capture, hub ingestion, storage,
+search, and retrieval.
 
 ### 1.1 Ingestion (MCP/API-first for MVP)
 
@@ -143,26 +144,26 @@ web UIs, then post normalized payloads to `POST /memory/insert`.
 
 ---
 
-## Phase 2 — Multi-source ingestion
+## Phase 2 — Multi-source capture and import adapters
 
-**Goal:** Support multiple AI platforms with different ingestion requirements.
+**Goal:** Support multiple AI platforms with different capture and import requirements.
 
-PGVector makes large ingestion sets more practical, but ingestion code should stay storage-agnostic. Each parser emits normalized records; the configured storage backend handles persistence.
+PGVector makes large captured/imported sets more practical, but ingestion code should stay storage-agnostic. Each adapter emits normalized records; the configured storage backend handles persistence.
 
 ### 2.1 Gemini
 
 - [ ] Google Takeout parser
 - [ ] Thread reconstruction
 
-### 2.2 Copilot (no official export — custom ingestion)
+### 2.2 Copilot (no official export — custom capture/import)
 
-Copilot does not provide a structured export comparable to ChatGPT. Ingestion must use one or more of the following strategies:
+Copilot does not provide a structured export comparable to ChatGPT. Capture/import must use one or more of the following strategies:
 
 - [x] **Manual paste importer** — user pastes a speaker-labelled chat; parser extracts roles and messages.
 
 - [ ] **VS Code Copilot logs (optional)** — parse local `.jsonl` logs when available.
 
-- [ ] **Future: Copilot API ingestion** — if Microsoft exposes conversation-history APIs, add a dedicated ingestion module.
+- [ ] **Future: Copilot API capture** — if Microsoft exposes conversation-history APIs, add a dedicated capture adapter.
 
 ### 2.3 Claude
 
@@ -309,9 +310,10 @@ PGVector and Postgres enable future hybrid search, SQL-based memory analytics, a
 - [ ] Shared memory spaces
 - [ ] Agent-specific memory filters
 
-### 6.4 Plugins
+### 6.4 Plugins And Extension Points
 
-- [ ] Custom ingestion modules
+- [ ] Custom capture/import adapters
+- [ ] Custom hub ingestion enrichers
 - [ ] Custom embedding providers
 - [ ] Custom vector stores
 
@@ -336,9 +338,9 @@ PGVector and Postgres enable future hybrid search, SQL-based memory analytics, a
 
 Evolution path:
 
-1. **MVP** — ingest, store, search, RAG
+1. **MVP** — capture, ingest, store, search, RAG
 2. **Storage abstraction** — supported metadata and vector providers behind stable interfaces
-3. **Multi-source ingestion**
+3. **Multi-source capture/import adapters**
 4. **Intelligence layer**
 5. **UI and developer experience**
 6. **Agent integration**

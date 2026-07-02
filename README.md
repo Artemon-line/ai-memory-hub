@@ -21,6 +21,37 @@ Local-first memory for AI agents.
 shared memory backend through MCP and HTTP. Store conversations once, then search,
 retrieve, and ask over them from any compatible client.
 
+```text
+                         +------------------+
+                         |  ai-memory-hub   |
+                         | local/LAN/hosted |
+                         +---------+--------+
+                                   |
+              HTTP API + MCP + auth + storage contract
+                                   |
+        +--------------------------+--------------------------+
+        |                          |                          |
+  Codex plugin              Browser extension           Other clients
+  skills / MCP setup        Chrome/Edge/etc.            agents, CLIs, apps
+        |                          |                          |
+        |                          |                          |
+  capture + retrieval       capture + retrieval         capture + retrieval
+  context injection         context injection           context injection
+```
+
+Adapters do not own memory. Adapters own capture and context injection. The hub
+owns storage, retrieval, auth, permissions, and memory quality.
+
+Terminology:
+
+- Capture: an adapter sends selected conversation, page, note, or code context
+  into the hub.
+- Ingestion: the hub validates, normalizes, deduplicates, enriches, embeds, and
+  stores captured content.
+- Retrieval: the hub returns relevant memories, facts, citations, or answers.
+- Context injection: an adapter places retrieved memory into the active agent,
+  browser, editor, or CLI session.
+
 ## Why It Exists
 
 Agent conversations contain useful project context, preferences, decisions, and
@@ -32,7 +63,7 @@ It is built for:
 - Cross-client handoff between agent tools
 - Local-first project and profile memory
 - MCP-native workflows
-- Deterministic ingestion and retrieval
+- Deterministic capture, ingestion, retrieval, and context injection boundaries
 - SQLite/LanceDB by default, with optional Postgres, MongoDB, and vector-store providers
 - Bring-your-own embedding model, local or hosted
 
@@ -254,6 +285,7 @@ provider matrix, smoke commands, CI coverage, and hosted-provider notes.
 - [MCP plan](docs/mcp_plan.md)
 - [Real-client MCP smoke plan](docs/real_client_mcp_smoke_plan.md)
 - [Browser extension capture plan](docs/browser_extension_capture_plan.md)
+- [Plugin readiness plan](docs/plugin_readiness_plan.md)
 - [First release readiness plan](docs/first_release_readiness_plan.md)
 - [Project promotion plan](docs/project_promotion_plan.md)
 - [Storage provider examples](docs/storage_provider_examples.md)
