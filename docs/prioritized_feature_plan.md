@@ -170,6 +170,7 @@ Implementation sequence:
 - [x] Validate project membership before every read, write, ask, retrieve,
       profile, and fact supersession operation.
 - [x] Add optional `project_id` to HTTP and MCP tool schemas.
+- [x] Add HTTP/MCP helpers to list visible projects and fetch the default project.
 - [x] Keep project and membership administration in CLI/API flows first, not
       agent-facing MCP tools.
 - [x] Add admin CLI commands to create/list projects and add/list project

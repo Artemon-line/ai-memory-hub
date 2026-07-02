@@ -215,6 +215,8 @@ python -m memory.cli config-show --json
 python -m memory.cli storage-check --json
 ```
 
+Authenticated clients can inspect visible project workspaces through `GET /memory/projects`, `GET /memory/projects/default`, `GET /memory/projects/{project_id}`, and the matching MCP project helper tools.
+
 Local bearer-token and project administration is CLI-first. Token creation prints
 the raw bearer token once; token list and revoke commands only expose stable
 token ids and non-secret prefixes.
@@ -259,6 +261,9 @@ Core tools:
 - `memory_fact_search(subject=None, predicate=None, include_superseded=False, source, date_from, date_to, confidence, status, source_quality, save_intent, save_intent_source, freshness_from, freshness_to, project_id)`
 - `memory_profile_get(subject="user", predicate, source, date_from, date_to, confidence, status, source_quality, save_intent, save_intent_source, freshness_from, freshness_to, project_id)`
 - `memory_fact_supersede(fact_id, superseded_by)`
+- `memory_project_list()`
+- `memory_project_default_get()`
+- `memory_project_get(project_id)`
 
 `memory_profile_get` returns `facts` plus a `summary` object. The summary is
 generated from active normalized facts and includes freshness, source-quality

@@ -147,6 +147,17 @@ class BaseIngestionAgent(ABC):
     ) -> Dict[str, Any]:
         raise NotImplementedError("reject_pending_memory is not implemented")
 
+    async def project_list(self, *, owner_id: str | None = None) -> Dict[str, Any]:
+        raise NotImplementedError("project_list is not implemented")
+
+    async def project_default_get(self, *, owner_id: str | None = None) -> Dict[str, Any]:
+        raise NotImplementedError("project_default_get is not implemented")
+
+    async def project_get(
+        self, project_id: str, *, owner_id: str | None = None
+    ) -> Dict[str, Any]:
+        raise NotImplementedError("project_get is not implemented")
+
     async def authenticate_bearer_token(self, token: str) -> str | None:
         raise NotImplementedError("authenticate_bearer_token is not implemented")
 

@@ -430,6 +430,35 @@ def _register_api_routes(
     app.post("/memory/pending/approve")(memory_pending_approve)
     app.post("/memory/pending/reject")(memory_pending_reject)
 
+    async def memory_project_list(request: Request) -> dict[str, Any]:
+        try:
+            return redact_content_hashes(await agent.project_list(owner_id=owner_id(request)))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    async def memory_project_default_get(request: Request) -> dict[str, Any]:
+        try:
+            return redact_content_hashes(
+                await agent.project_default_get(owner_id=owner_id(request))
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    async def memory_project_get(project_id: str, request: Request) -> dict[str, Any]:
+        try:
+            result = await agent.project_get(project_id, owner_id=owner_id(request))
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if result.get("status") == "not_found":
+            raise HTTPException(status_code=404, detail="project not found")
+        return redact_content_hashes(result)
+
+    app.get("/memory/projects")(memory_project_list)
+    app.get("/memory/projects/default")(memory_project_default_get)
+    app.get("/memory/projects/{project_id}")(memory_project_get)
+
 
 def _pop_insert_project_id(conversation_json: dict[str, Any]) -> str | None:
     value = conversation_json.pop("project_id", None)

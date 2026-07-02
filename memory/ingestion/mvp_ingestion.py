@@ -3286,6 +3286,60 @@ def fact_supersede(
     return {"status": "ok" if updated else "not_found", "id": fact_id, "superseded_by": superseded_by}
 
 
+def project_list(*, owner_id: str | None = None) -> dict[str, Any]:
+    store = _runtime().metadata_store
+    if hasattr(store, "ensure_default_project"):
+        store.ensure_default_project(owner_id)
+    if hasattr(store, "list_projects"):
+        return {"status": "ok", "results": store.list_projects(user_id=owner_id)}
+    return {"status": "ok", "results": [_fallback_project(owner_id)]}
+
+
+def project_default_get(*, owner_id: str | None = None) -> dict[str, Any]:
+    store = _runtime().metadata_store
+    if hasattr(store, "ensure_default_project"):
+        project = _normalize_project_record(store.ensure_default_project(owner_id), owner_id=owner_id)
+    else:
+        project = _fallback_project(owner_id)
+    return {"status": "ok", "project": project}
+
+
+def project_get(project_id: str, *, owner_id: str | None = None) -> dict[str, Any]:
+    project = _validate_project_id(project_id)
+    _resolve_project(owner_id=owner_id, project_id=project, required_role=PROJECT_ROLE_READER)
+    visible = project_list(owner_id=owner_id)["results"]
+    for candidate in visible:
+        if isinstance(candidate, dict) and candidate.get("id") == project:
+            return {"status": "ok", "project": candidate}
+    return {"status": "not_found", "id": project}
+
+
+def _fallback_project(owner_id: str | None) -> dict[str, Any]:
+    project_id = _default_project_id(owner_id) if owner_id is not None else LOCAL_DEFAULT_PROJECT_ID
+    return {
+        "id": project_id,
+        "owner_id": owner_id,
+        "name": "Private Default" if owner_id is not None else "Local Default",
+        "description": None,
+        "is_default": True,
+        "created_at": None,
+        "updated_at": None,
+        "archived_at": None,
+        "role": "admin",
+    }
+
+
+def _normalize_project_record(project: Any, *, owner_id: str | None) -> dict[str, Any]:
+    if isinstance(project, dict):
+        normalized = dict(project)
+        normalized.setdefault("role", "admin")
+        return normalized
+    project_id = str(project)
+    return {
+        **_fallback_project(owner_id),
+        "id": _validate_project_id(project_id),
+    }
+
 def authenticate_bearer_token(token: str) -> str | None:
     context = authenticate_bearer_token_context(token)
     return str(context["owner_id"]) if context is not None else None

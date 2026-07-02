@@ -240,6 +240,25 @@ async def test_mcp_tool_handlers_insert_search_retrieve() -> None:
 
 
 @pytest.mark.asyncio
+async def test_mcp_tool_handlers_expose_project_helpers() -> None:
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
+    handlers = build_tool_handlers(agent)
+
+    project_list = await handlers["memory_project_list"]()
+    default_project = await handlers["memory_project_default_get"]()
+    project_get = await handlers["memory_project_get"]("local-default")
+    denied_project = await handlers["memory_project_get"]("shared-project")
+
+    assert project_list["status"] == "ok"
+    assert project_list["results"] == [default_project["project"]]
+    assert default_project["project"]["id"] == "local-default"
+    assert default_project["project"]["is_default"] is True
+    assert project_get["project"]["id"] == "local-default"
+    assert denied_project["status"] == "error"
+    assert denied_project["error_code"] == "permission_denied"
+
+
+@pytest.mark.asyncio
 async def test_mcp_tool_handlers_accept_project_id_argument() -> None:
     runtime = _runtime()
     agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=runtime)

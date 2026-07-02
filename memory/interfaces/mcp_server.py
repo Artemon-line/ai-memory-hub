@@ -93,6 +93,9 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
     "memory_fact_supersede": "Mark one normalized fact as superseded by another fact within a project_id.",
     "memory_pending_approve": "Approve a pending memory insert so it becomes searchable and can create facts.",
     "memory_pending_reject": "Reject a pending memory insert so it remains excluded from default reads.",
+    "memory_project_list": "List project workspaces visible to the authenticated user.",
+    "memory_project_default_get": "Return the authenticated user's default private project workspace.",
+    "memory_project_get": "Return one visible project workspace by project_id.",
 }
 
 CONVERSATION_JSON_TOOL_META: dict[str, Any] = {
@@ -1096,6 +1099,46 @@ def build_tool_handlers(
         await _emit_mcp_tool_log(ctx, tool_name="memory_pending_reject", status="ok")
         return _with_envelope_defaults(result)
 
+    async def memory_project_list(ctx: FastMCPContext | None = None) -> dict[str, Any]:
+        result = await agent.project_list(owner_id=owner_id())
+        await _emit_mcp_tool_log(ctx, tool_name="memory_project_list", status="ok")
+        return _with_envelope_defaults(result)
+
+    async def memory_project_default_get(
+        ctx: FastMCPContext | None = None,
+    ) -> dict[str, Any]:
+        result = await agent.project_default_get(owner_id=owner_id())
+        await _emit_mcp_tool_log(
+            ctx, tool_name="memory_project_default_get", status="ok"
+        )
+        return _with_envelope_defaults(result)
+
+    async def memory_project_get(
+        project_id: str, ctx: FastMCPContext | None = None
+    ) -> dict[str, Any]:
+        if not isinstance(project_id, str) or not project_id.strip():
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message="project_id must be a non-empty string",
+            )
+        try:
+            result = await agent.project_get(project_id, owner_id=owner_id())
+        except PermissionError as exc:
+            return _envelope(
+                status="error",
+                error_code="permission_denied",
+                error_message=str(exc),
+            )
+        except ValueError as exc:
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message=str(exc),
+            )
+        await _emit_mcp_tool_log(ctx, tool_name="memory_project_get", status="ok")
+        return _with_envelope_defaults(result)
+
     return {
         "memory_validate": memory_validate,
         "memory_insert": memory_insert,
@@ -1107,6 +1150,9 @@ def build_tool_handlers(
         "memory_fact_supersede": memory_fact_supersede,
         "memory_pending_approve": memory_pending_approve,
         "memory_pending_reject": memory_pending_reject,
+        "memory_project_list": memory_project_list,
+        "memory_project_default_get": memory_project_default_get,
+        "memory_project_get": memory_project_get,
     }
 
 

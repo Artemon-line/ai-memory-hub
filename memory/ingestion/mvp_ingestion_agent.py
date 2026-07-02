@@ -230,6 +230,17 @@ class MVPIngestionAgent(BaseIngestionAgent):
             memory_id, owner_id=owner_id, project_id=project_id
         )
 
+    async def project_list(self, *, owner_id: str | None = None) -> Dict[str, Any]:
+        return mvp_ingestion.project_list(owner_id=owner_id)
+
+    async def project_default_get(self, *, owner_id: str | None = None) -> Dict[str, Any]:
+        return mvp_ingestion.project_default_get(owner_id=owner_id)
+
+    async def project_get(
+        self, project_id: str, *, owner_id: str | None = None
+    ) -> Dict[str, Any]:
+        return mvp_ingestion.project_get(project_id, owner_id=owner_id)
+
     async def authenticate_bearer_token(self, token: str) -> str | None:
         return mvp_ingestion.authenticate_bearer_token(token)
 

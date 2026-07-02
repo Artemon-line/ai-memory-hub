@@ -462,6 +462,30 @@ def test_bearer_auth_stamps_owner_and_isolates_memory() -> None:
     assert "red Fender" in ask_b.json()["answer"]
 
 
+def test_bearer_auth_exposes_visible_project_helpers(tmp_path) -> None:
+    client, _ = _sqlite_auth_client(tmp_path)
+    owner_a_headers = {"Authorization": "Bearer token-a"}
+    owner_b_headers = {"Authorization": "Bearer token-b"}
+    owner_c_headers = {"Authorization": "Bearer token-c"}
+
+    owner_a_projects = client.get("/memory/projects", headers=owner_a_headers)
+    owner_b_shared = client.get("/memory/projects/shared-321", headers=owner_b_headers)
+    owner_c_shared = client.get("/memory/projects/shared-321", headers=owner_c_headers)
+    owner_a_default = client.get("/memory/projects/default", headers=owner_a_headers)
+
+    assert owner_a_projects.status_code == 200
+    project_ids = {project["id"] for project in owner_a_projects.json()["results"]}
+    assert "shared-321" in project_ids
+    default_project = owner_a_default.json()["project"]
+    assert default_project["id"] in project_ids
+    assert default_project["id"].startswith("private-")
+    assert owner_b_shared.status_code == 200
+    assert owner_b_shared.json()["project"]["id"] == "shared-321"
+    assert owner_b_shared.json()["project"]["role"] == PROJECT_ROLE_WRITER
+    assert owner_c_shared.status_code == 403
+    assert owner_a_default.status_code == 200
+    assert default_project["is_default"] is True
+
 def test_bearer_auth_allows_shared_project_collaboration(tmp_path) -> None:
     client, store = _sqlite_auth_client(tmp_path)
     owner_a_headers = {"Authorization": "Bearer token-a"}

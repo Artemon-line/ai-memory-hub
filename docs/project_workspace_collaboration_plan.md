@@ -178,7 +178,7 @@ Profile views should therefore be project-relative:
 - [x] Add project membership checks to ingestion, search, retrieve, ask, fact
       search, profile lookup, and fact supersession.
 - [x] Add optional `project_id` to HTTP and MCP tool schemas.
-- [ ] Add HTTP/MCP project list/default helper operations.
+- [x] Add HTTP/MCP project list/default helper operations.
 - [x] Add admin CLI flows for project creation and membership management.
 - [ ] Add admin API flows for project creation and membership management if a
       non-local admin UI needs them.
