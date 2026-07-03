@@ -1,0 +1,118 @@
+name: docker-publish
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish, such as v0.1.0 or v0.1.0-rc.1.
+        required: true
+        type: string
+      prerelease:
+        description: Treat this manual publish as a prerelease.
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  docker-publish:
+    name: Publish Docker Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Resolve release inputs
+        id: release
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            release_tag="${{ inputs.tag }}"
+            event_prerelease="${{ inputs.prerelease }}"
+          else
+            release_tag="${{ github.event.release.tag_name }}"
+            event_prerelease="${{ github.event.release.prerelease }}"
+          fi
+
+          python tools/validate_release_version.py "$release_tag" --github-output > release-version.out
+          cat release-version.out >> "$GITHUB_OUTPUT"
+          {
+            echo "event_prerelease=$event_prerelease"
+            echo "release_tag=$release_tag"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Compute Docker tags
+        id: docker-tags
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_NAMESPACE: ${{ secrets.DOCKERHUB_NAMESPACE }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          IS_PRERELEASE: ${{ steps.release.outputs.is_prerelease }}
+          EVENT_PRERELEASE: ${{ steps.release.outputs.event_prerelease }}
+        run: |
+          namespace="${DOCKERHUB_NAMESPACE:-$DOCKERHUB_USERNAME}"
+          image="docker.io/${namespace}/ai-memory-hub"
+
+          {
+            echo "image=$image"
+            echo "tags<<TAGS"
+            echo "${image}:${RELEASE_TAG}"
+            echo "${image}:${RELEASE_VERSION}"
+            if [ "$IS_PRERELEASE" = "false" ] && [ "$EVENT_PRERELEASE" = "false" ]; then
+              echo "${image}:latest"
+            fi
+            echo "TAGS"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Containerfile
+          push: true
+          tags: ${{ steps.docker-tags.outputs.tags }}
+          labels: |
+            org.opencontainers.image.title=ai-memory-hub
+            org.opencontainers.image.description=Local-first deterministic memory ingestion hub
+            org.opencontainers.image.version=${{ steps.release.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+
+      - name: Publish summary
+        env:
+          IMAGE: ${{ steps.docker-tags.outputs.image }}
+          TAGS: ${{ steps.docker-tags.outputs.tags }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          {
+            echo "## Docker image published"
+            echo
+            echo "Image: \`$IMAGE\`"
+            echo
+            echo "Tags:"
+            echo "$TAGS" | sed 's/^/- `/' | sed 's/$/`/'
+            echo
+            echo "Digest: \`$DIGEST\`"
+            echo
+            echo "Add this digest to the GitHub release notes before promotion."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -413,15 +413,15 @@ Use `release_container_docs_plan.md` as the source of truth.
 
 Implementation sequence:
 
-- [ ] Define release version policy: GitHub tag must match `pyproject.toml`.
-- [ ] Add release tag validation for `vMAJOR.MINOR.PATCH`.
+- [x] Define release version policy: GitHub tag must match `pyproject.toml`.
+- [x] Add release tag validation for `vMAJOR.MINOR.PATCH`.
 - [ ] Add Docker Hub secrets: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`, and optional namespace.
-- [ ] Add release workflow triggered by `release.published`.
-- [ ] Build from `Containerfile` with Docker Buildx.
-- [ ] Push versioned tags for every release.
-- [ ] Push `latest` only for stable releases.
-- [ ] Add image digest to workflow summary and release notes.
-- [ ] Add manual `workflow_dispatch` for release publish recovery.
+- [x] Add release workflow triggered by `release.published`.
+- [x] Build from `Containerfile` with Docker Buildx.
+- [x] Push versioned tags for every release.
+- [x] Push `latest` only for stable releases.
+- [x] Add image digest to workflow summary and release notes.
+- [x] Add manual `workflow_dispatch` for release publish recovery.
 
 ## P2: First Release Readiness
 
@@ -429,11 +429,11 @@ Use `first_release_readiness_plan.md` as the source of truth.
 
 Implementation sequence:
 
-- [ ] Add `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, and `SECURITY.md`.
-- [ ] Add pull request and issue templates.
+- [x] Add `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, and `SECURITY.md`.
+- [x] Add pull request and issue templates.
 - [ ] Stop direct pushes to `main` after the release-readiness PR lands.
 - [ ] Configure branch protection and required checks.
-- [ ] Add release checklist and version/tag validation.
+- [x] Add release checklist and version/tag validation.
 - [ ] Run a `v0.1.0-rc.1` release-candidate drill before publishing `v0.1.0`.
 
 ## P2: Recurring Codebase Cleanup
@@ -545,9 +545,9 @@ Use `release_container_docs_plan.md` as the source of truth.
 
 Implementation sequence:
 
-- [ ] Decide release notes source: GitHub generated notes, `CHANGELOG.md`, or conventional commits.
-- [ ] Add release template/checklist.
-- [ ] Include Docker image tags, digest, docs URL, and upgrade notes in release notes.
+- [x] Decide release notes source: GitHub generated notes, `CHANGELOG.md`, or conventional commits.
+- [x] Add release template/checklist.
+- [x] Include Docker image tags, digest, docs URL, and upgrade notes in release notes.
 - [ ] Add dependency vulnerability scan plan.
 - [ ] Add image vulnerability scan plan.
 - [ ] Add SBOM generation plan.

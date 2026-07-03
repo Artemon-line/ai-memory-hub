@@ -145,20 +145,20 @@ Status: `PLANNED`
 Version source:
 
 - [ ] Use `pyproject.toml` as the source package version.
-- [ ] Use GitHub release tag as the released version.
-- [ ] Require release tag to match project version:
-  - [ ] `v0.1.0` tag must match `version = "0.1.0"`
-  - [ ] fail release workflow if they differ
+- [x] Use GitHub release tag as the released version.
+- [x] Require release tag to match project version:
+  - [x] `v0.1.0` tag must match `version = "0.1.0"`
+  - [x] fail release workflow if they differ
 
 Tag policy:
 
-- [ ] Release tags use `vMAJOR.MINOR.PATCH`.
-- [ ] Docker image tags:
-  - [ ] `docker.io/<dockerhub-namespace>/ai-memory-hub:vMAJOR.MINOR.PATCH`
-  - [ ] `docker.io/<dockerhub-namespace>/ai-memory-hub:MAJOR.MINOR.PATCH`
-  - [ ] `docker.io/<dockerhub-namespace>/ai-memory-hub:latest` for stable releases only
-- [ ] Pre-release tags use suffixes such as `v0.2.0-rc.1`.
-- [ ] Pre-releases publish version tags but do not update `latest`.
+- [x] Release tags use `vMAJOR.MINOR.PATCH`.
+- [x] Docker image tags:
+  - [x] `docker.io/<dockerhub-namespace>/ai-memory-hub:vMAJOR.MINOR.PATCH`
+  - [x] `docker.io/<dockerhub-namespace>/ai-memory-hub:MAJOR.MINOR.PATCH`
+  - [x] `docker.io/<dockerhub-namespace>/ai-memory-hub:latest` for stable releases only
+- [x] Pre-release tags use suffixes such as `v0.2.0-rc.1`.
+- [x] Pre-releases publish version tags but do not update `latest`.
 
 Release checklist:
 
@@ -171,13 +171,13 @@ Release checklist:
 
 ## 4) Docker Hub Publishing Workflow
 
-Status: `PLANNED`
+Status: `IMPLEMENTED`
 
 Workflow trigger:
 
-- [ ] Run on GitHub `release.published`.
-- [ ] Allow manual `workflow_dispatch` for recovery/retry.
-- [ ] Do not publish from pull requests.
+- [x] Run on GitHub `release.published`.
+- [x] Allow manual `workflow_dispatch` for recovery/retry.
+- [x] Do not publish from pull requests.
 
 Required GitHub secrets:
 
@@ -292,13 +292,13 @@ Pages acceptance criteria:
 
 Status: `PLANNED`
 
-- [ ] Decide release notes source:
+- [x] Decide release notes source:
   - [ ] GitHub auto-generated release notes
-  - [ ] committed `CHANGELOG.md`
+  - [x] committed `CHANGELOG.md`
   - [ ] generated notes from conventional commits
-- [ ] Add release template/checklist.
-- [ ] Include Docker image tags and digest in release notes.
-- [ ] Include docs URL in release notes.
+- [x] Add release template/checklist.
+- [x] Include Docker image tags and digest in release notes.
+- [x] Include docs URL in release notes.
 - [ ] Include upgrade notes when config, storage schema, or container behavior changes.
 - [ ] Call out whether the release updates `latest`.
 
@@ -332,9 +332,9 @@ Recommended sequence:
 2. Add container CI build and smoke test. Done.
 3. Improve `Containerfile` labels and runtime docs. Done.
 4. Add GitHub Pages MkDocs config and Pages workflow. Done.
-5. Add release version validation script/check.
-6. Add Docker Hub publish workflow for GitHub releases.
-7. Add release template and release notes checklist.
+5. Add release version validation script/check. Done.
+6. Add Docker Hub publish workflow for GitHub releases. Done.
+7. Add release template and release notes checklist. Done.
 8. Add image scanning/SBOM/provenance after the basic path is reliable.
 
 ## Final Acceptance Criteria
@@ -342,8 +342,8 @@ Recommended sequence:
 - [ ] Pull requests verify the container still builds.
 - [x] Pull requests verify docs still build.
 - [x] Pushes to `main` publish GitHub Pages docs.
-- [ ] GitHub releases publish Docker Hub images.
-- [ ] Docker image tags match release tags and project version.
-- [ ] Stable releases update `latest`; pre-releases do not.
-- [ ] Release notes include image tags, image digest, and docs URL.
-- [ ] Secrets are never printed in workflow logs.
+- [x] GitHub releases publish Docker Hub images.
+- [x] Docker image tags match release tags and project version.
+- [x] Stable releases update `latest`; pre-releases do not.
+- [x] Release notes include image tags, image digest, and docs URL.
+- [x] Secrets are never printed in workflow logs.

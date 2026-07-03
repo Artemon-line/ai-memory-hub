@@ -5,6 +5,12 @@ import shutil
 from pathlib import Path
 
 DEFAULT_OUTPUT_DIR = ".docs-build"
+ROOT_DOC_FILES = (
+    "CHANGELOG.md",
+    "CODE_OF_CONDUCT.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+)
 
 
 def prepare_docs(source_root: Path, output_dir: Path) -> None:
@@ -22,6 +28,7 @@ def prepare_docs(source_root: Path, output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     _copy_readme(source_root, output_dir)
     _copy_license(source_root, output_dir)
+    _copy_root_docs(source_root, output_dir)
     _copy_docs(source_root, output_dir)
 
 
@@ -35,6 +42,13 @@ def _copy_license(source_root: Path, output_dir: Path) -> None:
     license_file = source_root / "LICENSE"
     if license_file.exists():
         shutil.copy2(license_file, output_dir / "LICENSE")
+
+
+def _copy_root_docs(source_root: Path, output_dir: Path) -> None:
+    for filename in ROOT_DOC_FILES:
+        source = source_root / filename
+        if source.exists():
+            shutil.copy2(source, output_dir / filename)
 
 
 def _copy_docs(source_root: Path, output_dir: Path) -> None:

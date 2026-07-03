@@ -1,0 +1,70 @@
+name: Bug report
+description: Report a reproducible problem in ai-memory-hub.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Do not include secrets, bearer tokens,
+        API keys, private conversation data, embeddings, or production logs.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What went wrong?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Include the smallest command sequence or request payload that reproduces the issue.
+      placeholder: |
+        1. Run ...
+        2. Send ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: v0.1.0 or commit SHA
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      options:
+        - HTTP API
+        - MCP
+        - CLI
+        - Docker/container
+        - Storage provider
+        - Documentation
+        - Other
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Python version, storage provider, vector provider, and container runtime if relevant.
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Report safety
+      options:
+        - label: I removed secrets, bearer tokens, API keys, and private conversation data.
+          required: true

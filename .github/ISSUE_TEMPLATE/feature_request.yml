@@ -1,0 +1,44 @@
+name: Feature request
+description: Suggest a new capability or improvement.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What workflow or user need would this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior you would like to see.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Ingestion/capture
+        - Search/retrieval/ask
+        - MCP
+        - HTTP API
+        - CLI
+        - Storage providers
+        - Auth/security
+        - Documentation
+        - Release/packaging
+        - Other
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility notes
+      description: Mention config, API, storage schema, or client behavior that might be affected.

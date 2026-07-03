@@ -287,6 +287,9 @@ provider matrix, smoke commands, CI coverage, and hosted-provider notes.
 - [Browser extension capture plan](docs/browser_extension_capture_plan.md)
 - [Plugin readiness plan](docs/plugin_readiness_plan.md)
 - [First release readiness plan](docs/first_release_readiness_plan.md)
+- [Changelog](CHANGELOG.md)
+- [Contributing guide](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
 - [Project promotion plan](docs/project_promotion_plan.md)
 - [Storage provider examples](docs/storage_provider_examples.md)
 - [Roadmap](docs/roadmap.md)
@@ -309,6 +312,11 @@ provider live-test CI, and GitHub Pages docs publishing.
 
 Planned work includes broader importers, richer summaries, deletion/update
 workflows, provider-specific index compatibility checks, and release publishing.
+
+Known first-release limits: ai-memory-hub does not ship as a hosted memory
+service, production-quality retrieval requires a bring-your-own embedding model,
+browser extensions are planned as separate adapters, and UI dashboards/SDKs are
+future work.
 
 ## Contributing
 

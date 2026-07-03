@@ -36,15 +36,15 @@ Already in place:
 
 Missing or not yet enforced:
 
-- [ ] Docker Hub publish workflow.
-- [ ] Release workflow/checklist.
-- [ ] Version/tag validation.
-- [ ] `CHANGELOG.md` or chosen release notes source.
-- [ ] `CONTRIBUTING.md`.
-- [ ] `CODE_OF_CONDUCT.md`.
-- [ ] `SECURITY.md`.
-- [ ] Pull request template.
-- [ ] Issue templates.
+- [x] Docker Hub publish workflow.
+- [x] Release workflow/checklist.
+- [x] Version/tag validation.
+- [x] `CHANGELOG.md` or chosen release notes source.
+- [x] `CONTRIBUTING.md`.
+- [x] `CODE_OF_CONDUCT.md`.
+- [x] `SECURITY.md`.
+- [x] Pull request template.
+- [x] Issue templates.
 - [ ] Branch protection policy that blocks direct pushes to `main`.
 - [ ] Required status checks selected in GitHub settings.
 - [ ] Repository topics and description reviewed for discoverability.
@@ -89,7 +89,7 @@ These are required before the first release is promoted.
       manageable.
 - [ ] Decide whether signed commits are mandatory immediately. If yes, configure
       local signing before enabling enforcement.
-- [ ] Document the PR strategy in `CONTRIBUTING.md`:
+- [x] Document the PR strategy in `CONTRIBUTING.md`:
   - one focused change per PR;
   - tests or docs for behavior changes;
   - no direct `main` pushes;
@@ -99,46 +99,46 @@ These are required before the first release is promoted.
 
 Add these root-level files before release:
 
-- [ ] `CONTRIBUTING.md`
+- [x] `CONTRIBUTING.md`
   - local setup;
   - test commands;
   - documentation build commands;
   - PR expectations;
   - branch/commit policy;
   - release PR policy.
-- [ ] `CODE_OF_CONDUCT.md`
+- [x] `CODE_OF_CONDUCT.md`
   - use a standard Contributor Covenant-style policy unless there is a reason
     to customize heavily.
-- [ ] `SECURITY.md`
+- [x] `SECURITY.md`
   - supported versions;
   - how to report vulnerabilities privately;
   - expected response window;
   - reminder not to include secrets or private conversation data in reports.
-- [ ] `.github/PULL_REQUEST_TEMPLATE.md`
+- [x] `.github/PULL_REQUEST_TEMPLATE.md`
   - summary;
   - validation run;
   - docs impact;
   - security/privacy impact;
   - release note needed.
-- [ ] `.github/ISSUE_TEMPLATE/bug_report.yml`
-- [ ] `.github/ISSUE_TEMPLATE/feature_request.yml`
-- [ ] `.github/ISSUE_TEMPLATE/config.yml`
+- [x] `.github/ISSUE_TEMPLATE/bug_report.yml`
+- [x] `.github/ISSUE_TEMPLATE/feature_request.yml`
+- [x] `.github/ISSUE_TEMPLATE/config.yml`
 
 ## P0: Versioning And Release Notes
 
-- [ ] Decide release notes source:
+- [x] Decide release notes source:
   - GitHub generated release notes for the first release; or
   - committed `CHANGELOG.md` from the start.
-- [ ] Add a release checklist file, such as
+- [x] Add a release checklist file, such as
       `.github/RELEASE_CHECKLIST.md`.
-- [ ] Add version validation:
+- [x] Add version validation:
   - release tag must be `vMAJOR.MINOR.PATCH`;
   - tag `v0.1.0` must match `pyproject.toml` `version = "0.1.0"`;
   - release workflow fails if tag and project version differ.
-- [ ] Define prerelease policy:
+- [x] Define prerelease policy:
   - `v0.1.0-rc.1` is allowed for release candidates;
   - prereleases do not update Docker `latest`.
-- [ ] Release notes must include:
+- [x] Release notes must include:
   - one-paragraph project summary;
   - install/run commands;
   - Docker image tags and digest once publishing exists;
@@ -156,16 +156,16 @@ release requirements:
   - `DOCKERHUB_USERNAME`
   - `DOCKERHUB_TOKEN`
   - optional `DOCKERHUB_NAMESPACE`
-- [ ] Add `.github/workflows/docker-publish.yml`.
-- [ ] Trigger publish only on `release.published` and manual retry.
-- [ ] Build with Docker Buildx from the checked-in `Containerfile`.
-- [ ] Validate tag against `pyproject.toml`.
-- [ ] Push immutable version tags:
+- [x] Add `.github/workflows/docker-publish.yml`.
+- [x] Trigger publish only on `release.published` and manual retry.
+- [x] Build with Docker Buildx from the checked-in `Containerfile`.
+- [x] Validate tag against `pyproject.toml`.
+- [x] Push immutable version tags:
   - `v0.1.0`
   - `0.1.0`
-- [ ] Push `latest` only for stable releases.
-- [ ] Add image digest to the workflow summary and release notes.
-- [ ] Keep PR and push builds as smoke-only, with no registry push.
+- [x] Push `latest` only for stable releases.
+- [x] Add image digest to the workflow summary and release notes.
+- [x] Keep PR and push builds as smoke-only, with no registry push.
 
 ## P0: Documentation Readiness
 
@@ -173,10 +173,10 @@ release requirements:
       why local-first agent memory matters.
 - [ ] Quick start works from a clean checkout.
 - [ ] Docker/Compose quick start works from a clean checkout.
-- [ ] MCP client setup is reachable from README.
-- [ ] Security/auth guidance is reachable before LAN/container exposure docs.
-- [ ] Release notes link to the generated docs site.
-- [ ] Known limitations are explicit:
+- [x] MCP client setup is reachable from README.
+- [x] Security/auth guidance is reachable before LAN/container exposure docs.
+- [x] Release notes link to the generated docs site.
+- [x] Known limitations are explicit:
   - no hosted memory service;
   - bring-your-own embedding model for production-quality retrieval;
   - browser extensions are future/separate repos;
@@ -236,14 +236,14 @@ production-ready.
 
 Use this checklist for the release PR:
 
-- [ ] `CONTRIBUTING.md` added.
-- [ ] `CODE_OF_CONDUCT.md` added.
-- [ ] `SECURITY.md` added.
-- [ ] Issue templates added.
-- [ ] Pull request template added.
-- [ ] Docker publish workflow added.
-- [ ] Version/tag validation added.
-- [ ] Release checklist added.
+- [x] `CONTRIBUTING.md` added.
+- [x] `CODE_OF_CONDUCT.md` added.
+- [x] `SECURITY.md` added.
+- [x] Issue templates added.
+- [x] Pull request template added.
+- [x] Docker publish workflow added.
+- [x] Version/tag validation added.
+- [x] Release checklist added.
 - [ ] README and docs reviewed.
 - [ ] Branch protection enabled.
 - [ ] Required checks selected.

@@ -28,6 +28,11 @@ nav:
   - Storage Provider Examples: docs/storage_provider_examples.md
   - Storage BYOA Plan: docs/storage_agnostic_byoa_plan.md
   - Agent Integration: docs/agents.md
+  - Project:
+      - Changelog: CHANGELOG.md
+      - Contributing: CONTRIBUTING.md
+      - Code Of Conduct: CODE_OF_CONDUCT.md
+      - Security: SECURITY.md
   - MCP:
       - MCP Plan: docs/mcp_plan.md
       - MCP Client Smoke Plan: docs/mcp_client_smoke_plan.md
