@@ -41,7 +41,7 @@ Use this message consistently, then tailor the detail for each audience:
 
 Run this checklist before every larger promotion push:
 
-- [ ] `README.md` has a clear first-screen value proposition.
+- [x] `README.md` has a clear first-screen value proposition.
 - [ ] Quick start works from a clean checkout.
 - [ ] GitHub Actions are green on `main`.
 - [ ] The current promoted feature has docs and at least one copy-paste command.
@@ -49,7 +49,7 @@ Run this checklist before every larger promotion push:
       command.
 - [ ] Issues are enabled and triage labels exist.
 - [ ] One or two starter issues are available for contributors.
-- [ ] The latest known limitations are documented instead of hidden.
+- [x] The latest known limitations are documented instead of hidden.
 
 ## Weekly Cadence
 

@@ -169,7 +169,7 @@ release requirements:
 
 ## P0: Documentation Readiness
 
-- [ ] README first screen clearly says what the project is, who it is for, and
+- [x] README first screen clearly says what the project is, who it is for, and
       why local-first agent memory matters.
 - [ ] Quick start works from a clean checkout.
 - [ ] Docker/Compose quick start works from a clean checkout.
@@ -245,7 +245,7 @@ Use this checklist for the release PR:
 - [x] Docker publish workflow added.
 - [x] Version/tag validation added.
 - [x] Release checklist added.
-- [ ] README and docs reviewed.
+- [x] README and docs reviewed.
 - [ ] Branch protection enabled.
 - [ ] Required checks selected.
 - [ ] `main` is green.
