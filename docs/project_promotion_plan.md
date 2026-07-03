@@ -92,6 +92,9 @@ Once per month, publish a more substantial update.
 - Update `README.md` if the project positioning changed.
 - Review GitHub topics, description, pinned issue, and docs links.
 
+First-release copy, repository settings, demo transcript, launch-day post, and
+follow-up technical post are prepared in `release_promotion_assets.md`.
+
 ## Release Cadence
 
 For tagged releases, use a larger promotion loop:
@@ -211,10 +214,10 @@ Example four-week loop:
 
 ## Acceptance Criteria
 
-- [ ] A reusable project pitch exists in README and docs.
+- [x] A reusable project pitch exists in README and docs.
 - [ ] GitHub topics and repository description match the current positioning.
-- [ ] At least one demoable workflow is always linked from README.
+- [x] At least one demoable workflow is always linked from README.
 - [ ] Weekly promotion produces one concrete post or tutorial note.
-- [ ] Monthly promotion produces one longer update or release-style summary.
+- [x] Monthly promotion produces one longer update or release-style summary.
 - [ ] Feedback from promotion is captured as issues or improvement-plan updates.
-- [ ] Promotion never depends on unreleased behavior.
+- [x] Promotion never depends on unreleased behavior.

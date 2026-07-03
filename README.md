@@ -287,6 +287,7 @@ provider matrix, smoke commands, CI coverage, and hosted-provider notes.
 - [Browser extension capture plan](docs/browser_extension_capture_plan.md)
 - [Plugin readiness plan](docs/plugin_readiness_plan.md)
 - [First release readiness plan](docs/first_release_readiness_plan.md)
+- [Release promotion assets](docs/release_promotion_assets.md)
 - [Changelog](CHANGELOG.md)
 - [Contributing guide](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)

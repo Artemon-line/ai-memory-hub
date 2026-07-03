@@ -47,7 +47,7 @@ Missing or not yet enforced:
 - [x] Issue templates.
 - [ ] Branch protection policy that blocks direct pushes to `main`.
 - [ ] Required status checks selected in GitHub settings.
-- [ ] Repository topics and description reviewed for discoverability.
+- [ ] Repository topics and description applied in GitHub settings.
 
 ## Release Scope
 
@@ -217,8 +217,8 @@ production-ready.
 
 ## P1: Repository Discoverability
 
-- [ ] Set GitHub repository description to match README positioning.
-- [ ] Add repository topics:
+- [x] Document GitHub repository description to match README positioning.
+- [x] Document repository topics:
   - `mcp`
   - `ai-agents`
   - `memory`
@@ -227,9 +227,10 @@ production-ready.
   - `pgvector`
   - `local-first`
   - `openai-compatible`
-- [ ] Pin the first release announcement issue or discussion.
-- [ ] Add a small demo GIF or terminal transcript when available.
-- [ ] Make sure the promotion plan has one launch-day post and one follow-up
+- [ ] Apply repository description and topics in GitHub settings.
+- [ ] Pin the first release announcement issue or discussion after release.
+- [x] Add a small demo GIF or terminal transcript when available.
+- [x] Make sure the promotion plan has one launch-day post and one follow-up
       technical post ready.
 
 ## First Release Checklist

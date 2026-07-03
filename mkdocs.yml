@@ -51,6 +51,7 @@ nav:
       - Plugin Readiness Plan: docs/plugin_readiness_plan.md
       - Release, Container, and Docs Publishing Plan: docs/release_container_docs_plan.md
       - First Release Readiness Plan: docs/first_release_readiness_plan.md
+      - Release Promotion Assets: docs/release_promotion_assets.md
       - Project Promotion Plan: docs/project_promotion_plan.md
       - Observability, Logging, and Telemetry Plan: docs/observability_logging_telemetry_plan.md
       - Recurring Codebase Cleanup Plan: docs/recurring_codebase_cleanup_plan.md
