@@ -431,6 +431,7 @@ Implementation sequence:
 
 - [x] Add `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, and `SECURITY.md`.
 - [x] Add pull request and issue templates.
+- [x] Document branch protection, required checks, and repository settings.
 - [ ] Stop direct pushes to `main` after the release-readiness PR lands.
 - [ ] Configure branch protection and required checks.
 - [x] Add release checklist and version/tag validation.

@@ -45,6 +45,8 @@ Missing or not yet enforced:
 - [x] `SECURITY.md`.
 - [x] Pull request template.
 - [x] Issue templates.
+- [x] Branch protection, required checks, Docker Hub secrets, and repository
+      settings documented.
 - [ ] Branch protection policy that blocks direct pushes to `main`.
 - [ ] Required status checks selected in GitHub settings.
 - [ ] Repository topics and description applied in GitHub settings.
@@ -70,6 +72,8 @@ cloud service behavior as shipped release features.
 
 These are required before the first release is promoted.
 
+- [x] Document branch protection and required checks in
+      `repository_governance_settings.md`.
 - [ ] Stop direct pushes to `main`.
 - [ ] Require pull requests for all changes after the release-readiness PR lands.
 - [ ] Require the main CI workflow before merge:
@@ -79,10 +83,12 @@ These are required before the first release is promoted.
   - `Storage Postgres Integration`
   - `Containerfile Lint`
   - `Container Build and Smoke`
-- [ ] Require the docs build workflow before merge.
+- [ ] Require the docs build workflow before merge:
+  - `Build Documentation`
 - [ ] Require the Bruno workflow when files under `memory/**`, `tests/bruno/**`,
       `.github/workflows/bruno-integration.yml`, `pyproject.toml`, or `uv.lock`
-      change.
+      change:
+  - `Bruno API/MCP Integration`
 - [ ] Keep real-client MCP smoke manual/scheduled and non-required until it is
       stable enough for PR gating.
 - [ ] Require branch to be up to date before merge once queue/noise is
@@ -227,6 +233,8 @@ production-ready.
   - `pgvector`
   - `local-first`
   - `openai-compatible`
+- [x] Document repository description and topics in
+      `repository_governance_settings.md`.
 - [ ] Apply repository description and topics in GitHub settings.
 - [ ] Pin the first release announcement issue or discussion after release.
 - [x] Add a small demo GIF or terminal transcript when available.
