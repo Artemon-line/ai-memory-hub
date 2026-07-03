@@ -135,12 +135,12 @@ Add CI checks before publishing is enabled:
 Optional hardening:
 
 - [x] Add Hadolint or similar Dockerfile linting.
-- [ ] Add Trivy image scan in warning mode first.
+- [x] Add Trivy image scan in warning mode first.
 - [ ] Promote image scanning to required once false positives are triaged.
 
 ## 3) Release Version Policy
 
-Status: `PLANNED`
+Status: `PARTIAL`
 
 Version source:
 
@@ -203,7 +203,7 @@ Workflow steps:
 - [ ] Run a post-build smoke test before push where practical.
 - [ ] Push image to Docker Hub.
 - [ ] Add image digest to workflow summary.
-- [ ] Optionally attach SBOM/provenance artifact.
+- [x] Optionally attach SBOM/provenance artifact.
 
 Recommended GitHub Actions:
 
@@ -290,7 +290,7 @@ Pages acceptance criteria:
 
 ## 6) GitHub Release Notes
 
-Status: `PLANNED`
+Status: `IMPLEMENTED`
 
 - [x] Decide release notes source:
   - [ ] GitHub auto-generated release notes
@@ -304,23 +304,23 @@ Status: `PLANNED`
 
 ## 7) Security And Supply Chain
 
-Status: `PLANNED`
+Status: `PARTIAL`
 
-- [ ] Use least-privilege GitHub workflow permissions.
+- [x] Use least-privilege GitHub workflow permissions.
 - [ ] Store Docker Hub credentials only in GitHub Actions secrets.
 - [ ] Prefer Docker Hub access token over account password.
-- [ ] Add dependency vulnerability scan plan.
-- [ ] Add image vulnerability scan plan.
-- [ ] Consider SBOM generation:
-  - [ ] SPDX or CycloneDX
-  - [ ] attach to release or publish as image attestation
-- [ ] Consider provenance/signing:
-  - [ ] GitHub artifact attestations
+- [x] Add dependency vulnerability scan plan.
+- [x] Add image vulnerability scan plan.
+- [x] Consider SBOM generation:
+  - [x] SPDX or CycloneDX
+  - [x] attach to release or publish as image attestation
+- [x] Consider provenance/signing:
+  - [x] GitHub artifact attestations
   - [ ] Cosign signing later if needed
-- [ ] Document supported image lifecycle:
-  - [ ] supported tags
-  - [ ] deprecation policy
-  - [ ] security fix policy
+- [x] Document supported image lifecycle:
+  - [x] supported tags
+  - [x] deprecation policy
+  - [x] security fix policy
 
 ## 8) Implementation Order
 
@@ -335,7 +335,7 @@ Recommended sequence:
 5. Add release version validation script/check. Done.
 6. Add Docker Hub publish workflow for GitHub releases. Done.
 7. Add release template and release notes checklist. Done.
-8. Add image scanning/SBOM/provenance after the basic path is reliable.
+8. Add image scanning/SBOM/provenance after the basic path is reliable. Done.
 
 ## Final Acceptance Criteria
 

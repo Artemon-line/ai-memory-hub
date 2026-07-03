@@ -208,12 +208,12 @@ curl -fsS http://127.0.0.1:8000/ready
 These are valuable but should not block `v0.1.0` unless the image is promoted as
 production-ready.
 
-- [ ] Add Trivy image scan in warning mode.
-- [ ] Add dependency vulnerability reporting.
-- [ ] Add SBOM generation for Docker images.
-- [ ] Add GitHub artifact attestations or provenance.
+- [x] Add Trivy image scan in warning mode.
+- [x] Add dependency vulnerability reporting.
+- [x] Add SBOM generation for Docker images.
+- [x] Add GitHub artifact attestations or provenance.
 - [ ] Consider Cosign signing after the basic release process is stable.
-- [ ] Document image support lifecycle and security-fix policy.
+- [x] Document image support lifecycle and security-fix policy.
 
 ## P1: Repository Discoverability
 

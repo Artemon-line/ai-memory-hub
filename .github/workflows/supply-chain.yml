@@ -1,0 +1,69 @@
+name: supply-chain
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/supply-chain.yml"
+      - "Containerfile"
+      - "memory/**"
+      - "pyproject.toml"
+      - "uv.lock"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  image-scan-and-sbom:
+    name: Image Scan and SBOM
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Build image
+        run: |
+          docker build \
+            --label org.opencontainers.image.revision="${GITHUB_SHA}" \
+            --label org.opencontainers.image.source="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            -t ai-memory-hub:supply-chain \
+            -f Containerfile \
+            .
+
+      - name: Run Trivy image scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ai-memory-hub:supply-chain
+          format: table
+          exit-code: "0"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+
+      - name: Write Trivy image scan report
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ai-memory-hub:supply-chain
+          format: json
+          output: trivy-image-report.json
+          exit-code: "0"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+
+      - name: Generate CycloneDX SBOM
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ai-memory-hub:supply-chain
+          format: cyclonedx
+          output: ai-memory-hub.cdx.json
+          exit-code: "0"
+
+      - name: Upload supply-chain artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: supply-chain-reports
+          path: |
+            trivy-image-report.json
+            ai-memory-hub.cdx.json
+          retention-days: 30

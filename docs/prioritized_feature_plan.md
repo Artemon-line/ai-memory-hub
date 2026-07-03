@@ -35,7 +35,7 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P3 | Elasticsearch/OpenSearch vector providers | Implemented | `storage_agnostic_byoa_plan.md` |
 | P3 | Milvus/Zilliz and Weaviate vector providers | Implemented | `storage_agnostic_byoa_plan.md` |
 | P3 | Provider backlog: Redis/RediSearch, Pinecone, Turbopuffer, Vespa, and Typesense implemented; Meilisearch, DuckDB VSS, and sqlite-vec remain planned | Partial | `storage_agnostic_byoa_plan.md`, `improvements/vector_dbs.md` |
-| P3 | Release notes, image scanning, SBOM, and provenance | Planned | `release_container_docs_plan.md` |
+| P3 | Release notes, image scanning, SBOM, and provenance | Implemented | `release_container_docs_plan.md` |
 | P3 | Topic/project summaries, digests, consolidation | Planned here | This doc and `roadmap.md` |
 | P3 | UI and developer experience | Planned here | This doc and `roadmap.md` |
 | P4 | Graph memory, decay, shared memory, plugins | Planned here | This doc and `roadmap.md` |
@@ -548,11 +548,11 @@ Implementation sequence:
 - [x] Decide release notes source: GitHub generated notes, `CHANGELOG.md`, or conventional commits.
 - [x] Add release template/checklist.
 - [x] Include Docker image tags, digest, docs URL, and upgrade notes in release notes.
-- [ ] Add dependency vulnerability scan plan.
-- [ ] Add image vulnerability scan plan.
-- [ ] Add SBOM generation plan.
-- [ ] Add provenance/signing plan.
-- [ ] Document supported image lifecycle and security fix policy.
+- [x] Add dependency vulnerability scan plan.
+- [x] Add image vulnerability scan plan.
+- [x] Add SBOM generation plan.
+- [x] Add provenance/signing plan.
+- [x] Document supported image lifecycle and security fix policy.
 
 ## P3: Topic/Project Summaries And Consolidation
 

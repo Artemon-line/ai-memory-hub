@@ -124,3 +124,30 @@ def test_container_smoke_retains_stopped_container_for_logs() -> None:
     assert ".State.ExitCode" in workflow
     assert "docker exec ai-memory-hub-ci" in workflow
     assert "docker run --rm --user 12345:0 --entrypoint sh" in workflow
+
+
+def test_supply_chain_workflow_scans_without_blocking_prs() -> None:
+    workflow = Path(".github/workflows/supply-chain.yml").read_text(encoding="utf-8")
+
+    assert "aquasecurity/trivy-action@v0.36.0" in workflow
+    assert "exit-code: \"0\"" in workflow
+    assert "format: cyclonedx" in workflow
+    assert "ai-memory-hub.cdx.json" in workflow
+    assert "actions/upload-artifact@v7" in workflow
+
+
+def test_dependency_review_workflow_reports_in_warning_mode() -> None:
+    workflow = Path(".github/workflows/dependency-review.yml").read_text(encoding="utf-8")
+
+    assert "actions/dependency-review-action@v5" in workflow
+    assert "warn-only: true" in workflow
+    assert "vulnerability-check: true" in workflow
+
+
+def test_docker_publish_attests_published_image() -> None:
+    workflow = Path(".github/workflows/docker-publish.yml").read_text(encoding="utf-8")
+
+    assert "attestations: write" in workflow
+    assert "artifact-metadata: write" in workflow
+    assert "actions/attest@v4" in workflow
+    assert "push-to-registry: true" in workflow

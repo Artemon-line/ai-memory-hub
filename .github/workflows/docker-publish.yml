@@ -18,6 +18,9 @@ on:
 
 permissions:
   contents: read
+  id-token: write
+  attestations: write
+  artifact-metadata: write
 
 jobs:
   docker-publish:
@@ -116,3 +119,10 @@ jobs:
             echo
             echo "Add this digest to the GitHub release notes before promotion."
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Attest published image provenance
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ steps.docker-tags.outputs.image }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
