@@ -2695,6 +2695,61 @@ def test_runtime_health_reports_dry_run(tmp_path: Path) -> None:
     assert health["vector_fallback_active"] is False
 
 
+def test_embedding_readiness_does_not_probe_by_default(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    class ExplodingEmbeddingProvider:
+        dimension = 32
+
+        def embed_texts(self, texts: list[str]) -> list[list[float]]:
+            raise AssertionError("embedding readiness should not call embed_texts")
+
+    monkeypatch.setattr(mvp_ingestion, "LocalEmbeddingProvider", ExplodingEmbeddingProvider)
+    mvp_ingestion.configure_runtime(
+        config={
+            "providers": {"embeddings": "local", "vector_db": "in_memory"},
+            "paths": {"data_dir": str(tmp_path)},
+        }
+    )
+
+    health = mvp_ingestion.runtime_health()
+
+    assert health["embedding_health"] == {
+        "provider": "local",
+        "model": "local-deterministic-hash",
+        "dimension": 32,
+        "status": "ok",
+        "live_probe": False,
+        "mode": "configuration",
+    }
+
+
+def test_embedding_readiness_live_probe_is_explicit_and_redacted(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    class BrokenEmbeddingProvider:
+        dimension = 32
+
+        def embed_texts(self, texts: list[str]) -> list[list[float]]:
+            raise RuntimeError("embedding failed api_key=secret-readiness-key")
+
+    monkeypatch.setattr(mvp_ingestion, "LocalEmbeddingProvider", BrokenEmbeddingProvider)
+    mvp_ingestion.configure_runtime(
+        config={
+            "providers": {"embeddings": "local", "vector_db": "in_memory"},
+            "paths": {"data_dir": str(tmp_path)},
+            "observability": {"embedding_readiness_probe": True},
+        }
+    )
+
+    health = mvp_ingestion.runtime_health()
+
+    assert health["embedding_health"]["status"] == "degraded"
+    assert health["embedding_health"]["live_probe"] is True
+    assert health["embedding_health"]["error_type"] == "RuntimeError"
+    assert "secret-readiness-key" not in health["embedding_health"]["error"]
+
+
 def test_runtime_dimensionality_mismatch_after_startup_raises() -> None:
     store = InMemoryVectorStore(dimension=32)
     store.insert(

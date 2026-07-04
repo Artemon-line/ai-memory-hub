@@ -75,6 +75,14 @@ def test_vector_provider_config_rejects_unknown_distance():
         parse_config({"storage": {"vector": {"distance": "manhattan"}}})
 
 
+def test_observability_embedding_readiness_probe_defaults_off() -> None:
+    config = parse_config({})
+    assert config.observability.embedding_readiness_probe is False
+
+    enabled = parse_config({"observability": {"embedding_readiness_probe": True}})
+    assert enabled.observability.embedding_readiness_probe is True
+
+
 def test_storage_provider_expansion_config_models_validate() -> None:
     config = parse_config(
         {

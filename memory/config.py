@@ -706,6 +706,48 @@ class APIConfig(BaseModel):
         return self
 
 
+class LoggingConfig(BaseModel):
+    enabled: bool = True
+    format: str = "text"
+    level: str = "INFO"
+    access_logs: bool = True
+    request_id_header: str = "x-request-id"
+    include_stack_traces: bool = True
+
+    @field_validator("format")
+    @classmethod
+    def validate_format(cls, value: str) -> str:
+        normalized = value.lower()
+        if normalized not in {"text", "json"}:
+            raise ValueError("observability.logging.format must be one of: text, json")
+        return normalized
+
+    @field_validator("level")
+    @classmethod
+    def validate_level(cls, value: str) -> str:
+        normalized = value.upper()
+        if normalized not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
+            raise ValueError(
+                "observability.logging.level must be one of: "
+                "DEBUG, INFO, WARNING, ERROR, CRITICAL"
+            )
+        return normalized
+
+    @field_validator("request_id_header")
+    @classmethod
+    def validate_request_id_header(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if not normalized:
+            raise ValueError("observability.logging.request_id_header must not be empty")
+        return normalized
+
+
+class ObservabilityConfig(BaseModel):
+    logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    debug_payloads: bool = False
+    embedding_readiness_probe: bool = False
+
+
 class HubConfig(BaseModel):
     model_config = ConfigDict(populate_by_name=True, protected_namespaces=())
 
@@ -723,6 +765,7 @@ class HubConfig(BaseModel):
     openai: OpenAIConfig = Field(default_factory=OpenAIConfig)
     mcp: MCPConfig = Field(default_factory=MCPConfig)
     api: APIConfig = Field(default_factory=APIConfig)
+    observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
 
 
 def parse_config(config_dict: dict[str, Any] | None) -> HubConfig:

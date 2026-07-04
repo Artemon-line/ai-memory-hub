@@ -45,6 +45,7 @@ def test_pgvector_example_uses_slim_containerfile() -> None:
     )
 
     assert "dockerfile: examples/storage_providers/postgres-pgvector/Containerfile" in compose
+    assert "http://127.0.0.1:8000/ready" in compose
     assert "--extra postgres" in containerfile
     assert "--extra tokenizer" in containerfile
     assert 'CMD ["/app/.venv/bin/aim", "serve", "--host", "0.0.0.0", "--port", "8000"]' in containerfile

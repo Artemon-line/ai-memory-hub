@@ -476,6 +476,11 @@ def build_runtime(
         "vector_fallback_active": vector_fallback_active,
         "reasons": fallback_reasons,
         "embedding": embedding_index_metadata["embedding"],
+        "embedding_health": _embedding_readiness(
+            cfg=cfg,
+            embedding_provider=embedding_provider,
+            live_probe=cfg.observability.embedding_readiness_probe,
+        ),
         "vector_index": embedding_index_metadata["vector_index"],
         "embedding_index_mismatch": embedding_index_mismatch,
     }
@@ -4064,6 +4069,38 @@ def runtime_health() -> dict[str, Any]:
         "metadata_health": metadata_health,
         "vector_health": vector_health,
     }
+
+
+def _embedding_readiness(
+    *,
+    cfg: HubConfig,
+    embedding_provider: EmbeddingProvider,
+    live_probe: bool,
+) -> dict[str, Any]:
+    provider = str(cfg.providers.embeddings)
+    health: dict[str, Any] = {
+        "provider": provider,
+        "model": _active_embedding_model(cfg=cfg, embedding_provider=embedding_provider),
+        "dimension": int(embedding_provider.dimension),
+        "status": "ok",
+        "live_probe": bool(live_probe),
+    }
+    if not live_probe:
+        health["mode"] = "configuration"
+        return health
+    try:
+        vectors = embedding_provider.embed_texts(["ai-memory-hub readiness probe"])
+        first_vector = vectors[0] if vectors else []
+        if len(vectors) != 1 or len(first_vector) != embedding_provider.dimension:
+            health["status"] = "degraded"
+            health["error_type"] = "VectorDimensionError"
+        else:
+            health["mode"] = "live"
+    except Exception as exc:
+        health["status"] = "degraded"
+        health["error_type"] = type(exc).__name__
+        health["error"] = redact_secrets(str(exc))
+    return health
 
 
 def _hash_to_vector(text: str, dimensions: int) -> list[float]:

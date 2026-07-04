@@ -77,7 +77,25 @@ def _runtime() -> mvp_ingestion.RuntimeDependencies:
         embedding_provider=StubEmbedder(),
         metadata_store=StubMetadataStore(),
         vector_store=StubVectorStore(),
-        health_state={"mode": "ok", "vector_fallback_active": False},
+        health_state={
+            "mode": "ok",
+            "metadata_provider": "sqlite",
+            "vector_provider": "memory",
+            "vector_fallback_active": False,
+            "embedding": {
+                "provider": "local",
+                "model": "local-deterministic-hash",
+                "dimension": 32,
+            },
+            "embedding_health": {
+                "provider": "local",
+                "model": "local-deterministic-hash",
+                "dimension": 32,
+                "status": "ok",
+                "live_probe": False,
+                "mode": "configuration",
+            },
+        },
     )
 
 
@@ -259,8 +277,49 @@ def test_health_and_ready_are_public_and_redacted() -> None:
     assert health.json()["status"] == "ok"
     assert ready.json()["status"] == "ok"
     assert ready.json()["mode"] == "ok"
+    assert ready.json()["metadata_provider"] == "sqlite"
+    assert ready.json()["vector_provider"] == "memory"
+    assert ready.json()["embedding_provider"] == "local"
+    assert ready.json()["telemetry_enabled"] is False
     assert "content_hash" not in str(health.json())
     assert "content_hash" not in str(ready.json())
+
+
+def test_observability_endpoint_is_public_and_redacted() -> None:
+    client = _client()
+
+    response = client.get("/observability")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["observability"]["logging"]["format"] == "text"
+    assert body["observability"]["telemetry_enabled"] is False
+    assert body["observability"]["embedding_readiness_probe"] is False
+    assert body["runtime"]["mode"] == "ok"
+    assert "content_hash" not in str(body)
+
+
+def test_configured_request_id_header_is_echoed() -> None:
+    runtime = _runtime()
+    agent = MVPIngestionAgent(
+        config={"providers": {"agent": "mvp"}, "interfaces": {"api": "true"}},
+        runtime=runtime,
+    )
+    app = create_app(
+        config={
+            "observability": {"logging": {"request_id_header": "x-correlation-id"}},
+            "providers": {"embeddings": "local", "vector_db": "in_memory"},
+        },
+        ingestion_agent=agent,
+    )
+    client = TestClient(app)
+
+    response = client.get("/health", headers={"x-correlation-id": "release-docs-check"})
+
+    assert response.status_code == 200
+    assert response.headers["x-correlation-id"] == "release-docs-check"
+    assert "x-request-id" not in response.headers
 
 
 def test_bearer_auth_rejects_missing_and_invalid_tokens() -> None:

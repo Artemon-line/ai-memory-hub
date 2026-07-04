@@ -26,7 +26,7 @@ Implemented:
 
 Not implemented yet:
 
-- [ ] Global logging configuration for JSON/text format, log level, and access logs.
+- [x] Global logging configuration for JSON/text format, log level, and access logs.
 - [x] Request or operation correlation IDs.
 - [ ] Trace IDs in logs.
 - [ ] OpenTelemetry SDK setup.
@@ -98,11 +98,11 @@ observability:
 
 ### Implementation Tasks
 
-- [ ] Add `memory/observability/logging.py`.
-- [ ] Configure root logger once during app startup.
-- [ ] Support text logs for humans and JSON logs for containers.
+- [x] Add `memory/observability/logging.py`.
+- [x] Configure root logger once during app startup.
+- [x] Support text logs for humans and JSON logs for containers.
 - [x] Add request-id middleware for FastAPI HTTP requests.
-- [ ] Include `request_id`, `trace_id`, `span_id`, `operation`, and `provider`
+- [x] Include `request_id`, `trace_id`, `span_id`, `operation`, and `provider`
   fields when available.
 - [ ] Standardize exception logs:
   - `logger.exception("MCP tool failed", extra={...})`
@@ -161,10 +161,10 @@ Response shape:
 Tasks:
 
 - [x] Reuse `mvp_ingestion.runtime_health()`.
-- [ ] Add lightweight embedding-provider readiness check that does not perform a
+- [x] Add lightweight embedding-provider readiness check that does not perform a
   real embedding call unless explicitly configured.
 - [x] Add tests for ok/degraded/dry-run readiness.
-- [ ] Update Compose healthcheck to call `/ready` once available.
+- [x] Update Compose healthcheck to call `/ready` once available.
 
 ## Phase 3: OpenTelemetry Tracing
 
@@ -338,7 +338,7 @@ Hard requirements:
 - [ ] Do not log raw conversation payloads.
 - [ ] Do not log raw search queries by default.
 - [ ] Do not export user message text as span attributes.
-- [ ] Add `observability.debug_payloads: false` and keep it false by default.
+- [x] Add `observability.debug_payloads: false` and keep it false by default.
 
 If payload debugging is ever needed, require an explicit local-only flag and log
 only truncated, redacted snippets.
@@ -347,8 +347,8 @@ only truncated, redacted snippets.
 
 Unit tests:
 
-- [ ] Logging config chooses text or JSON format.
-- [ ] Secret redaction applies to structured log extras.
+- [x] Logging config chooses text or JSON format.
+- [x] Secret redaction applies to structured log extras.
 - [x] Request ID middleware uses incoming `x-request-id` or generates one.
 - [ ] OTel setup is no-op when disabled.
 - [ ] OTel setup does not raise when exporter endpoint is unavailable.

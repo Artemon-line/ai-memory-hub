@@ -16,6 +16,7 @@ from memory.importers import get_importer
 from memory.ingestion import mvp_ingestion
 from memory.ingestion.thread_models import SearchResultMode
 from memory.ingestion.tokenizer import tokenizer_diagnostics
+from memory.observability.logging import configure_logging
 from memory.provider_models import (
     MetadataProviderConfigKey,
     ProviderConfigSection,
@@ -532,12 +533,13 @@ def _storage_check(args: argparse.Namespace) -> int:
 
 def _serve(args: argparse.Namespace) -> int:
     config = load_config(args.config)
+    configure_logging(config.observability.logging)
     host = args.host or config.api.host
     port = args.port or config.api.port
     app = _create_cli_app(config)
     if not args.quiet:
         print(f"serving ai-memory-hub on {host}:{port}")
-    _run_server(app, host=host, port=int(port))
+    _run_server(app, host=host, port=int(port), access_log=config.observability.logging.access_logs)
     return EXIT_OK
 
 
@@ -547,12 +549,12 @@ def _create_cli_app(config: HubConfig) -> Any:
     return create_app(config=config)
 
 
-def _run_server(app: Any, *, host: str, port: int) -> None:
+def _run_server(app: Any, *, host: str, port: int, access_log: bool = True) -> None:
     try:
         import uvicorn
     except ImportError as exc:
         raise RuntimeError(str(exc)) from exc
-    uvicorn.run(app, host=host, port=int(port))
+    uvicorn.run(app, host=host, port=int(port), access_log=access_log)
 
 
 def _fact_search(args: argparse.Namespace) -> int:

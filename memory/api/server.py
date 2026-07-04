@@ -21,6 +21,7 @@ from memory.ingestion.save_intent import (
 )
 from memory.ingestion.thread_models import SearchResultMode
 from memory.interfaces.mcp_server import create_mcp_server
+from memory.observability.logging import configure_logging
 
 logger = logging.getLogger(__name__)
 REQUEST_ID_HEADER = "x-request-id"
@@ -103,7 +104,9 @@ class MemoryReviewRequest(BaseModel):
     project_id: str | None = None
 
 
-def _register_health_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
+def _register_health_routes(
+    app: FastAPI, agent: BaseIngestionAgent, config: HubConfig
+) -> None:
     async def health() -> dict[str, Any]:
         return {
             "status": "ok",
@@ -112,14 +115,72 @@ def _register_health_routes(app: FastAPI, agent: BaseIngestionAgent) -> None:
 
     async def ready() -> dict[str, Any]:
         health_state = redact_content_hashes(await agent.health())
+        embedding_health = health_state.get("embedding_health")
+        embedding_provider = None
+        if isinstance(embedding_health, dict):
+            embedding_provider = embedding_health.get("provider")
+        if embedding_provider is None and isinstance(health_state.get("embedding"), dict):
+            embedding_provider = health_state["embedding"].get("provider")
         return {
             "status": "ok",
             "mode": health_state.get("mode"),
+            "metadata_provider": health_state.get("metadata_provider"),
+            "vector_provider": health_state.get("vector_provider"),
+            "embedding_provider": embedding_provider,
+            "telemetry_enabled": False,
             "health": health_state,
+        }
+
+    async def observability() -> dict[str, Any]:
+        health_state = redact_content_hashes(await agent.health())
+        return {
+            "status": "ok",
+            "runtime": {
+                "mode": health_state.get("mode"),
+                "metadata_provider": health_state.get("metadata_provider"),
+                "vector_provider": health_state.get("vector_provider"),
+                "requested_vector_provider": health_state.get(
+                    "requested_vector_provider"
+                ),
+                "embedding": health_state.get("embedding"),
+                "embedding_health": health_state.get("embedding_health"),
+                "tokenizer": {
+                    "enabled": config.tokenizer.enabled,
+                    "encoding": config.tokenizer.encoding,
+                },
+                "interfaces": {
+                    "api": config.interfaces.api,
+                    "mcp": config.interfaces.mcp,
+                },
+                "auth_mode": config.api.auth,
+                "storage": {
+                    "profile": config.storage.profile,
+                    "dry_run": config.storage.dry_run,
+                    "vector_fallback_allowed": config.storage.vector.allow_fallback,
+                },
+            },
+            "observability": {
+                "logging": {
+                    "enabled": config.observability.logging.enabled,
+                    "format": config.observability.logging.format,
+                    "level": config.observability.logging.level,
+                    "access_logs": config.observability.logging.access_logs,
+                    "request_id_header": config.observability.logging.request_id_header,
+                    "include_stack_traces": (
+                        config.observability.logging.include_stack_traces
+                    ),
+                },
+                "debug_payloads": config.observability.debug_payloads,
+                "embedding_readiness_probe": (
+                    config.observability.embedding_readiness_probe
+                ),
+                "telemetry_enabled": False,
+            },
         }
 
     app.get("/health")(health)
     app.get("/ready")(ready)
+    app.get("/observability")(observability)
 
 
 def _register_protected_resource_metadata_routes(app: FastAPI, config: HubConfig) -> None:
@@ -134,9 +195,11 @@ def _register_protected_resource_metadata_routes(app: FastAPI, config: HubConfig
 
 
 def _register_request_failure_logging(app: FastAPI, config: HubConfig) -> None:
+    request_id_header = config.observability.logging.request_id_header
+
     @app.middleware("http")
     async def log_request_failures(request: Request, call_next: Any) -> Any:
-        request_id = _request_id(request)
+        request_id = _request_id(request, header_name=request_id_header)
         request.state.request_id = request_id
         try:
             response = await call_next(request)
@@ -153,7 +216,7 @@ def _register_request_failure_logging(app: FastAPI, config: HubConfig) -> None:
                 },
             )
             raise
-        response.headers[REQUEST_ID_HEADER] = request_id
+        response.headers[request_id_header] = request_id
         if response.status_code >= 400:
             logger.info(
                 "memory request returned error",
@@ -169,8 +232,8 @@ def _register_request_failure_logging(app: FastAPI, config: HubConfig) -> None:
         return response
 
 
-def _request_id(request: Request) -> str:
-    value = request.headers.get(REQUEST_ID_HEADER, "").strip()
+def _request_id(request: Request, *, header_name: str = REQUEST_ID_HEADER) -> str:
+    value = request.headers.get(header_name, "").strip()
     if value and "\r" not in value and "\n" not in value and len(value) <= 128:
         return value
     return str(uuid4())
@@ -479,6 +542,7 @@ def create_app(
 ) -> FastAPI:
     install_secret_redaction_filter()
     cfg = normalize_config(config)
+    configure_logging(cfg.observability.logging)
     ensure_token_hash_secret(cfg)
     mcp_app = None
     agent = ingestion_agent or MVPIngestionAgent(
@@ -502,7 +566,7 @@ def create_app(
     if mcp_app is not None:
         app.mount("/mcp", mcp_app)
 
-    _register_health_routes(app, agent)
+    _register_health_routes(app, agent, cfg)
     _register_protected_resource_metadata_routes(app, cfg)
 
     # ⭐ Only enable API if config says so

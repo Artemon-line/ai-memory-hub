@@ -699,19 +699,25 @@ def test_admin_token_revoke_not_found(capsys, monkeypatch) -> None:
 
 def test_serve_cli_uses_config_host_port(capsys, monkeypatch, tmp_path) -> None:
     config_path = tmp_path / "config.yaml"
-    config_path.write_text("api:\n  host: 127.0.0.2\n  port: 9999\n", encoding="utf-8")
+    config_path.write_text(
+        "api:\n  host: 127.0.0.2\n  port: 9999\n"
+        "observability:\n  logging:\n    access_logs: false\n",
+        encoding="utf-8",
+    )
     calls = {}
     monkeypatch.setattr(cli, "_create_cli_app", lambda config: "app")
     monkeypatch.setattr(
         cli,
         "_run_server",
-        lambda app, host, port: calls.update({"app": app, "host": host, "port": port}),
+        lambda app, host, port, access_log=True: calls.update(
+            {"app": app, "host": host, "port": port, "access_log": access_log}
+        ),
     )
 
     exit_code = cli.main(["serve", "--config", str(config_path)])
 
     assert exit_code == 0
-    assert calls == {"app": "app", "host": "127.0.0.2", "port": 9999}
+    assert calls == {"app": "app", "host": "127.0.0.2", "port": 9999, "access_log": False}
     assert "serving ai-memory-hub" in capsys.readouterr().out
 
 

@@ -39,6 +39,18 @@ services:
       - ./${AMH_CONFIG_FILE:-config.yaml}:/app/config.yaml:ro,Z
       - amh_hub_data:/data
       - amh_hub_logs:/logs
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3).read()",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
 
 volumes:
   amh_pgvector_data:

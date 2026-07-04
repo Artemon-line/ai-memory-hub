@@ -171,6 +171,20 @@ api:
   api_key: '' # only used if auth: api_key
 
 # -------------------------
+# OBSERVABILITY
+# -------------------------
+observability:
+  logging:
+    enabled: true
+    format: text # text | json
+    level: INFO
+    access_logs: true
+    request_id_header: x-request-id
+    include_stack_traces: true
+  debug_payloads: false
+  embedding_readiness_probe: false
+
+# -------------------------
 # PROVIDER SETTINGS
 # -------------------------
 openai:
