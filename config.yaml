@@ -181,6 +181,13 @@ observability:
     access_logs: true
     request_id_header: x-request-id
     include_stack_traces: true
+  tracing:
+    enabled: false
+    endpoint: http://otel-collector:4317
+    protocol: grpc
+    sample_ratio: 1.0
+    service_name: ai-memory-hub
+    environment: local
   debug_payloads: false
   embedding_readiness_probe: false
 

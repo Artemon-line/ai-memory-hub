@@ -742,8 +742,43 @@ class LoggingConfig(BaseModel):
         return normalized
 
 
+class TracingConfig(BaseModel):
+    enabled: bool = False
+    endpoint: str = "http://otel-collector:4317"
+    protocol: str = "grpc"
+    sample_ratio: float = Field(default=1.0, ge=0.0, le=1.0)
+    service_name: str = "ai-memory-hub"
+    environment: str = "local"
+
+    @field_validator("endpoint")
+    @classmethod
+    def validate_endpoint(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("observability.tracing.endpoint must not be empty")
+        _validate_absolute_uri(normalized, field_name="observability.tracing.endpoint")
+        return normalized.rstrip("/")
+
+    @field_validator("protocol")
+    @classmethod
+    def validate_protocol(cls, value: str) -> str:
+        normalized = value.lower()
+        if normalized != "grpc":
+            raise ValueError("observability.tracing.protocol must be grpc")
+        return normalized
+
+    @field_validator("service_name", "environment")
+    @classmethod
+    def validate_non_empty_label(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("observability.tracing labels must not be empty")
+        return normalized
+
+
 class ObservabilityConfig(BaseModel):
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    tracing: TracingConfig = Field(default_factory=TracingConfig)
     debug_payloads: bool = False
     embedding_readiness_probe: bool = False
 

@@ -39,9 +39,14 @@ _RESERVED_ATTRS = {
 
 class ObservabilityContextFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
+        trace_id, span_id = _active_trace_context()
         for field in _CONTEXT_FIELDS:
             if not hasattr(record, field):
                 setattr(record, field, "-")
+        if getattr(record, "trace_id", "-") == "-" and trace_id is not None:
+            record.trace_id = trace_id
+        if getattr(record, "span_id", "-") == "-" and span_id is not None:
+            record.span_id = span_id
         return True
 
 
@@ -127,3 +132,15 @@ def _safe_log_value(value: Any) -> Any:
     if isinstance(value, str):
         return redact_secrets(value)
     return value
+
+
+def _active_trace_context() -> tuple[str | None, str | None]:
+    try:
+        from opentelemetry import trace
+    except ImportError:
+        return None, None
+    span = trace.get_current_span()
+    context = span.get_span_context()
+    if not getattr(context, "is_valid", False):
+        return None, None
+    return f"{context.trace_id:032x}", f"{context.span_id:016x}"

@@ -22,6 +22,7 @@ from memory.ingestion.save_intent import (
 from memory.ingestion.thread_models import SearchResultMode
 from memory.interfaces.mcp_server import create_mcp_server
 from memory.observability.logging import configure_logging
+from memory.observability.tracing import TracingStatus, configure_tracing
 
 logger = logging.getLogger(__name__)
 REQUEST_ID_HEADER = "x-request-id"
@@ -127,7 +128,7 @@ def _register_health_routes(
             "metadata_provider": health_state.get("metadata_provider"),
             "vector_provider": health_state.get("vector_provider"),
             "embedding_provider": embedding_provider,
-            "telemetry_enabled": False,
+            "telemetry_enabled": _tracing_status(app).enabled,
             "health": health_state,
         }
 
@@ -174,13 +175,21 @@ def _register_health_routes(
                 "embedding_readiness_probe": (
                     config.observability.embedding_readiness_probe
                 ),
-                "telemetry_enabled": False,
+                "tracing": _tracing_status(app).as_dict(),
+                "telemetry_enabled": _tracing_status(app).enabled,
             },
         }
 
     app.get("/health")(health)
     app.get("/ready")(ready)
     app.get("/observability")(observability)
+
+
+def _tracing_status(app: FastAPI) -> TracingStatus:
+    status = getattr(app.state, "tracing_status", None)
+    if isinstance(status, TracingStatus):
+        return status
+    return TracingStatus(enabled=False, configured=False)
 
 
 def _register_protected_resource_metadata_routes(app: FastAPI, config: HubConfig) -> None:
@@ -559,6 +568,7 @@ def create_app(
         version="0.1.0",
         lifespan=mcp_app.lifespan if mcp_app is not None else None,
     )
+    app.state.tracing_status = configure_tracing(cfg.observability.tracing, app=app)
 
     install_auth_middleware(app, config=cfg, agent=agent)
     _register_request_failure_logging(app, cfg)

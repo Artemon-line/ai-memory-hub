@@ -295,6 +295,13 @@ def test_observability_endpoint_is_public_and_redacted() -> None:
     assert body["status"] == "ok"
     assert body["observability"]["logging"]["format"] == "text"
     assert body["observability"]["telemetry_enabled"] is False
+    assert body["observability"]["tracing"] == {
+        "enabled": False,
+        "configured": False,
+        "exporter": None,
+        "protocol": None,
+        "error_type": None,
+    }
     assert body["observability"]["embedding_readiness_probe"] is False
     assert body["runtime"]["mode"] == "ok"
     assert "content_hash" not in str(body)

@@ -28,9 +28,9 @@ Not implemented yet:
 
 - [x] Global logging configuration for JSON/text format, log level, and access logs.
 - [x] Request or operation correlation IDs.
-- [ ] Trace IDs in logs.
-- [ ] OpenTelemetry SDK setup.
-- [ ] FastAPI, HTTP client, and psycopg instrumentation.
+- [x] Trace IDs in logs.
+- [x] OpenTelemetry SDK setup.
+- [x] FastAPI, HTTP client, and psycopg instrumentation.
 - [ ] Manual spans around MCP tools and ingestion stages.
 - [ ] Metrics for tool/API latency, insert/search/ask outcomes, provider failures,
   vector rows, and fallback state.
@@ -200,9 +200,9 @@ observability:
 
 ### Automatic Instrumentation
 
-- [ ] FastAPI request spans.
-- [ ] HTTP client spans for OpenAI/Ollama embedding requests.
-- [ ] Psycopg spans for Postgres and PGVector SQL.
+- [x] FastAPI request spans.
+- [x] HTTP client spans for OpenAI/Ollama embedding requests.
+- [x] Psycopg spans for Postgres and PGVector SQL.
 
 ### Manual Spans
 
@@ -323,7 +323,7 @@ share the same pipeline.
 
 After traces are active:
 
-- [ ] Add trace id and span id to every application log record.
+- [x] Add trace id and span id to every application log record.
 - [x] Add request id to every HTTP log.
 - [ ] Add MCP tool call id when available.
 - [x] Ensure exception logs include `exc_info=True` through `logger.exception`.
@@ -350,8 +350,8 @@ Unit tests:
 - [x] Logging config chooses text or JSON format.
 - [x] Secret redaction applies to structured log extras.
 - [x] Request ID middleware uses incoming `x-request-id` or generates one.
-- [ ] OTel setup is no-op when disabled.
-- [ ] OTel setup does not raise when exporter endpoint is unavailable.
+- [x] OTel setup is no-op when disabled.
+- [x] OTel setup does not raise when exporter endpoint is unavailable.
 
 Integration tests:
 
