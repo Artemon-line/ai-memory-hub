@@ -35,8 +35,8 @@ Not implemented yet:
 - [x] Metrics for tool/API latency, insert/search/ask outcomes, provider failures,
   vector rows, and fallback state.
 - [x] `/health` and `/ready` HTTP endpoints.
-- [ ] Docker Compose observability profile with OTel Collector and Jaeger.
-- [ ] Documentation for local and LAN observability usage.
+- [x] Docker Compose observability profile with OTel Collector and Jaeger.
+- [x] Documentation for local and LAN observability usage.
 
 ## Recommended Stack
 
@@ -294,6 +294,7 @@ Add `examples/observability/`:
 ```text
 examples/observability/
   compose.yaml
+  config.yaml
   otel-collector.yaml
   prometheus.yaml
   README.md

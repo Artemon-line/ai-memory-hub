@@ -28,6 +28,7 @@ RUN python -m pip install --no-cache-dir uv && \
       --extra milvus \
       --extra mongodb \
       --extra opensearch \
+      --extra observability \
       --extra postgres \
       --extra pinecone \
       --extra qdrant \
@@ -50,6 +51,7 @@ RUN uv sync --frozen --no-dev \
       --extra milvus \
       --extra mongodb \
       --extra opensearch \
+      --extra observability \
       --extra postgres \
       --extra pinecone \
       --extra qdrant \

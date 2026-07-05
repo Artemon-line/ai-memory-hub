@@ -19,6 +19,7 @@ def test_containerfile_installs_project_after_copying_package() -> None:
         "milvus",
         "mongodb",
         "opensearch",
+        "observability",
         "postgres",
         "pinecone",
         "qdrant",
@@ -80,6 +81,7 @@ def test_free_provider_examples_use_provider_local_containerfiles() -> None:
         "milvus",
         "mongodb",
         "opensearch",
+        "observability",
         "pinecone",
         "postgres",
         "qdrant",
@@ -103,6 +105,29 @@ def test_free_provider_examples_use_provider_local_containerfiles() -> None:
             assert f"--extra {extra}" in containerfile
         for extra in all_optional_extras - enabled_extras:
             assert f"--extra {extra}" not in containerfile
+
+
+def test_observability_compose_profile_is_wired() -> None:
+    compose = Path("examples/observability/compose.yaml").read_text(encoding="utf-8")
+    config = Path("examples/observability/config.yaml").read_text(encoding="utf-8")
+    collector = Path("examples/observability/otel-collector.yaml").read_text(
+        encoding="utf-8"
+    )
+    prometheus = Path("examples/observability/prometheus.yaml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "otel-collector" in compose
+    assert "jaeger" in compose
+    assert "prometheus" in compose
+    assert "127.0.0.1:16686:16686" in compose
+    assert "127.0.0.1:9090:9090" in compose
+    assert "http://127.0.0.1:8000/ready" in compose
+    assert "tracing:" in config
+    assert "metrics:" in config
+    assert "endpoint: http://otel-collector:4317" in config
+    assert "otlp/jaeger" in collector
+    assert "otel-collector:8889" in prometheus
 
 
 def test_project_declares_build_backend_for_console_script() -> None:
