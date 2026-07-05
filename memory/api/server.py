@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 from uuid import uuid4
 
@@ -22,6 +23,12 @@ from memory.ingestion.save_intent import (
 from memory.ingestion.thread_models import SearchResultMode
 from memory.interfaces.mcp_server import create_mcp_server
 from memory.observability.logging import configure_logging
+from memory.observability.metrics import (
+    MetricsStatus,
+    configure_metrics,
+    metrics,
+    record_health_metrics,
+)
 from memory.observability.tracing import TracingStatus, configure_tracing
 
 logger = logging.getLogger(__name__)
@@ -109,13 +116,16 @@ def _register_health_routes(
     app: FastAPI, agent: BaseIngestionAgent, config: HubConfig
 ) -> None:
     async def health() -> dict[str, Any]:
+        health_state = redact_content_hashes(await agent.health())
+        record_health_metrics(health_state)
         return {
             "status": "ok",
-            "health": redact_content_hashes(await agent.health()),
+            "health": health_state,
         }
 
     async def ready() -> dict[str, Any]:
         health_state = redact_content_hashes(await agent.health())
+        record_health_metrics(health_state)
         embedding_health = health_state.get("embedding_health")
         embedding_provider = None
         if isinstance(embedding_health, dict):
@@ -128,12 +138,13 @@ def _register_health_routes(
             "metadata_provider": health_state.get("metadata_provider"),
             "vector_provider": health_state.get("vector_provider"),
             "embedding_provider": embedding_provider,
-            "telemetry_enabled": _tracing_status(app).enabled,
+            "telemetry_enabled": _telemetry_enabled(app),
             "health": health_state,
         }
 
     async def observability() -> dict[str, Any]:
         health_state = redact_content_hashes(await agent.health())
+        record_health_metrics(health_state)
         return {
             "status": "ok",
             "runtime": {
@@ -176,7 +187,8 @@ def _register_health_routes(
                     config.observability.embedding_readiness_probe
                 ),
                 "tracing": _tracing_status(app).as_dict(),
-                "telemetry_enabled": _tracing_status(app).enabled,
+                "metrics": _metrics_status(app).as_dict(),
+                "telemetry_enabled": _telemetry_enabled(app),
             },
         }
 
@@ -190,6 +202,17 @@ def _tracing_status(app: FastAPI) -> TracingStatus:
     if isinstance(status, TracingStatus):
         return status
     return TracingStatus(enabled=False, configured=False)
+
+
+def _metrics_status(app: FastAPI) -> MetricsStatus:
+    status = getattr(app.state, "metrics_status", None)
+    if isinstance(status, MetricsStatus):
+        return status
+    return MetricsStatus(enabled=False, configured=False)
+
+
+def _telemetry_enabled(app: FastAPI) -> bool:
+    return _tracing_status(app).enabled or _metrics_status(app).enabled
 
 
 def _register_protected_resource_metadata_routes(app: FastAPI, config: HubConfig) -> None:
@@ -210,9 +233,23 @@ def _register_request_failure_logging(app: FastAPI, config: HubConfig) -> None:
     async def log_request_failures(request: Request, call_next: Any) -> Any:
         request_id = _request_id(request, header_name=request_id_header)
         request.state.request_id = request_id
+        started = time.perf_counter()
+        route = request.url.path
         try:
             response = await call_next(request)
         except Exception:
+            elapsed_ms = (time.perf_counter() - started) * 1000
+            metrics.increment(
+                "memory_api_requests_total",
+                route=route,
+                status_code=500,
+            )
+            metrics.observe(
+                "memory_api_request_duration_ms",
+                elapsed_ms,
+                route=route,
+                status_code=500,
+            )
             logger.exception(
                 "memory request failed",
                 extra={
@@ -225,6 +262,18 @@ def _register_request_failure_logging(app: FastAPI, config: HubConfig) -> None:
                 },
             )
             raise
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        metrics.increment(
+            "memory_api_requests_total",
+            route=route,
+            status_code=response.status_code,
+        )
+        metrics.observe(
+            "memory_api_request_duration_ms",
+            elapsed_ms,
+            route=route,
+            status_code=response.status_code,
+        )
         response.headers[request_id_header] = request_id
         if response.status_code >= 400:
             logger.info(
@@ -287,20 +336,28 @@ def _register_api_routes(
                 insert_policy=config.memory.insert_policy,
             )
             if disposition == InsertDisposition.PENDING_REVIEW:
-                return redact_content_hashes(
+                result = redact_content_hashes(
                     await agent.store_pending_review_memory(
                         conversation_json,
                         owner_id=owner_id(request),
                         project_id=project_id,
                     )
                 )
-            return redact_content_hashes(
-                await agent.ingest_messages(
-                    conversation_json,
-                    owner_id=owner_id(request),
-                    project_id=project_id,
+            else:
+                result = redact_content_hashes(
+                    await agent.ingest_messages(
+                        conversation_json,
+                        owner_id=owner_id(request),
+                        project_id=project_id,
+                    )
                 )
+            metrics.increment(
+                "memory_insert_total",
+                source=conversation_json.get("source") or "unknown",
+                status=result.get("status") or "ok",
+                deduplicated=result.get("deduplicated", False),
             )
+            return result
         except jsonschema.ValidationError as exc:
             raise HTTPException(status_code=400, detail=exc.message) from exc
         except SaveIntentError as exc:
@@ -569,6 +626,7 @@ def create_app(
         lifespan=mcp_app.lifespan if mcp_app is not None else None,
     )
     app.state.tracing_status = configure_tracing(cfg.observability.tracing, app=app)
+    app.state.metrics_status = configure_metrics(cfg.observability.metrics)
 
     install_auth_middleware(app, config=cfg, agent=agent)
     _register_request_failure_logging(app, cfg)

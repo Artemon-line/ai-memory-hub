@@ -32,7 +32,7 @@ Not implemented yet:
 - [x] OpenTelemetry SDK setup.
 - [x] FastAPI, HTTP client, and psycopg instrumentation.
 - [ ] Manual spans around MCP tools and ingestion stages.
-- [ ] Metrics for tool/API latency, insert/search/ask outcomes, provider failures,
+- [x] Metrics for tool/API latency, insert/search/ask outcomes, provider failures,
   vector rows, and fallback state.
 - [x] `/health` and `/ready` HTTP endpoints.
 - [ ] Docker Compose observability profile with OTel Collector and Jaeger.
@@ -262,25 +262,25 @@ observability:
 
 Counters:
 
-- `memory_mcp_tool_calls_total{tool,status,error_code}`
-- `memory_api_requests_total{route,status_code}`
-- `memory_insert_total{source,status,deduplicated}`
-- `memory_embedding_failures_total{provider,error_type}`
-- `memory_provider_fallback_total{requested_provider,effective_provider}`
+- [x] `memory_mcp_tool_calls_total{tool,status,error_code}`
+- [x] `memory_api_requests_total{route,status_code}`
+- [x] `memory_insert_total{source,status,deduplicated}`
+- [x] `memory_embedding_failures_total{provider,error_type}`
+- [x] `memory_provider_fallback_total{requested_provider,effective_provider}`
 
 Histograms:
 
-- `memory_mcp_tool_duration_ms{tool,status}`
-- `memory_api_request_duration_ms{route,status_code}`
-- `memory_ingestion_stage_duration_ms{stage}`
-- `memory_embedding_duration_ms{provider,model}`
-- `memory_vector_search_duration_ms{provider}`
+- [x] `memory_mcp_tool_duration_ms{tool,status}`
+- [x] `memory_api_request_duration_ms{route,status_code}`
+- [ ] `memory_ingestion_stage_duration_ms{stage}`
+- [x] `memory_embedding_duration_ms{provider,model}`
+- [x] `memory_vector_search_duration_ms{provider}`
 
 Gauges:
 
-- `memory_vector_rows{provider}`
-- `memory_health_mode{mode}`
-- `memory_tokenizer_enabled`
+- [x] `memory_vector_rows{provider}`
+- [x] `memory_health_mode{mode}`
+- [x] `memory_tokenizer_enabled`
 
 Label rules:
 
@@ -358,7 +358,7 @@ Integration tests:
 - [x] Failed MCP insert logs stack trace and stable error envelope.
 - [x] `GET /health` and `GET /ready` return expected mode.
 - [ ] Manual spans are created for ingestion stages with safe attributes.
-- [ ] Metrics counters increment for successful and failed MCP tools.
+- [x] Metrics counters increment for successful and failed MCP tools.
 
 Local smoke:
 

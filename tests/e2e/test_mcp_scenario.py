@@ -91,6 +91,10 @@ async def test_memory_scenario_e2e():
                 )
 
     except Exception as e:
-        if "ConnectionRefusedError" in str(e) or "Connection reset by peer" in str(e):
+        if (
+            "ConnectionRefusedError" in str(e)
+            or "Connection reset by peer" in str(e)
+            or "Connection error" in str(e)
+        ):
             pytest.skip("Ollama is not running. Skipping E2E test.")
         raise e

@@ -19,6 +19,7 @@ from memory.backend.vector_store import InMemoryVectorStore
 from memory.config import ensure_token_hash_secret, parse_config
 from memory.ingestion import mvp_ingestion
 from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
+from memory.observability.metrics import metrics
 
 
 class StubEmbedder(mvp_ingestion.EmbeddingProvider):
@@ -267,6 +268,7 @@ def test_memory_insert_200() -> None:
 
 
 def test_health_and_ready_are_public_and_redacted() -> None:
+    metrics.reset()
     client = _client()
 
     health = client.get("/health")
@@ -283,6 +285,10 @@ def test_health_and_ready_are_public_and_redacted() -> None:
     assert ready.json()["telemetry_enabled"] is False
     assert "content_hash" not in str(health.json())
     assert "content_hash" not in str(ready.json())
+    snapshot = metrics.snapshot()
+    assert snapshot["counters"]["memory_api_requests_total{route=/health,status_code=200}"] == 1
+    assert snapshot["counters"]["memory_api_requests_total{route=/ready,status_code=200}"] == 1
+    assert snapshot["gauges"]["memory_health_mode{mode=ok}"] == 1.0
 
 
 def test_observability_endpoint_is_public_and_redacted() -> None:
@@ -296,6 +302,13 @@ def test_observability_endpoint_is_public_and_redacted() -> None:
     assert body["observability"]["logging"]["format"] == "text"
     assert body["observability"]["telemetry_enabled"] is False
     assert body["observability"]["tracing"] == {
+        "enabled": False,
+        "configured": False,
+        "exporter": None,
+        "protocol": None,
+        "error_type": None,
+    }
+    assert body["observability"]["metrics"] == {
         "enabled": False,
         "configured": False,
         "exporter": None,

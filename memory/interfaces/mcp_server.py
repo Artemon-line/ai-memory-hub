@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime
+from functools import wraps
 from typing import Annotated, Any, Awaitable, Callable
 from urllib.parse import unquote
 from uuid import UUID
@@ -27,6 +29,7 @@ from memory.ingestion.thread_models import (
     result_mode_values,
 )
 from memory.ingestion.validate import validate_conversation
+from memory.observability.metrics import metrics
 
 ToolFn = Callable[..., Awaitable[dict[str, Any]]]
 
@@ -222,6 +225,39 @@ def _log_mcp_tool_failure(*, operation: str, error_code: str, exc: Exception) ->
         },
         exc_info=(type(exc), RuntimeError(redact_secrets(str(exc))), exc.__traceback__),
     )
+
+
+def _instrument_mcp_tool(tool_name: str, tool_fn: ToolFn) -> ToolFn:
+    @wraps(tool_fn)
+    async def wrapped(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        started = time.perf_counter()
+        status = "error"
+        error_code = "unhandled_exception"
+        try:
+            result = await tool_fn(*args, **kwargs)
+            status = str(result.get("status") or "ok")
+            if status == "not_found":
+                status = "error"
+            error_code = str(result.get("error_code") or "none")
+            return result
+        except Exception:
+            raise
+        finally:
+            elapsed_ms = (time.perf_counter() - started) * 1000
+            metrics.increment(
+                "memory_mcp_tool_calls_total",
+                tool=tool_name,
+                status=status,
+                error_code=error_code,
+            )
+            metrics.observe(
+                "memory_mcp_tool_duration_ms",
+                elapsed_ms,
+                tool=tool_name,
+                status=status,
+            )
+
+    return wrapped
 
 
 def _format_schema_error(exc: jsonschema.ValidationError) -> str:
@@ -701,7 +737,14 @@ def build_tool_handlers(
                 error_message=redact_secrets(str(exc)),
             )
 
-        return _with_envelope_defaults(result)
+        payload = _with_envelope_defaults(result)
+        metrics.increment(
+            "memory_insert_total",
+            source=normalized.get("source") or "unknown",
+            status=payload.get("status") or "ok",
+            deduplicated=payload.get("deduplicated", False),
+        )
+        return payload
 
     async def memory_search(
         query: str,
@@ -1139,7 +1182,7 @@ def build_tool_handlers(
         await _emit_mcp_tool_log(ctx, tool_name="memory_project_get", status="ok")
         return _with_envelope_defaults(result)
 
-    return {
+    handlers: dict[str, ToolFn] = {
         "memory_validate": memory_validate,
         "memory_insert": memory_insert,
         "memory_search": memory_search,
@@ -1154,6 +1197,7 @@ def build_tool_handlers(
         "memory_project_default_get": memory_project_default_get,
         "memory_project_get": memory_project_get,
     }
+    return {name: _instrument_mcp_tool(name, handler) for name, handler in handlers.items()}
 
 
 def create_mcp_server(*, config: HubConfig, agent: BaseIngestionAgent):

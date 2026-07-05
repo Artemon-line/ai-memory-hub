@@ -4,6 +4,7 @@ import hashlib
 import logging
 import os
 import re
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -69,6 +70,7 @@ from memory.ingestion.validate import (
     validate_conversation,
     validate_schema_compatibility,
 )
+from memory.observability.metrics import metrics
 from memory.provider_models import VectorProviderAlias, VectorProviderName
 
 logger = logging.getLogger(__name__)
@@ -481,6 +483,7 @@ def build_runtime(
             embedding_provider=embedding_provider,
             live_probe=cfg.observability.embedding_readiness_probe,
         ),
+        "tokenizer_enabled": cfg.tokenizer.enabled,
         "vector_index": embedding_index_metadata["vector_index"],
         "embedding_index_mismatch": embedding_index_mismatch,
     }
@@ -865,7 +868,25 @@ def embed_chunks(
 ) -> list[dict[str, Any]]:
     runtime = _runtime()
     texts = [chunk["text"] for chunk in chunks]
-    vectors = runtime.embedding_provider.embed_texts(texts)
+    provider = str(runtime.health_state.get("embedding", {}).get("provider") or "unknown")
+    model = str(runtime.health_state.get("embedding", {}).get("model") or "unknown")
+    started = time.perf_counter()
+    try:
+        vectors = runtime.embedding_provider.embed_texts(texts)
+    except Exception as exc:
+        metrics.increment(
+            "memory_embedding_failures_total",
+            provider=provider,
+            error_type=type(exc).__name__,
+        )
+        raise
+    finally:
+        metrics.observe(
+            "memory_embedding_duration_ms",
+            (time.perf_counter() - started) * 1000,
+            provider=provider,
+            model=model,
+        )
     if len(vectors) != len(chunks):
         raise ValueError("Embedding provider must return one vector per chunk")
 
@@ -1822,7 +1843,14 @@ def search(
         1, int(getattr(runtime, "retrieval_candidate_multiplier", _SEARCH_CANDIDATE_MULTIPLIER))
     )
     candidate_k = 100 if filters.has_filters else max(top_k, min(top_k * candidate_multiplier, 100))
+    vector_provider = str(runtime.health_state.get("vector_provider") or "unknown")
+    started = time.perf_counter()
     matches = runtime.vector_store.search(query_vector, top_k=candidate_k)
+    metrics.observe(
+        "memory_vector_search_duration_ms",
+        (time.perf_counter() - started) * 1000,
+        provider=vector_provider,
+    )
 
     ids = [str(match["memory_id"]) for match in matches]
     keyword_conversations = _keyword_conversations(

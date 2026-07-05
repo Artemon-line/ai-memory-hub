@@ -180,6 +180,10 @@ observability:
     sample_ratio: 1.0
     service_name: ai-memory-hub
     environment: local
+  metrics:
+    enabled: false
+    endpoint: http://otel-collector:4317
+    protocol: grpc
   debug_payloads: false
   embedding_readiness_probe: false
 

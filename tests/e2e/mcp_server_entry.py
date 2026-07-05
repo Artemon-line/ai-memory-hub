@@ -16,6 +16,8 @@ def main():
     
     config.openai.base_url = "http://localhost:11434/v1"
     config.openai.api_key = "ollama" # dummy key
+    config.providers.embeddings = "local"
+    config.providers.embedding_dimension = 32
     
     # Use in-memory stores for isolated testing
     config.providers.vector_db = "in_memory"

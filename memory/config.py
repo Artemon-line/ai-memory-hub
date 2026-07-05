@@ -776,9 +776,33 @@ class TracingConfig(BaseModel):
         return normalized
 
 
+class MetricsConfig(BaseModel):
+    enabled: bool = False
+    endpoint: str = "http://otel-collector:4317"
+    protocol: str = "grpc"
+
+    @field_validator("endpoint")
+    @classmethod
+    def validate_endpoint(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("observability.metrics.endpoint must not be empty")
+        _validate_absolute_uri(normalized, field_name="observability.metrics.endpoint")
+        return normalized.rstrip("/")
+
+    @field_validator("protocol")
+    @classmethod
+    def validate_protocol(cls, value: str) -> str:
+        normalized = value.lower()
+        if normalized != "grpc":
+            raise ValueError("observability.metrics.protocol must be grpc")
+        return normalized
+
+
 class ObservabilityConfig(BaseModel):
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     tracing: TracingConfig = Field(default_factory=TracingConfig)
+    metrics: MetricsConfig = Field(default_factory=MetricsConfig)
     debug_payloads: bool = False
     embedding_readiness_probe: bool = False
 
