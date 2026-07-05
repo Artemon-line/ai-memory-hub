@@ -246,7 +246,7 @@ def _label_value(value: Any) -> str:
     text = str(value).strip()
     if not text:
         return "unknown"
-    return text[:80]
+    return redact_secrets(text[:80])
 
 
 def _snapshot_key(name: str, labels: MetricLabels) -> str:

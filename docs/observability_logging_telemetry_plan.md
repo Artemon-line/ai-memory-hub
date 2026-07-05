@@ -335,10 +335,10 @@ After traces are active:
 
 Hard requirements:
 
-- [ ] Redact DSNs, API keys, bearer tokens, passwords, and OpenAI/Ollama keys.
-- [ ] Do not log raw conversation payloads.
-- [ ] Do not log raw search queries by default.
-- [ ] Do not export user message text as span attributes.
+- [x] Redact DSNs, API keys, bearer tokens, passwords, and OpenAI/Ollama keys.
+- [x] Do not log raw conversation payloads.
+- [x] Do not log raw search queries by default.
+- [x] Do not export user message text as span attributes.
 - [x] Add `observability.debug_payloads: false` and keep it false by default.
 
 If payload debugging is ever needed, require an explicit local-only flag and log
