@@ -14,7 +14,7 @@ storage:
     distance: cosine
   metadata_providers:
     mongodb:
-      uri: mongodb+srv://user:password@example.mongodb.net/app
+      uri: mongodb+srv://example.mongodb.net/app
       database: ai_memory_hub
       conversations_collection: conversations
       facts_collection: facts
@@ -22,7 +22,7 @@ storage:
       schema_collection: schema_versions
   vector_providers:
     mongodb_atlas:
-      uri: mongodb+srv://user:password@example.mongodb.net/app
+      uri: mongodb+srv://example.mongodb.net/app
       database: ai_memory_hub
       collection: memory_vectors
       index: memory_vector_index

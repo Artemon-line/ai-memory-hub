@@ -656,7 +656,7 @@ storage:
       conversations_collection: conversations
   vector_providers:
     mongodb_atlas:
-      uri: mongodb+srv://user:password@example.mongodb.net/app
+      uri: mongodb+srv://example.mongodb.net/app
       database: ai_memory_hub
       collection: memory_vectors
       index: memory_vector_index

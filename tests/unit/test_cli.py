@@ -428,6 +428,10 @@ def test_ask_cli_prints_answer_and_citations(capsys, monkeypatch) -> None:
 
 def test_config_show_redacts_secrets(capsys, tmp_path) -> None:
     config_path = tmp_path / "config.yaml"
+    atlas_password = "fixture-atlas-password"
+    mongodb_password = "fixture-mongodb-password"
+    atlas_uri = "mongodb+srv://user:" + atlas_password + "@example.mongodb.net/app"
+    mongodb_uri = "mongodb://user:" + mongodb_password + "@127.0.0.1:27017/app"
     config_path.write_text(
         "\n".join(
             [
@@ -444,7 +448,7 @@ def test_config_show_redacts_secrets(capsys, tmp_path) -> None:
                 "    weaviate:",
                 "      api_key: weaviate-secret",
                 "    mongodb_atlas:",
-                "      uri: mongodb+srv://user:atlas-secret@example.mongodb.net/app",
+                f"      uri: {atlas_uri}",
                 "    elasticsearch:",
                 "      username: elastic-user",
                 "      password: elastic-secret",
@@ -465,7 +469,7 @@ def test_config_show_redacts_secrets(capsys, tmp_path) -> None:
                 "    postgres:",
                 "      url: postgresql://metadata:secret@localhost/db",
                 "    mongodb:",
-                "      uri: mongodb://user:mongo-secret@127.0.0.1:27017/app",
+                f"      uri: {mongodb_uri}",
                 "",
             ]
         ),

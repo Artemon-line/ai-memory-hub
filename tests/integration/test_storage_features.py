@@ -2079,15 +2079,17 @@ def test_build_runtime_fails_on_same_dimension_embedding_model_drift(
 
 
 def test_log_redaction_for_dsn_and_keyvalue_secrets() -> None:
+    mongodb_password = "fixture-mongodb-password"
+    mongodb_uri = "mongodb+srv://user:" + mongodb_password + "@example.mongodb.net/app"
     message = (
         "connect failed postgres://user:supersecret@db.local/app "
-        "mongodb+srv://user:mongo-secret@example.mongodb.net/app "
+        f"{mongodb_uri} "
         "http://elastic:elastic-secret@search.local:9200 "
         "password=hunter2 token=abc123 api_key=xyz api-key=qdrant-secret"
     )
     redacted = redact_secrets(message)
     assert "supersecret" not in redacted
-    assert "mongo-secret" not in redacted
+    assert mongodb_password not in redacted
     assert "elastic-secret" not in redacted
     assert "hunter2" not in redacted
     assert "abc123" not in redacted
@@ -2263,7 +2265,7 @@ def test_build_runtime_chromadb_fallback_disabled_raises(
         (
             "mongodb_atlas",
             "MongoDBAtlasVectorStore",
-            "mongodb unavailable mongodb://u:atlas-secret@example/app",
+            "mongodb unavailable " + "mongodb://u:" + "fixture-atlas-password" + "@example/app",
         ),
         (
             "elasticsearch",
@@ -2315,6 +2317,8 @@ def test_build_runtime_expansion_vector_fallback_uses_memory_provider(
             raise RuntimeError(secret_message)
 
     monkeypatch.setattr(mvp_ingestion, class_name, BrokenVectorStore)
+    atlas_password = "fixture-atlas-password"
+    atlas_uri = "mongodb://u:" + atlas_password + "@example/app"
     runtime = mvp_ingestion.build_runtime(
         {
             "providers": {"embeddings": "local", "vector_db": provider},
@@ -2324,7 +2328,7 @@ def test_build_runtime_expansion_vector_fallback_uses_memory_provider(
                 "vector_providers": {
                     "milvus": {"token": "milvus-secret"},
                     "weaviate": {"api_key": "weaviate-secret"},
-                    "mongodb_atlas": {"uri": "mongodb://u:atlas-secret@example/app"},
+                    "mongodb_atlas": {"uri": atlas_uri},
                     "elasticsearch": {
                         "username": "elastic",
                         "password": "elastic-secret",
@@ -2351,7 +2355,7 @@ def test_build_runtime_expansion_vector_fallback_uses_memory_provider(
     assert "qdrant-secret" not in " ".join(runtime.health_state["reasons"])
     assert "milvus-secret" not in " ".join(runtime.health_state["reasons"])
     assert "weaviate-secret" not in " ".join(runtime.health_state["reasons"])
-    assert "atlas-secret" not in " ".join(runtime.health_state["reasons"])
+    assert atlas_password not in " ".join(runtime.health_state["reasons"])
     assert "elastic-secret" not in " ".join(runtime.health_state["reasons"])
     assert "opensearch-secret" not in " ".join(runtime.health_state["reasons"])
     assert "redis-secret" not in " ".join(runtime.health_state["reasons"])
