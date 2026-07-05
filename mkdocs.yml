@@ -22,12 +22,17 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Technical Overview: docs/overview.md
-  - Architecture: docs/architecture.md
-  - Roadmap: docs/roadmap.md
-  - Storage Provider Examples: docs/storage_provider_examples.md
-  - Storage BYOA Plan: docs/storage_agnostic_byoa_plan.md
-  - Agent Integration: docs/agents.md
+  - What Exists Now:
+      - Current Features: docs/features.md
+      - Technical Overview: docs/overview.md
+      - Agent Integration: docs/agents.md
+      - Storage Provider Examples: docs/storage_provider_examples.md
+      - Observability: docs/observability.md
+      - Architecture: docs/architecture.md
+  - What Is Planned:
+      - Planned Features: docs/planned_features.md
+      - Roadmap: docs/roadmap.md
+      - Documentation Map: docs/plans.md
   - Project:
       - Changelog: CHANGELOG.md
       - Contributing: CONTRIBUTING.md
@@ -41,7 +46,9 @@ nav:
       - MCP Utility Compliance Plan: docs/mcp_utility_compliance_plan.md
       - MCP Authorization Compliance Plan: docs/bearer_api_key_auth_plan.md
   - Implementation Plans:
+      - Documentation Map: docs/plans.md
       - Prioritized Feature Plan: docs/prioritized_feature_plan.md
+      - Storage BYOA Plan: docs/storage_agnostic_byoa_plan.md
       - Browser Extension Capture Plan: docs/browser_extension_capture_plan.md
       - Bruno Integration Test Plan: docs/bruno_integration_test_plan.md
       - Project Workspace Collaboration Plan: docs/project_workspace_collaboration_plan.md
