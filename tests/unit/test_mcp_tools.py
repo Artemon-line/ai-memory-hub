@@ -75,6 +75,10 @@ class StubMCPContext:
         )
 
 
+class StubMCPContextWithRequestId(StubMCPContext):
+    request_id = "mcp-call-123"
+
+
 def _runtime() -> mvp_ingestion.RuntimeDependencies:
     return mvp_ingestion.RuntimeDependencies(
         embedding_provider=StubEmbedder(),  # type: ignore
@@ -156,6 +160,19 @@ async def test_mcp_tool_log_payload_is_sanitized() -> None:
             },
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_mcp_tool_log_includes_tool_call_id_when_available() -> None:
+    ctx = StubMCPContextWithRequestId()
+
+    await _emit_mcp_tool_log(ctx, tool_name="memory_search", status="ok")
+
+    assert ctx.logs[0]["extra"] == {
+        "tool": "memory_search",
+        "status": "ok",
+        "mcp_tool_call_id": "mcp-call-123",
+    }
 
 
 @pytest.mark.asyncio

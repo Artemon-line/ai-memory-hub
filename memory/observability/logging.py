@@ -9,7 +9,14 @@ from typing import Any, TextIO
 from memory.backend.log_safety import install_secret_redaction_filter, redact_secrets
 from memory.config import LoggingConfig
 
-_CONTEXT_FIELDS = ("request_id", "trace_id", "span_id", "operation", "provider")
+_CONTEXT_FIELDS = (
+    "request_id",
+    "trace_id",
+    "span_id",
+    "operation",
+    "provider",
+    "mcp_tool_call_id",
+)
 _RESERVED_ATTRS = {
     "args",
     "asctime",
@@ -56,7 +63,8 @@ class TextLogFormatter(logging.Formatter):
             fmt=(
                 "%(asctime)s %(levelname)s %(name)s "
                 "request_id=%(request_id)s trace_id=%(trace_id)s span_id=%(span_id)s "
-                "operation=%(operation)s provider=%(provider)s %(message)s"
+                "operation=%(operation)s provider=%(provider)s "
+                "mcp_tool_call_id=%(mcp_tool_call_id)s %(message)s"
             ),
             datefmt="%Y-%m-%dT%H:%M:%S%z",
         )

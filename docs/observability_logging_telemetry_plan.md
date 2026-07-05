@@ -326,7 +326,7 @@ After traces are active:
 
 - [x] Add trace id and span id to every application log record.
 - [x] Add request id to every HTTP log.
-- [ ] Add MCP tool call id when available.
+- [x] Add MCP tool call id when available.
 - [x] Ensure exception logs include `exc_info=True` through `logger.exception`.
 - [x] Add one integration test proving a failed MCP insert logs an exception with
   operation and error code.

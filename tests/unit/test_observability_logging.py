@@ -67,6 +67,7 @@ def test_json_logging_includes_context_fields_and_redacts_extras() -> None:
     assert payload["span_id"] == "-"
     assert payload["operation"] == "memory_insert"
     assert payload["provider"] == "pgvector"
+    assert payload["mcp_tool_call_id"] == "-"
     assert payload["dsn"] == "postgresql://user:***@example.com/db"
 
 
@@ -91,6 +92,7 @@ def test_text_logging_includes_context_fields() -> None:
     assert "span_id=-" in text
     assert "operation=startup" in text
     assert "provider=lancedb" in text
+    assert "mcp_tool_call_id=-" in text
 
 
 def test_access_logs_can_be_disabled() -> None:

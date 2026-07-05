@@ -201,6 +201,9 @@ async def _emit_mcp_tool_log(
             logger.debug("MCP client log notification failed", exc_info=True)
         return
     data: dict[str, Any] = {"tool": tool_name, "status": status}
+    tool_call_id = _mcp_tool_call_id(ctx)
+    if tool_call_id is not None:
+        data["mcp_tool_call_id"] = tool_call_id
     if error_code:
         data["error_code"] = error_code
     level = "error" if status == "error" else "info"
@@ -215,16 +218,46 @@ async def _emit_mcp_tool_log(
         logger.debug("MCP client log notification failed", exc_info=True)
 
 
-def _log_mcp_tool_failure(*, operation: str, error_code: str, exc: Exception) -> None:
+def _log_mcp_tool_failure(
+    *,
+    operation: str,
+    error_code: str,
+    exc: Exception,
+    mcp_tool_call_id: str | None = None,
+) -> None:
     logger.exception(
         "MCP tool failed",
         extra={
             "event": "mcp_tool_failed",
             "operation": operation,
             "error_code": error_code,
+            "mcp_tool_call_id": mcp_tool_call_id or "-",
         },
         exc_info=(type(exc), RuntimeError(redact_secrets(str(exc))), exc.__traceback__),
     )
+
+
+def _mcp_tool_call_id(ctx: FastMCPContext | None) -> str | None:
+    if ctx is None:
+        return None
+    for attr in ("tool_call_id", "request_id", "message_id", "id"):
+        value = getattr(ctx, attr, None)
+        if isinstance(value, str | int) and str(value).strip():
+            return _safe_correlation_id(value)
+    request_context = getattr(ctx, "request_context", None)
+    if request_context is not None:
+        for attr in ("request_id", "message_id", "id"):
+            value = getattr(request_context, attr, None)
+            if isinstance(value, str | int) and str(value).strip():
+                return _safe_correlation_id(value)
+    return None
+
+
+def _safe_correlation_id(value: str | int) -> str:
+    text = str(value).strip()
+    if "\r" in text or "\n" in text:
+        return "invalid"
+    return text[:128]
 
 
 def _instrument_mcp_tool(tool_name: str, tool_fn: ToolFn) -> ToolFn:
@@ -723,7 +756,10 @@ def build_tool_handlers(
             )
         except Exception as exc:
             _log_mcp_tool_failure(
-                operation="memory_insert", error_code="insert_failed", exc=exc
+                operation="memory_insert",
+                error_code="insert_failed",
+                exc=exc,
+                mcp_tool_call_id=_mcp_tool_call_id(ctx),
             )
             await _emit_mcp_tool_log(
                 ctx,
@@ -829,7 +865,10 @@ def build_tool_handlers(
             )
         except Exception as exc:
             _log_mcp_tool_failure(
-                operation="memory_search", error_code="search_failed", exc=exc
+                operation="memory_search",
+                error_code="search_failed",
+                exc=exc,
+                mcp_tool_call_id=_mcp_tool_call_id(ctx),
             )
             await _emit_mcp_tool_log(
                 ctx,
@@ -983,7 +1022,10 @@ def build_tool_handlers(
             )
         except Exception as exc:
             _log_mcp_tool_failure(
-                operation="memory_ask", error_code="ask_failed", exc=exc
+                operation="memory_ask",
+                error_code="ask_failed",
+                exc=exc,
+                mcp_tool_call_id=_mcp_tool_call_id(ctx),
             )
             await _emit_mcp_tool_log(
                 ctx,
