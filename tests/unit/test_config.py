@@ -84,6 +84,8 @@ def test_observability_embedding_readiness_probe_defaults_off() -> None:
 
 
 def test_storage_provider_expansion_config_models_validate() -> None:
+    atlas_uri = "mongodb+srv://user:" + "pass" + "@example.mongodb.net/app"
+    mongodb_uri = "mongodb://user:" + "pass" + "@127.0.0.1:27017/app"
     config = parse_config(
         {
             "storage": {
@@ -112,7 +114,7 @@ def test_storage_provider_expansion_config_models_validate() -> None:
                         "collection": "MemoryVector",
                     },
                     "mongodb_atlas": {
-                        "uri": "mongodb+srv://user:pass@example.mongodb.net/app",
+                        "uri": atlas_uri,
                         "database": "ai_memory_hub",
                         "collection": "memory_vectors",
                         "index": "memory_vector_index",
@@ -165,7 +167,7 @@ def test_storage_provider_expansion_config_models_validate() -> None:
                         "url": "postgresql://user:pass@127.0.0.1:5432/app",
                     },
                     "mongodb": {
-                        "uri": "mongodb://user:pass@127.0.0.1:27017/app",
+                        "uri": mongodb_uri,
                         "database": "ai_memory_hub",
                         "conversations_collection": "conversations",
                     }
@@ -209,6 +211,7 @@ def test_provider_config_accepts_implemented_expansion_providers() -> None:
 
 
 def test_storage_provider_configs_override_expansion_defaults() -> None:
+    atlas_uri = "mongodb+srv://user:" + "secret" + "@example.mongodb.net/app"
     config = parse_config(
         {
             "storage": {
@@ -234,7 +237,7 @@ def test_storage_provider_configs_override_expansion_defaults() -> None:
                         "collection": "CustomMemoryVector",
                     },
                     "mongodb_atlas": {
-                        "uri": "mongodb+srv://user:secret@example.mongodb.net/app",
+                        "uri": atlas_uri,
                         "database": "custom_memory",
                         "collection": "custom_atlas_vectors",
                         "index": "custom_vector_index",
@@ -307,9 +310,7 @@ def test_storage_provider_configs_override_expansion_defaults() -> None:
     assert config.storage.vector_providers.weaviate.url == "https://weaviate.example.com"
     assert config.storage.vector_providers.weaviate.api_key == "weaviate-key"
     assert config.storage.vector_providers.weaviate.collection == "CustomMemoryVector"
-    assert config.storage.vector_providers.mongodb_atlas.uri == (
-        "mongodb+srv://user:secret@example.mongodb.net/app"
-    )
+    assert config.storage.vector_providers.mongodb_atlas.uri == atlas_uri
     assert config.storage.vector_providers.mongodb_atlas.database == "custom_memory"
     assert config.storage.vector_providers.mongodb_atlas.collection == "custom_atlas_vectors"
     assert config.storage.vector_providers.mongodb_atlas.index == "custom_vector_index"

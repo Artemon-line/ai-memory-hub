@@ -19,7 +19,7 @@ uv run aim serve --config examples/storage_providers/mongodb-atlas/config.yaml -
 For CI or local live tests, set:
 
 ```bash
-export AMH_TEST_MONGODB_ATLAS_URI="mongodb+srv://user:password@example.mongodb.net/app"
+export AMH_TEST_MONGODB_ATLAS_URI="mongodb+srv://example.mongodb.net/app"
 export AMH_TEST_MONGODB_ATLAS_DATABASE="ai_memory_hub"
 export AMH_TEST_MONGODB_ATLAS_COLLECTION="memory_vectors"
 export AMH_TEST_MONGODB_ATLAS_INDEX="memory_vector_index"
