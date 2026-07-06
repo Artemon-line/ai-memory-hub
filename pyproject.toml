@@ -57,7 +57,7 @@ tokenizer = [
     "tiktoken>=0.13.0",
 ]
 turbopuffer = [
-    "turbopuffer>=0.1.0",
+    "turbopuffer>=2.6.0",
 ]
 vespa = [
     "pyvespa>=0.50.0",
