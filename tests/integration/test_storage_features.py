@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import logging
 import os
@@ -156,9 +157,7 @@ def test_mongodb_schema_version_document_and_indexes() -> None:
     } in conversation_indexes
     assert {
         "args": ([("project_id", 1), ("source", 1), ("upstream_thread_id", 1)],),
-        "kwargs": {
-            "partialFilterExpression": {"upstream_thread_id": {"$type": "string"}}
-        },
+        "kwargs": {"partialFilterExpression": {"upstream_thread_id": {"$type": "string"}}},
     } in conversation_indexes
 
 
@@ -176,9 +175,7 @@ def test_mongodb_schema_version_invariant_failures() -> None:
         MongoDBMetadataStore(uri="mongodb://example", client=too_many_client)
 
     incompatible_client = FakeMongoClient()
-    incompatible_client["ai_memory_hub"]["schema_versions"].insert_one(
-        {"id": 1, "version": 99}
-    )
+    incompatible_client["ai_memory_hub"]["schema_versions"].insert_one({"id": 1, "version": 99})
     with pytest.raises(RuntimeError, match="Incompatible MongoDB schema version"):
         MongoDBMetadataStore(uri="mongodb://example", client=incompatible_client)
 
@@ -213,9 +210,7 @@ def test_sqlite_metadata_store_tracks_index_chunk_manifest(tmp_path: Path) -> No
         "id": "d9fd4c95-9cb3-4fd5-b967-3027f8863210",
         "source": "manual",
         "timestamp": "2026-01-01T00:00:00Z",
-        "messages": [
-            {"role": "user", "text": "alpha beta gamma", "hash": "sha256:" + "a" * 64}
-        ],
+        "messages": [{"role": "user", "text": "alpha beta gamma", "hash": "sha256:" + "a" * 64}],
         "metadata": {
             "imported_at": "2026-01-01T00:00:00Z",
             "index_chunks": [
@@ -316,10 +311,7 @@ def test_sqlite_admin_user_token_and_project_management(tmp_path: Path) -> None:
     store.add_project_member(project_id="shared-321", user_id="carl", role="writer")
 
     assert user["id"] == "jane"
-    assert any(
-        row["id"] == "jane" and row["display_name"] == "Jane"
-        for row in store.list_users()
-    )
+    assert any(row["id"] == "jane" and row["display_name"] == "Jane" for row in store.list_users())
     assert token["token_id"].startswith("tok_")
     assert token["token_prefix"] == "amh_secret_v"
     assert token["scopes"] == ["memory:read", "memory:write"]
@@ -480,9 +472,7 @@ def _assert_vector_store_contract(store: Any) -> None:
         replace=True,
     )
     replacement_matches = [
-        row
-        for row in store.search([1.0, 0.0, 0.0], top_k=10)
-        if row["memory_id"] == replacement_id
+        row for row in store.search([1.0, 0.0, 0.0], top_k=10) if row["memory_id"] == replacement_id
     ]
     assert len(replacement_matches) == 1
     assert replacement_matches[0]["chunk_index"] == 1
@@ -527,9 +517,7 @@ class FakeVectorClient:
 
     def delete_by_memory_id(self, memory_id: str) -> None:
         self.rows = {
-            chunk_id: row
-            for chunk_id, row in self.rows.items()
-            if row["memory_id"] != memory_id
+            chunk_id: row for chunk_id, row in self.rows.items() if row["memory_id"] != memory_id
         }
 
     def search(self, query_vector: list[float], top_k: int) -> list[dict[str, Any]]:
@@ -651,12 +639,7 @@ class FakeChromaCollection:
             "ids": [[row["id"] for row in rows]],
             "metadatas": [[row["metadata"] for row in rows]],
             "documents": [[row["document"] for row in rows]],
-            "distances": [
-                [
-                    _test_cosine_distance(query_vector, row["embedding"])
-                    for row in rows
-                ]
-            ],
+            "distances": [[_test_cosine_distance(query_vector, row["embedding"]) for row in rows]],
         }
 
     def delete(self, *, where: dict[str, str]) -> None:
@@ -704,9 +687,7 @@ def test_chromadb_collection_metadata_mismatch_fails_startup() -> None:
 
 
 def test_qdrant_existing_collection_dimension_mismatch_fails_startup() -> None:
-    with pytest.raises(
-        VectorDimensionError, match="Qdrant collection dimensionality mismatch"
-    ):
+    with pytest.raises(VectorDimensionError, match="Qdrant collection dimensionality mismatch"):
         QdrantVectorStore(
             client=FakeQdrantClient(
                 existing_config=FakeQdrantModels.VectorParams(size=99, distance="Cosine")
@@ -823,6 +804,9 @@ class FakeMilvusClient:
         self.rows: dict[str, dict[str, Any]] = {}
         self.collections: dict[str, dict[str, Any]] = {}
         self.flushes: list[str] = []
+        self.indexes: list[dict[str, Any]] = []
+        self.loaded: list[str] = []
+        self.load_state = "Loaded"
 
     def has_collection(self, *, collection_name: str) -> bool:
         return collection_name in self.collections
@@ -868,11 +852,7 @@ class FakeMilvusClient:
         return [
             [
                 {
-                    "entity": {
-                        key: row[key]
-                        for key in output_fields
-                        if key in row
-                    },
+                    "entity": {key: row[key] for key in output_fields if key in row},
                     "distance": 1.0 - _test_cosine_distance(query_vector, row["vector"]),
                 }
                 for row in rows[:limit]
@@ -882,13 +862,10 @@ class FakeMilvusClient:
     def delete(self, *, collection_name: str, filter: str) -> None:
         _ = collection_name
         ids = {
-            item.strip().strip('"')
-            for item in filter.split("[", 1)[1].split("]", 1)[0].split(",")
+            item.strip().strip('"') for item in filter.split("[", 1)[1].split("]", 1)[0].split(",")
         }
         self.rows = {
-            row_id: row
-            for row_id, row in self.rows.items()
-            if row["memory_id"] not in ids
+            row_id: row for row_id, row in self.rows.items() if row["memory_id"] not in ids
         }
 
     def flush(self, *, collection_name: str) -> None:
@@ -897,6 +874,27 @@ class FakeMilvusClient:
     def get_collection_stats(self, *, collection_name: str) -> dict[str, int]:
         _ = collection_name
         return {"row_count": len(self.rows)}
+
+    def describe_collection(self, *, collection_name: str) -> dict[str, Any]:
+        return self.collections[collection_name]
+
+    def create_index(
+        self, *, collection_name: str, field_name: str, index_params: dict[str, Any]
+    ) -> None:
+        self.indexes.append(
+            {
+                "collection_name": collection_name,
+                "field_name": field_name,
+                "index_params": index_params,
+            }
+        )
+
+    def load_collection(self, *, collection_name: str) -> None:
+        self.loaded.append(collection_name)
+
+    def get_load_state(self, *, collection_name: str) -> dict[str, str]:
+        _ = collection_name
+        return {"state": self.load_state}
 
 
 class FakeSearchIndices:
@@ -912,6 +910,11 @@ class FakeSearchIndices:
     def create(self, *, index: str, **kwargs: Any) -> None:
         self.created[index] = dict(kwargs)
 
+    def get_mapping(self, *, index: str) -> dict[str, Any]:
+        config = self.created[index]
+        mappings = config.get("mappings") or config.get("body", {}).get("mappings", {})
+        return {index: {"mappings": mappings}}
+
 
 class FakeSearchStatusError(Exception):
     def __init__(self, status: int) -> None:
@@ -920,9 +923,7 @@ class FakeSearchStatusError(Exception):
 
 
 class FakeSearchClient:
-    def __init__(
-        self, *, opensearch: bool = False, fail_exists_status: int | None = None
-    ) -> None:
+    def __init__(self, *, opensearch: bool = False, fail_exists_status: int | None = None) -> None:
         self.rows: dict[str, dict[str, Any]] = {}
         self.indices = FakeSearchIndices(fail_exists_status=fail_exists_status)
         self.opensearch = opensearch
@@ -977,9 +978,7 @@ class FakeSearchClient:
         query = kwargs.get("query") or kwargs.get("body", {}).get("query", {})
         ids = set(query["terms"]["memory_id"])
         self.rows = {
-            row_id: row
-            for row_id, row in self.rows.items()
-            if row["memory_id"] not in ids
+            row_id: row for row_id, row in self.rows.items() if row["memory_id"] not in ids
         }
 
     def count(self, *, index: str) -> dict[str, int]:
@@ -997,9 +996,7 @@ class FakeRedisSearch:
             raise RuntimeError("Unknown index name")
         return {"num_docs": len(self.client.rows)}
 
-    def search(
-        self, query: Any, *, query_params: dict[str, bytes] | None = None
-    ) -> Any:
+    def search(self, query: Any, *, query_params: dict[str, bytes] | None = None) -> Any:
         query_text = _fake_redis_query_text(query)
         if query_text.startswith("@memory_id:"):
             memory_id = query_text.split("{", 1)[1].split("}", 1)[0]
@@ -1033,9 +1030,7 @@ class FakeRedisSearch:
             id=key,
             vector_distance=str(distance),
             **{
-                item_key: item_value
-                for item_key, item_value in row.items()
-                if item_key != "vector"
+                item_key: item_value for item_key, item_value in row.items() if item_key != "vector"
             },
         )
 
@@ -1103,9 +1098,7 @@ class FakePineconeIndex:
         _ = namespace
         ids = set(filter["memory_id"]["$in"])
         self.rows = {
-            key: row
-            for key, row in self.rows.items()
-            if row["metadata"]["memory_id"] not in ids
+            key: row for key, row in self.rows.items() if row["metadata"]["memory_id"] not in ids
         }
 
     def describe_index_stats(self) -> dict[str, Any]:
@@ -1151,9 +1144,7 @@ class FakeTurbopufferNamespace:
             _field, _operator, values = delete_filter
             ids = {str(value) for value in values}
             self.rows = {
-                row_id: row
-                for row_id, row in self.rows.items()
-                if row["memory_id"] not in ids
+                row_id: row for row_id, row in self.rows.items() if row["memory_id"] not in ids
             }
 
     def query(self, **kwargs: Any) -> Any:
@@ -1166,11 +1157,7 @@ class FakeTurbopufferNamespace:
         return types.SimpleNamespace(
             rows=[
                 types.SimpleNamespace(
-                    **{
-                        key: value
-                        for key, value in row.items()
-                        if key != "vector"
-                    },
+                    **{key: value for key, value in row.items() if key != "vector"},
                     **{"$dist": _test_cosine_distance(query_vector, row["vector"])},
                 )
                 for row in rows[:limit]
@@ -1218,11 +1205,7 @@ class FakeTypesenseDocuments:
         return {
             "hits": [
                 {
-                    "document": {
-                        key: value
-                        for key, value in row.items()
-                        if key != "vector"
-                    },
+                    "document": {key: value for key, value in row.items() if key != "vector"},
                     "vector_distance": _test_cosine_distance(query_vector, row["vector"]),
                 }
                 for row in rows[: int(params["per_page"])]
@@ -1341,9 +1324,7 @@ class FakeVespaClient:
         ]
         return FakeVespaResponse(hits=hits, total_count=len(hits))
 
-    def delete_data(
-        self, *, schema: str, namespace: str, data_id: str
-    ) -> FakeVespaResponse:
+    def delete_data(self, *, schema: str, namespace: str, data_id: str) -> FakeVespaResponse:
         _ = (schema, namespace)
         self.deletes.append(data_id)
         self.rows.pop(data_id, None)
@@ -1407,12 +1388,40 @@ class FakeWeaviateAggregate:
         return types.SimpleNamespace(total_count=len(self.collection.rows))
 
 
+class FakeWeaviateConfig:
+    def __init__(self) -> None:
+        self.properties = [
+            types.SimpleNamespace(name=name)
+            for name in [
+                "memory_id",
+                "project_id",
+                "owner_id",
+                "chunk_id",
+                "chunk_index",
+                "message_hash",
+                "role",
+                "text",
+                "schema_version",
+            ]
+        ]
+        self.vector_config = {
+            "vector_index_config": {
+                "dimensions": 3,
+                "distance_metric": "cosine",
+            }
+        }
+
+    def get(self) -> "FakeWeaviateConfig":
+        return self
+
+
 class FakeWeaviateCollection:
     def __init__(self) -> None:
         self.rows: dict[str, dict[str, Any]] = {}
         self.data = FakeWeaviateData(self)
         self.query = FakeWeaviateQuery(self)
         self.aggregate = FakeWeaviateAggregate(self)
+        self.config = FakeWeaviateConfig()
 
 
 class FakeWeaviateCollections:
@@ -1445,6 +1454,22 @@ class FakeMongoCollection:
     def __init__(self) -> None:
         self.docs: list[dict[str, Any]] = []
         self.indexes: list[dict[str, Any]] = []
+        self.search_indexes: list[dict[str, Any]] = [
+            {
+                "name": "memory_vector_index",
+                "status": "READY",
+                "definition": {
+                    "fields": [
+                        {
+                            "type": "vector",
+                            "path": "vector",
+                            "numDimensions": 3,
+                            "similarity": "cosine",
+                        }
+                    ]
+                },
+            }
+        ]
 
     def create_index(self, *args: Any, **kwargs: Any) -> None:
         self.indexes.append({"args": args, "kwargs": dict(kwargs)})
@@ -1464,7 +1489,9 @@ class FakeMongoCollection:
     def insert_many(self, docs: list[dict[str, Any]]) -> None:
         self.docs.extend(dict(doc) for doc in docs)
 
-    def find_one(self, query: dict[str, Any], sort: list[tuple[str, int]] | None = None) -> dict[str, Any] | None:
+    def find_one(
+        self, query: dict[str, Any], sort: list[tuple[str, int]] | None = None
+    ) -> dict[str, Any] | None:
         rows = list(self.find(query))
         if sort:
             key, direction = sort[0]
@@ -1510,6 +1537,9 @@ class FakeMongoCollection:
             row["score"] = 1.0 - _test_cosine_distance(query_vector, doc["vector"])
             output.append(row)
         return output
+
+    def list_search_indexes(self, *, name: str) -> list[dict[str, Any]]:
+        return [index for index in self.search_indexes if index.get("name") == name]
 
 
 class FakeMongoCursor:
@@ -1577,9 +1607,7 @@ def _apply_update(doc: dict[str, Any], update: dict[str, Any]) -> None:
         ("lancedb", lambda tmp_path: LanceDBVectorStore(tmp_path / "lancedb", dimension=3)),
         (
             "chromadb",
-            lambda tmp_path: ChromaDBVectorStore(
-                client=FakeChromaClient(), dimension=3
-            ),
+            lambda tmp_path: ChromaDBVectorStore(client=FakeChromaClient(), dimension=3),
         ),
         (
             "qdrant",
@@ -1589,15 +1617,11 @@ def _apply_update(doc: dict[str, Any], update: dict[str, Any]) -> None:
         ),
         (
             "milvus",
-            lambda tmp_path: MilvusVectorStore(
-                client=FakeMilvusClient(), dimension=3
-            ),
+            lambda tmp_path: MilvusVectorStore(client=FakeMilvusClient(), dimension=3),
         ),
         (
             "weaviate",
-            lambda tmp_path: WeaviateVectorStore(
-                client=FakeWeaviateClient(), dimension=3
-            ),
+            lambda tmp_path: WeaviateVectorStore(client=FakeWeaviateClient(), dimension=3),
         ),
         (
             "mongodb_atlas",
@@ -1609,9 +1633,7 @@ def _apply_update(doc: dict[str, Any], update: dict[str, Any]) -> None:
         ),
         (
             "elasticsearch",
-            lambda tmp_path: ElasticsearchVectorStore(
-                client=FakeSearchClient(), dimension=3
-            ),
+            lambda tmp_path: ElasticsearchVectorStore(client=FakeSearchClient(), dimension=3),
         ),
         (
             "opensearch",
@@ -1625,15 +1647,11 @@ def _apply_update(doc: dict[str, Any], update: dict[str, Any]) -> None:
         ),
         (
             "pinecone",
-            lambda tmp_path: PineconeVectorStore(
-                client=FakePineconeClient(), dimension=3
-            ),
+            lambda tmp_path: PineconeVectorStore(client=FakePineconeClient(), dimension=3),
         ),
         (
             "turbopuffer",
-            lambda tmp_path: TurbopufferVectorStore(
-                client=FakeTurbopufferClient(), dimension=3
-            ),
+            lambda tmp_path: TurbopufferVectorStore(client=FakeTurbopufferClient(), dimension=3),
         ),
         (
             "vespa",
@@ -1641,15 +1659,11 @@ def _apply_update(doc: dict[str, Any], update: dict[str, Any]) -> None:
         ),
         (
             "typesense",
-            lambda tmp_path: TypesenseVectorStore(
-                client=FakeTypesenseClient(), dimension=3
-            ),
+            lambda tmp_path: TypesenseVectorStore(client=FakeTypesenseClient(), dimension=3),
         ),
         (
             "fake-sdk",
-            lambda tmp_path: FakeSDKVectorStore(
-                client=FakeVectorClient(), dimension=3
-            ),
+            lambda tmp_path: FakeSDKVectorStore(client=FakeVectorClient(), dimension=3),
         ),
     ],
 )
@@ -1659,9 +1673,7 @@ def test_vector_store_contract_for_local_backends(
     _ = provider
     store = factory(tmp_path)
     _assert_vector_store_contract(store)
-    with pytest.raises(
-        NotSupportedError, match="TTL is not supported by this vector adapter"
-    ):
+    with pytest.raises(NotSupportedError, match="TTL is not supported by this vector adapter"):
         store.set_ttl(str(uuid4()), 60)
 
 
@@ -1687,6 +1699,103 @@ def test_milvus_uses_string_primary_key_for_stable_point_ids() -> None:
     )
     store.delete(["memory-a"])
     assert client.flushes == ["memory_vectors", "memory_vectors"]
+    assert client.indexes[0]["field_name"] == "vector"
+    assert client.indexes[0]["index_params"]["metric_type"] == "COSINE"
+    assert client.loaded == ["memory_vectors"]
+
+
+def test_milvus_existing_collection_dimension_mismatch_fails_startup() -> None:
+    client = FakeMilvusClient()
+    client.create_collection(
+        collection_name="memory_vectors",
+        dimension=99,
+        metric_type="COSINE",
+        auto_id=False,
+        id_type="string",
+        max_length=64,
+    )
+
+    with pytest.raises(VectorDimensionError, match="Milvus collection dimensionality mismatch"):
+        MilvusVectorStore(client=client, dimension=3)
+
+
+def test_milvus_existing_collection_metric_mismatch_fails_startup() -> None:
+    client = FakeMilvusClient()
+    client.create_collection(
+        collection_name="memory_vectors",
+        dimension=3,
+        metric_type="L2",
+        auto_id=False,
+        id_type="string",
+        max_length=64,
+    )
+
+    with pytest.raises(RuntimeError, match="Milvus collection metric mismatch"):
+        MilvusVectorStore(client=client, dimension=3, distance="cosine")
+
+
+def test_milvus_collection_not_loaded_fails_startup() -> None:
+    client = FakeMilvusClient()
+    client.load_state = "NotLoad"
+
+    with pytest.raises(RuntimeError, match="is not loaded"):
+        MilvusVectorStore(client=client, dimension=3)
+
+
+def test_mongodb_atlas_search_index_must_exist_and_match_dimension() -> None:
+    missing_client = FakeMongoClient()
+    missing_client["ai_memory_hub"]["memory_vectors"].search_indexes = []
+    with pytest.raises(RuntimeError, match="vector search index .* was not found"):
+        MongoDBAtlasVectorStore(uri="mongodb://example", client=missing_client, dimension=3)
+
+    building_client = FakeMongoClient()
+    building_client["ai_memory_hub"]["memory_vectors"].search_indexes[0]["status"] = "BUILDING"
+    with pytest.raises(RuntimeError, match="is not ready"):
+        MongoDBAtlasVectorStore(uri="mongodb://example", client=building_client, dimension=3)
+
+    mismatch_client = FakeMongoClient()
+    fields = mismatch_client["ai_memory_hub"]["memory_vectors"].search_indexes[0]["definition"][
+        "fields"
+    ]
+    fields[0]["numDimensions"] = 99
+    with pytest.raises(
+        VectorDimensionError,
+        match="MongoDB Atlas vector search index dimensionality mismatch",
+    ):
+        MongoDBAtlasVectorStore(uri="mongodb://example", client=mismatch_client, dimension=3)
+
+
+def test_weaviate_existing_collection_schema_mismatch_fails_startup() -> None:
+    client = FakeWeaviateClient()
+    client.collections.exists_called = True
+    client.collections.collection.config.properties = [
+        prop
+        for prop in client.collections.collection.config.properties
+        if prop.name != "message_hash"
+    ]
+
+    with pytest.raises(RuntimeError, match="missing required properties: message_hash"):
+        WeaviateVectorStore(client=client, dimension=3)
+
+
+def test_weaviate_existing_collection_dimension_mismatch_fails_startup() -> None:
+    client = FakeWeaviateClient()
+    client.collections.exists_called = True
+    client.collections.collection.config.vector_config["vector_index_config"]["dimensions"] = 99
+
+    with pytest.raises(VectorDimensionError, match="Weaviate collection dimensionality mismatch"):
+        WeaviateVectorStore(client=client, dimension=3)
+
+
+def test_weaviate_existing_collection_distance_mismatch_fails_startup() -> None:
+    client = FakeWeaviateClient()
+    client.collections.exists_called = True
+    client.collections.collection.config.vector_config["vector_index_config"]["distance_metric"] = (
+        "dot"
+    )
+
+    with pytest.raises(RuntimeError, match="Weaviate collection distance mismatch"):
+        WeaviateVectorStore(client=client, dimension=3)
 
 
 def test_elasticsearch_create_index_when_exists_probe_returns_bad_request() -> None:
@@ -1702,6 +1811,51 @@ def test_elasticsearch_reraises_unexpected_exists_probe_errors() -> None:
 
     with pytest.raises(FakeSearchStatusError, match="search status 503"):
         ElasticsearchVectorStore(client=client, dimension=3)
+
+
+def test_elasticsearch_existing_mapping_mismatch_fails_startup() -> None:
+    client = FakeSearchClient()
+    ElasticsearchVectorStore(client=client, dimension=3)
+    client.indices.created["memory_vectors"]["mappings"]["properties"]["vector"]["dims"] = 99
+
+    with pytest.raises(
+        VectorDimensionError,
+        match="Elasticsearch vector mapping dimensionality mismatch",
+    ):
+        ElasticsearchVectorStore(client=client, dimension=3)
+
+
+def test_opensearch_existing_mapping_mismatch_fails_startup() -> None:
+    client = FakeSearchClient(opensearch=True)
+    OpenSearchVectorStore(client=client, dimension=3)
+    mapping = client.indices.created["memory_vectors"]["body"]["mappings"]
+    mapping["properties"]["vector"]["method"]["space_type"] = "l2"
+
+    with pytest.raises(RuntimeError, match="OpenSearch vector mapping distance mismatch"):
+        OpenSearchVectorStore(client=client, dimension=3)
+
+
+def test_search_mapping_metadata_mismatch_fails_startup() -> None:
+    client = FakeSearchClient()
+    ElasticsearchVectorStore(client=client, dimension=3)
+    client.indices.created["memory_vectors"]["mappings"]["_meta"]["schema_version"] = 99
+
+    with pytest.raises(RuntimeError, match="Elasticsearch mapping schema version mismatch"):
+        ElasticsearchVectorStore(client=client, dimension=3)
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("chromadb") is None,
+    reason="chromadb is not installed",
+)
+def test_chromadb_persistent_local_vector_contract(tmp_path: Path) -> None:
+    _assert_vector_store_contract(
+        ChromaDBVectorStore(
+            path=tmp_path / "chromadb",
+            collection_name=f"memory_vectors_{uuid4().hex}",
+            dimension=3,
+        )
+    )
 
 
 @pytest.mark.skipif(
@@ -1888,9 +2042,7 @@ def test_live_vespa_vector_contract() -> None:
             token=str(os.getenv("AMH_TEST_VESPA_TOKEN", "")),
             namespace=str(os.getenv("AMH_TEST_VESPA_NAMESPACE", "memory")),
             schema=str(os.getenv("AMH_TEST_VESPA_SCHEMA", "memory_vector")),
-            rank_profile=str(
-                os.getenv("AMH_TEST_VESPA_RANK_PROFILE", "vector_similarity")
-            ),
+            rank_profile=str(os.getenv("AMH_TEST_VESPA_RANK_PROFILE", "vector_similarity")),
             dimension=3,
         )
     )
@@ -1944,9 +2096,7 @@ def test_build_runtime_fails_on_startup_dimensionality_mismatch(
             }
 
     monkeypatch.setattr(mvp_ingestion, "InMemoryVectorStore", MismatchVectorStore)
-    with pytest.raises(
-        VectorDimensionError, match="dimensionality mismatch at startup"
-    ):
+    with pytest.raises(VectorDimensionError, match="dimensionality mismatch at startup"):
         mvp_ingestion.build_runtime(
             {
                 "providers": {"embeddings": "local", "vector_db": "in_memory"},
@@ -1971,10 +2121,7 @@ def test_build_runtime_vector_fallback_uses_same_dimension(
         }
     )
 
-    assert (
-        runtime.vector_store.expected_dimensionality
-        == runtime.embedding_provider.dimension
-    )
+    assert runtime.vector_store.expected_dimensionality == runtime.embedding_provider.dimension
 
 
 def test_build_runtime_records_embedding_index_metadata_for_persistent_vectors(
@@ -2119,9 +2266,7 @@ def test_fallback_logging_redacts_exception_secrets(
 ) -> None:
     class BrokenLanceDB:
         def __init__(self, *_args, **_kwargs):
-            raise RuntimeError(
-                "connect postgres://u:pw123@db/app password=letmein token=tok123"
-            )
+            raise RuntimeError("connect postgres://u:pw123@db/app password=letmein token=tok123")
 
     monkeypatch.setattr(mvp_ingestion, "LanceDBVectorStore", BrokenLanceDB)
     with caplog.at_level("WARNING"):
@@ -2401,9 +2546,7 @@ def test_build_runtime_expansion_vector_fallback_disabled_raises(
                 "paths": {"data_dir": str(tmp_path)},
                 "storage": {
                     "vector": {"allow_fallback": False},
-                    "vector_providers": {
-                        "mongodb_atlas": {"uri": "mongodb://example/app"}
-                    },
+                    "vector_providers": {"mongodb_atlas": {"uri": "mongodb://example/app"}},
                 },
             }
         )
@@ -2439,9 +2582,7 @@ def test_vector_fallback_disabled_startup_error_redacts_credentials(
     assert "redis://:***@localhost:6379/0" in message
 
 
-def test_dry_run_write_is_noop(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
-) -> None:
+def test_dry_run_write_is_noop(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     with caplog.at_level(logging.WARNING, logger="memory.backend.dry_run"):
         runtime = mvp_ingestion.build_runtime(
             {
@@ -2501,22 +2642,16 @@ def test_unsupported_operations_raise_deterministic_errors(tmp_path: Path) -> No
         match="Metadata transactions are not exposed by this adapter API",
     ):
         metadata.begin_transaction()
-    with pytest.raises(
-        NotSupportedError, match="TTL is not supported by this metadata adapter"
-    ):
+    with pytest.raises(NotSupportedError, match="TTL is not supported by this metadata adapter"):
         metadata.set_ttl("id-1", 60)
     with pytest.raises(
         NotSupportedError,
         match="Metadata transactions are not exposed by this adapter API",
     ):
         mongodb_metadata.begin_transaction()
-    with pytest.raises(
-        NotSupportedError, match="TTL is not supported by this metadata adapter"
-    ):
+    with pytest.raises(NotSupportedError, match="TTL is not supported by this metadata adapter"):
         mongodb_metadata.set_ttl("id-1", 60)
-    with pytest.raises(
-        NotSupportedError, match="TTL is not supported by this vector adapter"
-    ):
+    with pytest.raises(NotSupportedError, match="TTL is not supported by this vector adapter"):
         vectors.set_ttl("id-1", 60)
 
 
@@ -2789,9 +2924,7 @@ def test_postgres_metadata_init_failure_fails_startup_without_fallback(
 ) -> None:
     class BrokenPostgresMetadataStore:
         def __init__(self, *_args, **_kwargs):
-            raise RuntimeError(
-                "postgres metadata unavailable postgres://user:pg-secret@db/app"
-            )
+            raise RuntimeError("postgres metadata unavailable postgres://user:pg-secret@db/app")
 
     monkeypatch.setattr(
         mvp_ingestion,
@@ -2809,9 +2942,7 @@ def test_postgres_metadata_init_failure_fails_startup_without_fallback(
                 },
                 "paths": {"data_dir": str(tmp_path)},
                 "storage": {
-                    "metadata_providers": {
-                        "postgres": {"url": "postgres://user:pg-secret@db/app"}
-                    },
+                    "metadata_providers": {"postgres": {"url": "postgres://user:pg-secret@db/app"}},
                     "vector": {"allow_fallback": True},
                 },
             }
@@ -2903,9 +3034,7 @@ class _RecordingCursor:
             ]
         elif normalized.startswith("DELETE FROM memory_vectors WHERE memory_id = %s"):
             memory_id = params[0] if isinstance(params, tuple) else None
-            self.state["rows"] = [
-                row for row in self.state["rows"] if row[0] != memory_id
-            ]
+            self.state["rows"] = [row for row in self.state["rows"] if row[0] != memory_id]
             self._current = []
         elif normalized.startswith("INSERT INTO memory_vectors"):
             if isinstance(params, tuple):
@@ -3104,9 +3233,7 @@ def test_build_runtime_fails_on_incompatible_postgres_schema(
             return {"provider": "postgres", "schema_version": self.schema_version}
 
     monkeypatch.setattr(mvp_ingestion, "PostgresMetadataStore", StubPostgresStore)
-    with pytest.raises(
-        SchemaVersionError, match="Incompatible metadata schema version"
-    ):
+    with pytest.raises(SchemaVersionError, match="Incompatible metadata schema version"):
         mvp_ingestion.build_runtime(
             {
                 "providers": {
@@ -3117,9 +3244,7 @@ def test_build_runtime_fails_on_incompatible_postgres_schema(
                 "paths": {"data_dir": str(tmp_path)},
                 "storage": {
                     "metadata_schema_versions": [1],
-                    "metadata_providers": {
-                        "postgres": {"url": "postgres://example"}
-                    },
+                    "metadata_providers": {"postgres": {"url": "postgres://example"}},
                 },
             }
         )
@@ -3246,9 +3371,7 @@ def test_runtime_postgres_pgvector_live_integration_when_dsn_provided(
     assert any(row["id"] == memory_id for row in search_result["results"])
 
 
-def test_lancedb_index_is_created_lazily(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_lancedb_index_is_created_lazily(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     class FakeTable:
         def __init__(self):
             self.add_calls = 0
@@ -3271,9 +3394,7 @@ def test_lancedb_index_is_created_lazily(
     monkeypatch.setitem(
         sys.modules, "lancedb", types.SimpleNamespace(connect=FakeLanceDBModule.connect)
     )
-    monkeypatch.setattr(
-        LanceDBVectorStore, "_open_or_create_table", lambda self: fake_table
-    )
+    monkeypatch.setattr(LanceDBVectorStore, "_open_or_create_table", lambda self: fake_table)
 
     store = LanceDBVectorStore(tmp_path / "lancedb", dimension=3)
     assert fake_table.create_index_calls == 0

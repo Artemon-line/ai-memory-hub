@@ -71,7 +71,9 @@ class VectorStore(Protocol):
     @property
     def expected_dimensionality(self) -> int: ...
 
-    def insert(self, metadata_id: str, embeddings: list[dict[str, Any]], replace: bool = False) -> None: ...
+    def insert(
+        self, metadata_id: str, embeddings: list[dict[str, Any]], replace: bool = False
+    ) -> None: ...
 
     def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]: ...
 
@@ -154,9 +156,7 @@ class ChromaDBVectorStore:
 
     def delete(self, ids: list[str]) -> None:
         for memory_id in ids:
-            self._collection.delete(
-                where={VectorPayloadKey.MEMORY_ID.value: str(memory_id)}
-            )
+            self._collection.delete(where={VectorPayloadKey.MEMORY_ID.value: str(memory_id)})
 
     def get_stats(self) -> dict[str, Any]:
         try:
@@ -171,9 +171,7 @@ class ChromaDBVectorStore:
             "schema_version": self._SCHEMA_VERSION,
             VectorStatsKey.DISTANCE.value: self._DISTANCE,
             VectorStatsKey.MODE.value: (
-                ChromaClientMode.HTTP.value
-                if self.url
-                else ChromaClientMode.PERSISTENT.value
+                ChromaClientMode.HTTP.value if self.url else ChromaClientMode.PERSISTENT.value
             ),
         }
 
@@ -241,12 +239,8 @@ class ChromaDBVectorStore:
         distances = _first_query_batch(result.get(ChromaQueryKey.DISTANCES.value, []))
         rows: list[dict[str, Any]] = []
         for index, chunk_id in enumerate(ids):
-            metadata_payload = (
-                dict(metadatas[index] or {}) if index < len(metadatas) else {}
-            )
-            metadata = ChromaMetadata.from_query(
-                metadata_payload, fallback_chunk_id=chunk_id
-            )
+            metadata_payload = dict(metadatas[index] or {}) if index < len(metadatas) else {}
+            metadata = ChromaMetadata.from_query(metadata_payload, fallback_chunk_id=chunk_id)
             distance = float(distances[index]) if index < len(distances) else 0.0
             text = (
                 str(documents[index])
@@ -491,6 +485,10 @@ class QdrantVectorStore:
 
 
 class MilvusVectorStore:
+    _INDEX_PARAMS = {
+        "index_type": "AUTOINDEX",
+        "metric_type": MilvusMetricType.COSINE.value,
+    }
     _METRIC_MAP = {
         "cosine": MilvusMetricType.COSINE.value,
         "l2": MilvusMetricType.L2.value,
@@ -512,8 +510,11 @@ class MilvusVectorStore:
         self.collection_name = collection_name
         self.dimension = dimension
         self.distance = distance
+        self.metric_type = self._metric_type()
         self._client = client or self._create_client()
         self._ensure_collection()
+        self._ensure_index()
+        self._ensure_loaded()
 
     @property
     def expected_dimensionality(self) -> int:
@@ -533,9 +534,7 @@ class MilvusVectorStore:
             payload = _vector_payload(metadata_id, item)
             rows.append(
                 {
-                    "id": _stable_point_id(
-                        metadata_id, payload[VectorPayloadKey.CHUNK_ID.value]
-                    ),
+                    "id": _stable_point_id(metadata_id, payload[VectorPayloadKey.CHUNK_ID.value]),
                     **payload,
                     VectorPayloadKey.VECTOR.value: vector,
                 }
@@ -570,9 +569,7 @@ class MilvusVectorStore:
     def get_stats(self) -> dict[str, Any]:
         rows = None
         try:
-            stats = self._client.get_collection_stats(
-                collection_name=self.collection_name
-            )
+            stats = self._client.get_collection_stats(collection_name=self.collection_name)
             if isinstance(stats, dict):
                 rows = int(stats.get("row_count", stats.get("num_entities", 0)) or 0)
         except Exception:
@@ -618,14 +615,12 @@ class MilvusVectorStore:
 
     def _ensure_collection(self) -> None:
         if self._client.has_collection(collection_name=self.collection_name):
+            self._validate_existing_collection()
             return
-        metric_type = self._METRIC_MAP.get(self.distance)
-        if metric_type is None:
-            raise ValueError("Milvus distance must be one of: cosine, l2, inner_product")
         self._client.create_collection(
             collection_name=self.collection_name,
             dimension=self.expected_dimensionality,
-            metric_type=metric_type,
+            metric_type=self.metric_type,
             id_type="string",
             max_length=64,
             auto_id=False,
@@ -654,6 +649,62 @@ class MilvusVectorStore:
             rows.append(row)
         return rows
 
+    def _metric_type(self) -> str:
+        metric_type = self._METRIC_MAP.get(self.distance)
+        if metric_type is None:
+            raise ValueError("Milvus distance must be one of: cosine, l2, inner_product")
+        return metric_type
+
+    def _validate_existing_collection(self) -> None:
+        describe = getattr(self._client, "describe_collection", None)
+        if describe is None:
+            return
+        details = describe(collection_name=self.collection_name)
+        dimension = _mapping_from_object_or_dict(details, "dimension")
+        if dimension is None:
+            vector_field = _find_milvus_vector_field(details)
+            dimension = _mapping_from_object_or_dict(vector_field, "dim")
+        if dimension is not None and int(dimension) != self.expected_dimensionality:
+            raise VectorDimensionError(
+                "Milvus collection dimensionality mismatch: "
+                f"expected {self.expected_dimensionality}, got {int(dimension)}"
+            )
+        metric = _mapping_from_object_or_dict(details, "metric_type")
+        if metric is None:
+            index = _first_milvus_index(details)
+            metric = _mapping_from_object_or_dict(index, "metric_type")
+        if metric is not None and str(metric).upper() != self.metric_type:
+            raise RuntimeError(
+                f"Milvus collection metric mismatch: expected {self.metric_type}, got {metric}"
+            )
+
+    def _ensure_index(self) -> None:
+        create_index = getattr(self._client, "create_index", None)
+        if create_index is None:
+            return
+        create_index(
+            collection_name=self.collection_name,
+            field_name=VectorPayloadKey.VECTOR.value,
+            index_params={
+                **self._INDEX_PARAMS,
+                "metric_type": self.metric_type,
+            },
+        )
+
+    def _ensure_loaded(self) -> None:
+        load = getattr(self._client, "load_collection", None)
+        if load is not None:
+            load(collection_name=self.collection_name)
+        get_load_state = getattr(self._client, "get_load_state", None)
+        if get_load_state is None:
+            return
+        state = get_load_state(collection_name=self.collection_name)
+        state_name = str(_mapping_from_object_or_dict(state, "state") or state).lower()
+        if state_name and "loaded" not in state_name:
+            raise RuntimeError(
+                f"Milvus collection {self.collection_name!r} is not loaded for search"
+            )
+
 
 class MongoDBAtlasVectorStore:
     def __init__(
@@ -676,6 +727,7 @@ class MongoDBAtlasVectorStore:
         self._client = client or self._create_client()
         self._collection = self._client[self.database][self.collection_name]
         self._ensure_indexes()
+        self._validate_search_index()
 
     @property
     def expected_dimensionality(self) -> int:
@@ -776,8 +828,32 @@ class MongoDBAtlasVectorStore:
                 f"Vector dimensionality mismatch during {operation}: expected {expected}, got {actual}"
             )
 
+    def _validate_search_index(self) -> None:
+        list_search_indexes = getattr(self._collection, "list_search_indexes", None)
+        if list_search_indexes is None:
+            return
+        indexes = list(list_search_indexes(name=self.index_name))
+        if not indexes:
+            raise RuntimeError(
+                f"MongoDB Atlas vector search index {self.index_name!r} was not found"
+            )
+        index = dict(indexes[0])
+        status = str(index.get("status") or index.get("queryable") or "").upper()
+        if status and status not in {"READY", "TRUE"}:
+            raise RuntimeError(
+                f"MongoDB Atlas vector search index {self.index_name!r} is not ready"
+            )
+        definition = index.get("definition") or {}
+        dimensions = _mongodb_atlas_index_dimensions(definition)
+        if dimensions is not None and dimensions != self.expected_dimensionality:
+            raise VectorDimensionError(
+                "MongoDB Atlas vector search index dimensionality mismatch: "
+                f"expected {self.expected_dimensionality}, got {dimensions}"
+            )
+
 
 class ElasticsearchVectorStore:
+    _SCHEMA_VERSION = 1
     _SIMILARITY_MAP = {
         "cosine": SearchSimilarityName.COSINE.value,
         "l2": SearchSimilarityName.L2.value,
@@ -822,9 +898,7 @@ class ElasticsearchVectorStore:
             document = {**payload, VectorPayloadKey.VECTOR.value: vector}
             self._client.index(
                 index=self.index_name,
-                id=_stable_point_id(
-                    metadata_id, payload[VectorPayloadKey.CHUNK_ID.value]
-                ),
+                id=_stable_point_id(metadata_id, payload[VectorPayloadKey.CHUNK_ID.value]),
                 document=document,
                 refresh=True,
             )
@@ -907,31 +981,64 @@ class ElasticsearchVectorStore:
 
     def _ensure_index(self) -> None:
         if self._index_exists():
+            self._validate_existing_mapping()
             return
         similarity = self._SIMILARITY_MAP.get(self.distance)
         if similarity is None:
-            raise ValueError(
-                "Elasticsearch distance must be one of: cosine, l2, inner_product"
-            )
+            raise ValueError("Elasticsearch distance must be one of: cosine, l2, inner_product")
         self._client.indices.create(
             index=self.index_name,
-            mappings={
-                "properties": {
-                    VectorPayloadKey.VECTOR.value: {
-                        "type": "dense_vector",
-                        "dims": self.expected_dimensionality,
-                        "index": True,
-                        "similarity": similarity,
-                    },
-                    VectorPayloadKey.MEMORY_ID.value: {"type": "keyword"},
-                    VectorPayloadKey.PROJECT_ID.value: {"type": "keyword"},
-                    VectorPayloadKey.OWNER_ID.value: {"type": "keyword"},
-                    VectorPayloadKey.CHUNK_ID.value: {"type": "keyword"},
-                    VectorPayloadKey.MESSAGE_HASH.value: {"type": "keyword"},
-                    VectorPayloadKey.ROLE.value: {"type": "keyword"},
-                    VectorPayloadKey.TEXT.value: {"type": "text"},
-                }
+            mappings=self._mapping(similarity),
+        )
+
+    def _mapping(self, similarity: str) -> dict[str, Any]:
+        return {
+            "_meta": {
+                "schema_version": self._SCHEMA_VERSION,
+                VectorStatsKey.EXPECTED_DIMENSIONALITY.value: self.expected_dimensionality,
+                VectorStatsKey.DISTANCE.value: self.distance,
             },
+            "properties": {
+                VectorPayloadKey.VECTOR.value: {
+                    "type": "dense_vector",
+                    "dims": self.expected_dimensionality,
+                    "index": True,
+                    "similarity": similarity,
+                },
+                VectorPayloadKey.MEMORY_ID.value: {"type": "keyword"},
+                VectorPayloadKey.PROJECT_ID.value: {"type": "keyword"},
+                VectorPayloadKey.OWNER_ID.value: {"type": "keyword"},
+                VectorPayloadKey.CHUNK_ID.value: {"type": "keyword"},
+                VectorPayloadKey.MESSAGE_HASH.value: {"type": "keyword"},
+                VectorPayloadKey.ROLE.value: {"type": "keyword"},
+                VectorPayloadKey.TEXT.value: {"type": "text"},
+            },
+        }
+
+    def _validate_existing_mapping(self) -> None:
+        get_mapping = getattr(self._client.indices, "get_mapping", None)
+        if get_mapping is None:
+            return
+        expected_similarity = self._SIMILARITY_MAP.get(self.distance)
+        if expected_similarity is None:
+            raise ValueError("Elasticsearch distance must be one of: cosine, l2, inner_product")
+        mapping = _search_index_mapping(get_mapping(index=self.index_name), self.index_name)
+        vector_mapping = mapping.get("properties", {}).get(VectorPayloadKey.VECTOR.value, {})
+        _validate_search_vector_mapping(
+            provider="Elasticsearch",
+            vector_mapping=vector_mapping,
+            expected_dimension=self.expected_dimensionality,
+            expected_similarity=expected_similarity,
+            dimension_key="dims",
+            similarity_key="similarity",
+        )
+        metadata = mapping.get("_meta", {})
+        _validate_search_mapping_metadata(
+            provider="Elasticsearch",
+            metadata=metadata,
+            expected_schema_version=self._SCHEMA_VERSION,
+            expected_dimension=self.expected_dimensionality,
+            expected_distance=self.distance,
         )
 
     def _index_exists(self) -> bool:
@@ -944,6 +1051,7 @@ class ElasticsearchVectorStore:
 
 
 class OpenSearchVectorStore:
+    _SCHEMA_VERSION = 1
     _SPACE_TYPE_MAP = {
         "cosine": OpenSearchSpaceType.COSINE.value,
         "l2": OpenSearchSpaceType.L2.value,
@@ -988,9 +1096,7 @@ class OpenSearchVectorStore:
             document = {**payload, VectorPayloadKey.VECTOR.value: vector}
             self._client.index(
                 index=self.index_name,
-                id=_stable_point_id(
-                    metadata_id, payload[VectorPayloadKey.CHUNK_ID.value]
-                ),
+                id=_stable_point_id(metadata_id, payload[VectorPayloadKey.CHUNK_ID.value]),
                 body=document,
                 refresh=True,
             )
@@ -1083,37 +1189,70 @@ class OpenSearchVectorStore:
 
     def _ensure_index(self) -> None:
         if self._client.indices.exists(index=self.index_name):
+            self._validate_existing_mapping()
             return
         space_type = self._SPACE_TYPE_MAP.get(self.distance)
         if space_type is None:
-            raise ValueError(
-                "OpenSearch distance must be one of: cosine, l2, inner_product"
-            )
+            raise ValueError("OpenSearch distance must be one of: cosine, l2, inner_product")
         self._client.indices.create(
             index=self.index_name,
             body={
                 "settings": {"index": {"knn": True}},
-                "mappings": {
-                    "properties": {
-                        VectorPayloadKey.VECTOR.value: {
-                            "type": "knn_vector",
-                            "dimension": self.expected_dimensionality,
-                            "method": {
-                                "name": "hnsw",
-                                "space_type": space_type,
-                                "engine": "lucene",
-                            },
-                        },
-                        VectorPayloadKey.MEMORY_ID.value: {"type": "keyword"},
-                        VectorPayloadKey.PROJECT_ID.value: {"type": "keyword"},
-                        VectorPayloadKey.OWNER_ID.value: {"type": "keyword"},
-                        VectorPayloadKey.CHUNK_ID.value: {"type": "keyword"},
-                        VectorPayloadKey.MESSAGE_HASH.value: {"type": "keyword"},
-                        VectorPayloadKey.ROLE.value: {"type": "keyword"},
-                        VectorPayloadKey.TEXT.value: {"type": "text"},
-                    }
-                },
+                "mappings": self._mapping(space_type),
             },
+        )
+
+    def _mapping(self, space_type: str) -> dict[str, Any]:
+        return {
+            "_meta": {
+                "schema_version": self._SCHEMA_VERSION,
+                VectorStatsKey.EXPECTED_DIMENSIONALITY.value: self.expected_dimensionality,
+                VectorStatsKey.DISTANCE.value: self.distance,
+            },
+            "properties": {
+                VectorPayloadKey.VECTOR.value: {
+                    "type": "knn_vector",
+                    "dimension": self.expected_dimensionality,
+                    "method": {
+                        "name": "hnsw",
+                        "space_type": space_type,
+                        "engine": "lucene",
+                    },
+                },
+                VectorPayloadKey.MEMORY_ID.value: {"type": "keyword"},
+                VectorPayloadKey.PROJECT_ID.value: {"type": "keyword"},
+                VectorPayloadKey.OWNER_ID.value: {"type": "keyword"},
+                VectorPayloadKey.CHUNK_ID.value: {"type": "keyword"},
+                VectorPayloadKey.MESSAGE_HASH.value: {"type": "keyword"},
+                VectorPayloadKey.ROLE.value: {"type": "keyword"},
+                VectorPayloadKey.TEXT.value: {"type": "text"},
+            },
+        }
+
+    def _validate_existing_mapping(self) -> None:
+        get_mapping = getattr(self._client.indices, "get_mapping", None)
+        if get_mapping is None:
+            return
+        expected_space_type = self._SPACE_TYPE_MAP.get(self.distance)
+        if expected_space_type is None:
+            raise ValueError("OpenSearch distance must be one of: cosine, l2, inner_product")
+        mapping = _search_index_mapping(get_mapping(index=self.index_name), self.index_name)
+        vector_mapping = mapping.get("properties", {}).get(VectorPayloadKey.VECTOR.value, {})
+        _validate_search_vector_mapping(
+            provider="OpenSearch",
+            vector_mapping=vector_mapping,
+            expected_dimension=self.expected_dimensionality,
+            expected_similarity=expected_space_type,
+            dimension_key="dimension",
+            similarity_key="method.space_type",
+        )
+        metadata = mapping.get("_meta", {})
+        _validate_search_mapping_metadata(
+            provider="OpenSearch",
+            metadata=metadata,
+            expected_schema_version=self._SCHEMA_VERSION,
+            expected_dimension=self.expected_dimensionality,
+            expected_distance=self.distance,
         )
 
 
@@ -1238,9 +1377,7 @@ class RedisVectorStore:
         )
         result = self._client.ft(self.index_name).search(
             _redis_search_query(query),
-            query_params={
-                RedisVectorField.VECTOR.value: _float32_vector_bytes(query_vector)
-            },
+            query_params={RedisVectorField.VECTOR.value: _float32_vector_bytes(query_vector)},
         )
         rows = [_row_from_redis_document(document) for document in result.docs]
         if not rows:
@@ -1293,9 +1430,7 @@ class RedisVectorStore:
         for key in self._keys_for_memory_id(memory_id):
             self._client.delete(key)
 
-    def _wait_for_indexed_documents(
-        self, expected_rows: int, timeout_seconds: float = 5.0
-    ) -> None:
+    def _wait_for_indexed_documents(self, expected_rows: int, timeout_seconds: float = 5.0) -> None:
         deadline = time.monotonic() + timeout_seconds
         while True:
             rows = self._indexed_doc_count()
@@ -1346,9 +1481,7 @@ class RedisVectorStore:
             if len(vector) != len(query_vector):
                 continue
             row = _row_from_vector_payload(payload)
-            distance = _redis_vector_distance(
-                query_vector, vector, distance_name=self.distance
-            )
+            distance = _redis_vector_distance(query_vector, vector, distance_name=self.distance)
             row[RedisVectorField.DISTANCE.value] = distance
             row[VectorPayloadKey.SCORE.value] = 1.0 - distance
             rows.append(row)
@@ -1434,9 +1567,7 @@ class PineconeVectorStore:
     def _ensure_index(self, *, cloud: str, region: str) -> None:
         if self.index_name in _pinecone_index_names(self._client.list_indexes()):
             return
-        spec = self._serverless_spec or _pinecone_serverless_spec(
-            cloud=cloud, region=region
-        )
+        spec = self._serverless_spec or _pinecone_serverless_spec(cloud=cloud, region=region)
         self._client.create_index(
             name=self.index_name,
             dimension=self.expected_dimensionality,
@@ -1915,9 +2046,7 @@ class TypesenseVectorStore:
             {
                 "q": "*",
                 "query_by": VectorPayloadKey.TEXT.value,
-                "vector_query": (
-                    f"{VectorPayloadKey.VECTOR.value}:([{vector}], k:{int(top_k)})"
-                ),
+                "vector_query": (f"{VectorPayloadKey.VECTOR.value}:([{vector}], k:{int(top_k)})"),
                 "per_page": int(top_k),
                 "exclude_fields": VectorPayloadKey.VECTOR.value,
             }
@@ -2000,6 +2129,9 @@ class TypesenseVectorStore:
 
 
 class WeaviateVectorStore:
+    _SCHEMA_VERSION = 1
+    _DISTANCE = "cosine"
+
     def __init__(
         self,
         *,
@@ -2037,9 +2169,7 @@ class WeaviateVectorStore:
             )
             payload = _vector_payload(metadata_id, item)
             self._collection.data.insert(
-                uuid=_stable_point_id(
-                    metadata_id, payload[VectorPayloadKey.CHUNK_ID.value]
-                ),
+                uuid=_stable_point_id(metadata_id, payload[VectorPayloadKey.CHUNK_ID.value]),
                 properties=payload,
                 vector=vector,
             )
@@ -2130,7 +2260,9 @@ class WeaviateVectorStore:
 
     def _ensure_collection(self) -> Any:
         if self._client.collections.exists(self.collection_name):
-            return self._client.collections.get(self.collection_name)
+            collection = self._client.collections.get(self.collection_name)
+            self._validate_existing_collection(collection)
+            return collection
         config_classes = self._classes.get("config") if isinstance(self._classes, dict) else None
         if config_classes is None:
             return self._client.collections.create(self.collection_name)
@@ -2170,8 +2302,35 @@ class WeaviateVectorStore:
                     name=VectorPayloadKey.TEXT.value,
                     data_type=config_classes.DataType.TEXT,
                 ),
+                config_classes.Property(
+                    name="schema_version",
+                    data_type=config_classes.DataType.INT,
+                ),
             ],
         )
+
+    def _validate_existing_collection(self, collection: Any) -> None:
+        config = _weaviate_collection_config(collection)
+        if config is None:
+            return
+        properties = _weaviate_property_names(config)
+        required = set(_vector_payload_fields()) | {"schema_version"}
+        missing = sorted(required - properties)
+        if missing:
+            raise RuntimeError(
+                "Weaviate collection schema missing required properties: " + ", ".join(missing)
+            )
+        dimension = _nested_mapping_value(config, "vector_config.vector_index_config.dimensions")
+        if dimension is not None and int(dimension) != self.expected_dimensionality:
+            raise VectorDimensionError(
+                "Weaviate collection dimensionality mismatch: "
+                f"expected {self.expected_dimensionality}, got {int(dimension)}"
+            )
+        distance = _weaviate_distance(config)
+        if distance is not None and str(distance).lower() != self._DISTANCE:
+            raise RuntimeError(
+                f"Weaviate collection distance mismatch: expected {self._DISTANCE}, got {distance}"
+            )
 
     def _metadata_query(self) -> Any | None:
         query_classes = self._classes.get("query") if isinstance(self._classes, dict) else None
@@ -2183,13 +2342,13 @@ class WeaviateVectorStore:
         query_classes = self._classes.get("query") if isinstance(self._classes, dict) else None
         if query_classes is None:
             return {VectorPayloadKey.MEMORY_ID.value: ids}
-        return query_classes.Filter.by_property(
-            VectorPayloadKey.MEMORY_ID.value
-        ).contains_any(ids)
+        return query_classes.Filter.by_property(VectorPayloadKey.MEMORY_ID.value).contains_any(ids)
 
 
 class LanceDBVectorStore:
-    def __init__(self, db_path: str | Path, table_name: str = "memory_vectors", dimension: int = 32):
+    def __init__(
+        self, db_path: str | Path, table_name: str = "memory_vectors", dimension: int = 32
+    ):
         self.db_path = Path(db_path)
         self.db_path.mkdir(parents=True, exist_ok=True)
         self.table_name = table_name
@@ -2198,9 +2357,7 @@ class LanceDBVectorStore:
         try:
             import lancedb
         except ImportError as exc:
-            raise RuntimeError(
-                "lancedb package is required for vector_db=lancedb"
-            ) from exc
+            raise RuntimeError("lancedb package is required for vector_db=lancedb") from exc
 
         self._db = lancedb.connect(str(self.db_path))
         self._table = self._open_or_create_table()
@@ -2227,8 +2384,7 @@ class LanceDBVectorStore:
 
         # reuse existing table if possible
         names = {
-            item[0] if isinstance(item, (list, tuple)) else item
-            for item in self._db.list_tables()
+            item[0] if isinstance(item, (list, tuple)) else item for item in self._db.list_tables()
         }
         if self.table_name in names:
             existing_table = self._db.open_table(self.table_name)
@@ -2256,12 +2412,12 @@ class LanceDBVectorStore:
                 return existing_table
 
         # Create or overwrite table with correct schema
-        table = self._db.create_table(
-            self.table_name, schema=schema, mode="overwrite"
-        )
+        table = self._db.create_table(self.table_name, schema=schema, mode="overwrite")
         return table
 
-    def insert(self, metadata_id: str, embeddings: list[dict[str, Any]], replace: bool = False) -> None:
+    def insert(
+        self, metadata_id: str, embeddings: list[dict[str, Any]], replace: bool = False
+    ) -> None:
         rows = []
         for item in embeddings:
             vector = [float(v) for v in item["vector"]]
@@ -2271,7 +2427,9 @@ class LanceDBVectorStore:
                     "memory_id": metadata_id,
                     "project_id": str(item.get("project_id", "")),
                     "owner_id": str(item.get("owner_id", "")),
-                    "chunk_id": str(item.get("chunk_id") or f"{metadata_id}:{int(item['chunk_index'])}"),
+                    "chunk_id": str(
+                        item.get("chunk_id") or f"{metadata_id}:{int(item['chunk_index'])}"
+                    ),
                     "chunk_index": int(item["chunk_index"]),
                     "message_hash": str(item.get("message_hash", "")),
                     "role": str(item["role"]),
@@ -2364,7 +2522,9 @@ class InMemoryVectorStore:
     def expected_dimensionality(self) -> int:
         return self.dimension
 
-    def insert(self, metadata_id: str, embeddings: list[dict[str, Any]], replace: bool = False) -> None:
+    def insert(
+        self, metadata_id: str, embeddings: list[dict[str, Any]], replace: bool = False
+    ) -> None:
         if replace:
             # Avoid duplicates if re-indexing
             self._rows = [row for row in self._rows if row["memory_id"] != metadata_id]
@@ -2376,7 +2536,9 @@ class InMemoryVectorStore:
                     "memory_id": metadata_id,
                     "project_id": str(item.get("project_id", "")),
                     "owner_id": str(item.get("owner_id", "")),
-                    "chunk_id": str(item.get("chunk_id") or f"{metadata_id}:{int(item['chunk_index'])}"),
+                    "chunk_id": str(
+                        item.get("chunk_id") or f"{metadata_id}:{int(item['chunk_index'])}"
+                    ),
                     "chunk_index": int(item["chunk_index"]),
                     "message_hash": str(item.get("message_hash", "")),
                     "role": str(item["role"]),
@@ -2486,9 +2648,12 @@ class PGVectorStore:
             return self._connect_fn(self._dsn)
         try:
             import importlib
+
             psycopg = importlib.import_module("psycopg")
         except ImportError as exc:
-            raise RuntimeError("psycopg package is required for providers.vector_db=pgvector") from exc
+            raise RuntimeError(
+                "psycopg package is required for providers.vector_db=pgvector"
+            ) from exc
         return psycopg.connect(self._dsn)
 
     def _init_db(self) -> None:
@@ -2528,8 +2693,12 @@ class PGVectorStore:
                     )
                     """
                 )
-                cur.execute(f"ALTER TABLE {self.table_name} ADD COLUMN IF NOT EXISTS project_id TEXT NOT NULL DEFAULT ''")
-                cur.execute(f"ALTER TABLE {self.table_name} ADD COLUMN IF NOT EXISTS owner_id TEXT NOT NULL DEFAULT ''")
+                cur.execute(
+                    f"ALTER TABLE {self.table_name} ADD COLUMN IF NOT EXISTS project_id TEXT NOT NULL DEFAULT ''"
+                )
+                cur.execute(
+                    f"ALTER TABLE {self.table_name} ADD COLUMN IF NOT EXISTS owner_id TEXT NOT NULL DEFAULT ''"
+                )
                 cur.execute(
                     f"""
                     CREATE INDEX IF NOT EXISTS idx_{self.table_name}_hnsw
@@ -2552,7 +2721,9 @@ class PGVectorStore:
             )
         return version
 
-    def insert(self, metadata_id: str, embeddings: list[dict[str, Any]], replace: bool = False) -> None:
+    def insert(
+        self, metadata_id: str, embeddings: list[dict[str, Any]], replace: bool = False
+    ) -> None:
         rows: list[tuple[str, str, str, str, int, str, str, str, str]] = []
         for item in embeddings:
             vector = [float(v) for v in item["vector"]]
@@ -2573,7 +2744,9 @@ class PGVectorStore:
         with self._connect() as conn:
             with conn.cursor() as cur:
                 if replace:
-                    cur.execute(f"DELETE FROM {self.table_name} WHERE memory_id = %s", (metadata_id,))
+                    cur.execute(
+                        f"DELETE FROM {self.table_name} WHERE memory_id = %s", (metadata_id,)
+                    )
                 for row in rows:
                     cur.execute(
                         f"""
@@ -2618,7 +2791,17 @@ class PGVectorStore:
             memory_id, chunk_id, project_id, chunk_index, message_hash, role, text, score = row
             owner_id = ""
         else:
-            memory_id, chunk_id, project_id, owner_id, chunk_index, message_hash, role, text, score = row
+            (
+                memory_id,
+                chunk_id,
+                project_id,
+                owner_id,
+                chunk_index,
+                message_hash,
+                role,
+                text,
+                score,
+            ) = row
         result = {
             "memory_id": str(memory_id),
             "chunk_id": str(chunk_id),
@@ -2639,7 +2822,10 @@ class PGVectorStore:
             return
         with self._connect() as conn:
             with conn.cursor() as cur:
-                cur.execute(f"DELETE FROM {self.table_name} WHERE memory_id = ANY(%s)", ([str(item) for item in ids],))
+                cur.execute(
+                    f"DELETE FROM {self.table_name} WHERE memory_id = ANY(%s)",
+                    ([str(item) for item in ids],),
+                )
 
     def get_stats(self) -> dict[str, Any]:
         with self._connect() as conn:
@@ -2721,6 +2907,142 @@ def _exception_status(exc: Exception) -> int | None:
     return int(status)
 
 
+def _nested_mapping_value(value: Any, dotted_key: str) -> Any:
+    current = value
+    for key in dotted_key.split("."):
+        current = _mapping_from_object_or_dict(current, key)
+        if current is None:
+            return None
+    return current
+
+
+def _mongodb_atlas_index_dimensions(definition: dict[str, Any]) -> int | None:
+    fields = definition.get("fields", [])
+    if not isinstance(fields, list):
+        return None
+    for field in fields:
+        if not isinstance(field, dict):
+            continue
+        if field.get("type") != "vector":
+            continue
+        if field.get("path") != VectorPayloadKey.VECTOR.value:
+            continue
+        dimensions = field.get("numDimensions") or field.get("dimensions")
+        return int(dimensions) if dimensions is not None else None
+    return None
+
+
+def _search_index_mapping(result: dict[str, Any], index_name: str) -> dict[str, Any]:
+    if "mappings" in result:
+        return dict(result["mappings"])
+    index_result = result.get(index_name, {})
+    return dict(index_result.get("mappings", {}))
+
+
+def _validate_search_vector_mapping(
+    *,
+    provider: str,
+    vector_mapping: dict[str, Any],
+    expected_dimension: int,
+    expected_similarity: str,
+    dimension_key: str,
+    similarity_key: str,
+) -> None:
+    actual_dimension = _nested_mapping_value(vector_mapping, dimension_key)
+    if actual_dimension is not None and int(actual_dimension) != expected_dimension:
+        raise VectorDimensionError(
+            f"{provider} vector mapping dimensionality mismatch: "
+            f"expected {expected_dimension}, got {int(actual_dimension)}"
+        )
+    actual_similarity = _nested_mapping_value(vector_mapping, similarity_key)
+    if actual_similarity is not None and str(actual_similarity) != expected_similarity:
+        raise RuntimeError(
+            f"{provider} vector mapping distance mismatch: "
+            f"expected {expected_similarity}, got {actual_similarity}"
+        )
+
+
+def _validate_search_mapping_metadata(
+    *,
+    provider: str,
+    metadata: dict[str, Any],
+    expected_schema_version: int,
+    expected_dimension: int,
+    expected_distance: str,
+) -> None:
+    if not metadata:
+        raise RuntimeError(f"{provider} mapping metadata is missing")
+    schema_version = metadata.get("schema_version")
+    if schema_version is not None and int(schema_version) != expected_schema_version:
+        raise RuntimeError(
+            f"{provider} mapping schema version mismatch: "
+            f"expected {expected_schema_version}, got {schema_version}"
+        )
+    dimension = metadata.get(VectorStatsKey.EXPECTED_DIMENSIONALITY.value)
+    if dimension is not None and int(dimension) != expected_dimension:
+        raise VectorDimensionError(
+            f"{provider} mapping metadata dimensionality mismatch: "
+            f"expected {expected_dimension}, got {int(dimension)}"
+        )
+    distance = metadata.get(VectorStatsKey.DISTANCE.value)
+    if distance is not None and str(distance) != expected_distance:
+        raise RuntimeError(
+            f"{provider} mapping metadata distance mismatch: "
+            f"expected {expected_distance}, got {distance}"
+        )
+
+
+def _find_milvus_vector_field(details: Any) -> Any | None:
+    fields = _mapping_from_object_or_dict(details, "fields") or []
+    for field in fields:
+        name = _mapping_from_object_or_dict(field, "name")
+        if name == VectorPayloadKey.VECTOR.value:
+            return field
+    return None
+
+
+def _first_milvus_index(details: Any) -> Any | None:
+    indexes = _mapping_from_object_or_dict(details, "indexes") or []
+    if indexes:
+        return indexes[0]
+    return None
+
+
+def _weaviate_collection_config(collection: Any) -> Any | None:
+    config = getattr(collection, "config", None)
+    if config is None:
+        return None
+    getter = getattr(config, "get", None)
+    if getter is None:
+        return config
+    try:
+        return getter()
+    except TypeError:
+        return getter(simple=False)
+
+
+def _weaviate_property_names(config: Any) -> set[str]:
+    properties = _mapping_from_object_or_dict(config, "properties") or []
+    names: set[str] = set()
+    for prop in properties:
+        name = _mapping_from_object_or_dict(prop, "name")
+        if name is not None:
+            names.add(str(name))
+    return names
+
+
+def _weaviate_distance(config: Any) -> Any | None:
+    for key in (
+        "vector_config.vector_index_config.distance_metric",
+        "vector_index_config.distance_metric",
+        "vectorIndexConfig.distance",
+    ):
+        distance = _nested_mapping_value(config, key)
+        if distance is not None:
+            return getattr(distance, "value", distance)
+    return None
+
+
 def _vector_payload(metadata_id: str, item: dict[str, Any]) -> dict[str, Any]:
     return {
         VectorPayloadKey.MEMORY_ID.value: metadata_id,
@@ -2742,7 +3064,9 @@ def _row_from_vector_payload(payload: dict[str, Any]) -> dict[str, Any]:
         VectorPayloadKey.MEMORY_ID.value: str(payload.get(VectorPayloadKey.MEMORY_ID.value, "")),
         VectorPayloadKey.CHUNK_ID.value: str(payload.get(VectorPayloadKey.CHUNK_ID.value, "")),
         VectorPayloadKey.CHUNK_INDEX.value: int(payload.get(VectorPayloadKey.CHUNK_INDEX.value, 0)),
-        VectorPayloadKey.MESSAGE_HASH.value: str(payload.get(VectorPayloadKey.MESSAGE_HASH.value, "")),
+        VectorPayloadKey.MESSAGE_HASH.value: str(
+            payload.get(VectorPayloadKey.MESSAGE_HASH.value, "")
+        ),
         VectorPayloadKey.ROLE.value: str(payload.get(VectorPayloadKey.ROLE.value, "")),
         VectorPayloadKey.TEXT.value: str(payload.get(VectorPayloadKey.TEXT.value, "")),
     }
@@ -2771,9 +3095,7 @@ def _row_from_redis_document(document: Any) -> dict[str, Any]:
         for field in _vector_payload_fields()
     }
     row = _row_from_vector_payload(payload)
-    distance = float(
-        _decode_redis_value(getattr(document, RedisVectorField.DISTANCE.value, 0.0))
-    )
+    distance = float(_decode_redis_value(getattr(document, RedisVectorField.DISTANCE.value, 0.0)))
     row[RedisVectorField.DISTANCE.value] = distance
     row[VectorPayloadKey.SCORE.value] = 1.0 - distance
     return row
@@ -2870,9 +3192,7 @@ def _pinecone_matches(result: Any) -> list[Any]:
 def _row_from_pinecone_match(match: Any) -> dict[str, Any]:
     metadata = _mapping_from_object_or_dict(match, "metadata") or {}
     row = _row_from_vector_payload(dict(metadata))
-    row[VectorPayloadKey.SCORE.value] = float(
-        _mapping_from_object_or_dict(match, "score") or 0.0
-    )
+    row[VectorPayloadKey.SCORE.value] = float(_mapping_from_object_or_dict(match, "score") or 0.0)
     return row
 
 
@@ -2900,8 +3220,7 @@ def _turbopuffer_rows(result: Any) -> list[Any]:
 
 def _row_from_turbopuffer_match(match: Any) -> dict[str, Any]:
     payload = {
-        field: _mapping_from_object_or_dict(match, field)
-        for field in _vector_payload_fields()
+        field: _mapping_from_object_or_dict(match, field) for field in _vector_payload_fields()
     }
     row = _row_from_vector_payload(payload)
     score = _mapping_from_object_or_dict(match, VectorPayloadKey.SCORE.value)
@@ -3017,9 +3336,7 @@ def _vector_payload_fields() -> list[str]:
     ]
 
 
-def _validate_vector_length(
-    vector: list[float], *, expected: int, operation: str
-) -> None:
+def _validate_vector_length(vector: list[float], *, expected: int, operation: str) -> None:
     actual = len(vector)
     if actual != expected:
         raise VectorDimensionError(
@@ -3034,9 +3351,7 @@ def _rows_from_search_hits(result: dict[str, Any]) -> list[dict[str, Any]]:
     for hit in hits:
         source = dict(hit.get(SearchQueryKey.SOURCE.value, {}) or {})
         row = _row_from_vector_payload(source)
-        row[VectorPayloadKey.SCORE.value] = float(
-            hit.get(SearchQueryKey.SCORE.value, 0.0)
-        )
+        row[VectorPayloadKey.SCORE.value] = float(hit.get(SearchQueryKey.SCORE.value, 0.0))
         rows.append(row)
     return rows
 

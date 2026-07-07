@@ -87,6 +87,50 @@ Hosted MongoDB Atlas Vector Search is covered by the same live test entry point,
 but it requires externally supplied credentials and an existing Atlas vector
 index.
 
+## Hosted Provider Notes
+
+Zilliz uses the Milvus adapter. Set `providers.vector_db: milvus`, point
+`storage.vector_providers.milvus.uri` at the Zilliz endpoint, and set
+`storage.vector_providers.milvus.token` from the Zilliz API key/token. The hub
+validates collection dimensionality and metric when the provider SDK exposes
+that metadata, creates or refreshes the vector index, and loads the collection
+before search.
+
+Weaviate Cloud uses the Weaviate adapter. Set `providers.vector_db: weaviate`,
+use the cluster URL in `storage.vector_providers.weaviate.url`, and set
+`storage.vector_providers.weaviate.api_key`. The adapter stores hub-generated
+vectors directly and creates collections with provider-side vectorization
+disabled when the SDK config classes are available.
+
+Elastic Cloud uses the Elasticsearch adapter. Set
+`providers.vector_db: elasticsearch`, use the deployment HTTPS endpoint in
+`storage.vector_providers.elasticsearch.url`, and configure username/password
+or equivalent basic auth credentials. OpenSearch-hosted services use the
+OpenSearch adapter and the matching `opensearch` config block.
+
+## Provider Limitations
+
+The hub keeps API and MCP response shapes stable across storage providers, but
+provider internals still differ:
+
+- **Consistency/read-after-write:** Elasticsearch and OpenSearch inserts and
+  deletes request `refresh=true`; other hosted providers may still expose
+  provider-specific propagation latency.
+- **Index readiness:** Atlas Vector Search must report the configured search
+  index as ready before startup succeeds. Milvus/Zilliz collections are loaded
+  before search. Hosted providers can still require operator-side index or
+  schema creation before the hub starts.
+- **Score interpretation:** Search results keep the existing `score` field, but
+  backends may use cosine similarity, distance, certainty, or provider-specific
+  score ranges internally. Treat scores as provider-local ranking signals, not
+  globally comparable values.
+- **Distance metrics:** The shared config supports `cosine`, `l2`, and
+  `inner_product` where the provider supports them. Some providers expose
+  different names or restrict metric changes after an index/collection exists.
+- **Local vs hosted behavior:** Local Compose examples favor fast smoke tests
+  and API-key-free setup. Hosted deployments add auth, quotas, network latency,
+  managed index lifecycle, and provider-specific operational limits.
+
 ## Common Smoke
 
 API-key-free local Compose examples:
