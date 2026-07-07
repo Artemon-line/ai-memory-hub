@@ -31,7 +31,7 @@ Not implemented yet:
 - [x] Trace IDs in logs.
 - [x] OpenTelemetry SDK setup.
 - [x] FastAPI, HTTP client, and psycopg instrumentation.
-- [ ] Manual spans around MCP tools and ingestion stages.
+- [x] Manual spans around MCP tools and ingestion stages.
 - [x] Metrics for tool/API latency, insert/search/ask outcomes, provider failures,
   vector rows, and fallback state.
 - [x] `/health` and `/ready` HTTP endpoints.
@@ -104,11 +104,11 @@ observability:
 - [x] Add request-id middleware for FastAPI HTTP requests.
 - [x] Include `request_id`, `trace_id`, `span_id`, `operation`, and `provider`
   fields when available.
-- [ ] Standardize exception logs:
+- [x] Standardize exception logs:
   - `logger.exception("MCP tool failed", extra={...})`
   - `logger.warning("Provider fallback activated", extra={...})`
   - `logger.info("Conversation inserted", extra={...})`
-- [ ] Keep secret redaction on all config/provider exception messages.
+- [x] Keep secret redaction on all config/provider exception messages.
 
 ### Key Events To Log
 
@@ -272,7 +272,7 @@ Histograms:
 
 - [x] `memory_mcp_tool_duration_ms{tool,status}`
 - [x] `memory_api_request_duration_ms{route,status_code}`
-- [ ] `memory_ingestion_stage_duration_ms{stage}`
+- [x] `memory_ingestion_stage_duration_ms{stage}`
 - [x] `memory_embedding_duration_ms{provider,model}`
 - [x] `memory_vector_search_duration_ms{provider}`
 
@@ -358,7 +358,7 @@ Integration tests:
 
 - [x] Failed MCP insert logs stack trace and stable error envelope.
 - [x] `GET /health` and `GET /ready` return expected mode.
-- [ ] Manual spans are created for ingestion stages with safe attributes.
+- [x] Manual spans are created for ingestion stages with safe attributes.
 - [x] Metrics counters increment for successful and failed MCP tools.
 
 Local smoke:

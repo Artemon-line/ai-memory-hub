@@ -20,6 +20,7 @@ from memory.ingestion.thread_models import (
     ThreadMetadata,
     ThreadMetadataKey,
 )
+from memory.observability.metrics import metrics
 
 
 class StubEmbedder:
@@ -1204,6 +1205,71 @@ def test_ingest_messages_enriches_topics() -> None:
     assert "sql" in topics
     assert "testing" in topics
     assert "docker" in topics
+
+
+def test_ingest_messages_records_stage_metrics_and_spans(monkeypatch) -> None:
+    spans: list[tuple[str, dict[str, Any], dict[str, Any]]] = []
+
+    class FakeSpan:
+        def __init__(self, record: tuple[str, dict[str, Any], dict[str, Any]]) -> None:
+            self._record = record
+
+        def set_attribute(self, key: str, value: Any) -> None:
+            self._record[2][key] = value
+
+    class FakeSpanContext:
+        def __init__(self, name: str, attributes: dict[str, Any] | None = None) -> None:
+            self._record = (name, dict(attributes or {}), {})
+
+        def __enter__(self) -> FakeSpan:
+            spans.append(self._record)
+            return FakeSpan(self._record)
+
+        def __exit__(self, *_args: Any) -> None:
+            return None
+
+    def fake_span(name: str, *, attributes: dict[str, Any] | None = None) -> FakeSpanContext:
+        return FakeSpanContext(name, attributes)
+
+    monkeypatch.setattr(mvp_ingestion, "start_observability_span", fake_span)
+    metrics.reset()
+    _configure_stubs()
+
+    conversation = _valid_conversation()
+    conversation["title"] = "Velvet Lantern"
+    conversation["messages"] = [
+        {"role": "user", "text": "Velvet Lantern creator is Ada."}
+    ]
+
+    mvp_ingestion.ingest_messages(conversation)
+    snapshot = metrics.snapshot()
+
+    assert {
+        "ingestion.normalize",
+        "ingestion.validate_schema",
+        "ingestion.dedupe_lookup",
+        "ingestion.metadata_insert",
+        "ingestion.chunk",
+        "ingestion.embedding",
+        "ingestion.vector_insert",
+        "ingestion.fact_extract",
+    }.issubset({name for name, _attributes, _set_attributes in spans})
+    for stage in (
+        "normalize",
+        "validate_schema",
+        "dedupe_lookup",
+        "metadata_insert",
+        "chunk",
+        "embedding",
+        "vector_insert",
+        "fact_extract",
+    ):
+        assert (
+            f"memory_ingestion_stage_duration_ms{{stage={stage}}}"
+            in snapshot["histograms"]
+        )
+    assert "Velvet Lantern creator is Ada" not in str(spans)
+    assert all("memory.duration_ms" in set_attributes for _, _, set_attributes in spans)
 
 
 def test_ingest_messages_preserves_existing_topics() -> None:

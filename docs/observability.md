@@ -95,8 +95,7 @@ curl -fsS http://127.0.0.1:8000/observability
 
 ## Still Planned
 
-Manual domain spans around MCP tools, ingestion stages, and retrieval stages are
-the main remaining observability work. See the
+Manual domain spans around MCP tools and ingestion stages are implemented; retrieval
+stage spans remain a follow-up. See the
 [observability implementation plan](observability_logging_telemetry_plan.md) for
 the detailed checklist.
-

@@ -30,6 +30,7 @@ from memory.ingestion.thread_models import (
 )
 from memory.ingestion.validate import validate_conversation
 from memory.observability.metrics import metrics
+from memory.observability.tracing import start_observability_span
 
 ToolFn = Callable[..., Awaitable[dict[str, Any]]]
 
@@ -266,29 +267,41 @@ def _instrument_mcp_tool(tool_name: str, tool_fn: ToolFn) -> ToolFn:
         started = time.perf_counter()
         status = "error"
         error_code = "unhandled_exception"
-        try:
-            result = await tool_fn(*args, **kwargs)
-            status = str(result.get("status") or "ok")
-            if status == "not_found":
-                status = "error"
-            error_code = str(result.get("error_code") or "none")
-            return result
-        except Exception:
-            raise
-        finally:
-            elapsed_ms = (time.perf_counter() - started) * 1000
-            metrics.increment(
-                "memory_mcp_tool_calls_total",
-                tool=tool_name,
-                status=status,
-                error_code=error_code,
-            )
-            metrics.observe(
-                "memory_mcp_tool_duration_ms",
-                elapsed_ms,
-                tool=tool_name,
-                status=status,
-            )
+        with start_observability_span(
+            f"mcp.{tool_name}",
+            attributes={
+                "mcp.tool": tool_name,
+                "operation": tool_name,
+            },
+        ) as span:
+            try:
+                result = await tool_fn(*args, **kwargs)
+                status = str(result.get("status") or "ok")
+                if status == "not_found":
+                    status = "error"
+                error_code = str(result.get("error_code") or "none")
+                return result
+            except Exception as exc:
+                error_code = type(exc).__name__
+                raise
+            finally:
+                elapsed_ms = (time.perf_counter() - started) * 1000
+                if span is not None:
+                    span.set_attribute("memory.status", status)
+                    span.set_attribute("memory.error_code", error_code)
+                    span.set_attribute("memory.duration_ms", elapsed_ms)
+                metrics.increment(
+                    "memory_mcp_tool_calls_total",
+                    tool=tool_name,
+                    status=status,
+                    error_code=error_code,
+                )
+                metrics.observe(
+                    "memory_mcp_tool_duration_ms",
+                    elapsed_ms,
+                    tool=tool_name,
+                    status=status,
+                )
 
     return wrapped
 

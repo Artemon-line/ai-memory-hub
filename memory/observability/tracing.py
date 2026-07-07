@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import logging
+from contextlib import contextmanager
 from dataclasses import dataclass
 from importlib import import_module
-from typing import Any
+from typing import Any, Iterator
 
 from memory.backend.log_safety import redact_secrets
 from memory.config import TracingConfig
 
 logger = logging.getLogger(__name__)
+
+_SAFE_ATTRIBUTE_TYPES = (str, bool, int, float)
 
 
 @dataclass(frozen=True)
@@ -130,3 +133,30 @@ def _configure_opentelemetry(config: TracingConfig, *, app: Any | None) -> Traci
         exporter=config.endpoint,
         protocol=config.protocol,
     )
+
+
+@contextmanager
+def start_observability_span(
+    name: str, *, attributes: dict[str, Any] | None = None
+) -> Iterator[Any | None]:
+    """Start a best-effort OpenTelemetry span without making OTel a hard dependency."""
+    try:
+        trace = import_module("opentelemetry.trace")
+        tracer = trace.get_tracer("ai-memory-hub")
+    except ImportError:
+        yield None
+        return
+
+    with tracer.start_as_current_span(name) as span:
+        _set_safe_span_attributes(span, attributes or {})
+        yield span
+
+
+def _set_safe_span_attributes(span: Any, attributes: dict[str, Any]) -> None:
+    for key, value in attributes.items():
+        if isinstance(value, _SAFE_ATTRIBUTE_TYPES):
+            span.set_attribute(key, value)
+        elif value is None:
+            continue
+        else:
+            span.set_attribute(key, str(value))

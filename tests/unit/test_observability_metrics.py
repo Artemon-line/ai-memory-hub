@@ -4,6 +4,7 @@ import pytest
 
 from memory.config import MetricsConfig, parse_config
 from memory.ingestion.base_agent import BaseIngestionAgent
+from memory.interfaces import mcp_server
 from memory.interfaces.mcp_server import build_tool_handlers
 from memory.observability import metrics as metrics_module
 from memory.observability.metrics import metrics
@@ -112,3 +113,57 @@ async def test_mcp_tool_metrics_increment_for_success_and_error() -> None:
         )
         == 1
     )
+
+
+@pytest.mark.asyncio
+async def test_mcp_tool_wrapper_creates_safe_manual_span(monkeypatch) -> None:
+    spans: list[tuple[str, dict[str, object], dict[str, object]]] = []
+
+    class FakeSpan:
+        def __init__(self, record: tuple[str, dict[str, object], dict[str, object]]) -> None:
+            self._record = record
+
+        def set_attribute(self, key: str, value: object) -> None:
+            self._record[2][key] = value
+
+    class FakeSpanContext:
+        def __init__(self, name: str, attributes: dict[str, object] | None = None) -> None:
+            self._record = (name, dict(attributes or {}), {})
+
+        def __enter__(self) -> FakeSpan:
+            spans.append(self._record)
+            return FakeSpan(self._record)
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+    def fake_span(
+        name: str, *, attributes: dict[str, object] | None = None
+    ) -> FakeSpanContext:
+        return FakeSpanContext(name, attributes)
+
+    monkeypatch.setattr(mcp_server, "start_observability_span", fake_span)
+    handlers = build_tool_handlers(StubAgent(config={"providers": {"agent": "mvp"}}))
+
+    result = await handlers["memory_validate"](
+        {
+            "source": "manual",
+            "timestamp": "2026-01-01T00:00:00Z",
+            "messages": [{"role": "user", "text": "private message"}],
+            "metadata": {"imported_at": "2026-01-01T00:00:00Z"},
+        }
+    )
+
+    assert result["status"] == "ok"
+    assert spans == [
+        (
+            "mcp.memory_validate",
+            {"mcp.tool": "memory_validate", "operation": "memory_validate"},
+            {
+                "memory.status": "ok",
+                "memory.error_code": "none",
+                "memory.duration_ms": spans[0][2]["memory.duration_ms"],
+            },
+        )
+    ]
+    assert "private message" not in str(spans)

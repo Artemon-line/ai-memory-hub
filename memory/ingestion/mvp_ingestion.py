@@ -5,10 +5,11 @@ import logging
 import os
 import re
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Protocol, Sequence
+from typing import Any, Iterator, Protocol, Sequence
 from uuid import uuid4
 
 from memory.backend.dry_run import DryRunMetadataStore, DryRunVectorStore
@@ -71,6 +72,7 @@ from memory.ingestion.validate import (
     validate_schema_compatibility,
 )
 from memory.observability.metrics import metrics
+from memory.observability.tracing import start_observability_span
 from memory.provider_models import VectorProviderAlias, VectorProviderName
 
 logger = logging.getLogger(__name__)
@@ -283,6 +285,29 @@ _TOPIC_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("backend", re.compile(r"\b(backend|fastapi|flask|server)\b", re.IGNORECASE)),
 ]
 _RESULT_MODES = result_mode_values()
+
+
+@contextmanager
+def _ingestion_stage(stage: str, **attributes: Any) -> Iterator[None]:
+    started = time.perf_counter()
+    with start_observability_span(
+        f"ingestion.{stage}",
+        attributes={
+            "ingestion.stage": stage,
+            **attributes,
+        },
+    ) as span:
+        try:
+            yield
+        finally:
+            elapsed_ms = (time.perf_counter() - started) * 1000
+            if span is not None:
+                span.set_attribute("memory.duration_ms", elapsed_ms)
+            metrics.observe(
+                "memory_ingestion_stage_duration_ms",
+                elapsed_ms,
+                stage=stage,
+            )
 _FACT_CORRECTION_RE = re.compile(
     r"\bactually,\s+my\s+(?P<item>[A-Za-z0-9][A-Za-z0-9 _-]{1,80})\s+is\s+(?P<new>[^,.]+),\s+not\s+(?P<old>[^.]+)",
     re.IGNORECASE,
@@ -871,22 +896,23 @@ def embed_chunks(
     provider = str(runtime.health_state.get("embedding", {}).get("provider") or "unknown")
     model = str(runtime.health_state.get("embedding", {}).get("model") or "unknown")
     started = time.perf_counter()
-    try:
-        vectors = runtime.embedding_provider.embed_texts(texts)
-    except Exception as exc:
-        metrics.increment(
-            "memory_embedding_failures_total",
-            provider=provider,
-            error_type=type(exc).__name__,
-        )
-        raise
-    finally:
-        metrics.observe(
-            "memory_embedding_duration_ms",
-            (time.perf_counter() - started) * 1000,
-            provider=provider,
-            model=model,
-        )
+    with _ingestion_stage("embedding", provider=provider, model=model, chunk_count=len(chunks)):
+        try:
+            vectors = runtime.embedding_provider.embed_texts(texts)
+        except Exception as exc:
+            metrics.increment(
+                "memory_embedding_failures_total",
+                provider=provider,
+                error_type=type(exc).__name__,
+            )
+            raise
+        finally:
+            metrics.observe(
+                "memory_embedding_duration_ms",
+                (time.perf_counter() - started) * 1000,
+                provider=provider,
+                model=model,
+            )
     if len(vectors) != len(chunks):
         raise ValueError("Embedding provider must return one vector per chunk")
 
@@ -916,7 +942,14 @@ def store_metadata(obj: dict[str, Any]) -> str:
 
 def store_vectors(metadata_id: str, embeddings: list[dict[str, Any]], replace: bool = False) -> None:
     runtime = _runtime()
-    runtime.vector_store.insert(metadata_id, embeddings, replace=replace)
+    provider = str(runtime.health_state.get("vector_provider") or "unknown")
+    with _ingestion_stage(
+        "vector_insert",
+        vector_provider=provider,
+        embedding_count=len(embeddings),
+        replace=replace,
+    ):
+        runtime.vector_store.insert(metadata_id, embeddings, replace=replace)
 
 
 def _lookup_by_conversation_hash(
@@ -980,16 +1013,18 @@ def _lookup_same_thread(
 
 def _insert_new_conversation(obj: dict[str, Any]) -> tuple[str, bool]:
     store = _runtime().metadata_store
-    if hasattr(store, "insert_new"):
-        return store.insert_new(obj)
-    duplicate = _lookup_by_conversation_hash(_conversation_hash(obj))
-    if duplicate is not None:
-        return str(duplicate["id"]), False
-    if hasattr(store, "get"):
-        existing = store.get(str(obj.get("id", "")))
-        if isinstance(existing, dict):
-            raise ValueError("unauthorized_update: conversation id already exists")
-    return store.insert(obj), True
+    provider = str(_runtime().health_state.get("metadata_provider") or "unknown")
+    with _ingestion_stage("metadata_insert", metadata_provider=provider):
+        if hasattr(store, "insert_new"):
+            return store.insert_new(obj)
+        duplicate = _lookup_by_conversation_hash(_conversation_hash(obj))
+        if duplicate is not None:
+            return str(duplicate["id"]), False
+        if hasattr(store, "get"):
+            existing = store.get(str(obj.get("id", "")))
+            if isinstance(existing, dict):
+                raise ValueError("unauthorized_update: conversation id already exists")
+        return store.insert(obj), True
 
 
 def _append_conversation(
@@ -1007,10 +1042,12 @@ def _append_conversation(
     updated["messages"] = messages
     updated["metadata"] = metadata
     store = _runtime().metadata_store
-    if hasattr(store, "append_messages"):
-        store.append_messages(updated, new_messages)
-    else:
-        store.insert(updated)
+    provider = str(_runtime().health_state.get("metadata_provider") or "unknown")
+    with _ingestion_stage("metadata_insert", metadata_provider=provider, append=True):
+        if hasattr(store, "append_messages"):
+            store.append_messages(updated, new_messages)
+        else:
+            store.insert(updated)
     return updated
 
 
@@ -1550,28 +1587,36 @@ def ingest_messages(
         owner_id=owner_id, project_id=project_id, required_role=PROJECT_ROLE_WRITER
     )
     # 0. Normalize
-    conversation_json = normalize_conversation_json(
-        conversation_json, strict_transcript=strict_transcript
-    )
-    _stamp_owner(conversation_json, owner_id=owner_id)
-    _stamp_project(conversation_json, project_id=effective_project_id)
-    _scope_conversation_hash(conversation_json, project_id=effective_project_id)
+    with _ingestion_stage("normalize"):
+        conversation_json = normalize_conversation_json(
+            conversation_json, strict_transcript=strict_transcript
+        )
+        _stamp_owner(conversation_json, owner_id=owner_id)
+        _stamp_project(conversation_json, project_id=effective_project_id)
+        _scope_conversation_hash(conversation_json, project_id=effective_project_id)
 
     # 1. Validate JSON against schema
-    validate_json(conversation_json)
+    with _ingestion_stage("validate_schema"):
+        validate_json(conversation_json)
 
     # 2. Enrich metadata topics from message text
-    enrich_topics(conversation_json)
-    enrich_auto_tags(conversation_json)
+    with _ingestion_stage("normalize", enrichment=True):
+        enrich_topics(conversation_json)
+        enrich_auto_tags(conversation_json)
 
-    conversation_hash = conversation_json["metadata"]["conversation_hash"]
-    duplicate = _lookup_by_conversation_hash(conversation_hash, project_id=effective_project_id)
-    duplicate_metadata_id = None
-    if duplicate is not None and _conversation_allowed(duplicate, owner_id, effective_project_id):
-        duplicate_metadata_id = str(duplicate["id"])
-        # We proceed to re-index even if it's a duplicate by hash,
-        # to ensure the vector store is in sync with the metadata.
-        conversation_json["id"] = duplicate_metadata_id
+    with _ingestion_stage("dedupe_lookup"):
+        conversation_hash = conversation_json["metadata"]["conversation_hash"]
+        duplicate = _lookup_by_conversation_hash(
+            conversation_hash, project_id=effective_project_id
+        )
+        duplicate_metadata_id = None
+        if duplicate is not None and _conversation_allowed(
+            duplicate, owner_id, effective_project_id
+        ):
+            duplicate_metadata_id = str(duplicate["id"])
+            # We proceed to re-index even if it's a duplicate by hash,
+            # to ensure the vector store is in sync with the metadata.
+            conversation_json["id"] = duplicate_metadata_id
 
     _attach_generated_summaries(
         conversation_json,
@@ -1622,15 +1667,18 @@ def ingest_messages(
             if new_messages
             else 0
         )
-        chunks = chunk_selected_messages(
-            updated, indexing_messages, start_index=chunk_start_index
-        )
+        with _ingestion_stage("chunk", message_count=len(indexing_messages)):
+            chunks = chunk_selected_messages(
+                updated, indexing_messages, start_index=chunk_start_index
+            )
         if new_messages:
             _extend_index_chunks(updated, chunks)
         else:
             _attach_index_chunks(updated, chunks)
         if new_messages or chunks:
-            store.insert(updated)
+            provider = str(_runtime().health_state.get("metadata_provider") or "unknown")
+            with _ingestion_stage("metadata_insert", metadata_provider=provider):
+                store.insert(updated)
         try:
             embeddings = embed_chunks(
                 chunks, project_id=effective_project_id, owner_id=owner_id
@@ -1641,11 +1689,23 @@ def ingest_messages(
             _mark_chunks_indexing_failed(str(updated["id"]), chunks)
             raise
         if new_messages:
-            _store_facts_for_messages(
-                updated,
-                new_messages,
-                start_message_index=start_index,
-            )
+            with _ingestion_stage("fact_extract", message_count=len(new_messages)):
+                _store_facts_for_messages(
+                    updated,
+                    new_messages,
+                    start_message_index=start_index,
+                )
+        logger.info(
+            "Conversation inserted",
+            extra={
+                "event": "conversation_inserted",
+                "operation": "memory_insert",
+                "conversation_id": str(updated["id"]),
+                "deduplicated": not bool(new_messages),
+                "appended_messages": len(new_messages),
+                "embedded_chunks": len(chunks),
+            },
+        )
         return {
             "status": "ok",
             "id": str(updated["id"]),
@@ -1656,7 +1716,8 @@ def ingest_messages(
         }
 
     # 3. Chunk messages
-    chunks = chunk_messages(conversation_json)
+    with _ingestion_stage("chunk", message_count=len(conversation_json.get("messages", []))):
+        chunks = chunk_messages(conversation_json)
     _attach_index_chunks(conversation_json, chunks)
 
     # 4. Store metadata with pending chunks before embedding. Exact duplicates
@@ -1676,7 +1737,19 @@ def ingest_messages(
         _mark_chunks_indexing_failed(metadata_id, chunks)
         raise
     if inserted:
-        _store_facts_for_conversation(conversation_json)
+        with _ingestion_stage("fact_extract"):
+            _store_facts_for_conversation(conversation_json)
+
+    logger.info(
+        "Conversation inserted",
+        extra={
+            "event": "conversation_inserted",
+            "operation": "memory_insert",
+            "conversation_id": metadata_id,
+            "deduplicated": not inserted,
+            "embedded_chunks": len(chunks),
+        },
+    )
 
     # 6. Return stored object
     return {
