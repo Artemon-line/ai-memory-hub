@@ -159,8 +159,13 @@ mcp:
 api:
   host: '127.0.0.1'
   port: 8000
-  auth: none # none | api_key
-  api_key: '' # only used if auth: api_key
+  auth: none # none | bearer_token | oauth_resource_server
+  # Explicit browser-extension and local-dev origins allowed to call the API.
+  # Example:
+  # cors_allow_origins:
+  #   - chrome-extension://abcdefghijklmnopabcdefghijklmnop
+  #   - http://127.0.0.1:5173
+  cors_allow_origins: []
 
 # -------------------------
 # OBSERVABILITY

@@ -667,6 +667,7 @@ class APIConfig(BaseModel):
     port: int = 8000
     auth: str = "none"
     public_base_url: str = ""
+    cors_allow_origins: list[str] = Field(default_factory=list)
     token: APITokenConfig = Field(default_factory=APITokenConfig)
     oauth: OAuthConfig = Field(default_factory=OAuthConfig)
 
@@ -686,6 +687,19 @@ class APIConfig(BaseModel):
         if value:
             _validate_absolute_uri(value, field_name="api.public_base_url")
         return value.rstrip("/")
+
+    @field_validator("cors_allow_origins")
+    @classmethod
+    def validate_cors_allow_origins(cls, values: list[str]) -> list[str]:
+        normalized: list[str] = []
+        for value in values:
+            origin = str(value).strip().rstrip("/")
+            if not origin:
+                continue
+            _validate_cors_origin(origin)
+            if origin not in normalized:
+                normalized.append(origin)
+        return normalized
 
     @model_validator(mode="after")
     def validate_auth_settings(self) -> "APIConfig":
@@ -882,6 +896,22 @@ def _validate_absolute_uri(value: str, *, field_name: str) -> None:
         raise ValueError(f"{field_name} must be an absolute URI")
     if parsed.fragment:
         raise ValueError(f"{field_name} must not include a fragment")
+
+
+def _validate_cors_origin(value: str) -> None:
+    if value == "*":
+        raise ValueError("api.cors_allow_origins must list explicit origins, not '*'")
+    parsed = urlparse(value)
+    if parsed.fragment or parsed.query or parsed.path not in {"", "/"}:
+        raise ValueError("api.cors_allow_origins entries must be origins only")
+    if parsed.scheme in {"http", "https"} and parsed.netloc:
+        return
+    if parsed.scheme in {"chrome-extension", "moz-extension"} and parsed.netloc:
+        return
+    raise ValueError(
+        "api.cors_allow_origins entries must be http(s), chrome-extension, "
+        "or moz-extension origins"
+    )
 
 
 def _validate_provider_name(value: str, *, field_name: str) -> str:

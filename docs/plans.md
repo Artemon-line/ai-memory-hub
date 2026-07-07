@@ -48,7 +48,7 @@ The public docs are now split into three kinds of pages:
 | --- | --- |
 | [Storage BYOA plan](storage_agnostic_byoa_plan.md) | Storage abstraction and provider behavior. |
 | [Deterministic ingestion plan](deterministic_ingestion_plan.md) | Schema-first ingestion, dedupe, and deterministic behavior. |
-| [Browser extension capture plan](browser_extension_capture_plan.md) | Browser capture boundary and future extension direction. |
+| [Browser extension capture plan](browser_extension_capture_plan.md) | Browser capture boundary, API contract, and future extension repos. |
 | [Token budget plan](token_budget_plan.md) | Token accounting and context construction. |
 | [CLI implementation plan](cli_implementation_plan.md) | CLI commands and behavior. |
 | [Project workspace collaboration plan](project_workspace_collaboration_plan.md) | Workspace collaboration model. |
@@ -63,4 +63,3 @@ The [improvement plans](improvements.md) collect focused follow-up work for
 client feedback, MCP result shapes, retrieval precision, context building,
 conversation grouping, memory quality, edge-case coverage, explicit save intent,
 and vector database evaluation.
-

@@ -40,7 +40,7 @@ When planning or estimating work, treat phases as **ordered capability layers**:
 - **Phase 1.5** promotes storage to a **first-class subsystem**: `VectorStore` interface → LanceDB/ChromaDB/Qdrant/Milvus/Weaviate/PGVector/MongoDB Atlas/Elasticsearch/OpenSearch/Redis/Pinecone/Turbopuffer/Vespa/Typesense/in-memory providers → deterministic startup checks → fallback behavior.
 - **Phase 2** adds **platform-specific capture/import adapters** (Gemini Takeout, Copilot workarounds, Claude HTML, local LLM logs);
 **schema and storage stay stable** if normalization boundaries are respected.
-- Browser extension capture is a planned Phase 2-compatible adapter option:
+- Browser extension capture has a Phase 2-compatible hub contract:
 extension repos parse ChatGPT, Microsoft Copilot, Claude, Gemini, and similar
 web UIs, then post normalized payloads to `POST /memory/insert`.
 - **Phase 3** is **offline/batch intelligence** on top of stored chunks (summaries, clustering, timelines).
@@ -178,10 +178,10 @@ Copilot does not provide a structured export comparable to ChatGPT. Capture/impo
 
 ### 2.5 Browser extension capture
 
-- [ ] Keep browser extension implementations in separate repos.
-- [ ] Have extensions parse platform web UIs and send normalized conversation
+- [x] Keep browser extension implementations in separate repos.
+- [x] Have extensions parse platform web UIs and send normalized conversation
   JSON to the existing `POST /memory/insert` API.
-- [ ] Do not parse raw HTML or DOM snapshots in the ai-memory-hub API layer.
+- [x] Do not parse raw HTML or DOM snapshots in the ai-memory-hub API layer.
 - [ ] Add API contract tests, CORS allowlist config, bearer-token guidance, and
   trusted append guidance before recommending this path for daily use.
 

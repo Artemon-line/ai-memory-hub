@@ -32,6 +32,26 @@ The boundary is:
 - Raw HTML, DOM snapshots, screenshots, and selector evidence stay out of
   ai-memory-hub storage by default.
 
+## Implemented Hub Contract
+
+The hub-side contract is implemented in ai-memory-hub:
+
+- Browser extension implementations stay in separate repositories.
+- Extensions post normalized conversation JSON to `POST /memory/insert`.
+- `api.cors_allow_origins` explicitly allows extension origins such as
+  `chrome-extension://<id>` and local development origins such as
+  `http://127.0.0.1:5173`.
+- `POST /memory/insert` uses a typed insert request model and still validates the
+  final payload through the shared conversation schema.
+- Extension-shaped API contract tests cover ChatGPT, Microsoft Copilot, Claude,
+  and Gemini source payloads.
+- Raw browser artifacts are rejected by key when posted as structured fields:
+  `raw_html`, `html_snapshot`, `dom_snapshot`, `screenshot`,
+  `screenshot_data`, and `selector_evidence`.
+- Repeated captures can append to an existing stored thread when
+  `storage.allow_trusted_appends: true` and the payload keeps the same `source`
+  plus `metadata.upstream_thread_id`.
+
 ## Expected Payload
 
 Extensions should post one complete source thread to `POST /memory/insert`:
@@ -45,9 +65,12 @@ Extensions should post one complete source thread to `POST /memory/insert`:
     {"role": "assistant", "text": "Use normalized JSON and the existing insert endpoint."}
   ],
   "metadata": {
-    "platform": "web",
-    "ingestion_method": "browser-extension",
+    "platform": "chatgpt",
+    "capture_client": "browser_extension",
+    "capture_client_version": "0.1.0",
     "upstream_thread_id": "platform-thread-id-if-available",
+    "save_intent": "user_confirmed",
+    "save_intent_source": "browser_extension",
     "model": "optional model name",
     "tags": ["browser-extension"],
     "timezone": "Europe/Dublin",
@@ -59,7 +82,7 @@ Extensions should post one complete source thread to `POST /memory/insert`:
 Recommended `source` values:
 
 - `chatgpt`
-- `ms-copilot`
+- `microsoft-copilot`
 - `claude`
 - `gemini`
 
@@ -74,21 +97,61 @@ compatibility reason to include them:
 
 The server normalizes and validates the final payload before storage.
 
+Use the same shape for each platform. The extension owns the platform-specific
+DOM parsing and maps visible user/assistant turns into `messages`; the hub does
+not receive selector logs, screenshots, or raw HTML.
+
+## CORS And Auth
+
+Configure browser-extension origins explicitly:
+
+```yaml
+api:
+  auth: bearer_token
+  cors_allow_origins:
+    - chrome-extension://abcdefghijklmnopabcdefghijklmnop
+    - http://127.0.0.1:5173
+```
+
+Extensions should send a bearer token with `memory:write` scope:
+
+```bash
+curl -X POST http://127.0.0.1:8000/memory/insert \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d @normalized-chat.json
+```
+
+Use `memory:write` for capture-only extensions; add `memory:read` only when the
+extension also searches or retrieves memory.
+
+## Trusted Repeated Captures
+
+When a user captures the same visible web thread multiple times, use:
+
+- the same `source`
+- the same `metadata.upstream_thread_id`
+- the full visible message list, or an append-only continuation that preserves
+  prior messages
+
+With `storage.allow_trusted_appends: true`, the hub can append newly observed
+messages to the existing conversation instead of creating duplicate memories.
+
 ## Future API Stabilization
 
 When browser-extension work starts, stabilize this integration without adding a
 new hub ingestion path:
 
-- Keep `POST /memory/insert` as the extension-facing contract.
-- Add typed insert request models around the current API route while preserving
+- [x] Keep `POST /memory/insert` as the extension-facing contract.
+- [x] Add typed insert request models around the current API route while preserving
   the existing JSON schema validation.
-- Add extension-shaped contract tests for ChatGPT, Microsoft Copilot, Claude,
+- [x] Add extension-shaped contract tests for ChatGPT, Microsoft Copilot, Claude,
   and Gemini payloads.
-- Add explicit CORS allowlist configuration for extension origins such as
+- [x] Add explicit CORS allowlist configuration for extension origins such as
   `chrome-extension://<id>` and local development origins.
-- Document bearer-token setup for extensions using
+- [x] Document bearer-token setup for extensions using
   `Authorization: Bearer <token>` with `memory:write` scope.
-- Document trusted appends for repeated captures of the same thread using
+- [x] Document trusted appends for repeated captures of the same thread using
   `source` plus `metadata.upstream_thread_id`.
 
 ## Notes For Extension Repos

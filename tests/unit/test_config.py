@@ -502,6 +502,43 @@ def test_oauth_resource_server_config_derives_valid_defaults() -> None:
     ]
 
 
+def test_api_cors_allow_origins_accepts_extension_and_local_dev_origins() -> None:
+    config = parse_config(
+        {
+            "api": {
+                "cors_allow_origins": [
+                    "chrome-extension://abcdefghijklmnopabcdefghijklmnop/",
+                    "moz-extension://12345678-1234-1234-1234-123456789abc",
+                    "http://127.0.0.1:5173/",
+                    "https://extension-dev.example.com",
+                    "https://extension-dev.example.com",
+                ]
+            }
+        }
+    )
+
+    assert config.api.cors_allow_origins == [
+        "chrome-extension://abcdefghijklmnopabcdefghijklmnop",
+        "moz-extension://12345678-1234-1234-1234-123456789abc",
+        "http://127.0.0.1:5173",
+        "https://extension-dev.example.com",
+    ]
+
+
+@pytest.mark.parametrize(
+    "origin",
+    [
+        "*",
+        "http://127.0.0.1:5173/path",
+        "chrome-extension://abcdefghijklmnopabcdefghijklmnop/options.html",
+        "file://extension",
+    ],
+)
+def test_api_cors_allow_origins_rejects_unsafe_or_non_origin_values(origin: str) -> None:
+    with pytest.raises(ValueError, match="api.cors_allow_origins"):
+        parse_config({"api": {"cors_allow_origins": [origin]}})
+
+
 def test_oauth_resource_uri_rejects_fragments() -> None:
     with pytest.raises(ValueError, match="api.oauth.resource"):
         parse_config(

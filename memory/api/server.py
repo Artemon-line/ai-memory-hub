@@ -7,7 +7,8 @@ from uuid import uuid4
 
 import jsonschema
 from fastapi import FastAPI, HTTPException, Request
-from pydantic import BaseModel, Field
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, ConfigDict, Field
 
 from memory.auth import install_auth_middleware, protected_resource_metadata
 from memory.backend.log_safety import install_secret_redaction_filter, redact_secrets
@@ -33,6 +34,16 @@ from memory.observability.tracing import TracingStatus, configure_tracing
 
 logger = logging.getLogger(__name__)
 REQUEST_ID_HEADER = "x-request-id"
+RAW_CAPTURE_ARTIFACT_KEYS = frozenset(
+    {
+        "raw_html",
+        "html_snapshot",
+        "dom_snapshot",
+        "screenshot",
+        "screenshot_data",
+        "selector_evidence",
+    }
+)
 
 
 class SearchRequest(BaseModel):
@@ -66,6 +77,18 @@ class AskRequest(BaseModel):
     date_to: str | None = None
     tags: list[str] | None = None
     thread_id: str | None = None
+
+
+class InsertRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    id: str | None = None
+    source: str | None = None
+    timestamp: str | None = None
+    title: str | None = None
+    messages: list[dict[str, Any]] | None = None
+    metadata: dict[str, Any] | None = None
+    project_id: str | None = None
 
 
 class FactSearchRequest(BaseModel):
@@ -290,6 +313,26 @@ def _register_request_failure_logging(app: FastAPI, config: HubConfig) -> None:
         return response
 
 
+def _configure_cors(app: FastAPI, config: HubConfig) -> None:
+    if not config.api.cors_allow_origins:
+        return
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=config.api.cors_allow_origins,
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=[
+            "Authorization",
+            "Content-Type",
+            config.observability.logging.request_id_header,
+        ],
+        expose_headers=[
+            "WWW-Authenticate",
+            config.observability.logging.request_id_header,
+        ],
+    )
+
+
 def _request_id(request: Request, *, header_name: str = REQUEST_ID_HEADER) -> str:
     value = request.headers.get(header_name, "").strip()
     if value and "\r" not in value and "\n" not in value and len(value) <= 128:
@@ -322,23 +365,24 @@ def _register_api_routes(
         )
 
     async def memory_insert(
-        conversation_json: dict[str, Any], request: Request
+        conversation_json: InsertRequest, request: Request
     ) -> dict[str, Any]:
         try:
-            conversation_json = dict(conversation_json)
-            project_id = _pop_insert_project_id(conversation_json)
-            metadata = conversation_json.get("metadata")
+            conversation_payload = conversation_json.model_dump(exclude_none=True)
+            _reject_raw_capture_artifacts(conversation_payload)
+            project_id = _pop_insert_project_id(conversation_payload)
+            metadata = conversation_payload.get("metadata")
             if isinstance(metadata, dict):
                 value = metadata.get("project_id")
                 project_id = str(value) if value is not None else project_id
             disposition = validate_insert_save_intent(
-                conversation_json,
+                conversation_payload,
                 insert_policy=config.memory.insert_policy,
             )
             if disposition == InsertDisposition.PENDING_REVIEW:
                 result = redact_content_hashes(
                     await agent.store_pending_review_memory(
-                        conversation_json,
+                        conversation_payload,
                         owner_id=owner_id(request),
                         project_id=project_id,
                     )
@@ -346,14 +390,14 @@ def _register_api_routes(
             else:
                 result = redact_content_hashes(
                     await agent.ingest_messages(
-                        conversation_json,
+                        conversation_payload,
                         owner_id=owner_id(request),
                         project_id=project_id,
                     )
                 )
             metrics.increment(
                 "memory_insert_total",
-                source=conversation_json.get("source") or "unknown",
+                source=conversation_payload.get("source") or "unknown",
                 status=result.get("status") or "ok",
                 deduplicated=result.get("deduplicated", False),
             )
@@ -601,6 +645,33 @@ def _pop_insert_project_id(conversation_json: dict[str, Any]) -> str | None:
     return str(value)
 
 
+def _reject_raw_capture_artifacts(payload: dict[str, Any]) -> None:
+    found = _raw_capture_artifact_paths(payload)
+    if found:
+        raise ValueError(
+            "raw browser capture artifacts are not accepted by /memory/insert: "
+            + ", ".join(found)
+        )
+
+
+def _raw_capture_artifact_paths(value: Any, *, path: str = "$") -> list[str]:
+    if isinstance(value, dict):
+        found: list[str] = []
+        for key, child in value.items():
+            child_path = f"{path}.{key}"
+            if str(key) in RAW_CAPTURE_ARTIFACT_KEYS:
+                found.append(child_path)
+                continue
+            found.extend(_raw_capture_artifact_paths(child, path=child_path))
+        return found
+    if isinstance(value, list):
+        found = []
+        for index, child in enumerate(value):
+            found.extend(_raw_capture_artifact_paths(child, path=f"{path}[{index}]"))
+        return found
+    return []
+
+
 def create_app(
     *,
     config: HubConfig | dict[str, Any] | None = None,
@@ -630,6 +701,7 @@ def create_app(
 
     install_auth_middleware(app, config=cfg, agent=agent)
     _register_request_failure_logging(app, cfg)
+    _configure_cors(app, cfg)
 
     if mcp_app is not None:
         app.mount("/mcp", mcp_app)
