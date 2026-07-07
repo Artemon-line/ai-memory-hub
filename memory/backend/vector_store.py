@@ -682,6 +682,16 @@ class MilvusVectorStore:
         create_index = getattr(self._client, "create_index", None)
         if create_index is None:
             return
+        prepare_index_params = getattr(self._client, "prepare_index_params", None)
+        if prepare_index_params is not None:
+            index_params = prepare_index_params()
+            index_params.add_index(
+                field_name=VectorPayloadKey.VECTOR.value,
+                index_type=self._INDEX_PARAMS["index_type"],
+                metric_type=self.metric_type,
+            )
+            create_index(collection_name=self.collection_name, index_params=index_params)
+            return
         create_index(
             collection_name=self.collection_name,
             field_name=VectorPayloadKey.VECTOR.value,
