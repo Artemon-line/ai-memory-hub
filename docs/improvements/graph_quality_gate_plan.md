@@ -11,14 +11,14 @@ promoting graph memory based on intuition alone.
 
 ## Scope
 
-- [ ] Add a local benchmark module: `memory.benchmarks.graph_quality`.
-- [ ] Define a representative golden corpus for graph-memory extraction and
+- [x] Add a local benchmark module: `memory.benchmarks.graph_quality`.
+- [x] Define a representative golden corpus for graph-memory extraction and
       retrieval behavior.
-- [ ] Report entity, relationship, provenance, conflict-detection, and
+- [x] Report entity, relationship, provenance, conflict-detection, and
       graph-retrieval metrics.
-- [ ] Fail with explicit threshold messages when graph quality is below the
+- [x] Fail with explicit threshold messages when graph quality is below the
       promotion bar.
-- [ ] Keep graph retrieval disabled until the quality gate passes.
+- [x] Keep graph retrieval disabled until the quality gate passes.
 
 ## Non-Goals
 
@@ -31,131 +31,131 @@ promoting graph memory based on intuition alone.
 
 ## Phase 1: Golden Corpus Shape
 
-- [ ] Create a small deterministic corpus of representative conversations.
-- [ ] Cover project-memory examples already used by the repo:
+- [x] Create a small deterministic corpus of representative conversations.
+- [x] Cover project-memory examples already used by the repo:
       Codex/opencode handoff, PGVector, bearer auth, observability, tokenizer
       setup, retrieval benchmarks, Velvet Lantern, tools, providers, and user
       preferences.
-- [ ] For each conversation, define stable conversation IDs and message indexes.
-- [ ] For each corpus item, define expected entities:
+- [x] For each conversation, define stable conversation IDs and message indexes.
+- [x] For each corpus item, define expected entities:
       `id`, `type`, `name`, `aliases`, `source_conversation_id`,
       `source_message_index`, and optional `source_fact_id`.
-- [ ] For each corpus item, define expected relationships:
+- [x] For each corpus item, define expected relationships:
       `subject`, `predicate`, `object`, `confidence`, `source_conversation_id`,
       `source_message_index`, and optional `source_fact_id`.
-- [ ] Include negative examples where text mentions nearby entities but should
+- [x] Include negative examples where text mentions nearby entities but should
       not create a relationship.
-- [ ] Include conflict examples where newer memory contradicts older memory.
+- [x] Include conflict examples where newer memory contradicts older memory.
 
 Acceptance criteria:
 
-- [ ] The corpus is local, deterministic, and small enough for unit tests.
-- [ ] Expected entities and relationships are human-readable.
-- [ ] Provenance expectations are explicit instead of inferred later.
+- [x] The corpus is local, deterministic, and small enough for unit tests.
+- [x] Expected entities and relationships are human-readable.
+- [x] Provenance expectations are explicit instead of inferred later.
 
 ## Phase 2: Metric Definitions
 
-- [ ] Entity precision: matched expected entities divided by produced entities.
-- [ ] Entity recall: matched expected entities divided by expected entities.
-- [ ] Entity F1: harmonic mean of entity precision and recall.
-- [ ] Relationship precision: matched expected relationships divided by produced
+- [x] Entity precision: matched expected entities divided by produced entities.
+- [x] Entity recall: matched expected entities divided by expected entities.
+- [x] Entity F1: harmonic mean of entity precision and recall.
+- [x] Relationship precision: matched expected relationships divided by produced
       relationships.
-- [ ] Relationship recall: matched expected relationships divided by expected
+- [x] Relationship recall: matched expected relationships divided by expected
       relationships.
-- [ ] Relationship F1: harmonic mean of relationship precision and recall.
-- [ ] Provenance accuracy: matched extracted records with correct source
+- [x] Relationship F1: harmonic mean of relationship precision and recall.
+- [x] Provenance accuracy: matched extracted records with correct source
       provenance divided by matched extracted records.
-- [ ] Conflict-detection precision and recall for contradictory relationship or
+- [x] Conflict-detection precision and recall for contradictory relationship or
       fact candidates.
-- [ ] Graph retrieval `precision_at_1`, `recall_at_k`, and MRR for relationship
+- [x] Graph retrieval `precision_at_1`, `recall_at_k`, and MRR for relationship
       questions.
-- [ ] Baseline comparison against non-graph retrieval for the same graph
+- [x] Baseline comparison against non-graph retrieval for the same graph
       retrieval cases.
 
 Matching policy:
 
-- [ ] Entity matching should normalize case, whitespace, and configured aliases.
-- [ ] Relationship matching should require normalized subject, predicate, and
+- [x] Entity matching should normalize case, whitespace, and configured aliases.
+- [x] Relationship matching should require normalized subject, predicate, and
       object match.
-- [ ] Provenance matching should require the expected conversation ID and message
+- [x] Provenance matching should require the expected conversation ID and message
       index, with chunk/fact ID checks when available.
-- [ ] Extra unsupported entities or relationships count against precision.
-- [ ] Missing expected entities or relationships count against recall.
+- [x] Extra unsupported entities or relationships count against precision.
+- [x] Missing expected entities or relationships count against recall.
 
 ## Phase 3: Benchmark Module
 
-- [ ] Add `memory/benchmarks/graph_quality.py`.
-- [ ] Expose `run_evaluation(...) -> dict[str, Any]`.
-- [ ] Expose `assert_thresholds(report: dict[str, Any]) -> None`.
-- [ ] Add a CLI entrypoint runnable as:
+- [x] Add `memory/benchmarks/graph_quality.py`.
+- [x] Expose `run_evaluation(...) -> dict[str, Any]`.
+- [x] Expose `assert_thresholds(report: dict[str, Any]) -> None`.
+- [x] Add a CLI entrypoint runnable as:
       `uv run python -m memory.benchmarks.graph_quality`.
-- [ ] Print JSON with:
+- [x] Print JSON with:
       `corpus`, `entity`, `relationship`, `provenance`, `conflict_detection`,
       `graph_retrieval`, `baseline_retrieval`, and `thresholds` sections.
-- [ ] Return exit code `1` when threshold failures exist.
-- [ ] Keep the benchmark independent of external storage, embeddings, LLMs, and
+- [x] Return exit code `1` when threshold failures exist.
+- [x] Keep the benchmark independent of external storage, embeddings, LLMs, and
       network services.
 
 Suggested CLI options:
 
-- [ ] `--top-k`
-- [ ] `--min-entity-precision`
-- [ ] `--min-entity-recall`
-- [ ] `--min-relationship-precision`
-- [ ] `--min-relationship-recall`
-- [ ] `--min-provenance-accuracy`
-- [ ] `--min-graph-precision-at-1`
-- [ ] `--min-graph-recall-at-k`
-- [ ] `--min-graph-mrr`
+- [x] `--top-k`
+- [x] `--min-entity-precision`
+- [x] `--min-entity-recall`
+- [x] `--min-relationship-precision`
+- [x] `--min-relationship-recall`
+- [x] `--min-provenance-accuracy`
+- [x] `--min-graph-precision-at-1`
+- [x] `--min-graph-recall-at-k`
+- [x] `--min-graph-mrr`
 
 ## Phase 4: Initial Thresholds
 
 Initial thresholds should be conservative and adjustable as fixtures become more
 representative.
 
-- [ ] Entity precision must be at least `0.90`.
-- [ ] Entity recall must be at least `0.80`.
-- [ ] Relationship precision must be at least `0.95`.
-- [ ] Relationship recall must be at least `0.75`.
-- [ ] Provenance accuracy must be at least `0.98`.
-- [ ] Graph retrieval `precision_at_1` must be at least `0.85`.
-- [ ] Graph retrieval `recall_at_k` must be at least `0.90`.
-- [ ] Graph retrieval MRR must be at least `0.85`.
-- [ ] Graph retrieval must not regress below baseline retrieval on ordinary
+- [x] Entity precision must be at least `0.90`.
+- [x] Entity recall must be at least `0.80`.
+- [x] Relationship precision must be at least `0.95`.
+- [x] Relationship recall must be at least `0.75`.
+- [x] Provenance accuracy must be at least `0.98`.
+- [x] Graph retrieval `precision_at_1` must be at least `0.85`.
+- [x] Graph retrieval `recall_at_k` must be at least `0.90`.
+- [x] Graph retrieval MRR must be at least `0.85`.
+- [x] Graph retrieval must not regress below baseline retrieval on ordinary
       semantic queries.
-- [ ] Every threshold failure must include the metric name, observed value, and
+- [x] Every threshold failure must include the metric name, observed value, and
       expected value.
 
 ## Phase 5: Tests
 
-- [ ] Add `tests/unit/test_graph_quality_benchmark.py`.
-- [ ] Test report shape and required metric sections.
-- [ ] Test invalid threshold arguments.
-- [ ] Test explicit threshold failure messages.
-- [ ] Test entity precision/recall/F1 calculations.
-- [ ] Test relationship precision/recall/F1 calculations.
-- [ ] Test provenance accuracy calculation.
-- [ ] Test graph retrieval regression detection against baseline retrieval.
-- [ ] Test CLI exit code behavior for passing and failing thresholds.
+- [x] Add `tests/unit/test_graph_quality_benchmark.py`.
+- [x] Test report shape and required metric sections.
+- [x] Test invalid threshold arguments.
+- [x] Test explicit threshold failure messages.
+- [x] Test entity precision/recall/F1 calculations.
+- [x] Test relationship precision/recall/F1 calculations.
+- [x] Test provenance accuracy calculation.
+- [x] Test graph retrieval regression detection against baseline retrieval.
+- [x] Test CLI exit code behavior for passing and failing thresholds.
 
 ## Phase 6: Promotion Rule
 
-- [ ] Graph extraction may be developed before the gate passes, but graph-derived
+- [x] Graph extraction may be developed before the gate passes, but graph-derived
       records must remain review-only or disabled for retrieval.
-- [ ] Graph lookup may become a retrieval candidate source only after the graph
+- [x] Graph lookup may become a retrieval candidate source only after the graph
       quality benchmark passes agreed thresholds.
-- [ ] Any new entity type, relationship predicate, extractor, or graph reranking
+- [x] Any new entity type, relationship predicate, extractor, or graph reranking
       rule must add or update benchmark cases.
-- [ ] Public API/MCP graph fields must stay experimental until the benchmark and
+- [x] Public API/MCP graph fields must stay experimental until the benchmark and
       shape tests cover them.
 
 ## Done When
 
-- [ ] `memory.benchmarks.graph_quality` exists and runs locally without network
+- [x] `memory.benchmarks.graph_quality` exists and runs locally without network
       dependencies.
-- [ ] The benchmark reports entity, relationship, provenance, conflict, and
+- [x] The benchmark reports entity, relationship, provenance, conflict, and
       graph-retrieval metrics.
-- [ ] Threshold failures are explicit and actionable.
-- [ ] Unit tests cover metric calculations and threshold failures.
-- [ ] `docs/improvements/advanced_memory_plan.md` points to this gate before
+- [x] Threshold failures are explicit and actionable.
+- [x] Unit tests cover metric calculations and threshold failures.
+- [x] `docs/improvements/advanced_memory_plan.md` points to this gate before
       graph-aware retrieval.

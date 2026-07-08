@@ -278,7 +278,8 @@ def extract_memory_graph(conversation: dict[str, Any]) -> dict[str, list[dict[st
         for match in _PROJECT_RE.finditer(text):
             subject = match.group("subject")
             object_value = match.group("object")
-            if normalize_graph_text(subject) in {"i", "the creator"}:
+            normalized_subject = normalize_graph_text(subject)
+            if normalized_subject in {"i", "the creator"} or normalized_subject.startswith("my favorite "):
                 continue
             add_relationship(subject, RelationshipPredicate.DECIDED, object_value, index, object_type=EntityType.DECISION, confidence=0.72)
         for match in _PREFERENCE_RE.finditer(text):

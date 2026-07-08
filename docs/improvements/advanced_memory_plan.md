@@ -93,37 +93,37 @@ Implementation note:
 Use `graph_quality_gate_plan.md` as the source of truth for the benchmark,
 metric definitions, thresholds, and graph-retrieval promotion rule.
 
-- [ ] Create a representative graph-memory evaluation corpus with source
+- [x] Create a representative graph-memory evaluation corpus with source
       conversations, expected entities, expected relationships, and expected
       source provenance.
-- [ ] Measure entity extraction precision, recall, and F1 by entity type.
-- [ ] Measure relationship extraction precision, recall, and F1 by relationship
+- [x] Measure entity extraction precision, recall, and F1 by entity type.
+- [x] Measure relationship extraction precision, recall, and F1 by relationship
       predicate.
-- [ ] Measure provenance accuracy: extracted entities and relationships should
+- [x] Measure provenance accuracy: extracted entities and relationships should
       point to the correct source conversation, message, chunk, or fact.
-- [ ] Track conflict detection quality for contradictory relationships and
+- [x] Track conflict detection quality for contradictory relationships and
       superseded facts.
-- [ ] Add thresholded evaluation output similar to
+- [x] Add thresholded evaluation output similar to
       `memory.benchmarks.retrieval_quality`, with explicit failure reasons.
-- [ ] Define minimum quality gates before graph records can influence retrieval
+- [x] Define minimum quality gates before graph records can influence retrieval
       ranking.
 
 Suggested initial quality gates:
 
-- [ ] Entity precision should be high enough that graph expansion does not add
+- [x] Entity precision should be high enough that graph expansion does not add
       noisy candidates to normal search.
-- [ ] Relationship precision should be stricter than entity precision because a
+- [x] Relationship precision should be stricter than entity precision because a
       wrong edge can create a misleading answer path.
-- [ ] Provenance accuracy should be near-perfect for promoted graph records.
-- [ ] Graph-aware retrieval must meet or beat baseline retrieval on relationship
+- [x] Provenance accuracy should be near-perfect for promoted graph records.
+- [x] Graph-aware retrieval must meet or beat baseline retrieval on relationship
       questions without regressing ordinary semantic queries.
 
 Acceptance criteria:
 
-- [ ] A local benchmark can report entity, relationship, provenance, and
+- [x] A local benchmark can report entity, relationship, provenance, and
       graph-retrieval metrics without network dependencies.
-- [ ] Quality threshold failures are explicit and actionable.
-- [ ] Graph retrieval remains disabled until the benchmark passes agreed gates.
+- [x] Quality threshold failures are explicit and actionable.
+- [x] Graph retrieval remains disabled until the benchmark passes agreed gates.
 
 ## Phase 4: Graph-Aware Retrieval
 
