@@ -578,6 +578,7 @@ class RetrievalConfig(BaseModel):
 
 class MemoryConfig(BaseModel):
     insert_policy: str = InsertPolicy.PERMISSIVE.value
+    graph_enabled: bool = False
 
     @field_validator("insert_policy")
     @classmethod

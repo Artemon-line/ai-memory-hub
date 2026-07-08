@@ -294,6 +294,49 @@ class SQLiteMetadataStore:
                 WHERE deleted_at IS NULL
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS graph_entities (
+                    id TEXT PRIMARY KEY,
+                    entity_type TEXT NOT NULL,
+                    normalized_name TEXT NOT NULL,
+                    owner_id TEXT,
+                    project_id TEXT,
+                    review_status TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    updated_at TEXT
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS graph_relationships (
+                    id TEXT PRIMARY KEY,
+                    subject TEXT NOT NULL,
+                    predicate TEXT NOT NULL,
+                    object TEXT NOT NULL,
+                    owner_id TEXT,
+                    project_id TEXT,
+                    review_status TEXT NOT NULL,
+                    superseded_by TEXT,
+                    conflict_group TEXT,
+                    payload TEXT NOT NULL,
+                    updated_at TEXT
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_graph_entities_lookup
+                ON graph_entities(project_id, entity_type, normalized_name)
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_graph_relationships_lookup
+                ON graph_relationships(project_id, predicate, subject)
+                """
+            )
             self._migrate_auth_token_ids(conn)
             self._migrate_default_projects(conn)
 
@@ -907,6 +950,139 @@ class SQLiteMetadataStore:
     ) -> dict[str, Any]:
         return {"subject": subject, "facts": self.search_facts(subject=subject, project_id=project_id)}
 
+    def upsert_graph_records(
+        self, *, entities: list[dict[str, Any]], relationships: list[dict[str, Any]]
+    ) -> None:
+        with self._connect() as conn:
+            for entity in entities:
+                conn.execute(
+                    """
+                    INSERT INTO graph_entities (
+                        id, entity_type, normalized_name, owner_id, project_id,
+                        review_status, payload, updated_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(id) DO UPDATE SET
+                        entity_type = excluded.entity_type,
+                        normalized_name = excluded.normalized_name,
+                        owner_id = excluded.owner_id,
+                        project_id = excluded.project_id,
+                        review_status = excluded.review_status,
+                        payload = excluded.payload,
+                        updated_at = excluded.updated_at
+                    """,
+                    (
+                        str(entity["id"]),
+                        str(entity["entity_type"]),
+                        str(entity["normalized_name"]),
+                        entity.get("owner_id"),
+                        entity.get("project_id"),
+                        str(entity.get("review_status", "active")),
+                        json.dumps(entity, separators=(",", ":"), ensure_ascii=False),
+                        entity.get("updated_at"),
+                    ),
+                )
+            for relationship in relationships:
+                conn.execute(
+                    """
+                    INSERT INTO graph_relationships (
+                        id, subject, predicate, object, owner_id, project_id,
+                        review_status, superseded_by, conflict_group, payload, updated_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(id) DO UPDATE SET
+                        subject = excluded.subject,
+                        predicate = excluded.predicate,
+                        object = excluded.object,
+                        owner_id = excluded.owner_id,
+                        project_id = excluded.project_id,
+                        review_status = excluded.review_status,
+                        superseded_by = excluded.superseded_by,
+                        conflict_group = excluded.conflict_group,
+                        payload = excluded.payload,
+                        updated_at = excluded.updated_at
+                    """,
+                    (
+                        str(relationship["id"]),
+                        str(relationship["subject"]),
+                        str(relationship["predicate"]),
+                        str(relationship["object"]),
+                        relationship.get("owner_id"),
+                        relationship.get("project_id"),
+                        str(relationship.get("review_status", "active")),
+                        relationship.get("superseded_by"),
+                        relationship.get("conflict_group"),
+                        json.dumps(relationship, separators=(",", ":"), ensure_ascii=False),
+                        relationship.get("updated_at"),
+                    ),
+                )
+            self._supersede_conflicting_relationships(conn, relationships)
+
+    def search_graph_entities(
+        self,
+        *,
+        entity_type: str | None = None,
+        name: str | None = None,
+        owner_id: str | None = None,
+        project_id: str | None = None,
+        include_inactive: bool = False,
+    ) -> list[dict[str, Any]]:
+        clauses = ["1 = 1"]
+        params: list[Any] = []
+        if entity_type is not None:
+            clauses.append("entity_type = ?")
+            params.append(entity_type)
+        if name is not None:
+            clauses.append("normalized_name = ?")
+            params.append(" ".join(str(name).strip().casefold().split()))
+        if owner_id is not None:
+            clauses.append("owner_id = ?")
+            params.append(owner_id)
+        if project_id is not None:
+            clauses.append("project_id = ?")
+            params.append(project_id)
+        if not include_inactive:
+            clauses.append("review_status IN ('active', 'approved', 'needs_review')")
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT payload FROM graph_entities WHERE {' AND '.join(clauses)} ORDER BY updated_at DESC, id ASC",
+                params,
+            ).fetchall()
+        return [json.loads(str(row["payload"])) for row in rows]
+
+    def search_graph_relationships(
+        self,
+        *,
+        subject: str | None = None,
+        predicate: str | None = None,
+        owner_id: str | None = None,
+        project_id: str | None = None,
+        include_superseded: bool = False,
+    ) -> list[dict[str, Any]]:
+        clauses = ["1 = 1"]
+        params: list[Any] = []
+        if subject is not None:
+            clauses.append("subject = ?")
+            params.append(subject)
+        if predicate is not None:
+            clauses.append("predicate = ?")
+            params.append(predicate)
+        if owner_id is not None:
+            clauses.append("owner_id = ?")
+            params.append(owner_id)
+        if project_id is not None:
+            clauses.append("project_id = ?")
+            params.append(project_id)
+        if not include_superseded:
+            clauses.append("superseded_by IS NULL")
+            clauses.append("review_status IN ('active', 'approved', 'needs_review')")
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT payload, superseded_by FROM graph_relationships WHERE {' AND '.join(clauses)} ORDER BY updated_at DESC, id ASC",
+                params,
+            ).fetchall()
+        return [self._graph_relationship_from_row(row) for row in rows]
+
     def upsert_generated_summary(self, summary: dict[str, Any]) -> str:
         summary_id = str(summary["id"])
         summary_type = str(summary["type"])
@@ -1198,6 +1374,40 @@ class SQLiteMetadataStore:
                 fact.get("project_id"),
             ),
         )
+
+    def _supersede_conflicting_relationships(
+        self, conn: sqlite3.Connection, relationships: list[dict[str, Any]]
+    ) -> None:
+        for relationship in relationships:
+            conflict_group = relationship.get("conflict_group")
+            if not conflict_group:
+                continue
+            conn.execute(
+                """
+                UPDATE graph_relationships
+                SET superseded_by = ?, updated_at = ?
+                WHERE conflict_group = ?
+                  AND id != ?
+                  AND superseded_by IS NULL
+                  AND object != ?
+                  AND COALESCE(owner_id, '') = COALESCE(?, '')
+                  AND COALESCE(project_id, '') = COALESCE(?, '')
+                """,
+                (
+                    str(relationship["id"]),
+                    relationship.get("updated_at"),
+                    str(conflict_group),
+                    str(relationship["id"]),
+                    str(relationship["object"]),
+                    relationship.get("owner_id"),
+                    relationship.get("project_id"),
+                ),
+            )
+
+    def _graph_relationship_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
+        payload = json.loads(str(row["payload"]))
+        payload["superseded_by"] = row["superseded_by"]
+        return payload
 
     def _fact_row(self, fact: dict[str, Any]) -> tuple[Any, ...]:
         return (

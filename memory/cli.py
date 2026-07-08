@@ -250,6 +250,20 @@ def build_parser() -> argparse.ArgumentParser:
     fact_supersede.add_argument("fact_id", help="Fact id to supersede.")
     fact_supersede.add_argument("superseded_by", help="Replacement fact id.")
 
+    graph_entities = subparsers.add_parser("graph-entities", help="Review extracted graph entities.")
+    _add_common_options(graph_entities)
+    graph_entities.add_argument("--entity-type", default=None, help="Filter by entity type.")
+    graph_entities.add_argument("--name", default=None, help="Filter by normalized entity name.")
+    graph_entities.add_argument("--include-inactive", action="store_true", help="Include hidden or rejected records.")
+
+    graph_relationships = subparsers.add_parser(
+        "graph-relationships", help="Review extracted graph relationships."
+    )
+    _add_common_options(graph_relationships)
+    graph_relationships.add_argument("--subject", default=None, help="Filter by relationship subject.")
+    graph_relationships.add_argument("--predicate", default=None, help="Filter by relationship predicate.")
+    graph_relationships.add_argument("--include-superseded", action="store_true", help="Include superseded relationships.")
+
     admin = subparsers.add_parser("admin", help="Manage local users, tokens, and projects.")
     _add_common_options(admin)
     admin_subparsers = admin.add_subparsers(
@@ -395,6 +409,10 @@ def _dispatch(args: argparse.Namespace) -> int:
         return _profile_get(args)
     if args.command == "fact-supersede":
         return _fact_supersede(args)
+    if args.command == "graph-entities":
+        return _graph_entities(args)
+    if args.command == "graph-relationships":
+        return _graph_relationships(args)
     if args.command == "admin":
         return _admin(args)
     raise ValueError(f"unknown command: {args.command}")
@@ -603,6 +621,28 @@ def _fact_supersede(args: argparse.Namespace) -> int:
     result = mvp_ingestion.fact_supersede(fact_id=args.fact_id, superseded_by=args.superseded_by)
     _emit_result(args, redact_content_hashes(result), text_formatter=lambda item: item["status"])
     return EXIT_OK if result["status"] == "ok" else EXIT_COMMAND_FAILURE
+
+
+def _graph_entities(args: argparse.Namespace) -> int:
+    _configure_memory_runtime(args.config)
+    result = mvp_ingestion.graph_entity_search(
+        entity_type=args.entity_type,
+        name=args.name,
+        include_inactive=args.include_inactive,
+    )
+    _emit_result(args, redact_content_hashes(result), text_formatter=_format_graph_entities_text)
+    return EXIT_OK
+
+
+def _graph_relationships(args: argparse.Namespace) -> int:
+    _configure_memory_runtime(args.config)
+    result = mvp_ingestion.graph_relationship_search(
+        subject=args.subject,
+        predicate=args.predicate,
+        include_superseded=args.include_superseded,
+    )
+    _emit_result(args, redact_content_hashes(result), text_formatter=_format_graph_relationships_text)
+    return EXIT_OK
 
 
 def _admin(args: argparse.Namespace) -> int:
@@ -894,6 +934,25 @@ def _format_fact_search_text(result: dict[str, Any]) -> str:
         if isinstance(fact, dict):
             lines.append(f"- {fact['id']} {fact['subject']}.{fact['predicate']}: {fact['object']}")
     return "\n".join(lines) if lines else "no facts"
+
+
+def _format_graph_entities_text(result: dict[str, Any]) -> str:
+    lines = []
+    for entity in result.get("results", []):
+        if isinstance(entity, dict):
+            lines.append(f"- {entity['id']} {entity['entity_type']}: {entity['name']}")
+    return "\n".join(lines) if lines else "no graph entities"
+
+
+def _format_graph_relationships_text(result: dict[str, Any]) -> str:
+    lines = []
+    for relationship in result.get("results", []):
+        if isinstance(relationship, dict):
+            lines.append(
+                f"- {relationship['id']} {relationship['subject']} "
+                f"{relationship['predicate']} {relationship['object']}"
+            )
+    return "\n".join(lines) if lines else "no graph relationships"
 
 
 def _format_profile_text(result: dict[str, Any]) -> str:

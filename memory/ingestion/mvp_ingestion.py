@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Iterator, Protocol, Sequence
 from uuid import uuid4
 
+from memory.advanced_memory import extract_memory_graph
 from memory.backend.dry_run import DryRunMetadataStore, DryRunVectorStore
 from memory.backend.errors import SchemaVersionError, VectorDimensionError
 from memory.backend.log_safety import redact_secrets
@@ -141,6 +142,7 @@ class RuntimeDependencies:
     retrieval_metadata_weight: float = 0.15
     retrieval_candidate_multiplier: int = 3
     fact_extractor: Any | None = None
+    graph_enabled: bool = False
 
 
 _VECTOR_COMPATIBILITY_METADATA_PREFIX = "vector_index_compatibility:"
@@ -531,6 +533,7 @@ def build_runtime(
         retrieval_keyword_weight=cfg.retrieval.keyword_weight,
         retrieval_metadata_weight=cfg.retrieval.metadata_weight,
         retrieval_candidate_multiplier=cfg.retrieval.candidate_multiplier,
+        graph_enabled=cfg.memory.graph_enabled,
     )
 
 
@@ -1695,6 +1698,9 @@ def ingest_messages(
                     new_messages,
                     start_message_index=start_index,
                 )
+                graph_counts = _store_graph_for_conversation(updated)
+        else:
+            graph_counts = {"entities": 0, "relationships": 0}
         logger.info(
             "Conversation inserted",
             extra={
@@ -1706,7 +1712,7 @@ def ingest_messages(
                 "embedded_chunks": len(chunks),
             },
         )
-        return {
+        result = {
             "status": "ok",
             "id": str(updated["id"]),
             "deduplicated": not bool(new_messages),
@@ -1714,6 +1720,7 @@ def ingest_messages(
             "embedded_chunks": len(chunks),
             "chunks": len(chunks),
         }
+        return _with_graph_counts(result, graph_counts)
 
     # 3. Chunk messages
     with _ingestion_stage("chunk", message_count=len(conversation_json.get("messages", []))):
@@ -1739,6 +1746,9 @@ def ingest_messages(
     if inserted:
         with _ingestion_stage("fact_extract"):
             _store_facts_for_conversation(conversation_json)
+            graph_counts = _store_graph_for_conversation(conversation_json)
+    else:
+        graph_counts = {"entities": 0, "relationships": 0}
 
     logger.info(
         "Conversation inserted",
@@ -1752,7 +1762,7 @@ def ingest_messages(
     )
 
     # 6. Return stored object
-    return {
+    result = {
         "status": "ok",
         "id": metadata_id,
         "deduplicated": not inserted,
@@ -1760,6 +1770,7 @@ def ingest_messages(
         "embedded_chunks": len(chunks),
         "chunks": len(chunks),
     }
+    return _with_graph_counts(result, graph_counts)
 
 
 def store_pending_review_memory(
@@ -1829,6 +1840,7 @@ def approve_pending_memory(
     _runtime().metadata_store.insert(conversation)
     result = ingest_messages(conversation, owner_id=owner_id, project_id=effective_project_id)
     _store_facts_for_conversation(conversation)
+    _store_graph_for_conversation(conversation)
     result["memory_status"] = _MEMORY_STATUS_ACTIVE
     return result
 
@@ -2700,6 +2712,70 @@ def _store_facts(facts: list[dict[str, Any]]) -> None:
     setattr(store, "_facts", active)
 
 
+def _store_graph_for_conversation(conversation: dict[str, Any]) -> dict[str, int]:
+    runtime = _runtime()
+    if not runtime.graph_enabled:
+        return {"entities": 0, "relationships": 0}
+    graph = extract_memory_graph(conversation)
+    entities = graph["entities"]
+    relationships = graph["relationships"]
+    if not entities and not relationships:
+        return {"entities": 0, "relationships": 0}
+    store = runtime.metadata_store
+    if hasattr(store, "upsert_graph_records"):
+        store.upsert_graph_records(entities=entities, relationships=relationships)
+    else:
+        _store_graph_in_memory(store, entities=entities, relationships=relationships)
+    return {"entities": len(entities), "relationships": len(relationships)}
+
+
+def _with_graph_counts(result: dict[str, Any], graph_counts: dict[str, int]) -> dict[str, Any]:
+    if graph_counts["entities"] or graph_counts["relationships"]:
+        result["graph"] = graph_counts
+    return result
+
+
+def _store_graph_in_memory(
+    store: Any, *, entities: list[dict[str, Any]], relationships: list[dict[str, Any]]
+) -> None:
+    existing_entities = {
+        str(entity["id"]): dict(entity)
+        for entity in getattr(store, "_graph_entities", [])
+        if isinstance(entity, dict) and "id" in entity
+    }
+    existing_relationships = {
+        str(relationship["id"]): dict(relationship)
+        for relationship in getattr(store, "_graph_relationships", [])
+        if isinstance(relationship, dict) and "id" in relationship
+    }
+    for entity in entities:
+        existing_entities[str(entity["id"])] = dict(entity)
+    for relationship in relationships:
+        _apply_in_memory_relationship_supersession(existing_relationships, relationship)
+        existing_relationships[str(relationship["id"])] = dict(relationship)
+    setattr(store, "_graph_entities", list(existing_entities.values()))
+    setattr(store, "_graph_relationships", list(existing_relationships.values()))
+
+
+def _apply_in_memory_relationship_supersession(
+    existing: dict[str, dict[str, Any]], relationship: dict[str, Any]
+) -> None:
+    conflict_group = relationship.get("conflict_group")
+    if not conflict_group:
+        return
+    for current in existing.values():
+        if (
+            current.get("conflict_group") == conflict_group
+            and current.get("id") != relationship.get("id")
+            and current.get("object") != relationship.get("object")
+            and current.get("owner_id") == relationship.get("owner_id")
+            and current.get("project_id") == relationship.get("project_id")
+            and not current.get("superseded_by")
+        ):
+            current["superseded_by"] = relationship["id"]
+            current["updated_at"] = relationship.get("updated_at")
+
+
 def extract_facts(conversation: dict[str, Any]) -> list[dict[str, Any]]:
     messages = conversation.get("messages", [])
     return extract_facts_from_messages(
@@ -3295,6 +3371,72 @@ def fact_search(
     return {"status": "ok", "results": [_public_fact(fact) for fact in facts]}
 
 
+def graph_entity_search(
+    *,
+    entity_type: str | None = None,
+    name: str | None = None,
+    owner_id: str | None = None,
+    project_id: str | None = None,
+    include_inactive: bool = False,
+) -> dict[str, Any]:
+    effective_project_id = _resolve_project(
+        owner_id=owner_id, project_id=project_id, required_role=PROJECT_ROLE_READER
+    )
+    store = _runtime().metadata_store
+    if hasattr(store, "search_graph_entities"):
+        entities = store.search_graph_entities(
+            entity_type=entity_type,
+            name=name,
+            owner_id=owner_id,
+            project_id=effective_project_id,
+            include_inactive=include_inactive,
+        )
+    else:
+        entities = [
+            entity
+            for entity in getattr(store, "_graph_entities", [])
+            if isinstance(entity, dict)
+            and (entity_type is None or str(entity.get("entity_type")) == entity_type)
+            and (name is None or str(entity.get("normalized_name")) == " ".join(name.strip().casefold().split()))
+            and _record_allowed(entity, owner_id, effective_project_id)
+            and (include_inactive or str(entity.get("review_status")) in {"active", "approved", "needs_review"})
+        ]
+    return {"status": "ok", "results": entities}
+
+
+def graph_relationship_search(
+    *,
+    subject: str | None = None,
+    predicate: str | None = None,
+    owner_id: str | None = None,
+    project_id: str | None = None,
+    include_superseded: bool = False,
+) -> dict[str, Any]:
+    effective_project_id = _resolve_project(
+        owner_id=owner_id, project_id=project_id, required_role=PROJECT_ROLE_READER
+    )
+    store = _runtime().metadata_store
+    if hasattr(store, "search_graph_relationships"):
+        relationships = store.search_graph_relationships(
+            subject=subject,
+            predicate=predicate,
+            owner_id=owner_id,
+            project_id=effective_project_id,
+            include_superseded=include_superseded,
+        )
+    else:
+        relationships = [
+            relationship
+            for relationship in getattr(store, "_graph_relationships", [])
+            if isinstance(relationship, dict)
+            and (subject is None or str(relationship.get("subject")) == subject)
+            and (predicate is None or str(relationship.get("predicate")) == predicate)
+            and _record_allowed(relationship, owner_id, effective_project_id)
+            and (include_superseded or not relationship.get("superseded_by"))
+        ]
+    return {"status": "ok", "results": relationships}
+
+
 def profile_get(
     subject: str = "user",
     *,
@@ -3390,6 +3532,12 @@ def fact_supersede(
                 fact["updated_at"] = now
                 updated = True
     return {"status": "ok" if updated else "not_found", "id": fact_id, "superseded_by": superseded_by}
+
+
+def _record_allowed(record: dict[str, Any], owner_id: str | None, project_id: str | None) -> bool:
+    if owner_id is not None and record.get("owner_id") != owner_id:
+        return False
+    return _fact_project_matches(record, project_id)
 
 
 def project_list(*, owner_id: str | None = None) -> dict[str, Any]:

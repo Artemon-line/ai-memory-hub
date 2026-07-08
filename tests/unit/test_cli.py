@@ -148,6 +148,49 @@ def test_fact_supersede_cli_returns_nonzero_when_missing(capsys, monkeypatch) ->
     assert json.loads(capsys.readouterr().out)["status"] == "not_found"
 
 
+def test_graph_entities_cli_outputs_review_records(capsys, monkeypatch) -> None:
+    monkeypatch.setattr(cli, "_configure_memory_runtime", lambda config_path: None)
+    monkeypatch.setattr(
+        cli.mvp_ingestion,
+        "graph_entity_search",
+        lambda **kwargs: {
+            "status": "ok",
+            "results": [{"id": "entity:1", "entity_type": "project", "name": "Velvet Lantern"}],
+        },
+    )
+
+    exit_code = cli.main(["graph-entities", "--entity-type", "project"])
+
+    output = capsys.readouterr().out
+    assert exit_code == 0
+    assert "entity:1 project: Velvet Lantern" in output
+
+
+def test_graph_relationships_cli_outputs_review_records(capsys, monkeypatch) -> None:
+    monkeypatch.setattr(cli, "_configure_memory_runtime", lambda config_path: None)
+    monkeypatch.setattr(
+        cli.mvp_ingestion,
+        "graph_relationship_search",
+        lambda **kwargs: {
+            "status": "ok",
+            "results": [
+                {
+                    "id": "rel:1",
+                    "subject": "Velvet Lantern",
+                    "predicate": "uses_tool",
+                    "object": "PGVector",
+                }
+            ],
+        },
+    )
+
+    exit_code = cli.main(["graph-relationships", "--predicate", "uses_tool"])
+
+    output = capsys.readouterr().out
+    assert exit_code == 0
+    assert "rel:1 Velvet Lantern uses_tool PGVector" in output
+
+
 def test_parser_includes_core_commands() -> None:
     help_text = cli.build_parser().format_help()
 

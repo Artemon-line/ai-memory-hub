@@ -112,6 +112,9 @@ memory:
   # require_save_intent rejects inserts without metadata.save_intent.
   # review_pending stores inserts without metadata.save_intent for explicit approval.
   insert_policy: permissive
+  # Optional deterministic entity/relationship extraction for local review.
+  # Graph records remain review-oriented and do not affect retrieval by default.
+  graph_enabled: false
 
 chunking:
   strategy: message

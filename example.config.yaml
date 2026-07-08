@@ -109,6 +109,9 @@ memory:
   # metadata.save_intent before writes are accepted.
   # Use review_pending to hold unmarked inserts outside default reads until approval.
   insert_policy: permissive
+  # Optional deterministic entity/relationship extraction for local review.
+  # Graph records remain review-oriented and do not affect retrieval by default.
+  graph_enabled: false
 
 # -------------------------
 # ACTIVE PROVIDERS (BYOS/BYOA)

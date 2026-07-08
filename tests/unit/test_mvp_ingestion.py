@@ -98,6 +98,7 @@ def _configure_stubs(
     retrieval_keyword_enabled: bool = True,
     retrieval_keyword_weight: float = 0.25,
     retrieval_metadata_weight: float = 0.15,
+    graph_enabled: bool = False,
 ) -> tuple[StubMetadataStore, StubVectorStore]:
     metadata = StubMetadataStore()
     vectors = StubVectorStore()
@@ -115,6 +116,7 @@ def _configure_stubs(
             retrieval_keyword_enabled=retrieval_keyword_enabled,
             retrieval_keyword_weight=retrieval_keyword_weight,
             retrieval_metadata_weight=retrieval_metadata_weight,
+            graph_enabled=graph_enabled,
         )
     )
     return metadata, vectors
@@ -1186,6 +1188,56 @@ def test_external_fact_extractor_hook_adds_normalized_facts() -> None:
     mvp_ingestion.ingest_messages(conversation)
 
     assert metadata._facts[0]["object"] == "a tester"
+
+
+def test_graph_extraction_is_opt_in_for_ingestion() -> None:
+    metadata, _ = _configure_stubs(graph_enabled=False)
+    conversation = _valid_conversation()
+    conversation["messages"] = [{"role": "user", "text": "Velvet Lantern uses PGVector."}]
+
+    result = mvp_ingestion.ingest_messages(conversation)
+
+    assert "graph" not in result
+    assert not hasattr(metadata, "_graph_relationships")
+
+
+def test_graph_records_are_stored_when_enabled() -> None:
+    metadata, _ = _configure_stubs(graph_enabled=True)
+    conversation = _valid_conversation()
+    conversation["title"] = "Velvet Lantern"
+    conversation["messages"] = [
+        {"role": "user", "text": "Velvet Lantern uses PGVector. The creator is Ada Lovelace."}
+    ]
+
+    result = mvp_ingestion.ingest_messages(conversation)
+    entities = mvp_ingestion.graph_entity_search()["results"]
+    relationships = mvp_ingestion.graph_relationship_search()["results"]
+
+    assert result["graph"]["entities"] >= 3
+    assert {entity["normalized_name"] for entity in entities} >= {"velvet lantern", "pgvector"}
+    assert {relationship["predicate"] for relationship in relationships} >= {"uses_tool", "created_by"}
+    assert all(relationship["provenance"] for relationship in relationships)
+    assert metadata._graph_entities
+
+
+def test_conflicting_graph_relationships_are_superseded() -> None:
+    _configure_stubs(graph_enabled=True, allow_trusted_appends=True)
+    conversation = _valid_conversation()
+    conversation["messages"] = [{"role": "user", "text": "Velvet Lantern changed to blue."}]
+    mvp_ingestion.ingest_messages(conversation)
+
+    updated = _valid_conversation()
+    updated["messages"] = [
+        {"role": "user", "text": "Velvet Lantern changed to blue."},
+        {"role": "user", "text": "Velvet Lantern changed to green."},
+    ]
+    mvp_ingestion.ingest_messages(updated)
+
+    relationships = mvp_ingestion.graph_relationship_search(include_superseded=True)["results"]
+    changed = [row for row in relationships if row["predicate"] == "changed_to"]
+
+    assert {row["object"] for row in changed} == {"blue", "green"}
+    assert any(row["superseded_by"] for row in changed if row["object"] == "blue")
 
 
 def test_ingest_messages_enriches_topics() -> None:

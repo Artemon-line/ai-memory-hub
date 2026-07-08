@@ -297,6 +297,55 @@ def test_sqlite_fact_storage_persists_freshness_and_source_quality(tmp_path: Pat
     assert superseded["superseded_at"] == "2026-01-02T00:00:00Z"
 
 
+def test_sqlite_graph_records_persist_and_supersede_conflicts(tmp_path: Path) -> None:
+    store = SQLiteMetadataStore(tmp_path / "metadata.sqlite3")
+    entity = {
+        "id": "entity:velvet",
+        "record_type": "entity",
+        "entity_type": "project",
+        "name": "Velvet Lantern",
+        "normalized_name": "velvet lantern",
+        "extractor": {"name": "deterministic-graph", "version": "1", "kind": "deterministic"},
+        "confidence": 0.9,
+        "source_scope": "private",
+        "review_status": "active",
+        "provenance": [{"conversation_id": "conv-1", "message_index": 0}],
+        "owner_id": "owner-a",
+        "project_id": "project-a",
+        "created_at": "2026-07-08T00:00:00Z",
+        "updated_at": "2026-07-08T00:00:00Z",
+    }
+    first = {
+        "id": "rel:first",
+        "record_type": "relationship",
+        "subject": "Velvet Lantern",
+        "predicate": "changed_to",
+        "object": "blue",
+        "extractor": {"name": "deterministic-graph", "version": "1", "kind": "deterministic"},
+        "confidence": 0.85,
+        "source_scope": "private",
+        "review_status": "active",
+        "provenance": [{"conversation_id": "conv-1", "message_index": 0}],
+        "owner_id": "owner-a",
+        "project_id": "project-a",
+        "conflict_group": "velvet lantern:changed_to",
+        "created_at": "2026-07-08T00:00:00Z",
+        "updated_at": "2026-07-08T00:00:00Z",
+    }
+    second = {**first, "id": "rel:second", "object": "green", "updated_at": "2026-07-09T00:00:00Z"}
+
+    store.upsert_graph_records(entities=[entity], relationships=[first])
+    store.upsert_graph_records(entities=[], relationships=[second])
+
+    entities = store.search_graph_entities(name="Velvet Lantern", project_id="project-a")
+    active = store.search_graph_relationships(project_id="project-a")
+    audit = store.search_graph_relationships(project_id="project-a", include_superseded=True)
+
+    assert entities[0]["id"] == "entity:velvet"
+    assert [row["object"] for row in active] == ["green"]
+    assert next(row for row in audit if row["id"] == "rel:first")["superseded_by"] == "rel:second"
+
+
 def test_sqlite_admin_user_token_and_project_management(tmp_path: Path) -> None:
     store = SQLiteMetadataStore(tmp_path / "metadata.sqlite3")
 

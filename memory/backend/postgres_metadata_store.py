@@ -176,6 +176,41 @@ CREATE TABLE IF NOT EXISTS runtime_metadata (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 )
 """
+CREATE_GRAPH_ENTITIES_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS graph_entities (
+    id TEXT PRIMARY KEY,
+    entity_type TEXT NOT NULL,
+    normalized_name TEXT NOT NULL,
+    owner_id TEXT NULL,
+    project_id TEXT NULL,
+    review_status TEXT NOT NULL,
+    payload JSONB NOT NULL,
+    updated_at TIMESTAMPTZ NULL
+)
+"""
+CREATE_GRAPH_RELATIONSHIPS_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS graph_relationships (
+    id TEXT PRIMARY KEY,
+    subject TEXT NOT NULL,
+    predicate TEXT NOT NULL,
+    object TEXT NOT NULL,
+    owner_id TEXT NULL,
+    project_id TEXT NULL,
+    review_status TEXT NOT NULL,
+    superseded_by TEXT NULL,
+    conflict_group TEXT NULL,
+    payload JSONB NOT NULL,
+    updated_at TIMESTAMPTZ NULL
+)
+"""
+CREATE_GRAPH_ENTITIES_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_graph_entities_lookup
+ON graph_entities(project_id, entity_type, normalized_name)
+"""
+CREATE_GRAPH_RELATIONSHIPS_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_graph_relationships_lookup
+ON graph_relationships(project_id, predicate, subject)
+"""
 CREATE_FACTS_INDEX_SQL = """
 CREATE INDEX IF NOT EXISTS idx_facts_subject_predicate
 ON facts(subject, predicate)
@@ -275,6 +310,10 @@ class PostgresMetadataStore:
                 cur.execute(CREATE_DEFAULT_PROJECT_LOCAL_INDEX_SQL)
                 cur.execute(CREATE_FACTS_TABLE_SQL)
                 cur.execute(CREATE_RUNTIME_METADATA_TABLE_SQL)
+                cur.execute(CREATE_GRAPH_ENTITIES_TABLE_SQL)
+                cur.execute(CREATE_GRAPH_RELATIONSHIPS_TABLE_SQL)
+                cur.execute(CREATE_GRAPH_ENTITIES_INDEX_SQL)
+                cur.execute(CREATE_GRAPH_RELATIONSHIPS_INDEX_SQL)
                 cur.execute("ALTER TABLE facts ADD COLUMN IF NOT EXISTS superseded_at TIMESTAMPTZ NULL")
                 cur.execute("ALTER TABLE facts ADD COLUMN IF NOT EXISTS source_quality TEXT NULL")
                 cur.execute("ALTER TABLE facts ADD COLUMN IF NOT EXISTS confidence_reason TEXT NULL")
@@ -840,6 +879,144 @@ class PostgresMetadataStore:
     ) -> dict[str, Any]:
         return {"subject": subject, "facts": self.search_facts(subject=subject, project_id=project_id)}
 
+    def upsert_graph_records(
+        self, *, entities: list[dict[str, Any]], relationships: list[dict[str, Any]]
+    ) -> None:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                for entity in entities:
+                    cur.execute(
+                        """
+                        INSERT INTO graph_entities (
+                            id, entity_type, normalized_name, owner_id, project_id,
+                            review_status, payload, updated_at
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT(id) DO UPDATE SET
+                            entity_type = EXCLUDED.entity_type,
+                            normalized_name = EXCLUDED.normalized_name,
+                            owner_id = EXCLUDED.owner_id,
+                            project_id = EXCLUDED.project_id,
+                            review_status = EXCLUDED.review_status,
+                            payload = EXCLUDED.payload,
+                            updated_at = EXCLUDED.updated_at
+                        """,
+                        (
+                            str(entity["id"]),
+                            str(entity["entity_type"]),
+                            str(entity["normalized_name"]),
+                            entity.get("owner_id"),
+                            entity.get("project_id"),
+                            str(entity.get("review_status", "active")),
+                            json.dumps(entity, separators=(",", ":"), ensure_ascii=False),
+                            entity.get("updated_at"),
+                        ),
+                    )
+                for relationship in relationships:
+                    cur.execute(
+                        """
+                        INSERT INTO graph_relationships (
+                            id, subject, predicate, object, owner_id, project_id,
+                            review_status, superseded_by, conflict_group, payload, updated_at
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT(id) DO UPDATE SET
+                            subject = EXCLUDED.subject,
+                            predicate = EXCLUDED.predicate,
+                            object = EXCLUDED.object,
+                            owner_id = EXCLUDED.owner_id,
+                            project_id = EXCLUDED.project_id,
+                            review_status = EXCLUDED.review_status,
+                            superseded_by = EXCLUDED.superseded_by,
+                            conflict_group = EXCLUDED.conflict_group,
+                            payload = EXCLUDED.payload,
+                            updated_at = EXCLUDED.updated_at
+                        """,
+                        (
+                            str(relationship["id"]),
+                            str(relationship["subject"]),
+                            str(relationship["predicate"]),
+                            str(relationship["object"]),
+                            relationship.get("owner_id"),
+                            relationship.get("project_id"),
+                            str(relationship.get("review_status", "active")),
+                            relationship.get("superseded_by"),
+                            relationship.get("conflict_group"),
+                            json.dumps(relationship, separators=(",", ":"), ensure_ascii=False),
+                            relationship.get("updated_at"),
+                        ),
+                    )
+                self._supersede_conflicting_relationships(cur, relationships)
+
+    def search_graph_entities(
+        self,
+        *,
+        entity_type: str | None = None,
+        name: str | None = None,
+        owner_id: str | None = None,
+        project_id: str | None = None,
+        include_inactive: bool = False,
+    ) -> list[dict[str, Any]]:
+        clauses = ["1 = 1"]
+        params: list[Any] = []
+        if entity_type is not None:
+            clauses.append("entity_type = %s")
+            params.append(entity_type)
+        if name is not None:
+            clauses.append("normalized_name = %s")
+            params.append(" ".join(str(name).strip().casefold().split()))
+        if owner_id is not None:
+            clauses.append("owner_id = %s")
+            params.append(owner_id)
+        if project_id is not None:
+            clauses.append("project_id = %s")
+            params.append(project_id)
+        if not include_inactive:
+            clauses.append("review_status IN ('active', 'approved', 'needs_review')")
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"SELECT payload FROM graph_entities WHERE {' AND '.join(clauses)} ORDER BY updated_at DESC, id ASC",
+                    params,
+                )
+                rows = cur.fetchall()
+        return [self._json_payload(row[0]) for row in rows]
+
+    def search_graph_relationships(
+        self,
+        *,
+        subject: str | None = None,
+        predicate: str | None = None,
+        owner_id: str | None = None,
+        project_id: str | None = None,
+        include_superseded: bool = False,
+    ) -> list[dict[str, Any]]:
+        clauses = ["1 = 1"]
+        params: list[Any] = []
+        if subject is not None:
+            clauses.append("subject = %s")
+            params.append(subject)
+        if predicate is not None:
+            clauses.append("predicate = %s")
+            params.append(predicate)
+        if owner_id is not None:
+            clauses.append("owner_id = %s")
+            params.append(owner_id)
+        if project_id is not None:
+            clauses.append("project_id = %s")
+            params.append(project_id)
+        if not include_superseded:
+            clauses.append("superseded_by IS NULL")
+            clauses.append("review_status IN ('active', 'approved', 'needs_review')")
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"SELECT payload, superseded_by FROM graph_relationships WHERE {' AND '.join(clauses)} ORDER BY updated_at DESC, id ASC",
+                    params,
+                )
+                rows = cur.fetchall()
+        return [self._graph_relationship_from_row(row) for row in rows]
+
     def upsert_generated_summary(self, summary: dict[str, Any]) -> str:
         summary_id = str(summary["id"])
         payload = json.dumps(summary, separators=(",", ":"), ensure_ascii=False)
@@ -1122,6 +1299,45 @@ class PostgresMetadataStore:
                 fact.get("project_id"),
             ),
         )
+
+    def _supersede_conflicting_relationships(
+        self, cur: Any, relationships: list[dict[str, Any]]
+    ) -> None:
+        for relationship in relationships:
+            conflict_group = relationship.get("conflict_group")
+            if not conflict_group:
+                continue
+            cur.execute(
+                """
+                UPDATE graph_relationships
+                SET superseded_by = %s, updated_at = %s
+                WHERE conflict_group = %s
+                  AND id != %s
+                  AND superseded_by IS NULL
+                  AND object != %s
+                  AND COALESCE(owner_id, '') = COALESCE(%s, '')
+                  AND COALESCE(project_id, '') = COALESCE(%s, '')
+                """,
+                (
+                    str(relationship["id"]),
+                    relationship.get("updated_at"),
+                    str(conflict_group),
+                    str(relationship["id"]),
+                    str(relationship["object"]),
+                    relationship.get("owner_id"),
+                    relationship.get("project_id"),
+                ),
+            )
+
+    def _json_payload(self, value: Any) -> dict[str, Any]:
+        if isinstance(value, dict):
+            return value
+        return json.loads(str(value))
+
+    def _graph_relationship_from_row(self, row: Any) -> dict[str, Any]:
+        payload = self._json_payload(row[0])
+        payload["superseded_by"] = row[1]
+        return payload
 
     def _fact_row(self, fact: dict[str, Any]) -> tuple[Any, ...]:
         return (
