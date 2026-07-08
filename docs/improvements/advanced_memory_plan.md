@@ -184,21 +184,28 @@ Implementation note:
 
 ## Phase 6: Forgetting And Review Workflows
 
-- [ ] Define "forget" as admin-controlled hiding, archival, or purge semantics
+- [x] Define "forget" as admin-controlled hiding, archival, or purge semantics
       with audit records.
-- [ ] Keep default conversation data immutable unless an admin workflow
+- [x] Keep default conversation data immutable unless an admin workflow
       explicitly hides or purges it.
-- [ ] Add review queues for low-confidence facts, conflicting relationships,
+- [x] Add review queues for low-confidence facts, conflicting relationships,
       stale generated summaries, and candidate redundant memories.
-- [ ] Add duplicate and redundant memory consolidation workflows after summary
+- [x] Add duplicate and redundant memory consolidation workflows after summary
       provenance and fact supersession remain stable.
-- [ ] Add export-before-purge guidance for local-first users.
+- [x] Add export-before-purge guidance for local-first users.
 
 Acceptance criteria:
 
-- [ ] Users can reduce noisy memory without losing auditability by default.
-- [ ] Forgetting behavior is consistent across metadata and vector providers.
-- [ ] No agent-facing MCP tool can silently delete or rewrite memory.
+- [x] Users can reduce noisy memory without losing auditability by default.
+- [x] Forgetting behavior is consistent across metadata and vector providers.
+- [x] No agent-facing MCP tool can silently delete or rewrite memory.
+
+Implementation note:
+
+- Phase 6 adds typed review queue and forget-audit contracts. It does not expose
+  MCP/API mutation tools for deletion or rewriting. Purge audit records carry
+  `export_recommended: true` so local-first users get explicit export-before-purge
+  guidance in future admin workflows.
 
 ## Phase 7: Shared Memory And Agent-Specific Filters
 

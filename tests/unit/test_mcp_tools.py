@@ -329,6 +329,13 @@ async def test_mcp_fact_tools_return_profile_facts() -> None:
     assert ask["structured_evidence"]["facts"][0]["source_quality"] == "direct_user_statement"
 
 
+def test_mcp_does_not_expose_agent_facing_forget_or_delete_tools() -> None:
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
+    handlers = build_tool_handlers(agent)
+
+    assert all("forget" not in name and "delete" not in name and "purge" not in name for name in handlers)
+
+
 @pytest.mark.asyncio
 async def test_mcp_tool_handlers_accept_codex_style_payload() -> None:
     runtime = _runtime()

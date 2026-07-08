@@ -67,6 +67,19 @@ class SourceScope(StrEnum):
     IMPORTED = "imported"
 
 
+class ForgetMode(StrEnum):
+    HIDE = "hide"
+    ARCHIVE = "archive"
+    PURGE = "purge"
+
+
+class ReviewReason(StrEnum):
+    LOW_CONFIDENCE = "low_confidence"
+    CONFLICT = "conflict"
+    STALE_SUMMARY = "stale_summary"
+    REDUNDANT_MEMORY = "redundant_memory"
+
+
 class MemoryScoringSignals(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -85,6 +98,35 @@ class MemoryScoringWeights(BaseModel):
     importance_weight: float = Field(default=0.15, ge=0.0, le=1.0)
     pin_weight: float = Field(default=0.3, ge=0.0, le=1.0)
     access_weight: float = Field(default=0.05, ge=0.0, le=1.0)
+
+
+class ReviewQueueItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    reason: ReviewReason
+    record_type: DerivedMemoryType
+    record_id: str
+    priority: int = Field(default=2, ge=0, le=3)
+    provenance: list[SourceProvenance] = Field(min_length=1)
+    owner_id: str | None = None
+    project_id: str | None = None
+    created_at: str
+    status: ReviewStatus = ReviewStatus.NEEDS_REVIEW
+
+
+class ForgetAuditRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    target_type: DerivedMemoryType | str
+    target_id: str
+    mode: ForgetMode
+    admin_actor_id: str
+    reason: str = Field(min_length=1, max_length=512)
+    export_recommended: bool = True
+    created_at: str
+    provenance: list[SourceProvenance] = Field(min_length=1)
 
 
 class SourceProvenance(BaseModel):
@@ -176,6 +218,72 @@ def advanced_relevance_boost(
             "contradicted": signals.contradicted,
         },
     }
+
+
+def create_review_item(
+    *,
+    reason: ReviewReason,
+    record_type: DerivedMemoryType,
+    record_id: str,
+    provenance: list[SourceProvenance],
+    created_at: str,
+    owner_id: str | None = None,
+    project_id: str | None = None,
+    priority: int = 2,
+) -> ReviewQueueItem:
+    item_id = stable_derived_id(
+        "review",
+        {
+            "reason": reason.value,
+            "record_type": record_type.value,
+            "record_id": record_id,
+            "project_id": project_id,
+        },
+    )
+    return ReviewQueueItem(
+        id=item_id,
+        reason=reason,
+        record_type=record_type,
+        record_id=record_id,
+        priority=priority,
+        provenance=provenance,
+        owner_id=owner_id,
+        project_id=project_id,
+        created_at=created_at,
+    )
+
+
+def create_forget_audit_record(
+    *,
+    target_type: DerivedMemoryType | str,
+    target_id: str,
+    mode: ForgetMode,
+    admin_actor_id: str,
+    reason: str,
+    provenance: list[SourceProvenance],
+    created_at: str,
+) -> ForgetAuditRecord:
+    audit_id = stable_derived_id(
+        "forget",
+        {
+            "target_type": str(target_type),
+            "target_id": target_id,
+            "mode": mode.value,
+            "admin_actor_id": admin_actor_id,
+            "created_at": created_at,
+        },
+    )
+    return ForgetAuditRecord(
+        id=audit_id,
+        target_type=target_type,
+        target_id=target_id,
+        mode=mode,
+        admin_actor_id=admin_actor_id,
+        reason=reason,
+        provenance=provenance,
+        created_at=created_at,
+        export_recommended=mode == ForgetMode.PURGE,
+    )
 
 
 def _recency_score(value: str | None, *, now: datetime | None = None) -> float:
