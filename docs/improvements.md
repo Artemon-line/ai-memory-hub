@@ -13,6 +13,8 @@ Source date: `28-05-2026`
 7. [Edge Case Test Coverage Plan](./improvements/edge_case_test_coverage_plan.md)
 8. [Explicit Memory Save Intent Plan](./improvements/explicit_memory_save_intent_plan.md)
 9. [Vector Database Options](./improvements/vector_dbs.md)
+10. [Advanced Memory Plan](./improvements/advanced_memory_plan.md)
+11. [Graph Quality Gate Plan](./improvements/graph_quality_gate_plan.md)
 
 ## Notes
 

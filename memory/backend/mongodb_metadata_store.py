@@ -226,6 +226,10 @@ class MongoDBMetadataStore:
         return ProviderCapabilities(
             supports_tags=True,
             supports_metadata_indexing=True,
+            supports_graph_records=False,
+            supports_decay_fields=False,
+            supports_shared_scopes=True,
+            supports_plugin_metadata=False,
         )
 
     def health(self) -> dict[str, Any]:

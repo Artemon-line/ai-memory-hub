@@ -985,6 +985,10 @@ class SQLiteMetadataStore:
             supports_transactions=True,
             supports_tags=True,
             supports_metadata_indexing=True,
+            supports_graph_records=True,
+            supports_decay_fields=True,
+            supports_shared_scopes=True,
+            supports_plugin_metadata=True,
         )
 
     def health(self) -> dict[str, Any]:

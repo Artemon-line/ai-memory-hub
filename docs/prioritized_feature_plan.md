@@ -38,7 +38,7 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P3 | Release notes, image scanning, SBOM, and provenance | Implemented | `release_container_docs_plan.md` |
 | P3 | Topic/project summaries, digests, consolidation | Planned here | This doc and `roadmap.md` |
 | P3 | UI and developer experience | Planned here | This doc and `roadmap.md` |
-| P4 | Graph memory, decay, shared memory, plugins | Planned here | This doc and `roadmap.md` |
+| P4 | Graph memory, decay, shared memory, plugins | Planned | `improvements/advanced_memory_plan.md`, `roadmap.md` |
 | P4 | Optional encrypted cloud sync | Planned here | This doc and `roadmap.md` |
 
 ## P0: Token-Budgeted Ask And Token Chunking
@@ -577,11 +577,15 @@ Implementation sequence:
 
 ## P4: Advanced Memory
 
+Use `improvements/advanced_memory_plan.md` as the source of truth.
+
 Implementation sequence:
 
+- [ ] Define advanced-memory data contracts and provenance links.
 - [ ] Add entity extraction and relationship storage behind an optional module.
-- [ ] Add graph-aware retrieval only after entity quality is testable.
-- [ ] Add relevance decay and importance scoring.
+- [ ] Add graph-aware retrieval only after entity, relationship, provenance, and graph-retrieval quality gates pass.
+- [ ] Add relevance decay, importance scoring, pinning, and review workflows.
+- [ ] Add forgetting/consolidation workflows with admin-only mutation semantics.
 - [ ] Add shared memory spaces and agent-specific filters.
 - [ ] Add plugin extension points once importer/provider boundaries are stable.
 
