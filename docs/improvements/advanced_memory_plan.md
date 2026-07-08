@@ -234,43 +234,51 @@ Implementation note:
 
 ## Phase 8: Plugin Extension Points
 
-- [ ] Define plugin interfaces only after importer, provider, and enrichment
+- [x] Define plugin interfaces only after importer, provider, and enrichment
       boundaries are stable.
-- [ ] Start with custom capture/import adapters that emit the existing
+- [x] Start with custom capture/import adapters that emit the existing
       normalized conversation schema.
-- [ ] Add custom ingestion enrichers for entity, relationship, summary, or fact
+- [x] Add custom ingestion enrichers for entity, relationship, summary, or fact
       extraction with explicit provenance and versioning.
-- [ ] Add custom embedding providers through existing provider configuration
+- [x] Add custom embedding providers through existing provider configuration
       patterns.
-- [ ] Add custom vector or metadata stores only if they can satisfy the provider
+- [x] Add custom vector or metadata stores only if they can satisfy the provider
       contract tests.
-- [ ] Document plugin safety expectations for secrets, PII, payload logging, and
+- [x] Document plugin safety expectations for secrets, PII, payload logging, and
       deterministic test fixtures.
 
 Acceptance criteria:
 
-- [ ] Plugins cannot bypass validation, auth, ownership, or project boundaries.
-- [ ] Plugin output is testable and auditable.
-- [ ] Core users can ignore plugins entirely.
+- [x] Plugins cannot bypass validation, auth, ownership, or project boundaries.
+- [x] Plugin output is testable and auditable.
+- [x] Core users can ignore plugins entirely.
+
+Implementation note:
+
+- `memory.plugin_contracts` defines protocol-style extension points for
+  capture/import adapters, ingestion enrichers, and embedding-provider plugins.
+  Validators reject owner/project/auth fields, secrets, raw browser artifacts,
+  and malformed enrichment shapes before plugin output can reach core ingestion.
+  No dynamic plugin loading is enabled by default.
 
 ## Testing
 
-- [ ] Unit tests for entity and relationship model validation.
-- [ ] Entity and graph quality benchmark tests with threshold failure cases.
-- [ ] Metadata-store contract tests for graph, decay, review, and shared-scope
+- [x] Unit tests for entity and relationship model validation.
+- [x] Entity and graph quality benchmark tests with threshold failure cases.
+- [x] Metadata-store contract tests for graph, decay, review, and shared-scope
       fields.
-- [ ] Retrieval tests comparing baseline search with graph-aware retrieval.
-- [ ] Regression tests for fact and relationship conflicts.
-- [ ] Auth and project-isolation tests for shared memory and agent filters.
-- [ ] CLI/API/MCP shape tests for any advanced-memory public surface.
-- [ ] Representative-data evaluations for graph quality, decay ranking, and
+- [x] Retrieval tests comparing baseline search with graph-aware retrieval.
+- [x] Regression tests for fact and relationship conflicts.
+- [x] Auth and project-isolation tests for shared memory and agent filters.
+- [x] CLI/API/MCP shape tests for any advanced-memory public surface.
+- [x] Representative-data evaluations for graph quality, decay ranking, and
       consolidation behavior.
 
 ## Done When
 
-- [ ] Advanced memory records have clear provenance and confidence.
-- [ ] Graph-aware retrieval measurably helps relationship questions.
-- [ ] Decay and importance improve ranking without hiding relevant older memory.
-- [ ] Shared memory remains explicitly permissioned and private by default.
-- [ ] Plugin extension points are stable, documented, and covered by contract
+- [x] Advanced memory records have clear provenance and confidence.
+- [x] Graph-aware retrieval measurably helps relationship questions.
+- [x] Decay and importance improve ranking without hiding relevant older memory.
+- [x] Shared memory remains explicitly permissioned and private by default.
+- [x] Plugin extension points are stable, documented, and covered by contract
       tests.
