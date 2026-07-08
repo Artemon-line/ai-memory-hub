@@ -209,21 +209,28 @@ Implementation note:
 
 ## Phase 7: Shared Memory And Agent-Specific Filters
 
-- [ ] Build on existing users, projects, project memberships, and owner/project
+- [x] Build on existing users, projects, project memberships, and owner/project
       scoping.
-- [ ] Add explicit shared-memory policies for private, project, team, and
+- [x] Add explicit shared-memory policies for private, project, team, and
       imported memory scopes.
-- [ ] Add agent-specific filters for source, project, trusted capture path,
+- [x] Add agent-specific filters for source, project, trusted capture path,
       allowed derived-memory types, and sensitivity class.
-- [ ] Add tests for cross-user, cross-project, and cross-agent isolation.
-- [ ] Keep default behavior private unless a user or admin explicitly shares a
+- [x] Add tests for cross-user, cross-project, and cross-agent isolation.
+- [x] Keep default behavior private unless a user or admin explicitly shares a
       project or memory scope.
 
 Acceptance criteria:
 
-- [ ] Shared memory works only through explicit membership or policy.
-- [ ] Agents can narrow what memory classes they can read.
-- [ ] Isolation failures are covered by regression tests.
+- [x] Shared memory works only through explicit membership or policy.
+- [x] Agents can narrow what memory classes they can read.
+- [x] Isolation failures are covered by regression tests.
+
+Implementation note:
+
+- Phase 7 adds `SharedMemoryPolicy` and `AgentMemoryFilter` contracts plus a
+  helper for narrowing derived records by source, project, record type,
+  sensitivity, and trusted capture status. The default visibility remains
+  private.
 
 ## Phase 8: Plugin Extension Points
 

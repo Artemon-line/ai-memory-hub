@@ -80,6 +80,20 @@ class ReviewReason(StrEnum):
     REDUNDANT_MEMORY = "redundant_memory"
 
 
+class SensitivityClass(StrEnum):
+    PUBLIC = "public"
+    INTERNAL = "internal"
+    PRIVATE = "private"
+    SECRET = "secret"
+
+
+class SharedMemoryVisibility(StrEnum):
+    PRIVATE = "private"
+    PROJECT = "project"
+    TEAM = "team"
+    IMPORTED = "imported"
+
+
 class MemoryScoringSignals(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -127,6 +141,30 @@ class ForgetAuditRecord(BaseModel):
     export_recommended: bool = True
     created_at: str
     provenance: list[SourceProvenance] = Field(min_length=1)
+
+
+class SharedMemoryPolicy(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    visibility: SharedMemoryVisibility = SharedMemoryVisibility.PRIVATE
+    project_id: str | None = None
+    allowed_user_ids: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def require_project_for_shared_project(self) -> SharedMemoryPolicy:
+        if self.visibility == SharedMemoryVisibility.PROJECT and not self.project_id:
+            raise ValueError("project visibility requires project_id")
+        return self
+
+
+class AgentMemoryFilter(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    allowed_sources: list[str] = Field(default_factory=list)
+    allowed_project_ids: list[str] = Field(default_factory=list)
+    allowed_record_types: list[DerivedMemoryType] = Field(default_factory=list)
+    max_sensitivity: SensitivityClass = SensitivityClass.PRIVATE
+    trusted_capture_only: bool = False
 
 
 class SourceProvenance(BaseModel):
@@ -286,6 +324,12 @@ def create_forget_audit_record(
     )
 
 
+def filter_derived_records_for_agent(
+    records: list[dict[str, Any]], agent_filter: AgentMemoryFilter
+) -> list[dict[str, Any]]:
+    return [record for record in records if _record_matches_agent_filter(record, agent_filter)]
+
+
 def _recency_score(value: str | None, *, now: datetime | None = None) -> float:
     if not value:
         return 0.0
@@ -298,6 +342,37 @@ def _recency_score(value: str | None, *, now: datetime | None = None) -> float:
         parsed = parsed.replace(tzinfo=UTC)
     age_days = max((current.astimezone(UTC) - parsed.astimezone(UTC)).days, 0)
     return max(0.0, 1.0 - min(age_days, 365) / 365)
+
+
+def _record_matches_agent_filter(record: dict[str, Any], agent_filter: AgentMemoryFilter) -> bool:
+    metadata = record.get("metadata")
+    metadata = metadata if isinstance(metadata, dict) else {}
+    source = str(metadata.get("source") or record.get("source") or "")
+    if agent_filter.allowed_sources and source not in set(agent_filter.allowed_sources):
+        return False
+    project_id = record.get("project_id")
+    if agent_filter.allowed_project_ids and project_id not in set(agent_filter.allowed_project_ids):
+        return False
+    record_type = record.get("record_type")
+    allowed_types = {item.value for item in agent_filter.allowed_record_types}
+    if allowed_types and str(record_type) not in allowed_types:
+        return False
+    sensitivity = SensitivityClass(str(metadata.get("sensitivity", SensitivityClass.PRIVATE.value)))
+    if _sensitivity_rank(sensitivity) > _sensitivity_rank(agent_filter.max_sensitivity):
+        return False
+    if agent_filter.trusted_capture_only and metadata.get("trusted_capture") is not True:
+        return False
+    return True
+
+
+def _sensitivity_rank(value: SensitivityClass) -> int:
+    order = {
+        SensitivityClass.PUBLIC: 0,
+        SensitivityClass.INTERNAL: 1,
+        SensitivityClass.PRIVATE: 2,
+        SensitivityClass.SECRET: 3,
+    }
+    return order[value]
 
 
 class EntityRecord(DerivedMemoryRecord):

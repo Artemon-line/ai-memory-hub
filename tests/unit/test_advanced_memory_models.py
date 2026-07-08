@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from memory.advanced_memory import (
+    AgentMemoryFilter,
     DerivedMemoryRecord,
     DerivedMemoryType,
     ExtractorMetadata,
@@ -11,10 +12,14 @@ from memory.advanced_memory import (
     MemoryScoringWeights,
     ReviewReason,
     ReviewStatus,
+    SensitivityClass,
+    SharedMemoryPolicy,
+    SharedMemoryVisibility,
     SourceProvenance,
     advanced_relevance_boost,
     create_forget_audit_record,
     create_review_item,
+    filter_derived_records_for_agent,
     stable_derived_id,
 )
 
@@ -119,3 +124,41 @@ def test_forget_audit_rejects_empty_reason() -> None:
             provenance=[SourceProvenance(fact_id="fact-1")],
             created_at="2026-07-08T00:00:00Z",
         )
+
+
+def test_shared_memory_policy_defaults_private_and_requires_project_for_project_scope() -> None:
+    assert SharedMemoryPolicy().visibility == SharedMemoryVisibility.PRIVATE
+    with pytest.raises(ValueError, match="project_id"):
+        SharedMemoryPolicy(visibility=SharedMemoryVisibility.PROJECT)
+
+
+def test_agent_memory_filter_narrows_records() -> None:
+    records = [
+        {
+            "id": "entity:1",
+            "record_type": "entity",
+            "project_id": "project-a",
+            "metadata": {"source": "codex", "sensitivity": "private", "trusted_capture": True},
+        },
+        {
+            "id": "entity:2",
+            "record_type": "entity",
+            "project_id": "project-b",
+            "metadata": {"source": "opencode", "sensitivity": "secret", "trusted_capture": True},
+        },
+        {
+            "id": "rel:1",
+            "record_type": "relationship",
+            "project_id": "project-a",
+            "metadata": {"source": "codex", "sensitivity": "internal", "trusted_capture": False},
+        },
+    ]
+    agent_filter = AgentMemoryFilter(
+        allowed_sources=["codex"],
+        allowed_project_ids=["project-a"],
+        allowed_record_types=[DerivedMemoryType.ENTITY],
+        max_sensitivity=SensitivityClass.PRIVATE,
+        trusted_capture_only=True,
+    )
+
+    assert [record["id"] for record in filter_derived_records_for_agent(records, agent_filter)] == ["entity:1"]
