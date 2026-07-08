@@ -574,6 +574,9 @@ class RetrievalConfig(BaseModel):
     keyword_weight: float = Field(default=0.25, ge=0)
     metadata_weight: float = Field(default=0.15, ge=0)
     candidate_multiplier: int = Field(default=3, ge=1, le=20)
+    graph_enabled: bool = False
+    graph_quality_gate_passed: bool = False
+    graph_weight: float = Field(default=0.2, ge=0)
 
 
 class MemoryConfig(BaseModel):

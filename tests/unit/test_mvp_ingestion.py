@@ -99,6 +99,8 @@ def _configure_stubs(
     retrieval_keyword_weight: float = 0.25,
     retrieval_metadata_weight: float = 0.15,
     graph_enabled: bool = False,
+    retrieval_graph_enabled: bool = False,
+    retrieval_graph_quality_gate_passed: bool = False,
 ) -> tuple[StubMetadataStore, StubVectorStore]:
     metadata = StubMetadataStore()
     vectors = StubVectorStore()
@@ -117,6 +119,8 @@ def _configure_stubs(
             retrieval_keyword_weight=retrieval_keyword_weight,
             retrieval_metadata_weight=retrieval_metadata_weight,
             graph_enabled=graph_enabled,
+            retrieval_graph_enabled=retrieval_graph_enabled,
+            retrieval_graph_quality_gate_passed=retrieval_graph_quality_gate_passed,
         )
     )
     return metadata, vectors
@@ -705,6 +709,79 @@ def test_search_metadata_rerank_uses_auto_tags() -> None:
     search_result = mvp_ingestion.search(query="gpu", top_k=2)
 
     assert search_result["results"][0]["id"] == tagged["id"]
+
+
+def test_graph_retrieval_disabled_preserves_search_shape() -> None:
+    metadata, vectors = _configure_stubs(
+        graph_enabled=True,
+        retrieval_keyword_enabled=False,
+        retrieval_graph_enabled=False,
+    )
+    conversation = _valid_conversation()
+    conversation["messages"] = [{"role": "user", "text": "Velvet Lantern uses PGVector."}]
+    mvp_ingestion.ingest_messages(conversation)
+    vectors.rows = []
+
+    result = mvp_ingestion.search("Velvet Lantern PGVector", top_k=5)
+
+    assert result == {"status": "ok", "results": []}
+    assert metadata._graph_relationships
+
+
+def test_graph_retrieval_requires_quality_gate() -> None:
+    _configure_stubs(
+        graph_enabled=True,
+        retrieval_keyword_enabled=False,
+        retrieval_graph_enabled=True,
+        retrieval_graph_quality_gate_passed=False,
+    )
+    conversation = _valid_conversation()
+    conversation["messages"] = [{"role": "user", "text": "Velvet Lantern uses PGVector."}]
+    mvp_ingestion.ingest_messages(conversation)
+
+    result = mvp_ingestion.search("Velvet Lantern PGVector", top_k=5)
+
+    assert "diagnostics" not in result
+
+
+def test_graph_retrieval_expands_candidates_after_quality_gate() -> None:
+    metadata, vectors = _configure_stubs(
+        graph_enabled=True,
+        retrieval_keyword_enabled=False,
+        retrieval_graph_enabled=True,
+        retrieval_graph_quality_gate_passed=True,
+    )
+    conversation = _valid_conversation()
+    conversation["messages"] = [{"role": "user", "text": "Velvet Lantern uses PGVector."}]
+    mvp_ingestion.ingest_messages(conversation)
+    vectors.rows = []
+
+    result = mvp_ingestion.search("Velvet Lantern PGVector", top_k=5)
+
+    assert result["results"][0]["id"] == conversation["id"]
+    assert result["diagnostics"]["graph"]["candidate_count"] == 1
+    assert result["diagnostics"]["graph"]["influenced_ids"] == [conversation["id"]]
+    assert "_graph_relationship_id" not in result["results"][0]
+    assert metadata._graph_relationships
+
+
+def test_graph_backed_ask_keeps_direct_memory_answer_shape() -> None:
+    _configure_stubs(
+        graph_enabled=True,
+        retrieval_keyword_enabled=False,
+        retrieval_graph_enabled=True,
+        retrieval_graph_quality_gate_passed=True,
+    )
+    conversation = _valid_conversation()
+    conversation["messages"] = [{"role": "user", "text": "Velvet Lantern uses PGVector."}]
+    mvp_ingestion.ingest_messages(conversation)
+    mvp_ingestion._runtime().vector_store.rows = []
+
+    result = mvp_ingestion.ask("Which tool does Velvet Lantern use?", top_k=5)
+
+    assert result["answer_basis"] == "direct_memory"
+    assert result["provenance"]
+    assert result["confidence_reason"] == "Answer built from ranked retrieved conversation chunks."
 
 
 def test_search_filters_by_thread_id() -> None:

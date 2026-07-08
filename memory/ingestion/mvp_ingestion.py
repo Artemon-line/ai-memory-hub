@@ -143,6 +143,9 @@ class RuntimeDependencies:
     retrieval_candidate_multiplier: int = 3
     fact_extractor: Any | None = None
     graph_enabled: bool = False
+    retrieval_graph_enabled: bool = False
+    retrieval_graph_quality_gate_passed: bool = False
+    retrieval_graph_weight: float = 0.2
 
 
 _VECTOR_COMPATIBILITY_METADATA_PREFIX = "vector_index_compatibility:"
@@ -534,6 +537,9 @@ def build_runtime(
         retrieval_metadata_weight=cfg.retrieval.metadata_weight,
         retrieval_candidate_multiplier=cfg.retrieval.candidate_multiplier,
         graph_enabled=cfg.memory.graph_enabled,
+        retrieval_graph_enabled=cfg.retrieval.graph_enabled,
+        retrieval_graph_quality_gate_passed=cfg.retrieval.graph_quality_gate_passed,
+        retrieval_graph_weight=cfg.retrieval.graph_weight,
     )
 
 
@@ -2005,6 +2011,16 @@ def search(
             results.append(row)
             existing_keys.add(key)
 
+    graph_rows, graph_diagnostics = _graph_candidate_rows(
+        query=query,
+        owner_id=owner_id,
+        project_id=effective_project_id,
+        existing_keys=existing_keys,
+        score=runtime.retrieval_vector_score_threshold,
+        limit=top_k,
+    )
+    results.extend(graph_rows)
+
     ranked = _rank_retrieval_results(
         query,
         results,
@@ -2012,7 +2028,10 @@ def search(
         metadata_weight=runtime.retrieval_metadata_weight,
     )
     grouped = group_conversation_results(ranked)
-    return {"status": "ok", "results": _apply_result_mode(grouped, result_mode)[:top_k]}
+    payload: dict[str, Any] = {"status": "ok", "results": _apply_result_mode(grouped, result_mode)[:top_k]}
+    if graph_diagnostics["enabled"] and graph_diagnostics["candidate_count"]:
+        payload["diagnostics"] = {"graph": graph_diagnostics}
+    return payload
 
 
 def _validate_result_mode(result_mode: str) -> None:
@@ -2108,6 +2127,9 @@ def _strip_internal_ranking_fields(row: dict[str, Any]) -> dict[str, Any]:
     cleaned.pop("_original_rank", None)
     cleaned.pop("_ranking_score", None)
     cleaned.pop("_ranking_boost", None)
+    cleaned.pop("_graph_boost", None)
+    cleaned.pop("_graph_relationship_id", None)
+    cleaned.pop("_graph_predicate", None)
     return cleaned
 
 
@@ -2160,6 +2182,9 @@ def group_conversation_results(rows: list[dict[str, Any]]) -> list[dict[str, Any
         row.pop("_original_rank", None)
         row.pop("_ranking_score", None)
         row.pop("_ranking_boost", None)
+        row.pop("_graph_boost", None)
+        row.pop("_graph_relationship_id", None)
+        row.pop("_graph_predicate", None)
     return grouped
 
 
@@ -2210,6 +2235,77 @@ def _keyword_conversations(
     return matches[:limit]
 
 
+def _graph_candidate_rows(
+    *,
+    query: str,
+    owner_id: str | None,
+    project_id: str | None,
+    existing_keys: set[tuple[str, int, str]],
+    score: float,
+    limit: int,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    runtime = _runtime()
+    diagnostics = {
+        "enabled": bool(runtime.retrieval_graph_enabled),
+        "quality_gate_passed": bool(runtime.retrieval_graph_quality_gate_passed),
+        "candidate_count": 0,
+        "influenced_ids": [],
+    }
+    if not runtime.retrieval_graph_enabled or not runtime.retrieval_graph_quality_gate_passed:
+        return [], diagnostics
+    relationships = graph_relationship_search(owner_id=owner_id, project_id=project_id)["results"]
+    query_tokens = set(_query_tokens(query))
+    scored: list[tuple[int, dict[str, Any]]] = []
+    for relationship in relationships:
+        overlap = len(query_tokens & set(_query_tokens(_relationship_search_text(relationship))))
+        if overlap > 0:
+            scored.append((overlap, relationship))
+    scored.sort(key=lambda item: (-item[0], str(item[1].get("id", ""))))
+    rows: list[dict[str, Any]] = []
+    influenced_ids: list[str] = []
+    for _, relationship in scored[:limit]:
+        conversation_id = _relationship_conversation_id(relationship)
+        if not conversation_id:
+            continue
+        conversation = retrieve(conversation_id, owner_id=owner_id, project_id=project_id)
+        if not isinstance(conversation, dict):
+            continue
+        row = _keyword_result_row(conversation, score=score)
+        row["_graph_boost"] = float(runtime.retrieval_graph_weight)
+        row["_graph_relationship_id"] = relationship.get("id")
+        row["_graph_predicate"] = relationship.get("predicate")
+        key = (str(row["id"]), int(row["chunk_index"]), str(row["text"]))
+        if key in existing_keys:
+            continue
+        rows.append(row)
+        existing_keys.add(key)
+        influenced_ids.append(str(row["id"]))
+    diagnostics["candidate_count"] = len(rows)
+    diagnostics["influenced_ids"] = influenced_ids
+    return rows, diagnostics
+
+
+def _relationship_search_text(relationship: dict[str, Any]) -> str:
+    return " ".join(
+        [
+            str(relationship.get("subject", "")),
+            str(relationship.get("predicate", "")),
+            str(relationship.get("object", "")),
+        ]
+    )
+
+
+def _relationship_conversation_id(relationship: dict[str, Any]) -> str | None:
+    provenance = relationship.get("provenance")
+    if not isinstance(provenance, list) or not provenance:
+        return None
+    first = provenance[0]
+    if not isinstance(first, dict):
+        return None
+    conversation_id = first.get("conversation_id")
+    return str(conversation_id) if conversation_id else None
+
+
 def _passes_retrieval_threshold(*, query: str, row: dict[str, Any], threshold: float) -> bool:
     score = float(row.get("score", 0.0))
     if score <= threshold:
@@ -2232,6 +2328,7 @@ def _rank_retrieval_results(
         ranking_boost = (
             min(keyword_overlap, 3) * keyword_weight
             + min(metadata_overlap, 3) * metadata_weight
+            + float(row.get("_graph_boost", 0.0))
         )
         ranking_score -= ranking_boost
         enriched = dict(row)

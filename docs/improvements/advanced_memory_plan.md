@@ -127,23 +127,31 @@ Acceptance criteria:
 
 ## Phase 4: Graph-Aware Retrieval
 
-- [ ] Add graph lookup as a retrieval candidate source only after entity,
+- [x] Add graph lookup as a retrieval candidate source only after entity,
       relationship, provenance, and graph-retrieval quality gates pass.
-- [ ] Use graph matches to expand or rerank candidate memories, not to replace
+- [x] Use graph matches to expand or rerank candidate memories, not to replace
       vector, keyword, fact, or summary retrieval.
-- [ ] Add result diagnostics showing when graph expansion influenced ranking.
-- [ ] Add graph-aware `memory_ask` answer bases only if they preserve the current
+- [x] Add result diagnostics showing when graph expansion influenced ranking.
+- [x] Add graph-aware `memory_ask` answer bases only if they preserve the current
       confidence and provenance shape.
-- [ ] Add representative retrieval evaluation cases for graph questions such as
+- [x] Add representative retrieval evaluation cases for graph questions such as
       "Who works on this project?", "Which tools are tied to this decision?",
       and "What changed about this preference?"
 
 Acceptance criteria:
 
-- [ ] Graph retrieval improves targeted relationship questions without reducing
+- [x] Graph retrieval improves targeted relationship questions without reducing
       precision for ordinary semantic search.
-- [ ] Graph-expanded answers include compact provenance and confidence reasons.
-- [ ] Graph features can be disabled without changing non-graph result shapes.
+- [x] Graph-expanded answers include compact provenance and confidence reasons.
+- [x] Graph features can be disabled without changing non-graph result shapes.
+
+Implementation note:
+
+- Graph retrieval is gated by `retrieval.graph_enabled` and
+  `retrieval.graph_quality_gate_passed`. When active, graph relationships add
+  normal conversation candidates and `memory_search` returns graph diagnostics.
+  `memory_ask` keeps the current `direct_memory` answer basis until a separate
+  graph-specific answer contract is warranted.
 
 ## Phase 5: Relevance Decay, Importance, And Pinning
 
