@@ -12,7 +12,12 @@ from pathlib import Path
 from typing import Any, Iterator, Protocol, Sequence
 from uuid import uuid4
 
-from memory.advanced_memory import extract_memory_graph
+from memory.advanced_memory import (
+    MemoryScoringSignals,
+    MemoryScoringWeights,
+    advanced_relevance_boost,
+    extract_memory_graph,
+)
 from memory.backend.dry_run import DryRunMetadataStore, DryRunVectorStore
 from memory.backend.errors import SchemaVersionError, VectorDimensionError
 from memory.backend.log_safety import redact_secrets
@@ -146,6 +151,11 @@ class RuntimeDependencies:
     retrieval_graph_enabled: bool = False
     retrieval_graph_quality_gate_passed: bool = False
     retrieval_graph_weight: float = 0.2
+    retrieval_advanced_scoring_enabled: bool = False
+    retrieval_recency_weight: float = 0.05
+    retrieval_importance_weight: float = 0.15
+    retrieval_pin_weight: float = 0.3
+    retrieval_access_weight: float = 0.05
 
 
 _VECTOR_COMPATIBILITY_METADATA_PREFIX = "vector_index_compatibility:"
@@ -540,6 +550,11 @@ def build_runtime(
         retrieval_graph_enabled=cfg.retrieval.graph_enabled,
         retrieval_graph_quality_gate_passed=cfg.retrieval.graph_quality_gate_passed,
         retrieval_graph_weight=cfg.retrieval.graph_weight,
+        retrieval_advanced_scoring_enabled=cfg.retrieval.advanced_scoring_enabled,
+        retrieval_recency_weight=cfg.retrieval.recency_weight,
+        retrieval_importance_weight=cfg.retrieval.importance_weight,
+        retrieval_pin_weight=cfg.retrieval.pin_weight,
+        retrieval_access_weight=cfg.retrieval.access_weight,
     )
 
 
@@ -2325,13 +2340,17 @@ def _rank_retrieval_results(
         keyword_overlap = _keyword_overlap(query, row)
         metadata_overlap = _metadata_overlap(query, row.get("conversation"))
         ranking_score = float(row.get("score", 0.0))
+        advanced_boost = _advanced_scoring_boost(row)
         ranking_boost = (
             min(keyword_overlap, 3) * keyword_weight
             + min(metadata_overlap, 3) * metadata_weight
             + float(row.get("_graph_boost", 0.0))
+            + advanced_boost
         )
         ranking_score -= ranking_boost
         enriched = dict(row)
+        if advanced_boost:
+            enriched["score"] = max(0.0, float(enriched.get("score", 0.0)) - advanced_boost)
         enriched["_ranking_score"] = max(0.0, ranking_score)
         enriched["_ranking_boost"] = ranking_boost
         enriched["_original_rank"] = index
@@ -2345,6 +2364,36 @@ def _rank_retrieval_results(
             int(row["_original_rank"]),
         ),
     )
+
+
+def _advanced_scoring_boost(row: dict[str, Any]) -> float:
+    runtime = _runtime()
+    if not runtime.retrieval_advanced_scoring_enabled:
+        return 0.0
+    conversation = row.get("conversation")
+    if not isinstance(conversation, dict):
+        return 0.0
+    metadata = conversation.get("metadata")
+    if not isinstance(metadata, dict):
+        return 0.0
+    raw = metadata.get("advanced_memory")
+    if not isinstance(raw, dict):
+        return 0.0
+    try:
+        signals = MemoryScoringSignals.model_validate(raw)
+    except ValueError:
+        return 0.0
+    scoring = advanced_relevance_boost(
+        signals,
+        MemoryScoringWeights(
+            recency_weight=runtime.retrieval_recency_weight,
+            importance_weight=runtime.retrieval_importance_weight,
+            pin_weight=runtime.retrieval_pin_weight,
+            access_weight=runtime.retrieval_access_weight,
+        ),
+    )
+    row["ranking_explanation"] = {"advanced_memory": scoring["signals"]}
+    return float(scoring["boost"])
 
 
 def _keyword_result_row(conversation: dict[str, Any], *, score: float) -> dict[str, Any]:

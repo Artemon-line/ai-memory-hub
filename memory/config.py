@@ -577,6 +577,11 @@ class RetrievalConfig(BaseModel):
     graph_enabled: bool = False
     graph_quality_gate_passed: bool = False
     graph_weight: float = Field(default=0.2, ge=0)
+    advanced_scoring_enabled: bool = False
+    recency_weight: float = Field(default=0.05, ge=0, le=1)
+    importance_weight: float = Field(default=0.15, ge=0, le=1)
+    pin_weight: float = Field(default=0.3, ge=0, le=1)
+    access_weight: float = Field(default=0.05, ge=0, le=1)
 
 
 class MemoryConfig(BaseModel):

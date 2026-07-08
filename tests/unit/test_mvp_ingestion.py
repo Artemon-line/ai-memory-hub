@@ -101,6 +101,7 @@ def _configure_stubs(
     graph_enabled: bool = False,
     retrieval_graph_enabled: bool = False,
     retrieval_graph_quality_gate_passed: bool = False,
+    retrieval_advanced_scoring_enabled: bool = False,
 ) -> tuple[StubMetadataStore, StubVectorStore]:
     metadata = StubMetadataStore()
     vectors = StubVectorStore()
@@ -121,6 +122,7 @@ def _configure_stubs(
             graph_enabled=graph_enabled,
             retrieval_graph_enabled=retrieval_graph_enabled,
             retrieval_graph_quality_gate_passed=retrieval_graph_quality_gate_passed,
+            retrieval_advanced_scoring_enabled=retrieval_advanced_scoring_enabled,
         )
     )
     return metadata, vectors
@@ -782,6 +784,49 @@ def test_graph_backed_ask_keeps_direct_memory_answer_shape() -> None:
     assert result["answer_basis"] == "direct_memory"
     assert result["provenance"]
     assert result["confidence_reason"] == "Answer built from ranked retrieved conversation chunks."
+
+
+def test_advanced_scoring_can_rerank_with_bounded_explanation() -> None:
+    metadata, vectors = _configure_stubs(
+        retrieval_metadata_weight=0.0,
+        retrieval_keyword_weight=0.0,
+        retrieval_advanced_scoring_enabled=True,
+    )
+    pinned = _valid_conversation()
+    pinned["id"] = "11111111-1111-4111-8111-111111111111"
+    pinned["messages"] = [{"role": "user", "text": "gpu setup note"}]
+    pinned["metadata"]["advanced_memory"] = {"pinned": True, "importance": 1.0, "access_count": 4}
+    ordinary = _valid_conversation()
+    ordinary["id"] = "22222222-2222-4222-8222-222222222222"
+    ordinary["messages"] = [{"role": "user", "text": "gpu setup note"}]
+    metadata.insert(pinned)
+    metadata.insert(ordinary)
+    vectors.search = lambda query_vector, top_k=5: [  # type: ignore[method-assign]
+        {"memory_id": ordinary["id"], "chunk_index": 0, "role": "user", "text": "gpu setup note", "score": 0.2},
+        {"memory_id": pinned["id"], "chunk_index": 0, "role": "user", "text": "gpu setup note", "score": 0.21},
+    ][:top_k]
+
+    result = mvp_ingestion.search("gpu setup", top_k=2)
+
+    assert result["results"][0]["id"] == pinned["id"]
+    explanation = result["results"][0]["ranking_explanation"]["advanced_memory"]
+    assert explanation["pinned"] is True
+    assert explanation["importance"] == 1.0
+
+
+def test_invalid_advanced_scoring_metadata_does_not_break_search() -> None:
+    metadata, vectors = _configure_stubs(retrieval_advanced_scoring_enabled=True)
+    conversation = _valid_conversation()
+    conversation["metadata"]["advanced_memory"] = {"raw_payload": "ignored"}
+    metadata.insert(conversation)
+    vectors.rows = [
+        {"memory_id": conversation["id"], "chunk_index": 0, "role": "user", "text": "gpu note", "score": 0.1}
+    ]
+
+    result = mvp_ingestion.search("gpu", top_k=1)
+
+    assert result["results"][0]["id"] == conversation["id"]
+    assert "ranking_explanation" not in result["results"][0]
 
 
 def test_search_filters_by_thread_id() -> None:

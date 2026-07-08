@@ -111,6 +111,13 @@ retrieval:
   graph_enabled: false
   graph_quality_gate_passed: false
   graph_weight: 0.2
+  # Optional bounded metadata scoring. Signals are read from conversation
+  # metadata.advanced_memory and never mutate raw memory.
+  advanced_scoring_enabled: false
+  recency_weight: 0.05
+  importance_weight: 0.15
+  pin_weight: 0.3
+  access_weight: 0.05
 
 memory:
   # permissive keeps existing clients compatible.

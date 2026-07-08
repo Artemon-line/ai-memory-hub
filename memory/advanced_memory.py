@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any, Iterable
 
@@ -66,6 +67,26 @@ class SourceScope(StrEnum):
     IMPORTED = "imported"
 
 
+class MemoryScoringSignals(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    pinned: bool = False
+    importance: float = Field(default=0.0, ge=0.0, le=1.0)
+    access_count: int = Field(default=0, ge=0)
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+    updated_at: str | None = None
+    contradicted: bool = False
+
+
+class MemoryScoringWeights(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    recency_weight: float = Field(default=0.05, ge=0.0, le=1.0)
+    importance_weight: float = Field(default=0.15, ge=0.0, le=1.0)
+    pin_weight: float = Field(default=0.3, ge=0.0, le=1.0)
+    access_weight: float = Field(default=0.05, ge=0.0, le=1.0)
+
+
 class SourceProvenance(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -127,6 +148,48 @@ def stable_derived_id(prefix: str, payload: dict[str, Any]) -> str:
     material = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     digest = hashlib.sha256(material.encode("utf-8")).hexdigest()[:32]
     return f"{prefix}:{digest}"
+
+
+def advanced_relevance_boost(
+    signals: MemoryScoringSignals, weights: MemoryScoringWeights, *, now: datetime | None = None
+) -> dict[str, Any]:
+    recency = _recency_score(signals.updated_at, now=now)
+    access = min(signals.access_count, 20) / 20
+    contradiction_penalty = 0.15 if signals.contradicted else 0.0
+    boost = (
+        (weights.pin_weight if signals.pinned else 0.0)
+        + signals.importance * weights.importance_weight
+        + recency * weights.recency_weight
+        + access * weights.access_weight
+        + signals.confidence * 0.03
+        - contradiction_penalty
+    )
+    bounded = max(-0.2, min(0.6, boost))
+    return {
+        "boost": bounded,
+        "signals": {
+            "pinned": signals.pinned,
+            "importance": signals.importance,
+            "recency": recency,
+            "access": access,
+            "confidence": signals.confidence,
+            "contradicted": signals.contradicted,
+        },
+    }
+
+
+def _recency_score(value: str | None, *, now: datetime | None = None) -> float:
+    if not value:
+        return 0.0
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return 0.0
+    current = now or datetime.now(UTC)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    age_days = max((current.astimezone(UTC) - parsed.astimezone(UTC)).days, 0)
+    return max(0.0, 1.0 - min(age_days, 365) / 365)
 
 
 class EntityRecord(DerivedMemoryRecord):

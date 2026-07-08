@@ -155,24 +155,32 @@ Implementation note:
 
 ## Phase 5: Relevance Decay, Importance, And Pinning
 
-- [ ] Define scoring inputs: recency, access frequency, explicit pinning,
+- [x] Define scoring inputs: recency, access frequency, explicit pinning,
       correction status, confidence, source quality, project activity, and user
       feedback.
-- [ ] Store decay and importance signals as metadata, not destructive changes to
+- [x] Store decay and importance signals as metadata, not destructive changes to
       raw memories.
-- [ ] Add pinned memory behavior for facts, conversations, summaries, and graph
+- [x] Add pinned memory behavior for facts, conversations, summaries, and graph
       relationships that should resist decay.
-- [ ] Add stale-memory diagnostics for facts and relationships that are old,
+- [x] Add stale-memory diagnostics for facts and relationships that are old,
       low-confidence, or contradicted.
-- [ ] Add tests proving decay changes ranking only within bounded, explainable
+- [x] Add tests proving decay changes ranking only within bounded, explainable
       limits.
 
 Acceptance criteria:
 
-- [ ] Recent or important records can rank higher without hiding highly relevant
+- [x] Recent or important records can rank higher without hiding highly relevant
       older evidence.
-- [ ] Pinned records remain discoverable.
-- [ ] Scoring explanations disclose decay and importance effects.
+- [x] Pinned records remain discoverable.
+- [x] Scoring explanations disclose decay and importance effects.
+
+Implementation note:
+
+- `retrieval.advanced_scoring_enabled` defaults to `false`. When enabled, the
+  ranker reads bounded signals from `metadata.advanced_memory`, including
+  `pinned`, `importance`, `access_count`, `confidence`, `updated_at`, and
+  `contradicted`. The scoring helper caps boosts so metadata can nudge ranking
+  without replacing lexical/vector relevance.
 
 ## Phase 6: Forgetting And Review Workflows
 
