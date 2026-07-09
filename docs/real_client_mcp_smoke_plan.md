@@ -2,8 +2,8 @@
 
 ## Goal
 
-Run a weekly scheduled smoke lane that launches real agent CLIs against
-ai-memory-hub MCP and verifies they can complete a minimal memory workflow.
+Run a CI smoke lane that launches real agent CLIs against ai-memory-hub MCP and
+verifies they can complete a minimal memory workflow.
 
 This is separate from default contract smoke tests. Contract tests prove MCP
 protocol and payload compatibility quickly in PR CI. Real-client tests prove
@@ -15,25 +15,30 @@ memory behavior as those clients change over time.
 P0.
 
 MCP is the primary agent integration path. Real-client breakage should be found
-regularly, but these tests should not block ordinary PRs until they are stable,
-credential-free, and cheap to run.
+regularly. The workflow now runs on pull requests and pushes, while individual
+client slots remain skip-safe when a command template or executable is not
+available.
 
 ## CI Policy
 
 - [x] Add a separate workflow for real-client MCP smoke tests.
 - [x] Run it weekly on a scheduled trigger.
+- [x] Run it on pull requests and pushes to `main`.
 - [x] Allow manual `workflow_dispatch` runs for debugging and release checks.
-- [x] Keep it out of default PR gating at first.
+- [x] Promote the workflow into default PR gating.
 - [x] Capture ai-memory-hub logs, client stdout, client stderr, and gateway logs
   as artifacts on failure.
 - [x] Skip unavailable clients with explicit diagnostics during rollout.
-- [ ] Promote individual client jobs to stricter gating only after they are
-  stable and do not require vendor credentials.
+- [ ] Promote individual client slots from skip-safe to strict only after they
+  are stable and do not require vendor credentials.
 
 Suggested schedule:
 
 ```yaml
 on:
+  pull_request:
+  push:
+    branches: [main]
   schedule:
     - cron: "17 4 * * 1"
   workflow_dispatch:
@@ -151,7 +156,7 @@ Each client should receive a prompt equivalent to:
 
 ```text
 Use the ai-memory-hub MCP server. Validate and insert a short conversation about
-the weekly real-client smoke test. Then search for it, retrieve it by ID, and
+the real-client smoke test. Then search for it, retrieve it by ID, and
 ask what the conversation was about. Report the inserted ID.
 ```
 
@@ -160,7 +165,7 @@ trusting client stdout.
 
 ## Acceptance Criteria
 
-- [x] Weekly scheduled workflow exists and can be manually dispatched.
+- [x] PR/push/weekly scheduled workflow exists and can be manually dispatched.
 - [x] ai-memory-hub starts with MCP enabled in the workflow.
 - [x] Local deterministic gateway starts in the workflow.
 - [x] At least Claude Code runs end-to-end or skips with a clear unavailable
@@ -174,17 +179,18 @@ trusting client stdout.
 
 ## Done When
 
-- [x] Claude Code and Copilot CLI run weekly through the scheduled lane.
+- [x] Claude Code and Copilot CLI run through the PR/push/scheduled lane when
+  their command templates and executables are available.
 - [x] Codex CLI, opencode, and Gemini have documented status: implemented,
   skipped with reason, or blocked by missing reliable headless/local-provider
   support.
 - [x] The plan documents the command/config used for every implemented client.
-- [x] Default PR CI remains focused on deterministic contract tests.
+- [x] Default PR CI includes the skip-safe real-client smoke harness.
 
 ## Implemented Harness
 
-The weekly lane is implemented by `.github/workflows/real-client-mcp-smoke.yml`
-and `memory.tools.real_client_smoke`.
+The CI lane is implemented by `.github/workflows/real-client-mcp-smoke.yml` and
+`memory.tools.real_client_smoke`.
 
 Default behavior:
 
@@ -212,10 +218,10 @@ The harness also exports `AMH_MCP_URL`, `AMH_SMOKE_PROMPT`, and
 
 Current client status:
 
-- Claude Code: weekly slot implemented; runs when
+- Claude Code: CI slot implemented; runs when
   `AMH_REAL_CLIENT_CLAUDE_COMMAND` and the `claude` executable are available,
   otherwise skips explicitly.
-- Copilot CLI: weekly slot implemented; runs when
+- Copilot CLI: CI slot implemented; runs when
   `AMH_REAL_CLIENT_COPILOT_COMMAND` and the `copilot` executable are available,
   otherwise skips explicitly.
 - Codex CLI: temporary `CODEX_HOME` config generation is implemented; the slot

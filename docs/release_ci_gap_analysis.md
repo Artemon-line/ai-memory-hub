@@ -21,11 +21,25 @@ manual because they depend on external systems outside the repository.
     high/critical Trivy findings.
   - Pulls/runs the just-pushed image by digest and checks `/ready` before the
     publish summary is treated as successful.
+  - Updates existing GitHub release notes with the published image tags and
+    digest after the published-image smoke test passes.
+- Real-client MCP smoke workflow:
+  - Runs on pull requests, pushes to `main`, weekly schedule, and manual
+    dispatch.
+  - Uploads real-client smoke artifacts for every run.
 - Root `Containerfile` tests:
   - Ensure the default image remains the SQLite/LanceDB quickstart image and
     does not silently regain optional provider extras.
   - Ensure every repository-owned container image pins the `uv` installer
     version used during image builds.
+- GitHub Actions workflow refs:
+  - Third-party actions are pinned to immutable commit SHAs with version
+    comments for update readability.
+- E2E Ollama workflow:
+  - Uses a pinned `ollama/ollama:0.22.1` image digest instead of the upstream
+    installer script.
+- Conversation schema validation:
+  - Enforces declared JSON Schema formats such as `uuid` and `date-time`.
 
 ## Already Covered
 
@@ -43,7 +57,7 @@ manual because they depend on external systems outside the repository.
 - CycloneDX SBOM generation.
 - Dependency review in warning mode.
 - GitHub Pages strict docs build and deployment.
-- Weekly/manual real-client MCP smoke harness with artifact upload.
+- PR/push/weekly/manual real-client MCP smoke harness with artifact upload.
 
 ## Still Manual Or Repository-Setting Driven
 
@@ -55,21 +69,11 @@ manual because they depend on external systems outside the repository.
 - Enabling GitHub Pages with source `GitHub Actions`.
 - Enabling repository security features such as Dependabot alerts, secret
   scanning, push protection, and private vulnerability reporting where available.
-- Verifying real Codex/opencode/Claude/Copilot/Gemini client behavior on a
-  developer machine until stable client binaries/configs are available in CI.
 - Posting release announcements and pinning launch material.
 
 ## Recommended Next Automations
 
-- Add Dependabot version updates for GitHub Actions and Python dependencies once
-  dependency churn is acceptable.
 - Promote dependency review from warning mode to blocking after the first
   release establishes a vulnerability triage rhythm.
-- Configure real-client smoke command templates in CI and promote the clients
-  that are stable for three consecutive scheduled runs.
-- Add a release-note check that verifies the Docker digest from the publish
-  workflow is copied into the GitHub release notes before stable promotion.
-- Pin third-party GitHub Actions to commit SHAs after the workflow set stops
-  changing daily.
 - Pin Docker base images and provider service images by digest once the release
   image cadence is settled.

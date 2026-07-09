@@ -17,7 +17,7 @@ on:
         type: boolean
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
   attestations: write
   artifact-metadata: write
@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - name: Checkout requested release tag
         if: github.event_name == 'workflow_dispatch'
@@ -47,7 +47,7 @@ jobs:
           git checkout --detach "refs/tags/${RELEASE_TAG}"
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.14"
 
@@ -70,13 +70,13 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
 
       - name: Build local image for release scan
         run: docker build --file Containerfile --tag ai-memory-hub:release-scan .
 
       - name: Scan release image before push
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         with:
           image-ref: ai-memory-hub:release-scan
           format: table
@@ -85,7 +85,7 @@ jobs:
           exit-code: "1"
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -116,7 +116,7 @@ jobs:
 
       - name: Build and push image
         id: build
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
           file: Containerfile
@@ -146,6 +146,50 @@ jobs:
           docker rm -f ai-memory-hub-published-smoke
           exit 1
 
+      - name: Update release notes with published image digest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          IMAGE: ${{ steps.docker-tags.outputs.image }}
+          TAGS: ${{ steps.docker-tags.outputs.tags }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          if ! gh release view "$RELEASE_TAG" --json body --jq .body > release-notes.md; then
+            echo "No GitHub release found for $RELEASE_TAG; skipping release-note digest update."
+            exit 0
+          fi
+
+          python <<'PY'
+          import os
+          from pathlib import Path
+
+          notes_path = Path("release-notes.md")
+          body = notes_path.read_text(encoding="utf-8")
+          start = "<!-- ai-memory-hub-docker-digest:start -->"
+          end = "<!-- ai-memory-hub-docker-digest:end -->"
+          tags = "\n".join(
+              f"- `{tag}`" for tag in os.environ["TAGS"].splitlines() if tag.strip()
+          )
+          block = (
+              f"{start}\n"
+              "## Docker Image\n\n"
+              f"Image: `{os.environ['IMAGE']}`\n\n"
+              "Tags:\n"
+              f"{tags}\n\n"
+              f"Digest: `{os.environ['DIGEST']}`\n"
+              f"{end}"
+          )
+          if start in body and end in body:
+              prefix, rest = body.split(start, 1)
+              _, suffix = rest.split(end, 1)
+              body = prefix.rstrip() + "\n\n" + block + suffix
+          else:
+              body = body.rstrip() + "\n\n" + block + "\n"
+          notes_path.write_text(body, encoding="utf-8")
+          PY
+
+          gh release edit "$RELEASE_TAG" --notes-file release-notes.md
+
       - name: Publish summary
         env:
           IMAGE: ${{ steps.docker-tags.outputs.image }}
@@ -162,11 +206,11 @@ jobs:
             echo
             echo "Digest: \`$DIGEST\`"
             echo
-            echo "Add this digest to the GitHub release notes before promotion."
+            echo "The GitHub release notes were updated with this digest when the release exists."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Attest published image provenance
-        uses: actions/attest@v4
+        uses: actions/attest@f6bf1532d7d6793fce74eac584813a8eee607999 # v4
         with:
           subject-name: ${{ steps.docker-tags.outputs.image }}
           subject-digest: ${{ steps.build.outputs.digest }}

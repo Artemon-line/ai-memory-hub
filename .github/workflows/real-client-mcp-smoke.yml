@@ -1,6 +1,9 @@
 name: real-client-mcp-smoke
 
 on:
+  pull_request:
+  push:
+    branches: [main]
   schedule:
     - cron: "17 4 * * 1"
   workflow_dispatch:
@@ -10,21 +13,21 @@ permissions:
 
 jobs:
   real-client-mcp-smoke:
-    name: Weekly Real-Client MCP Smoke
+    name: Real-Client MCP Smoke
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.14'
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
         with:
           enable-cache: true
 
@@ -40,7 +43,7 @@ jobs:
 
       - name: Upload real-client smoke artifacts
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: real-client-mcp-smoke
           path: artifacts/real-client-mcp-smoke

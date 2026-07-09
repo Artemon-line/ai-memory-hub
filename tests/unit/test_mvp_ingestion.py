@@ -500,6 +500,20 @@ def test_ingest_messages_rejects_invalid_timestamp_before_storage() -> None:
         mvp_ingestion.ingest_messages(conversation)
 
 
+def test_validate_conversation_enforces_schema_formats() -> None:
+    conversation = _valid_conversation()
+    normalized = mvp_ingestion.normalize_conversation_json(conversation)
+
+    normalized["id"] = "not-a-uuid"
+    with pytest.raises(jsonschema.ValidationError, match="is not a 'uuid'"):
+        ingestion_validate.validate_conversation(normalized)
+
+    normalized = mvp_ingestion.normalize_conversation_json(conversation)
+    normalized["metadata"]["updated_at"] = "not-a-date"
+    with pytest.raises(jsonschema.ValidationError, match="is not a 'date-time'"):
+        ingestion_validate.validate_conversation(normalized)
+
+
 def test_ingest_messages_rejects_non_string_source() -> None:
     _configure_stubs()
     conversation = _valid_conversation()

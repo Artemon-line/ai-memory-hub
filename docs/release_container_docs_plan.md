@@ -225,6 +225,8 @@ Publishing acceptance criteria:
       written.
 - [x] Manual Docker publish retries check out the requested release tag before
       building.
+- [x] Existing GitHub release notes are updated with image tags and digest after
+      the published-image smoke test passes.
 
 ## 5) GitHub Pages Documentation
 
@@ -304,6 +306,7 @@ Status: `IMPLEMENTED`
   - [ ] generated notes from conventional commits
 - [x] Add release template/checklist.
 - [x] Include Docker image tags and digest in release notes.
+- [x] Automate release-note digest insertion in the Docker publish workflow.
 - [x] Include docs URL in release notes.
 - [ ] Include upgrade notes when config, storage schema, or container behavior changes.
 - [ ] Call out whether the release updates `latest`.

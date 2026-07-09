@@ -28,7 +28,7 @@ debugging failures or preparing an offline release candidate.
 - [ ] Required status checks include the main CI jobs, docs build, and Bruno
       integration when relevant files change.
 - [ ] Required status checks include `Release Readiness` and `CodeQL Analysis`.
-- [ ] Real-client MCP smoke remains manual/scheduled and non-required.
+- [ ] Required status checks include `Real-Client MCP Smoke`.
 - [ ] Repository description and topics are reviewed.
 
 ## Release Candidate Drill
@@ -44,12 +44,14 @@ debugging failures or preparing an offline release candidate.
 - [ ] Pull and run the image on a clean machine or clean container runtime.
 - [ ] Confirm the Docker publish workflow smoke-tested the pushed image by
       digest.
+- [ ] Confirm the Docker publish workflow updated the release notes digest
+      block.
 - [ ] Run the README quick start from a clean checkout.
 
 ## Stable Release
 
 - [ ] Publish `v0.1.0`.
 - [ ] Confirm Docker version tags and `latest` were pushed.
-- [ ] Add the image digest to the release notes.
+- [ ] Confirm the image digest is present in the release notes.
 - [ ] Confirm the docs site link works.
 - [ ] Publish the launch/promotion note.

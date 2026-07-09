@@ -52,8 +52,8 @@ Required policy:
 - Require branches to be up to date before merging once check noise is stable.
 - Do not require signed commits for `v0.1.0` unless maintainer signing is already
   configured locally.
-- Keep the weekly real-client MCP smoke workflow manual/scheduled and
-  non-required until it has repeated stable runs.
+- Require the real-client MCP smoke workflow now that it runs on pull requests
+  and skips unavailable clients with explicit diagnostics.
 
 Required status checks for `main`:
 
@@ -70,6 +70,7 @@ Bruno API/MCP Integration
 Dependency Review
 Image Scan and SBOM
 CodeQL Analysis
+Real-Client MCP Smoke
 ```
 
 The Bruno check can be configured as required once GitHub path-based rulesets are
@@ -77,9 +78,8 @@ available for the repository. Until then, it is acceptable to require it for all
 PRs if runtime is acceptable, or keep it as a visible non-required check and
 manually enforce it for API/MCP changes.
 
-Keep provider live-matrix jobs and weekly real-client MCP smoke visible but
-non-required until their external service/client availability is stable enough
-for every PR.
+Keep provider live-matrix jobs visible but non-required until their external
+service availability is stable enough for every PR.
 
 ## Docker Hub Secrets
 

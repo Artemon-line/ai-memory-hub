@@ -38,6 +38,8 @@ Already in place:
 - [x] `CodeQL Analysis` workflow for Python security scanning.
 - [x] `Dependency Review` workflow for dependency vulnerability reporting.
 - [x] `Image Scan and SBOM` workflow for Trivy and CycloneDX artifacts.
+- [x] `Real-Client MCP Smoke` workflow on pull requests, pushes to `main`,
+      weekly schedule, and manual dispatch.
 - [x] Bruno black-box integration workflow for API/MCP smoke coverage.
 - [x] Pytest and Bruno JUnit result publishing in CI.
 - [x] Containerfile with OCI labels, non-root runtime, and CI smoke coverage.
@@ -99,8 +101,8 @@ These are required before the first release is promoted.
       `.github/workflows/bruno-integration.yml`, `pyproject.toml`, or `uv.lock`
       change:
   - `Bruno API/MCP Integration`
-- [ ] Keep real-client MCP smoke manual/scheduled and non-required until it is
-      stable enough for PR gating.
+- [x] Require real-client MCP smoke in PR CI while keeping individual client
+      slots skip-safe when binaries or command templates are unavailable.
 - [ ] Require branch to be up to date before merge once queue/noise is
       manageable.
 - [ ] Decide whether signed commits are mandatory immediately. If yes, configure
@@ -186,6 +188,8 @@ release requirements:
 - [x] Keep PR and push builds as smoke-only, with no registry push.
 - [x] Smoke-test the published Docker image by digest during the publish
       workflow before treating the release image as promoted.
+- [x] Automatically update existing GitHub release notes with the image digest
+      after the published-image smoke test passes.
 
 ## P0: Documentation Readiness
 
@@ -193,8 +197,8 @@ release requirements:
       why local-first agent memory matters.
 - [ ] Quick start works from a clean checkout.
 - [ ] Docker/Compose quick start works from a clean checkout.
-- [x] Deterministic quickstart checks are covered by CI; keep real external
-      client checks scheduled/manual until stable clients are available in CI.
+- [x] Deterministic quickstart checks and real-client smoke harness runs are
+      covered by CI.
 - [x] MCP client setup is reachable from README.
 - [x] Security/auth guidance is reachable before LAN/container exposure docs.
 - [x] Release notes link to the generated docs site.
@@ -238,8 +242,11 @@ production-ready.
 - [x] Add CodeQL for Python static security analysis.
 - [x] Document best-effort release security scan findings in
       `release_security_scan_notes.md`.
-- [ ] Pin GitHub Actions and Docker base/provider images by digest after the
-      workflow set stabilizes.
+- [x] Pin third-party GitHub Actions to commit SHAs.
+- [x] Replace the Ollama install script with a pinned container image in E2E CI.
+- [x] Enforce declared JSON Schema formats during conversation validation.
+- [ ] Pin Docker base/provider images by digest after the image cadence
+      stabilizes.
 - [ ] Consider Cosign signing after the basic release process is stable.
 - [x] Document image support lifecycle and security-fix policy.
 

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 import jsonschema  # pyright: ignore[reportMissingModuleSource]
 
@@ -11,6 +13,23 @@ _ACTIVE_SCHEMA_PATH: Path = SCHEMA_PATH
 _REQUIRED_SCHEMA_FIELDS = ("id", "source", "timestamp", "messages", "metadata")
 _REQUIRED_MESSAGE_FIELDS = ("role", "text", "hash")
 _REQUIRED_METADATA_FIELDS = ("imported_at", "updated_at", "conversation_hash")
+_FORMAT_CHECKER = jsonschema.FormatChecker()
+
+
+@_FORMAT_CHECKER.checks("date-time", raises=ValueError)
+def _is_date_time(value: object) -> bool:
+    if not isinstance(value, str):
+        return True
+    datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return True
+
+
+@_FORMAT_CHECKER.checks("uuid", raises=ValueError)
+def _is_uuid(value: object) -> bool:
+    if not isinstance(value, str):
+        return True
+    UUID(value)
+    return True
 
 
 def load_schema() -> dict[str, Any]:
@@ -86,4 +105,9 @@ def validate_conversation(payload: dict[str, Any]) -> None:
     Raises jsonschema.ValidationError if invalid.
     """
     schema = load_schema()
-    jsonschema.validate(instance=payload, schema=schema)
+    jsonschema.Draft202012Validator.check_schema(schema)
+    validator = jsonschema.Draft202012Validator(
+        schema,
+        format_checker=_FORMAT_CHECKER,
+    )
+    validator.validate(payload)

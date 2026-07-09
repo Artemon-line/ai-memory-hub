@@ -17,15 +17,15 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.14'
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
         with:
           enable-cache: true
 
@@ -41,7 +41,7 @@ jobs:
             --junitxml=reports/junit/pytest-unit-integration.xml
 
       - name: Publish unit and integration test results
-        uses: EnricoMi/publish-unit-test-result-action@v2
+        uses: EnricoMi/publish-unit-test-result-action@b3f8796819acf652cecbf27a64fa9ac8d7e137ee # v2
         if: >-
           ${{
             always() &&
@@ -56,7 +56,7 @@ jobs:
 
       - name: Upload unit and integration test reports
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: pytest-unit-integration-report
           path: reports/junit/*.xml
@@ -66,34 +66,35 @@ jobs:
     name: E2E Scenario (Ollama)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      OLLAMA_IMAGE: >-
+        ollama/ollama:0.22.1@sha256:3ca37ec2b9cb6341b62554074205c616778fe98abcf9e4fc50361b79a07407ae
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.14'
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
         with:
           enable-cache: true
 
       - name: Install dependencies
         run: uv sync --dev
 
-      - name: Install Ollama
+      - name: Start pinned Ollama container
         run: |
-          curl -fsSL https://ollama.com/install.sh | sudo -E sh
-
-      - name: Start Ollama
-        run: |
-          ollama serve &
-          # Wait for the HTTP port to open
+          docker run -d \
+            --name ollama-ci \
+            -p 127.0.0.1:11434:11434 \
+            "$OLLAMA_IMAGE"
           for i in {1..10}; do
-            if curl -s http://localhost:11434 > /dev/null; then
+            if curl -fsS http://127.0.0.1:11434/api/version; then
               echo "Ollama is ready!"
               exit 0
             fi
@@ -105,8 +106,8 @@ jobs:
 
       - name: Pull models
         run: |
-          ollama pull nomic-embed-text
-          ollama pull qwen2.5:0.5b
+          docker exec ollama-ci ollama pull nomic-embed-text
+          docker exec ollama-ci ollama pull qwen2.5:0.5b
 
       - name: Run E2E tests
         env:
@@ -117,8 +118,12 @@ jobs:
           uv run pytest tests/e2e \
             --junitxml=reports/junit/pytest-e2e.xml
 
+      - name: Capture Ollama logs
+        if: always()
+        run: docker logs ollama-ci > ollama.log 2>&1 || true
+
       - name: Publish E2E test results
-        uses: EnricoMi/publish-unit-test-result-action@v2
+        uses: EnricoMi/publish-unit-test-result-action@b3f8796819acf652cecbf27a64fa9ac8d7e137ee # v2
         if: >-
           ${{
             always() &&
@@ -133,11 +138,23 @@ jobs:
 
       - name: Upload E2E test reports
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: pytest-e2e-report
           path: reports/junit/*.xml
           if-no-files-found: warn
+
+      - name: Upload Ollama logs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ollama-e2e-logs
+          path: ollama.log
+          if-no-files-found: warn
+
+      - name: Stop Ollama
+        if: always()
+        run: docker rm -f ollama-ci || true
 
   storage-config:
     name: Storage Config Variations
@@ -154,15 +171,15 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.14'
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
         with:
           enable-cache: true
 
@@ -195,7 +212,7 @@ jobs:
           fi
 
       - name: Publish storage config test results
-        uses: EnricoMi/publish-unit-test-result-action@v2
+        uses: EnricoMi/publish-unit-test-result-action@b3f8796819acf652cecbf27a64fa9ac8d7e137ee # v2
         if: >-
           ${{
             always() &&
@@ -210,7 +227,7 @@ jobs:
 
       - name: Upload storage config test reports
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: pytest-storage-config-${{ matrix.case }}-report
           path: reports/junit/*.xml
@@ -237,15 +254,15 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.14'
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
         with:
           enable-cache: true
 
@@ -268,7 +285,7 @@ jobs:
           --junitxml=reports/junit/pytest-postgres-storage.xml
 
       - name: Publish postgres storage test results
-        uses: EnricoMi/publish-unit-test-result-action@v2
+        uses: EnricoMi/publish-unit-test-result-action@b3f8796819acf652cecbf27a64fa9ac8d7e137ee # v2
         if: >-
           ${{
             always() &&
@@ -283,7 +300,7 @@ jobs:
 
       - name: Upload postgres storage test reports
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: pytest-postgres-storage-report
           path: reports/junit/*.xml
@@ -296,10 +313,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - name: Run Hadolint
-        uses: hadolint/hadolint-action@v3.1.0
+        uses: hadolint/hadolint-action@54c9adbab1582c2ef04b2016b760714a4bfde3cf # v3.1.0
         with:
           dockerfile: Containerfile
 
@@ -310,7 +327,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - name: Read package version
         id: version
@@ -382,7 +399,7 @@ jobs:
 
       - name: Upload container logs
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: container-smoke-logs
           path: container.log

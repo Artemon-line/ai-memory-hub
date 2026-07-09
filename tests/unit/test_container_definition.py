@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import tomllib
 from pathlib import Path
 
@@ -158,7 +159,7 @@ def test_container_smoke_retains_stopped_container_for_logs() -> None:
     workflow = Path(".github/workflows/pipeline.yml").read_text(encoding="utf-8")
 
     run_command = next(
-        line for line in workflow.splitlines() if "docker run" in line
+        line for line in workflow.splitlines() if "ai-memory-hub-ci" in line and "docker run" in line
     )
     assert "--rm" not in run_command
     assert "127.0.0.1:8000:8000" in run_command
@@ -172,17 +173,17 @@ def test_container_smoke_retains_stopped_container_for_logs() -> None:
 def test_supply_chain_workflow_scans_without_blocking_prs() -> None:
     workflow = Path(".github/workflows/supply-chain.yml").read_text(encoding="utf-8")
 
-    assert "aquasecurity/trivy-action@v0.36.0" in workflow
+    assert "aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0" in workflow
     assert "exit-code: \"0\"" in workflow
     assert "format: cyclonedx" in workflow
     assert "ai-memory-hub.cdx.json" in workflow
-    assert "actions/upload-artifact@v7" in workflow
+    assert "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7" in workflow
 
 
 def test_dependency_review_workflow_reports_in_warning_mode() -> None:
     workflow = Path(".github/workflows/dependency-review.yml").read_text(encoding="utf-8")
 
-    assert "actions/dependency-review-action@v5" in workflow
+    assert "actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0" in workflow
     assert "warn-only: true" in workflow
     assert "vulnerability-check: true" in workflow
 
@@ -192,7 +193,8 @@ def test_docker_publish_attests_published_image() -> None:
 
     assert "attestations: write" in workflow
     assert "artifact-metadata: write" in workflow
-    assert "actions/attest@v4" in workflow
+    assert "contents: write" in workflow
+    assert "actions/attest@f6bf1532d7d6793fce74eac584813a8eee607999 # v4" in workflow
     assert "push-to-registry: true" in workflow
     assert "Checkout requested release tag" in workflow
     assert 'git checkout --detach "refs/tags/${RELEASE_TAG}"' in workflow
@@ -203,6 +205,9 @@ def test_docker_publish_attests_published_image() -> None:
     assert '"${IMAGE}@${DIGEST}"' in workflow
     assert "127.0.0.1:8000:8000" in workflow
     assert "curl -fsS http://127.0.0.1:8000/ready" in workflow
+    assert "Update release notes with published image digest" in workflow
+    assert "gh release edit \"$RELEASE_TAG\" --notes-file release-notes.md" in workflow
+    assert "ai-memory-hub-docker-digest:start" in workflow
 
 
 def test_release_readiness_and_codeql_workflows_exist() -> None:
@@ -218,5 +223,34 @@ def test_release_readiness_and_codeql_workflows_exist() -> None:
     assert "python -m pip install -r docs/requirements.txt" in release_readiness
     assert "mkdocs build --strict" in release_readiness
     assert "tools/validate_release_version.py" in release_readiness
-    assert "github/codeql-action/init@v4" in codeql
+    assert "github/codeql-action/init@1ad29ea4a422cce9a242a9fae469541dcd08addc # v4" in codeql
     assert "security-events: write" in codeql
+
+
+def test_workflows_pin_third_party_actions_to_shas() -> None:
+    for workflow_path in Path(".github/workflows").glob("*.yml"):
+        workflow = workflow_path.read_text(encoding="utf-8")
+        assert not re.search(r"uses:\s+[^#\s]+@v[0-9]", workflow), workflow_path
+
+
+def test_e2e_ollama_uses_pinned_container_instead_of_install_script() -> None:
+    workflow = Path(".github/workflows/pipeline.yml").read_text(encoding="utf-8")
+
+    assert "curl -fsSL https://ollama.com/install.sh" not in workflow
+    assert "OLLAMA_IMAGE: >-" in workflow
+    assert "ollama/ollama:0.22.1@sha256:" in workflow
+    assert "3ca37ec2b9cb6341b62554074205c616778fe98abcf9e4fc50361b79a07407ae" in workflow
+    assert "docker run -d" in workflow
+    assert "docker exec ollama-ci ollama pull nomic-embed-text" in workflow
+    assert "docker rm -f ollama-ci" in workflow
+
+
+def test_real_client_smoke_runs_on_prs_and_pushes() -> None:
+    workflow = Path(".github/workflows/real-client-mcp-smoke.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "pull_request:" in workflow
+    assert "push:" in workflow
+    assert "branches: [main]" in workflow
+    assert "name: Real-Client MCP Smoke" in workflow

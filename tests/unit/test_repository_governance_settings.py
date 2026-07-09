@@ -18,6 +18,7 @@ def test_repository_governance_required_checks_match_release_plan() -> None:
         "Dependency Review",
         "Image Scan and SBOM",
         "CodeQL Analysis",
+        "Real-Client MCP Smoke",
     ]
 
     for check in required_checks:
@@ -63,7 +64,8 @@ def test_release_ci_gap_analysis_tracks_remaining_manual_work() -> None:
     assert "CodeQL Analysis" in gap_analysis
     assert "requested release tag" in gap_analysis
     assert "blocks release publishing on" in gap_analysis
-    assert "real Codex/opencode/Claude/Copilot/Gemini client behavior" in gap_analysis
+    assert "Updates existing GitHub release notes" in gap_analysis
+    assert "Runs on pull requests, pushes to `main`" in gap_analysis
     assert "Release CI gap analysis" in readme
 
 
@@ -77,5 +79,6 @@ def test_release_security_scan_notes_track_fixed_and_remaining_findings() -> Non
     assert "MCP write tools now require `memory:write`" in security_notes
     assert "LanceDB delete/replace filters" in security_notes
     assert "pin `uv==0.10.3`" in security_notes
-    assert "GitHub Actions are version-tag pinned" in security_notes
+    assert "GitHub Actions are commit-SHA pinned" in security_notes
+    assert "JSON schema validation now enforces declared formats" in security_notes
     assert "Release security scan notes" in readme
