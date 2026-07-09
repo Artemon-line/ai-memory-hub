@@ -73,6 +73,23 @@ class StubVectorStore:
         ]
 
 
+class FakeEmbeddingHTTPResponse:
+    def __init__(self, payload: dict[str, Any]):
+        self._payload = payload
+
+    def __enter__(self) -> "FakeEmbeddingHTTPResponse":
+        return self
+
+    def __exit__(self, *_args: Any) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return json.dumps(self._payload).encode("utf-8")
+
+    def close(self) -> None:
+        return None
+
+
 def _valid_conversation() -> dict[str, Any]:
     return {
         "id": "d9fd4c95-9cb3-4fd5-b967-3027f8863210",
@@ -498,6 +515,71 @@ def test_ingest_messages_rejects_invalid_timestamp_before_storage() -> None:
 
     with pytest.raises(ValueError, match="timestamp must be an ISO-8601 datetime"):
         mvp_ingestion.ingest_messages(conversation)
+
+
+def test_openai_compatible_embedding_provider_uses_http_endpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requests: list[Any] = []
+
+    def fake_urlopen(request: Any, timeout: int) -> FakeEmbeddingHTTPResponse:
+        requests.append((request, timeout))
+        assert json.loads(request.data.decode("utf-8")) == {
+            "model": "nomic-embed-text",
+            "input": ["alpha", "beta"],
+            "dimensions": 3,
+        }
+        return FakeEmbeddingHTTPResponse(
+            {
+                "data": [
+                    {"embedding": [1, 2, 3]},
+                    {"embedding": [4.5, 5.5, 6.5]},
+                ]
+            }
+        )
+
+    monkeypatch.setattr(mvp_ingestion.urllib.request, "urlopen", fake_urlopen)
+
+    provider = mvp_ingestion.OpenAIEmbeddingProvider(
+        embedding_model="nomic-embed-text",
+        dimension=3,
+        base_url="http://127.0.0.1:11434/v1/",
+        api_key="test-key",
+    )
+
+    assert provider.embed_texts(["alpha", "beta"]) == [
+        [1.0, 2.0, 3.0],
+        [4.5, 5.5, 6.5],
+    ]
+    request, timeout = requests[0]
+    assert request.full_url == "http://127.0.0.1:11434/v1/embeddings"
+    assert request.headers["Authorization"] == "Bearer test-key"
+    assert timeout == 60
+
+
+def test_openai_compatible_embedding_provider_redacts_http_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_urlopen(_request: Any, timeout: int) -> Any:
+        _ = timeout
+        raise mvp_ingestion.urllib.error.HTTPError(
+            url="http://127.0.0.1:11434/v1/embeddings",
+            code=401,
+            msg="Unauthorized",
+            hdrs={},
+            fp=FakeEmbeddingHTTPResponse({"error": "api_key=secret-key"}),
+        )
+
+    monkeypatch.setattr(mvp_ingestion.urllib.request, "urlopen", fake_urlopen)
+    provider = mvp_ingestion.OpenAIEmbeddingProvider(dimension=3, api_key="secret-key")
+
+    with pytest.raises(RuntimeError) as exc_info:
+        provider.embed_texts(["alpha"])
+
+    message = str(exc_info.value)
+    assert "HTTP 401" in message
+    assert "secret-key" not in message
+    assert "***" in message
 
 
 def test_validate_conversation_enforces_schema_formats() -> None:

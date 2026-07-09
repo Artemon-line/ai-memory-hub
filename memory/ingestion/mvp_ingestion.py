@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import os
 import re
 import time
+import urllib.error
+import urllib.request
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -101,30 +104,76 @@ class LocalEmbeddingProvider:
 
 
 class OpenAIEmbeddingProvider:
+    """OpenAI-compatible embeddings endpoint client without the OpenAI SDK."""
+
     def __init__(
         self,
         embedding_model: str = "text-embedding-3-small",
         dimension: int = 1536,
-        base_url: str = "https://api.openai.com",
+        base_url: str = "https://api.openai.com/v1",
         api_key: str | None = None,
     ):
-        from openai import OpenAI
-
         key = api_key or os.getenv("OPENAI_API_KEY")
         if not key:
             logger.warning(
                 "OPENAI_API_KEY is required when providers.embeddings=openai"
             )
 
-        self.client = OpenAI(base_url=base_url, api_key=key)
+        self.base_url = base_url.rstrip("/")
+        self.api_key = key or ""
         self.embedding_model = embedding_model
         self.dimension = dimension
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
-        response = self.client.embeddings.create(
-            model=self.embedding_model, input=texts, dimensions=self.dimension
+        payload = {
+            "model": self.embedding_model,
+            "input": texts,
+            "dimensions": self.dimension,
+        }
+        request = urllib.request.Request(
+            f"{self.base_url}/embeddings",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
         )
-        return [list(item.embedding) for item in response.data]
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                response_body = response.read().decode("utf-8")
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(
+                f"Embedding endpoint returned HTTP {exc.code}: {redact_secrets(detail)}"
+            ) from exc
+        except urllib.error.URLError as exc:
+            raise RuntimeError(
+                f"Embedding endpoint request failed: {redact_secrets(str(exc.reason))}"
+            ) from exc
+        try:
+            parsed = json.loads(response_body)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("Embedding endpoint returned invalid JSON") from exc
+        data = parsed.get("data") if isinstance(parsed, dict) else None
+        if not isinstance(data, list):
+            raise RuntimeError("Embedding endpoint response must include a data array")
+        embeddings: list[list[float]] = []
+        for item in data:
+            if not isinstance(item, dict) or not isinstance(item.get("embedding"), list):
+                raise RuntimeError("Embedding endpoint response item is missing embedding")
+            vector = item["embedding"]
+            if len(vector) != self.dimension:
+                raise RuntimeError(
+                    "Embedding endpoint returned vector dimensionality "
+                    f"{len(vector)}; expected {self.dimension}"
+                )
+            embeddings.append([float(value) for value in vector])
+        if len(embeddings) != len(texts):
+            raise RuntimeError(
+                f"Embedding endpoint returned {len(embeddings)} vectors for {len(texts)} inputs"
+            )
+        return embeddings
 
 
 @dataclass

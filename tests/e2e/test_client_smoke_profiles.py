@@ -4,8 +4,8 @@ import copy
 import json
 import os
 from typing import Any
-from urllib.error import URLError
-from urllib.request import urlopen
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 import pytest
 from fastapi.testclient import TestClient
@@ -458,24 +458,42 @@ def test_mcp_client_malformed_payloads_return_invalid_input_envelope(
 
 def test_ollama_chat_completion_smoke() -> None:
     _require_ollama()
-    openai = pytest.importorskip("openai")
-    client = openai.OpenAI(base_url=OPENAI_BASE_URL, api_key="ollama")
-
+    request = Request(
+        f"{OPENAI_BASE_URL}/chat/completions",
+        data=json.dumps(
+            {
+                "model": CHAT_MODEL,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": "Reply with exactly two words: memory smoke",
+                    }
+                ],
+                "max_tokens": 8,
+                "temperature": 0,
+            }
+        ).encode("utf-8"),
+        headers={
+            "Authorization": "Bearer ollama",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
     try:
-        response = client.chat.completions.create(
-            model=CHAT_MODEL,
-            messages=[
-                {
-                    "role": "user",
-                    "content": "Reply with exactly two words: memory smoke",
-                }
-            ],
-            max_tokens=8,
-            temperature=0,
-        )
-    except openai.NotFoundError as exc:
+        with urlopen(request, timeout=120) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        if exc.code == 404:
+            detail = exc.read().decode("utf-8", errors="replace")
+            pytest.skip(f"Ollama chat model is not available locally: {detail}")
+        raise
+    except URLError as exc:
         pytest.skip(f"Ollama chat model is not available locally: {exc}")
 
-    content = response.choices[0].message.content
+    choices = payload.get("choices") if isinstance(payload, dict) else None
+    assert isinstance(choices, list) and choices
+    message = choices[0].get("message") if isinstance(choices[0], dict) else None
+    assert isinstance(message, dict)
+    content = message.get("content")
     assert isinstance(content, str)
     assert content.strip()

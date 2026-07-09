@@ -142,8 +142,9 @@ vector table, collection, index, or namespace and re-ingest/reindex the memory
 from durable metadata or source transcripts.
 
 Today the real embedding path is OpenAI-compatible: configure an
-OpenAI-compatible embedding endpoint through the OpenAI client, such as OpenAI
-itself or a local Ollama-compatible `/v1` endpoint. The deterministic local
+OpenAI-compatible embeddings API endpoint, such as OpenAI itself or a local
+Ollama-compatible `/v1` endpoint. ai-memory-hub uses a small embeddings-only
+HTTP client and does not require the OpenAI Python SDK. The deterministic local
 embedding mode is for smoke tests and demos, not production-quality semantic or
 multilingual retrieval.
 
