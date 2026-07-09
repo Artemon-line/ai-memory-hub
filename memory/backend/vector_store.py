@@ -2450,7 +2450,7 @@ class LanceDBVectorStore:
         if rows:
             if replace:
                 # Avoid duplicates if re-indexing
-                self._table.delete(f"memory_id = '{metadata_id}'")
+                self._table.delete(_lancedb_memory_id_filter(metadata_id))
             self._table.add(rows)
             self._ensure_index()
 
@@ -2476,7 +2476,7 @@ class LanceDBVectorStore:
 
     def delete(self, ids: list[str]) -> None:
         for memory_id in ids:
-            self._table.delete(f"memory_id = '{memory_id}'")
+            self._table.delete(_lancedb_memory_id_filter(memory_id))
 
     def get_stats(self) -> dict[str, Any]:
         try:
@@ -3067,6 +3067,11 @@ def _vector_payload(metadata_id: str, item: dict[str, Any]) -> dict[str, Any]:
         VectorPayloadKey.ROLE.value: str(item[VectorPayloadKey.ROLE.value]),
         VectorPayloadKey.TEXT.value: str(item[VectorPayloadKey.TEXT.value]),
     }
+
+
+def _lancedb_memory_id_filter(memory_id: object) -> str:
+    value = str(memory_id).replace("'", "''")
+    return f"memory_id = '{value}'"
 
 
 def _row_from_vector_payload(payload: dict[str, Any]) -> dict[str, Any]:

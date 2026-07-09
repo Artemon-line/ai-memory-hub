@@ -58,6 +58,8 @@ nav:
       - Plugin Readiness Plan: docs/plugin_readiness_plan.md
       - Release, Container, and Docs Publishing Plan: docs/release_container_docs_plan.md
       - First Release Readiness Plan: docs/first_release_readiness_plan.md
+      - Release CI Gap Analysis: docs/release_ci_gap_analysis.md
+      - Release Security Scan Notes: docs/release_security_scan_notes.md
       - Repository Governance Settings: docs/repository_governance_settings.md
       - Release Promotion Assets: docs/release_promotion_assets.md
       - Project Promotion Plan: docs/project_promotion_plan.md

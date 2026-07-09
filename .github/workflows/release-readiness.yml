@@ -1,0 +1,60 @@
+name: release-readiness
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-readiness:
+    name: Release Readiness
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Install docs dependencies
+        run: python -m pip install -r docs/requirements.txt
+
+      - name: Run Ruff
+        run: uv run python -m ruff check memory tests tools
+
+      - name: Run Pyright
+        run: uv run python -m pyright
+
+      - name: Validate Bruno test files
+        run: uv run python tests/bruno/validate_files.py
+
+      - name: Build docs strictly
+        run: |
+          uv run python tools/prepare_mkdocs.py
+          mkdocs build --strict
+
+      - name: Validate release tag policy against project version
+        run: |
+          version="$(uv run python - <<'PY'
+          import pathlib
+          import tomllib
+
+          print(tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"])
+          PY
+          )"
+          uv run python tools/validate_release_version.py "v${version}"

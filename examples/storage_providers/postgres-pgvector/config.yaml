@@ -68,9 +68,9 @@ mcp:
 api:
   host: 0.0.0.0
   port: 8000
-  # Local smoke-test default. Before using this 0.0.0.0 Compose stack from
-  # another PC, seed a token in Postgres and change this to bearer_token.
-  # Clients must then send Authorization: Bearer <token> to /memory/* and /mcp/*.
+  # Local smoke-test default. Before publishing MCP outside loopback, configure
+  # oauth_resource_server and expose the service through TLS, a trusted reverse
+  # proxy, VPN, or another protected private-network boundary.
   auth: none
 
 openai:

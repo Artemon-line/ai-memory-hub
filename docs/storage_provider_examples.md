@@ -22,8 +22,8 @@ block there does not activate it.
 
 Installing dependencies is separate from configuration. Optional SDKs are
 downloaded only when you install their extras, such as `uv sync --extra qdrant`
-or `uv sync --extra postgres`, or when using a container image that deliberately
-installs all provider extras.
+or `uv sync --extra postgres`, or when using a provider-local container image
+that deliberately installs that provider's extra.
 
 The API-key-free local Compose examples for PostgreSQL/PGVector, MongoDB,
 Redis, ChromaDB, and SQLite/LanceDB use provider-local Containerfiles. Those
@@ -178,5 +178,6 @@ curl -fsS http://127.0.0.1:8000/memory/search \
   -d '{"query":"amber-vector","top_k":3}'
 ```
 
-Keep `api.auth: none` only for local smoke tests. Use bearer-token auth and a
-trusted TLS/VPN/reverse-proxy boundary before exposing the hub outside loopback.
+Keep `api.auth: none` only for local smoke tests. Use
+`api.auth: oauth_resource_server` with TLS, a reverse proxy, VPN, or another
+trusted private network before exposing MCP outside loopback.

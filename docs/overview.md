@@ -32,10 +32,9 @@ container builds or provider compatibility checks.
 
 Provider config blocks do not install dependencies. Dependencies are installed
 only by the `uv sync` extras you choose, or by container images that explicitly
-install extras. The checked-in `Containerfile` installs all provider extras so
-the same image can run any supported storage backend; a local/dev install should
-usually install only the extra for the provider you actually select. The free
-local Compose examples for PostgreSQL/PGVector, MongoDB, Redis, ChromaDB, and
+install extras. The checked-in root `Containerfile` is the quickstart image and
+installs only the default SQLite/LanceDB runtime dependencies. The free local
+Compose examples for PostgreSQL/PGVector, MongoDB, Redis, ChromaDB, and
 SQLite/LanceDB use provider-local Containerfiles so they install only the extras
 needed by that example.
 
@@ -874,7 +873,7 @@ docker build -t ai-memory-hub:local -f Containerfile .
 Run the default image locally:
 
 ```bash
-docker run --rm -p 8000:8000 ai-memory-hub:local
+docker run --rm -p 127.0.0.1:8000:8000 ai-memory-hub:local
 ```
 
 The image exposes the API and MCP service on port `8000` and starts with:
@@ -884,12 +883,12 @@ The image exposes the API and MCP service on port `8000` and starts with:
 ```
 
 The built-in container configuration uses deterministic local embeddings, SQLite
-metadata, and in-memory vectors so the image starts without external model or
-database services.
+metadata, and LanceDB vectors so the image starts without external model or
+database services while keeping local vector state persistent under `/app/data`.
 
 Container images run as a non-root user by default and are built so OpenShift can
 override the runtime UID while keeping root-group write access to `/app/data`,
-`/app/logs`, and `TIKTOKEN_CACHE_DIR`. Use `/ready` for readiness probes and
+`/app/logs`, and `/app/.uv-cache`. Use `/ready` for readiness probes and
 `/health` for liveness probes.
 
 Kubernetes probe example:

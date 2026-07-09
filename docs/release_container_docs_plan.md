@@ -92,8 +92,8 @@ Required improvements:
   - [x] `data`
   - [x] local logs/artifacts
 - [x] Decide whether the image should install optional extras:
-  - [x] default image includes Postgres/PGVector and tokenizer extras for the current reusable Compose/runtime path
-  - [x] optional slimmer image variants are deferred until release publishing needs them
+  - [x] default image is the SQLite/LanceDB quickstart image with no optional provider extras
+  - [x] Postgres/PGVector and tokenizer extras live in the provider-local example image
 - [x] Add a healthcheck command or document health endpoint once the API exposes one.
 - [x] Add Containerfile linting with Hadolint.
 - [x] Simulate OpenShift arbitrary UID startup in CI with `--user 12345:0`.
@@ -136,6 +136,8 @@ Optional hardening:
 
 - [x] Add Hadolint or similar Dockerfile linting.
 - [x] Add Trivy image scan in warning mode first.
+- [x] Block Docker release publishing on high/critical Trivy image findings
+      before the image is pushed.
 - [ ] Promote image scanning to required once false positives are triaged.
 
 ## 3) Release Version Policy
@@ -219,6 +221,10 @@ Publishing acceptance criteria:
 - [ ] Pre-releases do not update `latest`.
 - [ ] Failed image publish fails the release workflow visibly.
 - [ ] Logs do not expose Docker Hub tokens or runtime secrets.
+- [x] Published image is smoke-tested by digest before the workflow summary is
+      written.
+- [x] Manual Docker publish retries check out the requested release tag before
+      building.
 
 ## 5) GitHub Pages Documentation
 

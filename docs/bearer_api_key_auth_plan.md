@@ -1,25 +1,31 @@
-# Bearer Auth And User Isolation Plan
+# MCP Authorization And Bearer Compatibility Plan
 
 ## Goal
 
-Protect ai-memory-hub MCP and HTTP access beyond local testing, starting with a
-simple bearer-token mode that supports per-user memory isolation. Keep the design
-compatible with MCP HTTP authorization expectations so OAuth resource-server mode
-can be added later without changing client request shape.
+Protect ai-memory-hub MCP and HTTP access beyond local testing. Use
+MCP-compliant OAuth resource-server mode for protected MCP deployments, while
+retaining bearer-token mode as a local/LAN compatibility mode for existing HTTP
+API and personal-token workflows.
 
 Supported modes:
 
 - `api.auth: none` for CI and loopback-only local testing.
-- `api.auth: bearer_token` for local/LAN deployments that need simple personal
-  access tokens and per-user memory isolation.
+- `api.auth: bearer_token` for compatibility with simple personal access-token
+  deployments. This is useful for local/LAN HTTP API workflows, but it is not the
+  recommended MCP-compliant release posture.
 - `api.auth: oauth_resource_server` for MCP-compliant OAuth authorization.
 
 Source: https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization
 
 ## Recommendation
 
-Implement `bearer_token` first. It is not full OAuth, but it uses the same client
-request shape required by MCP HTTP auth:
+For first-release user guidance, document `api.auth: none` only for loopback/CI
+and `api.auth: oauth_resource_server` for protected MCP. Keep `bearer_token`
+implemented and tested as a compatibility mode, but do not present it as the
+recommended way to expose MCP beyond loopback.
+
+Both bearer-token compatibility mode and OAuth resource-server mode use the
+standard authorization header shape:
 
 ```http
 Authorization: Bearer <token>
@@ -37,10 +43,10 @@ Use `api.auth: none` only when:
 - Running loopback-only local development, for example `127.0.0.1:8000`.
 - Running isolated smoke tests where the service is not exposed to other hosts.
 
-Use `api.auth: bearer_token` before exposing AMH on a trusted LAN. Use HTTPS,
-VPN, SSH tunnel, or a trusted reverse proxy if the endpoint crosses machines.
-Use `api.auth: oauth_resource_server` later for internet-facing or federated
-Google/Apple/Meta-style login.
+Use `api.auth: oauth_resource_server` before exposing MCP outside loopback. Use
+HTTPS, VPN, SSH tunnel, or a trusted reverse proxy if the endpoint crosses
+machines. Reserve `bearer_token` for compatibility scenarios where the operator
+accepts that it is not a full MCP OAuth resource-server deployment.
 
 ## Current Status
 

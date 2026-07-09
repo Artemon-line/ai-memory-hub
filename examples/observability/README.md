@@ -24,5 +24,6 @@ The included config uses local deterministic embeddings and in-memory vectors so
 the profile does not require Ollama, OpenAI, Postgres, or PGVector.
 
 For trusted LAN testing, change the ai-memory-hub port binding in `compose.yaml`
-from `127.0.0.1:8000:8000` to `0.0.0.0:8000:8000` and enable API authentication
-before exposing the service.
+from `127.0.0.1:8000:8000` to an explicit LAN binding only after enabling
+protected MCP/API authentication and a TLS, VPN, or trusted reverse-proxy
+boundary.

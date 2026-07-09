@@ -2,7 +2,7 @@ providers:
   embeddings: local
   embedding_dimension: 32
   metadata_db: sqlite
-  vector_db: memory
+  vector_db: lancedb
 
 storage:
   dry_run: false

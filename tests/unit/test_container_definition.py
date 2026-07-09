@@ -3,10 +3,14 @@ from __future__ import annotations
 import tomllib
 from pathlib import Path
 
+PINNED_UV_INSTALL = 'python -m pip install --no-cache-dir "uv==0.10.3"'
+
 
 def test_containerfile_installs_project_after_copying_package() -> None:
     containerfile = Path("Containerfile").read_text(encoding="utf-8")
 
+    assert PINNED_UV_INSTALL in containerfile
+    assert "python -m pip install --no-cache-dir uv" not in containerfile
     dependency_sync = containerfile.index("--no-install-project")
     package_copy = containerfile.index("COPY memory ./memory")
     project_sync = containerfile.index("uv sync --frozen --no-dev", package_copy)
@@ -30,11 +34,17 @@ def test_containerfile_installs_project_after_copying_package() -> None:
         "typesense",
         "weaviate",
     ):
-        assert f"--extra {extra}" in containerfile
+        assert f"--extra {extra}" not in containerfile
+    assert "TIKTOKEN_CACHE_DIR" not in containerfile
+    assert "tiktoken.get_encoding" not in containerfile
     assert "COPY examples/container/config.yaml /app/config.yaml" in containerfile
     assert "useradd --uid 1001 --gid 0" in containerfile
     assert 'CMD ["/app/.venv/bin/aim", "serve", "--host", "0.0.0.0", "--port", "8000"]' in containerfile
     assert 'CMD ["uv", "run", "aim"' not in containerfile
+
+    config = Path("examples/container/config.yaml").read_text(encoding="utf-8")
+    assert "metadata_db: sqlite" in config
+    assert "vector_db: lancedb" in config
 
 
 def test_pgvector_example_uses_slim_containerfile() -> None:
@@ -47,6 +57,8 @@ def test_pgvector_example_uses_slim_containerfile() -> None:
 
     assert "dockerfile: examples/storage_providers/postgres-pgvector/Containerfile" in compose
     assert "http://127.0.0.1:8000/ready" in compose
+    assert PINNED_UV_INSTALL in containerfile
+    assert "python -m pip install --no-cache-dir uv" not in containerfile
     assert "--extra postgres" in containerfile
     assert "--extra tokenizer" in containerfile
     assert 'CMD ["/app/.venv/bin/aim", "serve", "--host", "0.0.0.0", "--port", "8000"]' in containerfile
@@ -99,6 +111,8 @@ def test_free_provider_examples_use_provider_local_containerfiles() -> None:
         containerfile = (example_dir / "Containerfile").read_text(encoding="utf-8")
 
         assert f"dockerfile: examples/storage_providers/{example}/Containerfile" in compose
+        assert PINNED_UV_INSTALL in containerfile
+        assert "python -m pip install --no-cache-dir uv" not in containerfile
         assert 'CMD ["/app/.venv/bin/aim", "serve", "--host", "0.0.0.0", "--port", "8000"]' in containerfile
         assert 'CMD ["uv", "run", "aim"' not in containerfile
         for extra in enabled_extras:
@@ -147,9 +161,12 @@ def test_container_smoke_retains_stopped_container_for_logs() -> None:
         line for line in workflow.splitlines() if "docker run" in line
     )
     assert "--rm" not in run_command
+    assert "127.0.0.1:8000:8000" in run_command
     assert ".State.ExitCode" in workflow
     assert "docker exec ai-memory-hub-ci" in workflow
     assert "docker run --rm --user 12345:0 --entrypoint sh" in workflow
+    assert "test -w /app/.uv-cache" in workflow
+    assert "TIKTOKEN_CACHE_DIR" not in workflow
 
 
 def test_supply_chain_workflow_scans_without_blocking_prs() -> None:
@@ -177,3 +194,29 @@ def test_docker_publish_attests_published_image() -> None:
     assert "artifact-metadata: write" in workflow
     assert "actions/attest@v4" in workflow
     assert "push-to-registry: true" in workflow
+    assert "Checkout requested release tag" in workflow
+    assert 'git checkout --detach "refs/tags/${RELEASE_TAG}"' in workflow
+    assert "Build local image for release scan" in workflow
+    assert "Scan release image before push" in workflow
+    assert "exit-code: \"1\"" in workflow
+    assert "Smoke published image" in workflow
+    assert '"${IMAGE}@${DIGEST}"' in workflow
+    assert "127.0.0.1:8000:8000" in workflow
+    assert "curl -fsS http://127.0.0.1:8000/ready" in workflow
+
+
+def test_release_readiness_and_codeql_workflows_exist() -> None:
+    release_readiness = Path(".github/workflows/release-readiness.yml").read_text(
+        encoding="utf-8"
+    )
+    codeql = Path(".github/workflows/codeql.yml").read_text(encoding="utf-8")
+
+    assert "name: release-readiness" in release_readiness
+    assert "uv run python -m ruff check memory tests tools" in release_readiness
+    assert "uv run python -m pyright" in release_readiness
+    assert "uv run python tests/bruno/validate_files.py" in release_readiness
+    assert "python -m pip install -r docs/requirements.txt" in release_readiness
+    assert "mkdocs build --strict" in release_readiness
+    assert "tools/validate_release_version.py" in release_readiness
+    assert "github/codeql-action/init@v4" in codeql
+    assert "security-events: write" in codeql

@@ -14,61 +14,27 @@ LABEL org.opencontainers.image.title="ai-memory-hub" \
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     HOME=/tmp \
-    TIKTOKEN_CACHE_DIR=/opt/tiktoken-cache \
     UV_CACHE_DIR=/app/.uv-cache
 
 WORKDIR /app
 
 COPY pyproject.toml uv.lock README.md ./
 
-RUN python -m pip install --no-cache-dir uv && \
-    uv sync --frozen --no-dev \
-      --extra chromadb \
-      --extra elasticsearch \
-      --extra milvus \
-      --extra mongodb \
-      --extra opensearch \
-      --extra observability \
-      --extra postgres \
-      --extra pinecone \
-      --extra qdrant \
-      --extra redis \
-      --extra tokenizer \
-      --extra turbopuffer \
-      --extra vespa \
-      --extra typesense \
-      --extra weaviate \
-      --no-install-project && \
-    mkdir -p "$TIKTOKEN_CACHE_DIR" && \
-    uv run python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"
+RUN python -m pip install --no-cache-dir "uv==0.10.3" && \
+    uv sync --frozen --no-dev --no-install-project
 
 COPY memory ./memory
 COPY examples/container/config.yaml /app/config.yaml
 
-RUN uv sync --frozen --no-dev \
-      --extra chromadb \
-      --extra elasticsearch \
-      --extra milvus \
-      --extra mongodb \
-      --extra opensearch \
-      --extra observability \
-      --extra postgres \
-      --extra pinecone \
-      --extra qdrant \
-      --extra redis \
-      --extra tokenizer \
-      --extra turbopuffer \
-      --extra vespa \
-      --extra typesense \
-      --extra weaviate && \
+RUN uv sync --frozen --no-dev && \
     uv pip install --no-deps . && \
     test -x /app/.venv/bin/aim && \
     /app/.venv/bin/python -c "import memory; from memory.cli import main; assert callable(main)" && \
-    mkdir -p /app/data /app/logs /app/.uv-cache "$TIKTOKEN_CACHE_DIR" && \
+    mkdir -p /app/data /app/logs /app/.uv-cache && \
     useradd --uid 1001 --gid 0 --home-dir /tmp --no-create-home \
       --shell /usr/sbin/nologin ai-memory-hub && \
-    chgrp -R 0 /app "$TIKTOKEN_CACHE_DIR" && \
-    chmod -R g=u /app "$TIKTOKEN_CACHE_DIR" && \
+    chgrp -R 0 /app && \
+    chmod -R g=u /app && \
     chown -R 1001:0 /tmp/.uv-cache || true && \
     chown -R 1001:0 /app/.uv-cache && \
     chmod -R g=u /app/.uv-cache

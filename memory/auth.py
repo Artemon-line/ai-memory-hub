@@ -21,6 +21,9 @@ PUBLIC_PATHS = {"/health", "/ready", "/.well-known/oauth-protected-resource"}
 READ_SCOPE = "memory:read"
 WRITE_SCOPE = "memory:write"
 _CURRENT_OWNER_ID: ContextVar[str | None] = ContextVar("amh_owner_id", default=None)
+_CURRENT_AUTH_CONTEXT: ContextVar["AuthContext | None"] = ContextVar(
+    "amh_auth_context", default=None
+)
 
 
 @dataclass(frozen=True)
@@ -69,6 +72,10 @@ def current_owner_id() -> str | None:
     return _CURRENT_OWNER_ID.get()
 
 
+def current_auth_context() -> AuthContext | None:
+    return _CURRENT_AUTH_CONTEXT.get()
+
+
 class AuthMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, *, config: HubConfig, agent: BaseIngestionAgent):
         super().__init__(app)
@@ -94,11 +101,13 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if not _has_required_scopes(auth.scopes, required_scopes):
             return _forbidden(request, self._config, required_scopes)
         request.state.auth = auth
-        token_handle = _CURRENT_OWNER_ID.set(auth.owner_id)
+        owner_token = _CURRENT_OWNER_ID.set(auth.owner_id)
+        auth_token = _CURRENT_AUTH_CONTEXT.set(auth)
         try:
             return await call_next(request)
         finally:
-            _CURRENT_OWNER_ID.reset(token_handle)
+            _CURRENT_AUTH_CONTEXT.reset(auth_token)
+            _CURRENT_OWNER_ID.reset(owner_token)
 
     async def _authenticate(self, request: Request, token: str) -> AuthContext | None:
         if self._config.api.auth == "bearer_token":

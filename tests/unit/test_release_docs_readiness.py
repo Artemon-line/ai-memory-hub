@@ -18,7 +18,7 @@ def test_readme_quick_start_has_source_and_docker_paths() -> None:
     assert "uv run aim serve --host 127.0.0.1 --port 8000" in readme
     assert "curl -X POST http://127.0.0.1:8000/memory/insert" in readme
     assert "docker build -t ai-memory-hub:local -f Containerfile ." in readme
-    assert "docker run --rm -p 8000:8000 ai-memory-hub:local" in readme
+    assert "docker run --rm -p 127.0.0.1:8000:8000 ai-memory-hub:local" in readme
     assert "cd examples/storage_providers/postgres-pgvector" in readme
     assert "docker compose up --build" in readme
 
@@ -28,11 +28,11 @@ def test_readme_mcp_and_security_guidance_are_visible_before_lan_docs() -> None:
 
     mcp_index = readme.index("MCP endpoint:")
     auth_index = readme.index("Before exposing")
-    lan_guidance_index = readme.index("Before exposing\nit on a LAN")
+    exposure_guidance_index = readme.index("Before exposing\nit beyond loopback")
 
-    assert mcp_index < lan_guidance_index
-    assert auth_index == lan_guidance_index
-    assert "Authorization: Bearer <token>" in readme
+    assert mcp_index < exposure_guidance_index
+    assert auth_index == exposure_guidance_index
+    assert "api.auth: oauth_resource_server" in readme
 
 
 def test_readme_known_first_release_limits_are_explicit() -> None:

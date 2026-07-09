@@ -64,16 +64,22 @@ Storage Config Variations
 Storage Postgres Integration
 Containerfile Lint
 Container Build and Smoke
+Release Readiness
 Build Documentation
 Bruno API/MCP Integration
 Dependency Review
 Image Scan and SBOM
+CodeQL Analysis
 ```
 
 The Bruno check can be configured as required once GitHub path-based rulesets are
 available for the repository. Until then, it is acceptable to require it for all
 PRs if runtime is acceptable, or keep it as a visible non-required check and
 manually enforce it for API/MCP changes.
+
+Keep provider live-matrix jobs and weekly real-client MCP smoke visible but
+non-required until their external service/client availability is stable enough
+for every PR.
 
 ## Docker Hub Secrets
 

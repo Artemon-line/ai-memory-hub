@@ -220,8 +220,9 @@ multiple configured provider blocks.
 
 Provider dependencies are installed by package extras, not by config. For local
 development install only the extra for the provider you select, such as
-`uv sync --extra postgres` or `uv sync --extra qdrant`. Container images may
-install all provider extras deliberately for runtime flexibility.
+`uv sync --extra postgres` or `uv sync --extra qdrant`. The root container image
+is intentionally limited to the default SQLite/LanceDB quickstart path; provider
+examples use provider-local Containerfiles when extra SDKs are required.
 
 Example:
 

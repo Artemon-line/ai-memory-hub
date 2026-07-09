@@ -3425,6 +3425,7 @@ def test_lancedb_index_is_created_lazily(monkeypatch: pytest.MonkeyPatch, tmp_pa
         def __init__(self):
             self.add_calls = 0
             self.create_index_calls = 0
+            self.delete_filters: list[str] = []
 
         def add(self, rows):
             _ = rows
@@ -3433,6 +3434,9 @@ def test_lancedb_index_is_created_lazily(monkeypatch: pytest.MonkeyPatch, tmp_pa
         def create_index(self, metric: str = "cosine", index_type: str = "IVF_HNSW_SQ"):
             _ = metric
             self.create_index_calls += 1
+
+        def delete(self, filter: str) -> None:
+            self.delete_filters.append(filter)
 
     class FakeLanceDBModule:
         @staticmethod
@@ -3474,3 +3478,22 @@ def test_lancedb_index_is_created_lazily(monkeypatch: pytest.MonkeyPatch, tmp_pa
         ],
     )
     assert fake_table.create_index_calls == 1
+
+    store.delete(["abc' OR memory_id = 'other"])
+    store.insert(
+        "replace' OR memory_id = 'other",
+        [
+            {
+                "chunk_index": 2,
+                "role": "user",
+                "text": "replace",
+                "vector": [0.7, 0.8, 0.9],
+            }
+        ],
+        replace=True,
+    )
+
+    assert fake_table.delete_filters == [
+        "memory_id = 'abc'' OR memory_id = ''other'",
+        "memory_id = 'replace'' OR memory_id = ''other'",
+    ]

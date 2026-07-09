@@ -135,39 +135,14 @@ python3 -m pip install --user podman-compose
 podman-compose up --build
 ```
 
-The Compose example publishes ai-memory-hub on `0.0.0.0:8000`, so clients on
-another PC can use the host machine's LAN IP. It keeps Postgres bound to
+The Compose example publishes ai-memory-hub on `127.0.0.1:8000` by default, so
+the unauthenticated smoke setup is local-only. It keeps Postgres bound to
 `127.0.0.1:5432` because remote clients do not need direct database access.
 
-The checked-in config keeps `api.auth: none` so local smoke tests work without a
-setup step. Before using this listener from another PC, create a local admin
-user, issue a bearer token, and switch the mounted config to `bearer_token`.
-The token create command prints the raw token once; store it in your shell or
-password manager because later list commands do not expose it again:
-
-```bash
-cd examples/storage_providers/postgres-pgvector
-
-AMH_OWNER="personal"
-docker compose exec -T ai-memory-hub \
-  uv run aim admin user create "$AMH_OWNER" --display-name "$AMH_OWNER" --json
-
-TOKEN_JSON="$(docker compose exec -T ai-memory-hub \
-  uv run aim admin token create --user "$AMH_OWNER" --display-name lan-client --json)"
-AMH_TOKEN="$(printf '%s\n' "$TOKEN_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')"
-printf 'ai-memory-hub bearer token: %s\n' "$AMH_TOKEN"
-
-sed -i 's/^  auth: none$/  auth: bearer_token/' config.yaml
-docker compose restart ai-memory-hub
-```
-
-If you started Compose with `AMH_CONFIG_FILE=config.ollama.yaml`, run the `sed`
-command against `config.ollama.yaml` instead. After enabling bearer auth, direct
-HTTP calls need this header:
-
-```bash
--H "Authorization: Bearer $AMH_TOKEN"
-```
+Before using this listener from another PC, bind it through a protected reverse
+proxy or switch the mounted config to `api.auth: oauth_resource_server`.
+Bearer-token compatibility mode exists for personal HTTP workflows, but it is
+not the MCP-compliant protected deployment mode for release docs.
 
 Find the host LAN IP from WSL/Linux:
 
@@ -178,7 +153,8 @@ hostname -I | awk '{print $1}'
 In the examples below:
 
 - use `http://127.0.0.1:8000` from the same machine.
-- use `http://<HOST_LAN_IP>:8000` from another PC on the same network.
+- use `http://<HOST_LAN_IP>:8000` from another PC only after changing the
+  published port binding and enabling protected MCP auth.
 
 If using Ollama embeddings, verify the hub container can reach Ollama:
 
@@ -267,7 +243,8 @@ If Codex runs on the same machine as ai-memory-hub, add:
 url = "http://127.0.0.1:8000/mcp/"
 ```
 
-If Codex runs on another PC on the same network, use the host LAN IP:
+If Codex runs on another PC on the same network, first publish the hub through a
+protected listener, then use the host LAN IP:
 
 ```toml
 [mcp_servers.ai_memory_hub]
@@ -289,7 +266,8 @@ does not work, get the WSL IP with `hostname -I` inside WSL and use
 opencode can register remote MCP servers under the `mcp` config key.
 
 Add this to your opencode config, usually `opencode.json` or `opencode.jsonc`.
-Use `127.0.0.1` on the same machine, or `<HOST_LAN_IP>` from another PC:
+Use `127.0.0.1` on the same machine, or `<HOST_LAN_IP>` from another PC only
+after enabling protected MCP auth:
 
 ```jsonc
 {
@@ -465,10 +443,11 @@ docker compose down -v
 - The example `Containerfile` installs `tiktoken` through the `tokenizer` extra
   before precise token budgeting is available.
 - `storage.vector.allow_fallback: false` is intentional. If PGVector fails, the container should fail instead of silently using in-memory vectors.
-- The Compose example exposes ai-memory-hub on the LAN. Keep `api.auth: none`
-  only for local smoke tests; use `api.auth: bearer_token` before trusted-LAN
-  use, and do not expose it on untrusted networks without TLS, a VPN, or a
-  trusted reverse proxy.
+- The Compose example exposes ai-memory-hub on loopback by default. Keep
+  `api.auth: none` only for local smoke tests; use
+  `api.auth: oauth_resource_server` before publishing MCP outside loopback, and
+  do not expose it on untrusted networks without TLS, a VPN, or a trusted
+  reverse proxy.
 
 ## References
 

@@ -6,6 +6,11 @@ container and docs publishing mechanics. This plan covers the broader release
 surface: repository governance, PR policy, security posture, release artifacts,
 Docker publishing, documentation, and launch readiness.
 
+See `release_ci_gap_analysis.md` for the split between automated release checks
+and the remaining repository-setting or external-client work. See
+`release_security_scan_notes.md` for the first-release security scan results and
+remaining hardening backlog.
+
 ## Release Goal
 
 Ship `v0.1.0` as a credible first public release:
@@ -28,6 +33,11 @@ Already in place:
 - [x] MkDocs site and GitHub Pages workflow.
 - [x] Main CI workflow with unit, integration, E2E, storage, container, and
       Hadolint checks.
+- [x] `Release Readiness` workflow for Ruff, Pyright, Bruno file validation,
+      strict docs build, and release tag/version validation.
+- [x] `CodeQL Analysis` workflow for Python security scanning.
+- [x] `Dependency Review` workflow for dependency vulnerability reporting.
+- [x] `Image Scan and SBOM` workflow for Trivy and CycloneDX artifacts.
 - [x] Bruno black-box integration workflow for API/MCP smoke coverage.
 - [x] Pytest and Bruno JUnit result publishing in CI.
 - [x] Containerfile with OCI labels, non-root runtime, and CI smoke coverage.
@@ -164,14 +174,18 @@ release requirements:
   - optional `DOCKERHUB_NAMESPACE`
 - [x] Add `.github/workflows/docker-publish.yml`.
 - [x] Trigger publish only on `release.published` and manual retry.
+- [x] Manual retry checks out the requested release tag before building.
 - [x] Build with Docker Buildx from the checked-in `Containerfile`.
 - [x] Validate tag against `pyproject.toml`.
+- [x] Block publishing on high/critical Trivy findings in the release image.
 - [x] Push immutable version tags:
   - `v0.1.0`
   - `0.1.0`
 - [x] Push `latest` only for stable releases.
 - [x] Add image digest to the workflow summary and release notes.
 - [x] Keep PR and push builds as smoke-only, with no registry push.
+- [x] Smoke-test the published Docker image by digest during the publish
+      workflow before treating the release image as promoted.
 
 ## P0: Documentation Readiness
 
@@ -179,6 +193,8 @@ release requirements:
       why local-first agent memory matters.
 - [ ] Quick start works from a clean checkout.
 - [ ] Docker/Compose quick start works from a clean checkout.
+- [x] Deterministic quickstart checks are covered by CI; keep real external
+      client checks scheduled/manual until stable clients are available in CI.
 - [x] MCP client setup is reachable from README.
 - [x] Security/auth guidance is reachable before LAN/container exposure docs.
 - [x] Release notes link to the generated docs site.
@@ -202,7 +218,7 @@ Before publishing `v0.1.0`, run one release-candidate rehearsal:
 7. Run:
 
 ```bash
-docker run --rm -p 8000:8000 <image>:v0.1.0-rc.1
+docker run --rm -p 127.0.0.1:8000:8000 <image>:v0.1.0-rc.1
 curl -fsS http://127.0.0.1:8000/ready
 ```
 
@@ -214,10 +230,16 @@ curl -fsS http://127.0.0.1:8000/ready
 These are valuable but should not block `v0.1.0` unless the image is promoted as
 production-ready.
 
-- [x] Add Trivy image scan in warning mode.
+- [x] Add Trivy image scan in warning mode for PR/scheduled reporting.
+- [x] Block Docker release publishing on high/critical Trivy image findings.
 - [x] Add dependency vulnerability reporting.
 - [x] Add SBOM generation for Docker images.
 - [x] Add GitHub artifact attestations or provenance.
+- [x] Add CodeQL for Python static security analysis.
+- [x] Document best-effort release security scan findings in
+      `release_security_scan_notes.md`.
+- [ ] Pin GitHub Actions and Docker base/provider images by digest after the
+      workflow set stabilizes.
 - [ ] Consider Cosign signing after the basic release process is stable.
 - [x] Document image support lifecycle and security-fix policy.
 

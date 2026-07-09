@@ -92,12 +92,10 @@ storage:
 
 Optional provider SDKs are installed through extras, not by the presence of a
 config block. For example, use `uv sync --extra postgres` for Postgres/PGVector
-or `uv sync --extra qdrant` for Qdrant. The checked-in `Containerfile` installs
-all provider extras intentionally so one image can run any supported provider,
-but a local/dev install only downloads the extras you request. The free local
-Compose examples for PostgreSQL/PGVector, MongoDB, Redis, ChromaDB, and
-SQLite/LanceDB use provider-local Containerfiles so they install only the extras
-needed by that example.
+or `uv sync --extra qdrant` for Qdrant. The checked-in root `Containerfile` is
+the quickstart image and installs only the default SQLite/LanceDB runtime
+dependencies. Provider-specific Compose examples use provider-local
+Containerfiles so they install only the extras needed by that example.
 
 ## What It Does
 
@@ -227,7 +225,7 @@ Run with Docker:
 
 ```bash
 docker build -t ai-memory-hub:local -f Containerfile .
-docker run --rm -p 8000:8000 ai-memory-hub:local
+docker run --rm -p 127.0.0.1:8000:8000 ai-memory-hub:local
 ```
 
 Run with Postgres and PGVector:
@@ -246,10 +244,10 @@ supports your languages. Reindex or use a separate vector namespace/index if
 you change embedding model/provider/options on persistent data.
 
 The Compose example is unauthenticated for local smoke testing. Before exposing
-it on a LAN, create a bearer token in the metadata database and change
-`api.auth` in the mounted config to `bearer_token`; clients then send
-`Authorization: Bearer <token>` to both HTTP and MCP endpoints. See the PGVector
-runbook in the checked-in Compose example directory for the exact commands.
+it beyond loopback, put it behind TLS or a trusted private network and use
+`api.auth: oauth_resource_server` for MCP-compliant HTTP authorization. The
+OAuth resource-server example shows the protected resource metadata and bearer
+access-token shape expected by MCP clients.
 
 Other checked-in provider examples live under `examples/storage_providers`:
 ChromaDB, Qdrant, MongoDB, MongoDB Atlas, Milvus, Weaviate, Elasticsearch,
@@ -257,7 +255,8 @@ OpenSearch, Redis/RediSearch, Vespa, Typesense, Pinecone, Turbopuffer,
 SQLite/LanceDB, and in-memory vectors.
 
 The local MongoDB and Redis examples include their own Compose stack and
-provider-local hub `Containerfile`, so they avoid building the all-extras image:
+provider-local hub `Containerfile`, so they avoid adding unrelated provider
+SDKs to the quickstart image:
 
 ```bash
 cd examples/storage_providers/mongodb
@@ -287,6 +286,8 @@ provider matrix, smoke commands, CI coverage, and hosted-provider notes.
 - [Browser extension capture plan](docs/browser_extension_capture_plan.md)
 - [Plugin readiness plan](docs/plugin_readiness_plan.md)
 - [First release readiness plan](docs/first_release_readiness_plan.md)
+- [Release CI gap analysis](docs/release_ci_gap_analysis.md)
+- [Release security scan notes](docs/release_security_scan_notes.md)
 - [Repository governance settings](docs/repository_governance_settings.md)
 - [Release promotion assets](docs/release_promotion_assets.md)
 - [Changelog](CHANGELOG.md)

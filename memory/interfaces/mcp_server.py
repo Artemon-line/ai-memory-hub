@@ -12,7 +12,7 @@ import jsonschema
 from fastmcp import Context as FastMCPContext
 from pydantic import Field
 
-from memory.auth import current_owner_id
+from memory.auth import WRITE_SCOPE, current_auth_context, current_owner_id
 from memory.backend.log_safety import redact_secrets
 from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig
@@ -629,6 +629,17 @@ def build_tool_handlers(
     def owner_id() -> str | None:
         return current_owner_id()
 
+    def require_scope(scope: str) -> dict[str, Any] | None:
+        auth = current_auth_context()
+        if auth is None or scope in auth.scopes:
+            return None
+        return _envelope(
+            status="error",
+            error_code="insufficient_scope",
+            error_message=f"{scope} scope is required for this MCP tool",
+            required_scope=scope,
+        )
+
     async def memory_validate(
         conversation_json: ConversationJsonArg, ctx: FastMCPContext | None = None
     ) -> dict[str, Any]:
@@ -690,6 +701,15 @@ def build_tool_handlers(
         project_id: str | None = None,
         ctx: FastMCPContext | None = None,
     ) -> dict[str, Any]:
+        scope_error = require_scope(WRITE_SCOPE)
+        if scope_error is not None:
+            await _emit_mcp_tool_log(
+                ctx,
+                tool_name="memory_insert",
+                status="error",
+                error_code="insufficient_scope",
+            )
+            return scope_error
         if not isinstance(conversation_json, dict):
             return _envelope(
                 status="error",
@@ -1146,6 +1166,15 @@ def build_tool_handlers(
         project_id: str | None = None,
         ctx: FastMCPContext | None = None,
     ) -> dict[str, Any]:
+        scope_error = require_scope(WRITE_SCOPE)
+        if scope_error is not None:
+            await _emit_mcp_tool_log(
+                ctx,
+                tool_name="memory_fact_supersede",
+                status="error",
+                error_code="insufficient_scope",
+            )
+            return scope_error
         if not isinstance(fact_id, str) or not fact_id.strip():
             return _envelope(
                 status="error",
@@ -1170,6 +1199,15 @@ def build_tool_handlers(
     async def memory_pending_approve(
         id: str, project_id: str | None = None, ctx: FastMCPContext | None = None
     ) -> dict[str, Any]:
+        scope_error = require_scope(WRITE_SCOPE)
+        if scope_error is not None:
+            await _emit_mcp_tool_log(
+                ctx,
+                tool_name="memory_pending_approve",
+                status="error",
+                error_code="insufficient_scope",
+            )
+            return scope_error
         if not isinstance(id, str) or not id.strip():
             return _envelope(
                 status="error",
@@ -1185,6 +1223,15 @@ def build_tool_handlers(
     async def memory_pending_reject(
         id: str, project_id: str | None = None, ctx: FastMCPContext | None = None
     ) -> dict[str, Any]:
+        scope_error = require_scope(WRITE_SCOPE)
+        if scope_error is not None:
+            await _emit_mcp_tool_log(
+                ctx,
+                tool_name="memory_pending_reject",
+                status="error",
+                error_code="insufficient_scope",
+            )
+            return scope_error
         if not isinstance(id, str) or not id.strip():
             return _envelope(
                 status="error",

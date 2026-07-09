@@ -14,14 +14,12 @@ Use this checklist for release PRs and release candidate drills.
 ## Required Local Checks
 
 ```bash
-uv run python -m ruff check memory tests tools
-uv run pytest tests/unit tests/integration -q
-uv run python -m pyright
-uv run python tests/bruno/validate_files.py
-uv run python tools/prepare_mkdocs.py
-uv run python -m mkdocs build --strict
 uv run python tools/validate_release_version.py v0.1.0
 ```
+
+Ruff, Pyright, Bruno file validation, strict docs build, and release tag policy
+are covered by the `Release Readiness` workflow. Run them locally only when
+debugging failures or preparing an offline release candidate.
 
 ## GitHub Settings
 
@@ -29,6 +27,7 @@ uv run python tools/validate_release_version.py v0.1.0
 - [ ] Pull requests are required before merge.
 - [ ] Required status checks include the main CI jobs, docs build, and Bruno
       integration when relevant files change.
+- [ ] Required status checks include `Release Readiness` and `CodeQL Analysis`.
 - [ ] Real-client MCP smoke remains manual/scheduled and non-required.
 - [ ] Repository description and topics are reviewed.
 
@@ -40,8 +39,11 @@ uv run python tools/validate_release_version.py v0.1.0
 - [ ] Publish a GitHub prerelease.
 - [ ] Confirm Docker publishing creates version tags and does not update
       `latest`.
+- [ ] Confirm Docker publishing checked out the requested release tag and passed
+      the blocking image scan.
 - [ ] Pull and run the image on a clean machine or clean container runtime.
-- [ ] Run `curl -fsS http://127.0.0.1:8000/ready`.
+- [ ] Confirm the Docker publish workflow smoke-tested the pushed image by
+      digest.
 - [ ] Run the README quick start from a clean checkout.
 
 ## Stable Release

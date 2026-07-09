@@ -187,6 +187,21 @@ def _sign_hs256(payload: dict[str, object], secret: str) -> str:
     return f"{header_part}.{payload_part}.{_base64url(signature)}"
 
 
+def _mcp_result_payload(response_text: str) -> dict[str, object]:
+    for line in response_text.splitlines():
+        if not line.startswith("data: "):
+            continue
+        payload = json.loads(line.removeprefix("data: "))
+        if "result" not in payload:
+            continue
+        content = payload["result"]["content"]
+        assert isinstance(content, list) and content
+        text = content[0]["text"]
+        assert isinstance(text, str)
+        return json.loads(text)
+    raise AssertionError(f"No MCP result payload found in response: {response_text}")
+
+
 def _base64url_json(payload: dict[str, object]) -> str:
     raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
     return _base64url(raw)
@@ -500,6 +515,64 @@ def test_oauth_auth_accepts_mcp_tools_list_with_session() -> None:
     assert session_id
     assert tools_list.status_code == 200
     assert "memory_search" in tools_list.text
+
+
+def test_oauth_mcp_write_tool_requires_write_scope() -> None:
+    initialize_payload = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "pytest", "version": "0.1"},
+        },
+    }
+    token = _oauth_token(scope="memory:read")
+    base_headers = {
+        "Accept": "application/json, text/event-stream",
+        "Authorization": f"Bearer {token}",
+    }
+    payload = _conversation()
+
+    with _oauth_client() as client:
+        initialize = client.post("/mcp/", json=initialize_payload, headers=base_headers)
+        session_id = initialize.headers.get("mcp-session-id")
+        insert = client.post(
+            "/mcp/",
+            json={
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/call",
+                "params": {
+                    "name": "memory_insert",
+                    "arguments": {"conversation_json": payload},
+                },
+            },
+            headers={**base_headers, "Mcp-Session-Id": session_id or ""},
+        )
+        read_search = client.post(
+            "/mcp/",
+            json={
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "tools/call",
+                "params": {
+                    "name": "memory_search",
+                    "arguments": {"query": "hello", "top_k": 5},
+                },
+            },
+            headers={**base_headers, "Mcp-Session-Id": session_id or ""},
+        )
+
+    assert initialize.status_code == 200
+    assert insert.status_code == 200
+    insert_payload = _mcp_result_payload(insert.text)
+    assert insert_payload["status"] == "error"
+    assert insert_payload["error_code"] == "insufficient_scope"
+    assert insert_payload["required_scope"] == "memory:write"
+    assert read_search.status_code == 200
+    assert _mcp_result_payload(read_search.text)["status"] == "ok"
 
 
 def test_bearer_auth_stamps_owner_and_isolates_memory() -> None:
