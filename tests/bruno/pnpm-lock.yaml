@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  axios: 1.18.0
+  form-data: 4.0.6
+  uuid: 11.1.1
+
 importers:
 
   .:
@@ -417,6 +422,10 @@ packages:
   '@usebruno/schema@0.27.0':
     resolution: {integrity: sha512-fd9b0Oj+oyQ+C75s7r0jIuJ6iac+QGoKY+ShUs0bcOvOIhwv2xEViskPKkxReGMwtTYTcwfpYzfLC2K2/ouh7Q==}
 
+  agent-base@6.0.2:
+    resolution: {integrity: sha512-RZNwNclF7+MS/8bDg70amg32dyeZGZxiDuQmZxKLAlQjr3jGyLx+4Kkk58UO7D2QdgFIQCovuSuZESne6RG6XQ==}
+    engines: {node: '>= 6.0.0'}
+
   agent-base@7.1.4:
     resolution: {integrity: sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ==}
     engines: {node: '>= 14'}
@@ -473,7 +482,7 @@ packages:
     resolution: {integrity: sha512-BlpjvRWiOi52k8bCeoSCTe5jKQQdSqAN18x07WR8sZghzGW6tvtuepz+72pPvImI2vCn2F5HiyLvOVAVjoha+g==}
     engines: {node: '>=16'}
     peerDependencies:
-      axios: '>=1.6.0'
+      axios: 1.18.0
 
   aws4@1.13.2:
     resolution: {integrity: sha512-lHe62zvbTB5eEABUVi/AwVh0ZKY9rMMDhmm+eeyuuUQbQ3+J+fONVQOZyj+DdrvD4BY33uYniyRJ4UJIaSKAfw==}
@@ -481,8 +490,8 @@ packages:
   axios-ntlm@1.4.6:
     resolution: {integrity: sha512-4nR5cbVEBfPMTFkd77FEDpDuaR205JKibmrkaQyNwGcCx0szWNpRZaL0jZyMx4+mVY2PXHjRHuJafv9Oipl0Kg==}
 
-  axios@1.16.0:
-    resolution: {integrity: sha512-6hp5CwvTPlN2A31g5dxnwAX0orzM7pmCRDLnZSX772mv8WDqICwFjowHuPs04Mc8deIld1+ejhtaMn5vp6b+1w==}
+  axios@1.18.0:
+    resolution: {integrity: sha512-E32NzpYKp++W7XRe52rHiXV2ehxmh3wbdgO7MHeFM+vqxLBYHzt0ElkiImtOBxtOmyp0yoC8C6uESVV84Y2/hw==}
 
   baseline-browser-mapping@2.10.43:
     resolution: {integrity: sha512-AjYpR78kDWAY3Efj+cDTFH9t9SCoL7OoTp1BOb0mQV7S+6CiLwnWM3FyxhJtdPufDFKzmCSFoUncKjWgJEZTCQ==}
@@ -752,10 +761,6 @@ packages:
       debug:
         optional: true
 
-  form-data@4.0.4:
-    resolution: {integrity: sha512-KrGhL9Q4zjj0kiUt5OO4Mr/A/jlI2jDYs5eHBpYHPcBEVSiipAvn2Ko2HnPe20rmcuuvMHNdZFp+4IlGTMF0Ow==}
-    engines: {node: '>= 6'}
-
   form-data@4.0.6:
     resolution: {integrity: sha512-vKatAh4SlVfgbv+YtmhiRjhEMJsYpsG1Y2rMQtR+SVSbytsSD1YGzDIcrAJmdFec88u/+VoGmxnl+80gL1tRCQ==}
     engines: {node: '>= 6'}
@@ -836,6 +841,10 @@ packages:
   http-proxy-agent@7.0.2:
     resolution: {integrity: sha512-T1gkAiYYDWYx3V5Bmyu7HcfcvL7mUrTWiM6yOfa3PIphViJ/gFPbvidQ+veqSOHci/PxBcDabeUNCzpOODJZig==}
     engines: {node: '>= 14'}
+
+  https-proxy-agent@5.0.1:
+    resolution: {integrity: sha512-dFcAjpTQFgoLMzC2VwU+C/CbS7uRL0lWmxDITmqm7C+7F0Odmj6s9l6alZc6AELXhrnggM2CeWSXHGOdX2YtwA==}
+    engines: {node: '>= 6'}
 
   https-proxy-agent@7.0.6:
     resolution: {integrity: sha512-vK9P5/iUfdl95AI+JVyUuIcVtd4ofvtrOr3HNtM2yxC9bnMbEdp3x01OhQNnjb8IJYi38VlTE3mBXwcfvywuSw==}
@@ -1341,9 +1350,8 @@ packages:
   util@0.10.4:
     resolution: {integrity: sha512-0Pm9hTQ3se5ll1XihRic3FDIku70C+iHUdT/W926rSgHV5QgXsYbKZN8MSC3tJtSkhuROzvsQjAaFENRXr+19A==}
 
-  uuid@10.0.0:
-    resolution: {integrity: sha512-8XkAphELsDnEGrDxUOHB3RGvXz6TeuYSGEZBOjtTtPm2lwhGBjLgOzLHB63IUWfBpNucQjND6d3AOudO+H3RWQ==}
-    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
+  uuid@11.1.1:
+    resolution: {integrity: sha512-vIYxrBCC/N/K+Js3qSN88go7kIfNPssr/hHCesKCQNAjmgvYS2oqr69kIufEG+O4+PfezOH4EbIeHCfFov8ZgQ==}
     hasBin: true
 
   webidl-conversions@3.0.1:
@@ -1989,8 +1997,8 @@ snapshots:
       '@usebruno/js': 0.49.0(debug@4.4.3)
       '@usebruno/lang': 0.37.1
       '@usebruno/requests': 0.18.0
-      aws4-axios: 3.4.0(axios@1.16.0)
-      axios: 1.16.0(debug@4.4.3)
+      aws4-axios: 3.4.0(axios@1.18.0)
+      axios: 1.18.0(debug@4.4.3)
       axios-ntlm: 1.4.6(debug@4.4.3)
       chai: 4.5.0
       chalk: 3.0.0
@@ -1998,7 +2006,7 @@ snapshots:
       csv-parse: 5.6.0
       debug: 4.4.3
       decomment: 0.9.5
-      form-data: 4.0.4
+      form-data: 4.0.6
       fs-extra: 10.1.0
       http-proxy-agent: 7.0.2
       https-proxy-agent: 7.0.6
@@ -2045,7 +2053,7 @@ snapshots:
       ajv: 8.20.0
       ajv-formats: 2.1.1(ajv@8.20.0)
       atob: 2.1.2
-      axios: 1.16.0(debug@4.4.3)
+      axios: 1.18.0(debug@4.4.3)
       btoa: 1.2.1
       chai: 4.5.0
       chai-string: 1.6.0(chai@4.5.0)
@@ -2061,13 +2069,14 @@ snapshots:
       path: 0.12.7
       quickjs-emscripten: 0.32.0
       tv4: 1.3.0
-      uuid: 10.0.0
+      uuid: 11.1.1
       xml-formatter: 3.7.0
       xml2js: 0.6.2
       yaml: 2.9.0
     transitivePeerDependencies:
       - debug
       - encoding
+      - supports-color
 
   '@usebruno/lang@0.37.0':
     dependencies:
@@ -2091,7 +2100,7 @@ snapshots:
       '@grpc/grpc-js': 1.14.4
       '@grpc/proto-loader': 0.7.15
       '@types/qs': 6.15.1
-      axios: 1.16.0(debug@4.4.3)
+      axios: 1.18.0(debug@4.4.3)
       debug: 4.4.3
       google-protobuf: 4.0.2
       grpc-js-reflection-client: 1.4.1(@grpc/grpc-js@1.14.4)
@@ -2113,6 +2122,12 @@ snapshots:
     dependencies:
       nanoid: 3.3.8
       yup: 0.32.11
+
+  agent-base@6.0.2:
+    dependencies:
+      debug: 4.4.3
+    transitivePeerDependencies:
+      - supports-color
 
   agent-base@7.1.4: {}
 
@@ -2153,30 +2168,33 @@ snapshots:
 
   atob@2.1.2: {}
 
-  aws4-axios@3.4.0(axios@1.16.0):
+  aws4-axios@3.4.0(axios@1.18.0):
     dependencies:
       '@aws-sdk/client-sts': 3.1090.0
       aws4: 1.13.2
-      axios: 1.16.0(debug@4.4.3)
+      axios: 1.18.0(debug@4.4.3)
 
   aws4@1.13.2: {}
 
   axios-ntlm@1.4.6(debug@4.4.3):
     dependencies:
-      axios: 1.16.0(debug@4.4.3)
+      axios: 1.18.0(debug@4.4.3)
       des.js: 1.1.0
       dev-null: 0.1.1
       js-md4: 0.3.2
     transitivePeerDependencies:
       - debug
+      - supports-color
 
-  axios@1.16.0(debug@4.4.3):
+  axios@1.18.0(debug@4.4.3):
     dependencies:
       follow-redirects: 1.16.0(debug@4.4.3)
       form-data: 4.0.6
+      https-proxy-agent: 5.0.1
       proxy-from-env: 2.1.0
     transitivePeerDependencies:
       - debug
+      - supports-color
 
   baseline-browser-mapping@2.10.43: {}
 
@@ -2455,14 +2473,6 @@ snapshots:
     optionalDependencies:
       debug: 4.4.3
 
-  form-data@4.0.4:
-    dependencies:
-      asynckit: 0.4.0
-      combined-stream: 1.0.8
-      es-set-tostringtag: 2.1.0
-      hasown: 2.0.4
-      mime-types: 2.1.35
-
   form-data@4.0.6:
     dependencies:
       asynckit: 0.4.0
@@ -2551,6 +2561,13 @@ snapshots:
   http-proxy-agent@7.0.2:
     dependencies:
       agent-base: 7.1.4
+      debug: 4.4.3
+    transitivePeerDependencies:
+      - supports-color
+
+  https-proxy-agent@5.0.1:
+    dependencies:
+      agent-base: 6.0.2
       debug: 4.4.3
     transitivePeerDependencies:
       - supports-color
@@ -3017,7 +3034,7 @@ snapshots:
     dependencies:
       inherits: 2.0.3
 
-  uuid@10.0.0: {}
+  uuid@11.1.1: {}
 
   webidl-conversions@3.0.1: {}
 
