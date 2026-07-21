@@ -9,6 +9,6 @@
     "smoke": "cd collections/ai-memory-hub-integration && bru run --global-env local --workspace-path ../.. --tags smoke --sandbox developer --noproxy"
   },
   "devDependencies": {
-    "@usebruno/cli": "3.5.1"
+    "@usebruno/cli": "3.5.2"
   }
 }
