@@ -83,13 +83,11 @@ def test_pgvector_example_uses_slim_containerfile() -> None:
 
 def test_free_provider_examples_use_provider_local_containerfiles() -> None:
     expected_extras = {
-        "chromadb": {"chromadb"},
         "mongodb": {"mongodb"},
         "redis": {"redis"},
         "sqlite-lancedb": set(),
     }
     all_optional_extras = {
-        "chromadb",
         "elasticsearch",
         "milvus",
         "mongodb",

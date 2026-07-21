@@ -22,12 +22,6 @@ storage:
     pgvector:
       url: ""
       table_name: memory_vectors
-    chromadb:
-      path: ./data/chromadb
-      url: ""
-      host: 127.0.0.1
-      port: 8000
-      collection: memory_vectors
     qdrant:
       url: http://127.0.0.1:6333
       api_key: ""
@@ -136,7 +130,7 @@ providers:
   embedding_model: 'text-embedding-3-small' # OpenAI-compatible embedding model
   embedding_dimension: 1536 # text-embedding-3-small embedding dimension
   metadata_db: sqlite # active metadata provider: sqlite | postgres | mongodb
-  # lancedb | chromadb | qdrant | milvus | weaviate | mongodb_atlas |
+  # lancedb | qdrant | milvus | weaviate | mongodb_atlas |
   # elasticsearch | opensearch | redis | pinecone | turbopuffer | vespa | typesense | pgvector | memory | in_memory
   vector_db: lancedb # active vector provider
   agent: mvp # Phase 1 ingestion agent (deterministic pipeline)
@@ -246,23 +240,7 @@ openai:
 #     postgres:
 #       url: postgresql://user:password@127.0.0.1:5432/memory
 #
-# 3) ChromaDB vectors
-#
-# providers:
-#   vector_db: chromadb
-#
-# storage:
-#   vector:
-#     allow_fallback: false
-#   vector_providers:
-#     chromadb:
-#       path: ./data/chromadb
-#       collection: memory_vectors
-#
-# Install with:
-#   uv sync --extra chromadb
-#
-# 4) Qdrant vectors
+# 3) Qdrant vectors
 #
 # providers:
 #   vector_db: qdrant
@@ -280,7 +258,7 @@ openai:
 # Install with:
 #   uv sync --extra qdrant
 #
-# 5) Milvus vectors
+# 4) Milvus vectors
 #
 # providers:
 #   vector_db: milvus
@@ -298,7 +276,7 @@ openai:
 # Install with:
 #   uv sync --extra milvus
 #
-# 6) Weaviate vectors
+# 5) Weaviate vectors
 #
 # providers:
 #   vector_db: weaviate
@@ -315,7 +293,7 @@ openai:
 # Install with:
 #   uv sync --extra weaviate
 #
-# 7) Elasticsearch vectors
+# 6) Elasticsearch vectors
 #
 # providers:
 #   vector_db: elasticsearch
@@ -334,7 +312,7 @@ openai:
 # Install with:
 #   uv sync --extra elasticsearch
 #
-# 8) OpenSearch vectors
+# 7) OpenSearch vectors
 #
 # providers:
 #   vector_db: opensearch
@@ -353,7 +331,7 @@ openai:
 # Install with:
 #   uv sync --extra opensearch
 #
-# 9) Redis/RediSearch vectors
+# 8) Redis/RediSearch vectors
 #
 # providers:
 #   vector_db: redis
@@ -371,7 +349,7 @@ openai:
 # Install with:
 #   uv sync --extra redis
 #
-# 10) Pinecone vectors
+# 9) Pinecone vectors
 #
 # providers:
 #   vector_db: pinecone
@@ -392,7 +370,7 @@ openai:
 # Install with:
 #   uv sync --extra pinecone
 #
-# 11) Turbopuffer vectors
+# 10) Turbopuffer vectors
 #
 # providers:
 #   vector_db: turbopuffer
@@ -410,7 +388,7 @@ openai:
 # Install with:
 #   uv sync --extra turbopuffer
 #
-# 12) Vespa vectors
+# 11) Vespa vectors
 #
 # providers:
 #   vector_db: vespa
@@ -430,7 +408,7 @@ openai:
 # Install with:
 #   uv sync --extra vespa
 #
-# 13) Typesense vectors
+# 12) Typesense vectors
 #
 # providers:
 #   vector_db: typesense
@@ -448,7 +426,7 @@ openai:
 # Install with:
 #   uv sync --extra typesense
 #
-# 14) Postgres metadata + PGVector vectors
+# 13) Postgres metadata + PGVector vectors
 #
 # providers:
 #   metadata_db: postgres
@@ -469,7 +447,7 @@ openai:
 # Install with:
 #   uv sync --extra postgres
 #
-# 15) MongoDB metadata + Atlas Vector Search
+# 14) MongoDB metadata + Atlas Vector Search
 #
 # providers:
 #   metadata_db: mongodb
@@ -490,7 +468,7 @@ openai:
 # Install with:
 #   uv sync --extra mongodb
 #
-# 16) Strict production startup (no vector fallback)
+# 15) Strict production startup (no vector fallback)
 #
 # storage:
 #   profile: production
@@ -499,19 +477,19 @@ openai:
 #     # Optional here; production defaults this to false when omitted.
 #     allow_fallback: false
 #
-# 17) Dry-run mode for ingestion validation
+# 16) Dry-run mode for ingestion validation
 #
 # storage:
 #   dry_run: true
 #   vector:
 #     allow_fallback: true
 #
-# 18) In-memory vectors path
+# 17) In-memory vectors path
 #
 # providers:
 #   vector_db: in_memory
 #
-# 19) Custom conversation schema
+# 18) Custom conversation schema
 #
 # schema:
 #   file: "./memory/schema/conversation.schema.json"

@@ -26,7 +26,7 @@ or `uv sync --extra postgres`, or when using a provider-local container image
 that deliberately installs that provider's extra.
 
 The API-key-free local Compose examples for PostgreSQL/PGVector, MongoDB,
-Redis, ChromaDB, and SQLite/LanceDB use provider-local Containerfiles. Those
+Redis, and SQLite/LanceDB use provider-local Containerfiles. Those
 images install only the optional dependency extras needed by that example.
 For Redis and MongoDB specifically, the checked-in directories include all
 local-run assets:
@@ -45,7 +45,6 @@ local-run assets:
 | SQLite + LanceDB | `examples/storage_providers/sqlite-lancedb` | Default local persistent setup |
 | SQLite + in-memory vectors | `examples/storage_providers/memory` | Disposable vector storage for tests |
 | Postgres + PGVector | `examples/storage_providers/postgres-pgvector` | Full runbook for Docker/Podman and MCP handoff |
-| SQLite + ChromaDB | `examples/storage_providers/chromadb` | Local Chroma HTTP service |
 | SQLite + Qdrant | `examples/storage_providers/qdrant` | Local Qdrant service |
 | MongoDB metadata + LanceDB | `examples/storage_providers/mongodb` | MongoDB owns metadata only |
 | MongoDB metadata + Atlas vectors | `examples/storage_providers/mongodb-atlas` | Hosted Atlas Vector Search |
@@ -61,11 +60,15 @@ local-run assets:
 
 ## CI Coverage
 
+ChromaDB is temporarily unavailable in `v0.1.0` because the upstream
+`chromadb` package has an unresolved critical advisory with no patched release.
+The adapter remains in the codebase for future re-enable after a safe upstream
+version is available.
+
 The normal CI suite runs shared fake-client contract tests for every vector
 adapter and metadata provider. The dedicated provider workflow
 `.github/workflows/storage-providers.yml` runs service-backed live tests for:
 
-- ChromaDB
 - Qdrant
 - MongoDB
 - Milvus
@@ -137,9 +140,6 @@ API-key-free local Compose examples:
 
 ```bash
 cd examples/storage_providers/sqlite-lancedb
-docker compose up --build
-
-cd examples/storage_providers/chromadb
 docker compose up --build
 
 cd examples/storage_providers/mongodb

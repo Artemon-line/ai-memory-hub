@@ -24,8 +24,8 @@ uv sync --dev --extra tokenizer
 uv sync --dev --all-extras
 ```
 
-Use provider extras when selecting optional storage SDKs such as ChromaDB,
-Qdrant, Milvus, Weaviate, MongoDB, Elasticsearch, OpenSearch, Redis, Vespa,
+Use provider extras when selecting optional storage SDKs such as Qdrant,
+Milvus, Weaviate, MongoDB, Elasticsearch, OpenSearch, Redis, Vespa,
 Typesense, Pinecone, Turbopuffer, Postgres, or PGVector. Use the tokenizer extra for exact
 OpenAI-compatible token counting through `tiktoken`. Use `--all-extras` for
 container builds or provider compatibility checks.
@@ -34,9 +34,14 @@ Provider config blocks do not install dependencies. Dependencies are installed
 only by the `uv sync` extras you choose, or by container images that explicitly
 install extras. The checked-in root `Containerfile` is the quickstart image and
 installs only the default SQLite/LanceDB runtime dependencies. The free local
-Compose examples for PostgreSQL/PGVector, MongoDB, Redis, ChromaDB, and
-SQLite/LanceDB use provider-local Containerfiles so they install only the extras
-needed by that example.
+Compose examples for PostgreSQL/PGVector, MongoDB, Redis, and SQLite/LanceDB
+use provider-local Containerfiles so they install only the extras needed by
+that example.
+
+ChromaDB is temporarily unavailable in `v0.1.0` because the upstream
+`chromadb` package has an unresolved critical advisory with no patched release.
+The adapter code remains in the repository for future re-enable after upstream
+publishes a safe version.
 
 ## How It Works
 
@@ -385,26 +390,6 @@ paths:
   data_dir: ./data
 ```
 
-### SQLite + ChromaDB
-
-Use ChromaDB as an optional local-first vector backend:
-
-```yaml
-providers:
-  metadata_db: sqlite
-  vector_db: chromadb
-
-storage:
-  vector:
-    allow_fallback: false
-  vector_providers:
-    chromadb:
-      path: ./data/chromadb
-      collection: memory_vectors
-```
-
-Install the optional dependency with `uv sync --extra chromadb`.
-
 ### SQLite + Qdrant
 
 Use Qdrant as a local Docker or Qdrant Cloud vector backend:
@@ -728,9 +713,6 @@ storage:
     allow_fallback: true
     distance: cosine
   vector_providers:
-    chromadb:
-      path: ./data/chromadb
-      collection: memory_vectors
     qdrant:
       url: http://127.0.0.1:6333
       api_key: ""
@@ -928,7 +910,7 @@ enables tokenizer budgeting with the optional `tiktoken` extra. For remote
 Ollama embeddings, see `examples/storage_providers/postgres-pgvector/config.ollama.yaml`.
 
 Additional checked-in provider examples are under `examples/storage_providers`.
-They cover SQLite/LanceDB, in-memory vectors, ChromaDB, Qdrant, MongoDB metadata,
+They cover SQLite/LanceDB, in-memory vectors, Qdrant, MongoDB metadata,
 MongoDB Atlas Vector Search, Milvus, Weaviate, Elasticsearch, OpenSearch,
 Redis/RediSearch, Vespa, Typesense, Pinecone, and Turbopuffer.
 

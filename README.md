@@ -5,7 +5,6 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Provider live checks:
-[![ChromaDB](https://img.shields.io/github/actions/workflow/status/Artemon-line/ai-memory-hub/storage-providers.yml?branch=main&event=push&label=ChromaDB&logo=chroma)](https://github.com/Artemon-line/ai-memory-hub/actions/workflows/storage-providers.yml)
 [![Qdrant](https://img.shields.io/github/actions/workflow/status/Artemon-line/ai-memory-hub/storage-providers.yml?branch=main&event=push&label=Qdrant&logo=qdrant)](https://github.com/Artemon-line/ai-memory-hub/actions/workflows/storage-providers.yml)
 [![MongoDB](https://img.shields.io/github/actions/workflow/status/Artemon-line/ai-memory-hub/storage-providers.yml?branch=main&event=push&label=MongoDB&logo=mongodb)](https://github.com/Artemon-line/ai-memory-hub/actions/workflows/storage-providers.yml)
 [![Weaviate](https://img.shields.io/github/actions/workflow/status/Artemon-line/ai-memory-hub/storage-providers.yml?branch=main&event=push&label=Weaviate&logo=weaviate)](https://github.com/Artemon-line/ai-memory-hub/actions/workflows/storage-providers.yml)
@@ -120,7 +119,7 @@ You choose three things:
 | --- | --- | --- |
 | Embeddings | Deterministic local embeddings for smoke tests and demos | Use a real embedding model for useful semantic search, especially multilingual memory |
 | Metadata storage | SQLite | Use Postgres for shared durable server setups, or MongoDB when it already owns application persistence |
-| Vector storage | LanceDB, ChromaDB, Qdrant, Milvus, Weaviate, PGVector, MongoDB Atlas, Elasticsearch, OpenSearch, Redis/RediSearch, Vespa, Typesense, Pinecone, Turbopuffer, or in-memory | Use the backend that already fits your local or hosted operations stack |
+| Vector storage | LanceDB, Qdrant, Milvus, Weaviate, PGVector, MongoDB Atlas, Elasticsearch, OpenSearch, Redis/RediSearch, Vespa, Typesense, Pinecone, Turbopuffer, or in-memory | Use the backend that already fits your local or hosted operations stack |
 
 ## Multilingual Retrieval Rule
 
@@ -151,12 +150,16 @@ multilingual retrieval.
 Storage guidance:
 
 - Use SQLite + LanceDB for the fastest single-machine development setup.
-- Use SQLite + ChromaDB when you want a local-first vector backend with an optional HTTP client mode.
 - Use SQLite + Qdrant when you want a local Docker or Qdrant Cloud vector backend.
 - Use Postgres metadata when multiple clients/users or long-running containers
   need one shared database.
 - Use Postgres + PGVector when you want one database to store both conversation
   metadata and vector indexes.
+
+ChromaDB is temporarily unavailable in `v0.1.0` because the upstream
+`chromadb` package has an unresolved critical advisory with no patched release.
+The adapter remains in the repository for future re-enable.
+
 - Use MongoDB metadata or MongoDB Atlas Vector Search when MongoDB already owns
   the application's persistence layer.
 - Use Milvus/Zilliz, Weaviate, Elasticsearch, OpenSearch, Redis/RediSearch, Vespa, or Typesense
@@ -251,7 +254,7 @@ OAuth resource-server example shows the protected resource metadata and bearer
 access-token shape expected by MCP clients.
 
 Other checked-in provider examples live under `examples/storage_providers`:
-ChromaDB, Qdrant, MongoDB, MongoDB Atlas, Milvus, Weaviate, Elasticsearch,
+Qdrant, MongoDB, MongoDB Atlas, Milvus, Weaviate, Elasticsearch,
 OpenSearch, Redis/RediSearch, Vespa, Typesense, Pinecone, Turbopuffer,
 SQLite/LanceDB, and in-memory vectors.
 
@@ -310,7 +313,7 @@ uv run python -m mkdocs build --strict
 
 The project currently includes deterministic ingestion, MCP tools/resources/prompts,
 HTTP endpoints, CLI commands, fact-backed answers, SQLite/Postgres/MongoDB
-metadata, LanceDB/ChromaDB/Qdrant/Milvus/Weaviate/PGVector/MongoDB Atlas/
+metadata, LanceDB/Qdrant/Milvus/Weaviate/PGVector/MongoDB Atlas/
 Elasticsearch/OpenSearch/Redis/Vespa/Typesense/Pinecone/Turbopuffer/in-memory vectors, token-budgeted ask, container CI,
 provider live-test CI, and GitHub Pages docs publishing.
 

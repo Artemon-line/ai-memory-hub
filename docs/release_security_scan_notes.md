@@ -7,6 +7,11 @@ hardening pass rather than a formal audit sign-off.
 
 ## Fixed In This Pass
 
+- ChromaDB is excluded from `v0.1.0` installable extras, live provider CI, and
+  checked-in runnable examples because the upstream `chromadb` package has an
+  unresolved critical advisory with no patched release. Re-enable only after a
+  safe upstream version is available and Dependabot no longer reports the
+  critical alert.
 - MCP write tools now require `memory:write` even though `/mcp` itself only
   requires `memory:read` to initialize and call read tools. A read-only OAuth
   token can still search, but `memory_insert`, fact supersede, pending approve,

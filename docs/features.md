@@ -37,7 +37,7 @@ switch providers through configuration.
 | Provider type | Available providers |
 | --- | --- |
 | Metadata | SQLite, Postgres, MongoDB |
-| Vector | LanceDB, ChromaDB, Qdrant, Milvus, Weaviate, PGVector, MongoDB Atlas Vector Search, Elasticsearch, OpenSearch, Redis/RediSearch, Pinecone, Turbopuffer, Vespa, Typesense, in-memory |
+| Vector | LanceDB, Qdrant, Milvus, Weaviate, PGVector, MongoDB Atlas Vector Search, Elasticsearch, OpenSearch, Redis/RediSearch, Pinecone, Turbopuffer, Vespa, Typesense, in-memory |
 | Embeddings | Deterministic local embeddings for smoke tests and OpenAI-compatible embedding endpoints for useful semantic retrieval |
 
 Provider startup checks cover schema compatibility, vector dimensions, selected
@@ -77,4 +77,3 @@ See [Observability](observability.md) for setup and operator notes.
   backends.
 - Unit, integration, and end-to-end test layout in the repository.
 - Release readiness, container, docs publishing, and governance checklists.
-

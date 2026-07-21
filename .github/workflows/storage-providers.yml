@@ -77,49 +77,6 @@ jobs:
           path: reports/junit/*.xml
           if-no-files-found: warn
 
-  chromadb:
-    name: ChromaDB Live Storage
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    services:
-      chromadb:
-        image: chromadb/chroma:latest
-        ports:
-          - 8001:8000
-
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
-        with:
-          python-version: "3.14"
-      - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
-        with:
-          enable-cache: true
-      - run: uv sync --dev --extra chromadb
-      - name: Wait for ChromaDB
-        run: |
-          for i in {1..60}; do
-            curl -fsS http://127.0.0.1:8001/api/v1/heartbeat && exit 0
-            curl -fsS http://127.0.0.1:8001/api/v2/heartbeat && exit 0
-            sleep 2
-          done
-          exit 1
-      - name: Run ChromaDB live test
-        env:
-          PYTHONHASHSEED: "0"
-          AMH_TEST_CHROMADB_URL: http://127.0.0.1:8001
-        run: |
-          mkdir -p reports/junit
-          uv run pytest -q tests/integration/test_storage_features.py \
-            -k live_chromadb_http_vector_contract \
-            --junitxml=reports/junit/pytest-chromadb-live.xml
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        if: always()
-        with:
-          name: pytest-chromadb-live-report
-          path: reports/junit/*.xml
-          if-no-files-found: warn
-
   qdrant:
     name: Qdrant Live Storage
     runs-on: ubuntu-latest

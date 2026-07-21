@@ -27,7 +27,7 @@ Implemented and verified in the codebase:
 - Multilingual retrieval is supported when the configured embedding model
   supports the languages involved; ai-memory-hub itself is not English-only.
 - Metadata stores: SQLite, Postgres, and MongoDB.
-- Vector stores: LanceDB, ChromaDB, Qdrant, Milvus/Zilliz, Weaviate,
+- Vector stores: LanceDB, Qdrant, Milvus/Zilliz, Weaviate,
   PGVector, MongoDB Atlas Vector Search, Elasticsearch, OpenSearch, Redis,
   Pinecone, Turbopuffer, Vespa, Typesense, and in-memory.
 - Provider capabilities, schema-version checks, vector dimensionality checks, fallback policy, degraded health state, and dry-run wrappers.
@@ -100,7 +100,7 @@ Default providers:
 Supported providers:
 
 - Metadata: SQLite, Postgres, MongoDB
-- Vectors: LanceDB, ChromaDB, Qdrant, Milvus/Zilliz, Weaviate, PGVector,
+- Vectors: LanceDB, Qdrant, Milvus/Zilliz, Weaviate, PGVector,
   MongoDB Atlas Vector Search, Elasticsearch, OpenSearch, Redis, Vespa,
   Typesense, Pinecone, Turbopuffer,
   in-memory
@@ -195,7 +195,7 @@ when the new model has the same dimensionality.
 [Configured Providers]
   Embeddings: openai | local
   Metadata: sqlite | postgres | mongodb
-  Vectors: lancedb | chromadb | qdrant | milvus | weaviate | pgvector |
+  Vectors: lancedb | qdrant | milvus | weaviate | pgvector |
            mongodb_atlas | elasticsearch | opensearch | redis | vespa |
            typesense | pinecone | turbopuffer | memory
        |
@@ -239,11 +239,6 @@ storage:
     allow_fallback: true
     distance: cosine
   vector_providers:
-    chromadb:
-      path: ./data/chromadb
-      collection: memory_vectors
-      # Optional HTTP mode:
-      # url: http://127.0.0.1:8000
     qdrant:
       url: http://127.0.0.1:6333
       collection: memory_vectors

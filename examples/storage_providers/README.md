@@ -20,7 +20,6 @@ break ranking.
 | SQLite metadata + LanceDB vectors | `sqlite-lancedb` | default unit/integration suite; local Compose smoke |
 | In-memory vectors | `memory` | default unit/integration suite |
 | Postgres metadata + PGVector vectors | `postgres-pgvector` | default CI service job; local Compose smoke |
-| ChromaDB vectors | `chromadb` | provider workflow; local Compose smoke |
 | Qdrant vectors | `qdrant` | provider workflow |
 | MongoDB metadata | `mongodb` | provider workflow; local Compose smoke |
 | MongoDB Atlas Vector Search | `mongodb-atlas` | optional hosted workflow inputs |
@@ -36,13 +35,14 @@ break ranking.
 
 ## Common Smoke Check
 
+ChromaDB is temporarily unavailable in `v0.1.0` because the upstream
+`chromadb` package has an unresolved critical advisory with no patched release.
+The adapter remains in the repository for future re-enable.
+
 Free local Compose examples that do not need API keys:
 
 ```bash
 cd examples/storage_providers/sqlite-lancedb
-docker compose up --build
-
-cd examples/storage_providers/chromadb
 docker compose up --build
 
 cd examples/storage_providers/mongodb

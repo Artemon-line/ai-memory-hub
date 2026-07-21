@@ -21,12 +21,6 @@ storage:
     pgvector:
       url: ""
       table_name: memory_vectors
-    chromadb:
-      path: ./data/chromadb
-      url: ""
-      host: 127.0.0.1
-      port: 8000
-      collection: memory_vectors
     qdrant:
       url: http://127.0.0.1:6333
       api_key: ""
@@ -144,7 +138,7 @@ providers:
   embedding_model: 'nomic-embed-text'
   embedding_dimension: 768
   metadata_db: sqlite # active metadata provider: sqlite | postgres | mongodb
-  # lancedb | chromadb | qdrant | milvus | weaviate | mongodb_atlas |
+  # lancedb | qdrant | milvus | weaviate | mongodb_atlas |
   # elasticsearch | opensearch | redis | pinecone | turbopuffer | vespa | typesense | pgvector | memory | in_memory
   vector_db: lancedb # active vector provider
   agent: mvp # Phase 1 ingestion agent (deterministic pipeline)

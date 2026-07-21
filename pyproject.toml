@@ -16,9 +16,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-chromadb = [
-    "chromadb>=1.0.0",
-]
 elasticsearch = [
     "elasticsearch>=8.15.0",
 ]
