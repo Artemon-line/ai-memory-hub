@@ -3816,8 +3816,85 @@ def authenticate_bearer_token_context(token: str) -> dict[str, object] | None:
                 "owner_id": str(owner_id),
                 "token_id": None,
                 "scopes": ["memory:read", "memory:write"],
-            }
+        }
     return None
+
+
+def find_or_create_oauth_identity(
+    *,
+    provider: str,
+    provider_subject: str,
+    email: str | None = None,
+    display_name: str | None = None,
+) -> dict[str, object]:
+    store = _runtime().metadata_store
+    if not hasattr(store, "find_or_create_oauth_identity"):
+        raise NotImplementedError("metadata store does not support oauth identities")
+    return store.find_or_create_oauth_identity(
+        provider=provider,
+        provider_subject=provider_subject,
+        email=email,
+        display_name=display_name,
+    )
+
+
+def create_web_session(
+    *,
+    session_id_hash: str,
+    user_id: str,
+    csrf_token_hash: str,
+    expires_at: str,
+) -> dict[str, object]:
+    store = _runtime().metadata_store
+    if not hasattr(store, "create_web_session"):
+        raise NotImplementedError("metadata store does not support web sessions")
+    return store.create_web_session(
+        session_id_hash=session_id_hash,
+        user_id=user_id,
+        csrf_token_hash=csrf_token_hash,
+        expires_at=expires_at,
+    )
+
+
+def web_session_for_hash(session_id_hash: str) -> dict[str, object] | None:
+    store = _runtime().metadata_store
+    if not hasattr(store, "web_session_for_hash"):
+        return None
+    return store.web_session_for_hash(session_id_hash)
+
+
+def revoke_web_session(session_id_hash: str) -> bool:
+    store = _runtime().metadata_store
+    if not hasattr(store, "revoke_web_session"):
+        return False
+    return bool(store.revoke_web_session(session_id_hash))
+
+
+def create_auth_token(
+    *,
+    owner_id: str,
+    token: str,
+    token_display_name: str | None = None,
+    expires_at: str | None = None,
+    scopes: list[str] | None = None,
+) -> dict[str, object]:
+    store = _runtime().metadata_store
+    if not hasattr(store, "create_auth_token"):
+        raise NotImplementedError("metadata store does not support auth tokens")
+    return store.create_auth_token(
+        owner_id=owner_id,
+        token=token,
+        token_display_name=token_display_name,
+        expires_at=expires_at,
+        scopes=scopes,
+    )
+
+
+def revoke_auth_token(token_id_or_prefix: str) -> dict[str, object] | None:
+    store = _runtime().metadata_store
+    if not hasattr(store, "revoke_auth_token"):
+        return None
+    return store.revoke_auth_token(token_id_or_prefix)
 
 
 def _fact_answer_text(

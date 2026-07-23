@@ -221,7 +221,8 @@ Acceptance criteria:
 - Each bearer token maps to exactly one user/principal.
 - User A cannot read, search, retrieve, or ask over User B's memory.
 - Tokens are shown once at creation and only hashes are stored.
-- `auth=none` remains available for CI and loopback-only local testing.
+- `auth=none` remains available for CI/test fixtures and maintainer-only
+  loopback smoke tests, but is not documented as a user setup option.
 
 ## P0: Project Workspaces And Shared Collaboration
 

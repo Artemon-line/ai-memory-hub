@@ -17,7 +17,16 @@ from starlette.responses import JSONResponse, Response
 from memory.config import HubConfig
 from memory.ingestion.base_agent import BaseIngestionAgent
 
-PUBLIC_PATHS = {"/health", "/ready", "/.well-known/oauth-protected-resource"}
+PUBLIC_PATHS = {
+    "/",
+    "/connect",
+    "/auth/google",
+    "/auth/google/callback",
+    "/auth/logout",
+    "/health",
+    "/ready",
+    "/.well-known/oauth-protected-resource",
+}
 READ_SCOPE = "memory:read"
 WRITE_SCOPE = "memory:write"
 _CURRENT_OWNER_ID: ContextVar[str | None] = ContextVar("amh_owner_id", default=None)
@@ -126,6 +135,23 @@ class AuthMiddleware(BaseHTTPMiddleware):
         claims = validate_oauth_access_token(token, self._config)
         if claims is None:
             return None
+        stored_context = await self._agent.authenticate_bearer_token_context(token)
+        if _is_hub_issued_claim(claims, self._config) and stored_context is None:
+            return None
+        if stored_context is not None:
+            scopes = stored_context.get("scopes", [])
+            if not isinstance(scopes, list | tuple | set | frozenset):
+                scopes = []
+            return AuthContext(
+                owner_id=str(stored_context["owner_id"]),
+                token_id=(
+                    str(stored_context["token_id"])
+                    if stored_context.get("token_id") is not None
+                    else claims.token_id
+                ),
+                scopes=frozenset(str(scope) for scope in scopes),
+                auth_mode="oauth_resource_server",
+            )
         return AuthContext(
             owner_id=claims.owner_id,
             token_id=claims.token_id,
@@ -139,6 +165,7 @@ class AccessTokenClaims:
     owner_id: str
     token_id: str | None
     scopes: frozenset[str]
+    issuer: str | None
 
 
 def required_scopes_for_request(request: Request) -> set[str]:
@@ -174,6 +201,7 @@ def validate_oauth_access_token(token: str, config: HubConfig) -> AccessTokenCla
         owner_id=owner_id.strip(),
         token_id=str(claims["jti"]) if claims.get("jti") is not None else None,
         scopes=frozenset(_scopes_from_claims(claims)),
+        issuer=str(claims["iss"]) if claims.get("iss") is not None else None,
     )
 
 
@@ -188,7 +216,11 @@ def protected_resource_metadata(config: HubConfig, *, resource_path: str = "/mcp
 
 
 def _is_public_path(path: str) -> bool:
-    return path in PUBLIC_PATHS or path.startswith("/.well-known/oauth-protected-resource/")
+    return (
+        path in PUBLIC_PATHS
+        or path.startswith("/auth/")
+        or path.startswith("/.well-known/oauth-protected-resource/")
+    )
 
 
 def _unauthorized(request: Request, config: HubConfig, error: str) -> JSONResponse:
@@ -240,6 +272,11 @@ def _oauth_jwt_secret(config: HubConfig) -> str:
     if config.api.oauth.jwt_secret:
         return config.api.oauth.jwt_secret
     return os.environ.get(config.api.oauth.jwt_secret_env, "")
+
+
+def _is_hub_issued_claim(claims: AccessTokenClaims, config: HubConfig) -> bool:
+    issuer = config.api.public_base_url.rstrip("/")
+    return bool(issuer) and claims.issuer == issuer
 
 
 def _decode_hs256_jwt(token: str, secret: str) -> dict[str, object] | None:

@@ -7,9 +7,10 @@ MCP-compliant OAuth resource-server mode for protected MCP deployments, while
 retaining bearer-token mode as a local/LAN compatibility mode for existing HTTP
 API and personal-token workflows.
 
-Supported modes:
+Implemented modes:
 
-- `api.auth: none` for CI and loopback-only local testing.
+- `api.auth: none` for CI, test fixtures, and maintainer-only local smoke tests.
+  Do not present this as a user setup option.
 - `api.auth: bearer_token` for compatibility with simple personal access-token
   deployments. This is useful for local/LAN HTTP API workflows, but it is not the
   recommended MCP-compliant release posture.
@@ -19,10 +20,10 @@ Source: https://modelcontextprotocol.io/specification/2025-11-25/basic/authoriza
 
 ## Recommendation
 
-For first-release user guidance, document `api.auth: none` only for loopback/CI
-and `api.auth: oauth_resource_server` for protected MCP. Keep `bearer_token`
-implemented and tested as a compatibility mode, but do not present it as the
-recommended way to expose MCP beyond loopback.
+For first-release user guidance, document `api.auth: oauth_resource_server` as
+the MCP setup path. Keep `api.auth: none` available for CI/test fixtures and
+maintainer smoke tests only, and keep `bearer_token` implemented and tested as a
+compatibility mode, but do not present either as the recommended MCP setup.
 
 Both bearer-token compatibility mode and OAuth resource-server mode use the
 standard authorization header shape:
@@ -40,7 +41,12 @@ tokens without editing config.
 Use `api.auth: none` only when:
 
 - Running in CI.
-- Running loopback-only local development, for example `127.0.0.1:8000`.
+- Running maintainer-only local smoke tests, bound to loopback, for example
+  `127.0.0.1:8000`.
+
+Do not list `api.auth: none` as a normal user setup option. It exists so tests,
+fixtures, and low-level local debugging can run without an external identity
+provider.
 - Running isolated smoke tests where the service is not exposed to other hosts.
 
 Use `api.auth: oauth_resource_server` before exposing MCP outside loopback. Use
@@ -149,7 +155,7 @@ Config:
 
 ```yaml
 api:
-  auth: none                 # none | bearer_token | oauth_resource_server
+  auth: oauth_resource_server
   public_base_url: ""        # required for oauth_resource_server
   token:
     hash_secret_env: AMH_TOKEN_HASH_SECRET
@@ -165,7 +171,8 @@ api:
 
 Rules:
 
-- `none`: allow all requests. Use only for CI and loopback-only local testing.
+- `none`: allow all requests. Use only for CI/test fixtures and maintainer-only
+  loopback smoke tests; do not document it as a user setup path.
 - `bearer_token`: require a server-issued personal access token in the
   `Authorization: Bearer` header, map it to a user, then scope every read/write
   to that user.
@@ -264,13 +271,13 @@ Acceptance criteria:
 - Each token maps to exactly one user/principal.
 - Every memory/fact read and write is scoped to the token's user.
 - Raw tokens are shown once and only token hashes are stored.
-- Existing CI/local `auth=none` behavior remains available.
+- Existing CI/test-fixture `auth=none` behavior remains available.
 - The MCP client request shape is already compatible with future OAuth mode.
 
 ## OAuth Resource-Server Mode
 
-Use `api.auth: oauth_resource_server` whenever the HTTP MCP endpoint is reachable
-outside CI or loopback-only local testing.
+Use `api.auth: oauth_resource_server` for user-facing MCP setup and whenever the
+HTTP MCP endpoint is reachable outside CI/test fixtures.
 
 Token validation should be adapter-based so the first implementation can support
 one practical provider without hardcoding the project to a specific IdP:
@@ -291,6 +298,12 @@ Required validation:
 Current limitation: JWKS and introspection adapters are still planned. The first
 implementation validates HS256 JWTs using `api.oauth.jwt_secret` or
 `api.oauth.jwt_secret_env`.
+
+For the planned Google sign-in and client setup UI, use
+`improvements/google_oauth_connect_ui_plan.md` as the source of truth. That plan
+keeps ai-memory-hub as the OAuth resource server and adds a small Connect UI
+that lets Google prove user identity before ai-memory-hub issues hub-owned MCP
+access tokens.
 
 Do not:
 
@@ -433,8 +446,9 @@ Fallbacks for clients without MCP authorization support:
 
 ### Phase 7: Compose Examples
 
-Keep checked-in Compose examples unauthenticated only for local smoke tests bound
-to loopback.
+Keep checked-in Compose examples unauthenticated only for maintainer local smoke
+tests bound to loopback. User-facing Compose and MCP setup docs should use
+OAuth resource-server mode.
 
 Add a separate OAuth/proxy example instead of a shared-secret LAN example:
 
@@ -489,18 +503,7 @@ Update:
 - `docs/agents.md`.
 - `docs/mcp_plan.md`.
 
-Document three supported modes:
-
-1. CI and loopback-only local testing:
-
-```yaml
-ports:
-  - "127.0.0.1:8000:8000"
-api:
-  auth: none
-```
-
-2. MCP-compliant HTTP auth:
+Document one recommended MCP setup mode:
 
 ```yaml
 api:
@@ -512,7 +515,7 @@ api:
     resource: "https://memory.example.com/mcp"
 ```
 
-3. Internet exposure without built-in OAuth:
+Internet exposure without built-in OAuth:
 
 Put ai-memory-hub behind TLS plus an identity-aware reverse proxy, or expose it
 only through a VPN. Do not publish unauthenticated MCP/API endpoints.
@@ -520,7 +523,8 @@ only through a VPN. Do not publish unauthenticated MCP/API endpoints.
 ## Acceptance Criteria
 
 - `api.auth` supports `none`, `bearer_token`, and `oauth_resource_server`.
-- `api.auth: none` remains available for CI and loopback-only local testing.
+- `api.auth: none` remains available for CI/test fixtures and maintainer-only
+  loopback smoke tests, but is not documented as a user setup option.
 - `api.auth: bearer_token` protects `/memory/*` and `/mcp/*` with
   `Authorization: Bearer <token>`.
 - `api.auth: oauth_resource_server` exposes MCP protected resource metadata.

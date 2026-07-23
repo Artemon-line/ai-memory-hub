@@ -366,6 +366,9 @@ def test_sqlite_admin_user_token_and_project_management(tmp_path: Path) -> None:
     assert token["scopes"] == ["memory:read", "memory:write"]
     assert token["last_used_at"] is None
     assert "token_hash" not in token
+    with sqlite3.connect(tmp_path / "metadata.sqlite3") as conn:
+        raw_token_hash = conn.execute("SELECT token_hash FROM auth_tokens").fetchone()[0]
+    assert raw_token_hash.startswith("pbkdf2-sha256:")
     assert store.owner_for_token("amh_secret_value") == "jane"
     listed_tokens = store.list_auth_tokens(owner_id="jane")
     assert listed_tokens[0]["last_used_at"] is not None
@@ -388,6 +391,30 @@ def test_sqlite_admin_user_token_and_project_management(tmp_path: Path) -> None:
     assert revoked is not None
     assert revoked["revoked_at"] is not None
     assert store.owner_for_token("amh_secret_value") is None
+
+
+def test_sqlite_web_sessions_require_supported_secret_hashes(tmp_path: Path) -> None:
+    store = SQLiteMetadataStore(tmp_path / "metadata.sqlite3")
+    store.create_user(user_id="jane", display_name="Jane")
+    session_hash = "pbkdf2-sha256:" + "a" * 64
+    csrf_hash = "pbkdf2-sha256:" + "b" * 64
+
+    session = store.create_web_session(
+        session_id_hash=session_hash,
+        user_id="jane",
+        csrf_token_hash=csrf_hash,
+        expires_at="2999-01-01T00:00:00+00:00",
+    )
+
+    assert session["session_id_hash"] == session_hash
+    assert session["csrf_token_hash"] == csrf_hash
+    with pytest.raises(ValueError, match="supported secret hash"):
+        store.create_web_session(
+            session_id_hash="md5:" + "a" * 32,
+            user_id="jane",
+            csrf_token_hash=csrf_hash,
+            expires_at="2999-01-01T00:00:00+00:00",
+        )
 
 
 def test_sqlite_auth_token_id_migration_backfills_existing_rows(tmp_path: Path) -> None:

@@ -671,6 +671,171 @@ class OAuthConfig(BaseModel):
         return normalized
 
 
+PASSPORT_PROVIDER_NAMES = {"google", "meta", "x"}
+
+
+class PassportProviderConfig(BaseModel):
+    enabled: bool = False
+    label: str = ""
+    client_id_env: str = "GOOGLE_CLIENT_ID"
+    client_secret_env: str = "GOOGLE_CLIENT_SECRET"
+    callback_url: str = ""
+    authorization_url: str = ""
+    token_url: str = ""
+    issuer: str = ""
+    scopes: list[str] = Field(default_factory=lambda: ["openid", "email", "profile"])
+    allowed_domains: list[str] = Field(default_factory=list)
+    allowed_emails: list[str] = Field(default_factory=list)
+
+    @field_validator("callback_url")
+    @classmethod
+    def validate_callback_url(cls, value: str) -> str:
+        normalized = value.strip()
+        if normalized:
+            _validate_absolute_uri(normalized, field_name="api.connect.passport.callback_url")
+        return normalized
+
+    @field_validator("authorization_url", "token_url", "issuer")
+    @classmethod
+    def validate_provider_urls(cls, value: str) -> str:
+        normalized = value.strip()
+        if normalized:
+            _validate_absolute_uri(normalized, field_name="api.connect.passport provider URL")
+        return normalized.rstrip("/")
+
+    @field_validator("scopes")
+    @classmethod
+    def normalize_scopes(cls, values: list[str]) -> list[str]:
+        normalized = [str(value).strip() for value in values if str(value).strip()]
+        if not normalized:
+            raise ValueError("api.connect.passport provider scopes must not be empty")
+        return normalized
+
+    @field_validator("allowed_domains", "allowed_emails")
+    @classmethod
+    def normalize_allowlist(cls, values: list[str]) -> list[str]:
+        normalized: list[str] = []
+        for value in values:
+            item = str(value).strip().lower()
+            if item and item not in normalized:
+                normalized.append(item)
+        return normalized
+
+
+def _passport_provider_defaults(provider: str) -> PassportProviderConfig:
+    if provider == "google":
+        return PassportProviderConfig(
+            label="Google",
+            client_id_env="GOOGLE_CLIENT_ID",
+            client_secret_env="GOOGLE_CLIENT_SECRET",
+            authorization_url="https://accounts.google.com/o/oauth2/v2/auth",
+            token_url="https://oauth2.googleapis.com/token",
+            issuer="https://accounts.google.com",
+        )
+    if provider == "meta":
+        return PassportProviderConfig(
+            label="Meta",
+            client_id_env="META_CLIENT_ID",
+            client_secret_env="META_CLIENT_SECRET",
+            authorization_url="https://www.facebook.com/v23.0/dialog/oauth",
+            token_url="https://graph.facebook.com/v23.0/oauth/access_token",
+        )
+    if provider == "x":
+        return PassportProviderConfig(
+            label="X",
+            client_id_env="X_CLIENT_ID",
+            client_secret_env="X_CLIENT_SECRET",
+            authorization_url="https://twitter.com/i/oauth2/authorize",
+            token_url="https://api.x.com/2/oauth2/token",
+        )
+    raise ValueError(f"unsupported passport provider: {provider}")
+
+
+class PassportConfig(BaseModel):
+    providers: list[str] = Field(default_factory=lambda: ["google"])
+    google: PassportProviderConfig = Field(
+        default_factory=lambda: _passport_provider_defaults("google")
+    )
+    meta: PassportProviderConfig = Field(default_factory=lambda: _passport_provider_defaults("meta"))
+    x: PassportProviderConfig = Field(default_factory=lambda: _passport_provider_defaults("x"))
+
+    @field_validator("providers")
+    @classmethod
+    def validate_providers(cls, values: list[str]) -> list[str]:
+        normalized: list[str] = []
+        for value in values:
+            provider = str(value).strip().lower()
+            if provider not in PASSPORT_PROVIDER_NAMES:
+                supported = ", ".join(sorted(PASSPORT_PROVIDER_NAMES))
+                raise ValueError(f"api.connect.passport.providers must contain only: {supported}")
+            if provider not in normalized:
+                normalized.append(provider)
+        if not normalized:
+            raise ValueError("api.connect.passport.providers must not be empty")
+        return normalized
+
+    @model_validator(mode="after")
+    def apply_provider_defaults(self) -> "PassportConfig":
+        for provider in PASSPORT_PROVIDER_NAMES:
+            configured = getattr(self, provider)
+            defaults = _passport_provider_defaults(provider)
+            if not configured.label:
+                configured.label = defaults.label
+            if configured.client_id_env == "GOOGLE_CLIENT_ID" and provider != "google":
+                configured.client_id_env = defaults.client_id_env
+            if configured.client_secret_env == "GOOGLE_CLIENT_SECRET" and provider != "google":
+                configured.client_secret_env = defaults.client_secret_env
+            if not configured.authorization_url:
+                configured.authorization_url = defaults.authorization_url
+            if not configured.token_url:
+                configured.token_url = defaults.token_url
+            if not configured.issuer:
+                configured.issuer = defaults.issuer
+        return self
+
+
+class ConnectUIConfig(BaseModel):
+    enabled: bool = True
+    passport: PassportConfig = Field(default_factory=PassportConfig)
+    google: PassportProviderConfig = Field(
+        default_factory=lambda: _passport_provider_defaults("google")
+    )
+    session_cookie_name: str = "amh_session"
+    session_secret: str = ""
+    session_secret_env: str = "AMH_SESSION_SECRET"
+    session_ttl_seconds: int = Field(default=60 * 60 * 12, ge=300)
+    token_ttl_seconds: int = Field(default=60 * 60, ge=300)
+
+    @model_validator(mode="after")
+    def apply_legacy_google_alias(self) -> "ConnectUIConfig":
+        if self.google.enabled:
+            defaults = _passport_provider_defaults("google")
+            if not self.google.label:
+                self.google.label = defaults.label
+            if not self.google.authorization_url:
+                self.google.authorization_url = defaults.authorization_url
+            if not self.google.token_url:
+                self.google.token_url = defaults.token_url
+            if not self.google.issuer:
+                self.google.issuer = defaults.issuer
+            self.passport.google = self.google
+            if "google" not in self.passport.providers:
+                self.passport.providers.insert(0, "google")
+        else:
+            self.google = self.passport.google
+        return self
+
+    @field_validator("session_cookie_name")
+    @classmethod
+    def validate_session_cookie_name(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("api.connect.session_cookie_name must be non-empty")
+        if any(ch in normalized for ch in ('"', ";", ",", " ", "\r", "\n")):
+            raise ValueError("api.connect.session_cookie_name contains unsafe characters")
+        return normalized
+
+
 class APIConfig(BaseModel):
     host: str = "127.0.0.1"
     port: int = 8000
@@ -679,6 +844,7 @@ class APIConfig(BaseModel):
     cors_allow_origins: list[str] = Field(default_factory=list)
     token: APITokenConfig = Field(default_factory=APITokenConfig)
     oauth: OAuthConfig = Field(default_factory=OAuthConfig)
+    connect: ConnectUIConfig = Field(default_factory=ConnectUIConfig)
 
     @field_validator("auth")
     @classmethod

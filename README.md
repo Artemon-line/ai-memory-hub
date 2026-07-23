@@ -215,6 +215,21 @@ MCP endpoint:
 http://127.0.0.1:8000/mcp/
 ```
 
+For user-facing MCP setup, start an OAuth-enabled configuration and open
+`/connect`. The Connect UI shows the active MCP URL, configured passport
+providers, sign-in status, short-lived hub token workflow, and copyable client
+snippets. The hub config supports Google, Meta, and X provider entries; the
+checked-in example enables Google by default.
+
+```bash
+cd examples/google-oauth-connect
+docker compose up --build
+```
+
+```text
+http://127.0.0.1:8000/connect
+```
+
 ## Common Workflows
 
 Use the CLI during development:
@@ -247,11 +262,13 @@ embedding dimension. For multilingual memory, choose an embedding model that
 supports your languages. Reindex or use a separate vector namespace/index if
 you change embedding model/provider/options on persistent data.
 
-The Compose example is unauthenticated for local smoke testing. Before exposing
-it beyond loopback, put it behind TLS or a trusted private network and use
-`api.auth: oauth_resource_server` for MCP-compliant HTTP authorization. The
-OAuth resource-server example shows the protected resource metadata and bearer
-access-token shape expected by MCP clients.
+The default and provider Compose examples are for local smoke testing only.
+Before exposing
+it beyond loopback, use `api.auth: oauth_resource_server` with TLS or a trusted
+private network. User-facing MCP setups should start from
+`examples/google-oauth-connect` and open `/connect`; the external OAuth resource
+server example remains available for deployments that already have their own
+issuer.
 
 Other checked-in provider examples live under `examples/storage_providers`:
 Qdrant, MongoDB, MongoDB Atlas, Milvus, Weaviate, Elasticsearch,
@@ -286,6 +303,7 @@ provider matrix, smoke commands, CI coverage, and hosted-provider notes.
 - [Architecture](docs/architecture.md)
 - [Agent integration](docs/agents.md)
 - [MCP plan](docs/mcp_plan.md)
+- [Google OAuth Connect UI plan](docs/improvements/google_oauth_connect_ui_plan.md)
 - [Real-client MCP smoke plan](docs/real_client_mcp_smoke_plan.md)
 - [Browser extension capture plan](docs/browser_extension_capture_plan.md)
 - [Plugin readiness plan](docs/plugin_readiness_plan.md)

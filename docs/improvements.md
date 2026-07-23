@@ -15,6 +15,7 @@ Source date: `28-05-2026`
 9. [Vector Database Options](./improvements/vector_dbs.md)
 10. [Advanced Memory Plan](./improvements/advanced_memory_plan.md)
 11. [Graph Quality Gate Plan](./improvements/graph_quality_gate_plan.md)
+12. [Google OAuth Connect UI Plan](./improvements/google_oauth_connect_ui_plan.md)
 
 ## Notes
 

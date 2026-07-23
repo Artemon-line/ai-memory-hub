@@ -39,6 +39,10 @@ observability = [
     "opentelemetry-instrumentation-requests>=0.64b0",
     "opentelemetry-instrumentation-psycopg>=0.50b0",
 ]
+oauth = [
+    "authlib>=1.7.1",
+    "httpx>=0.28.1",
+]
 postgres = [
     "psycopg[binary]>=3.2.4",
 ]

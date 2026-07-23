@@ -75,4 +75,5 @@ nav:
       - Memory Quality And Fact Layer Plan: docs/improvements/memory_quality_fact_layer_plan.md
       - Edge Case Test Coverage Plan: docs/improvements/edge_case_test_coverage_plan.md
       - Explicit Memory Save Intent Plan: docs/improvements/explicit_memory_save_intent_plan.md
+      - Google OAuth Connect UI Plan: docs/improvements/google_oauth_connect_ui_plan.md
       - Vector Database Options: docs/improvements/vector_dbs.md

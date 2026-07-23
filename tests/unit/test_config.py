@@ -502,6 +502,68 @@ def test_oauth_resource_server_config_derives_valid_defaults() -> None:
     ]
 
 
+def test_connect_ui_google_oauth_config_normalizes_allowlists() -> None:
+    config = parse_config(
+        {
+            "api": {
+                "connect": {
+                    "session_cookie_name": "amh_test_session",
+                    "google": {
+                        "enabled": True,
+                        "callback_url": "https://memory.example.com/auth/google/callback",
+                        "allowed_domains": ["Example.COM", "example.com"],
+                        "allowed_emails": ["Alice@Example.com", "alice@example.com"],
+                    },
+                }
+            }
+        }
+    )
+
+    assert config.api.connect.enabled is True
+    assert config.api.connect.session_cookie_name == "amh_test_session"
+    assert config.api.connect.google.enabled is True
+    assert config.api.connect.google.allowed_domains == ["example.com"]
+    assert config.api.connect.google.allowed_emails == ["alice@example.com"]
+    assert config.api.connect.passport.google.enabled is True
+    assert config.api.connect.passport.google.authorization_url == (
+        "https://accounts.google.com/o/oauth2/v2/auth"
+    )
+
+
+def test_connect_ui_passport_config_supports_google_meta_and_x() -> None:
+    config = parse_config(
+        {
+            "api": {
+                "connect": {
+                    "passport": {
+                        "providers": ["google", "meta", "x", "meta"],
+                        "meta": {"enabled": True, "callback_url": "https://memory.example.com/auth/meta/callback"},
+                        "x": {"enabled": True},
+                    }
+                }
+            }
+        }
+    )
+
+    assert config.api.connect.passport.providers == ["google", "meta", "x"]
+    assert config.api.connect.passport.meta.enabled is True
+    assert config.api.connect.passport.meta.label == "Meta"
+    assert config.api.connect.passport.meta.client_id_env == "META_CLIENT_ID"
+    assert config.api.connect.passport.x.enabled is True
+    assert config.api.connect.passport.x.label == "X"
+    assert config.api.connect.passport.x.client_secret_env == "X_CLIENT_SECRET"
+
+
+def test_connect_ui_passport_config_rejects_unknown_provider() -> None:
+    with pytest.raises(ValueError, match="passport.providers"):
+        parse_config({"api": {"connect": {"passport": {"providers": ["google", "github"]}}}})
+
+
+def test_connect_ui_rejects_unsafe_session_cookie_name() -> None:
+    with pytest.raises(ValueError, match="session_cookie_name"):
+        parse_config({"api": {"connect": {"session_cookie_name": "bad cookie"}}})
+
+
 def test_api_cors_allow_origins_accepts_extension_and_local_dev_origins() -> None:
     config = parse_config(
         {

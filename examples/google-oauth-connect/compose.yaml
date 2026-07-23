@@ -1,0 +1,19 @@
+services:
+  ai-memory-hub:
+    build:
+      context: ../..
+      dockerfile: examples/google-oauth-connect/Containerfile
+    environment:
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?set GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?set GOOGLE_CLIENT_SECRET}
+      AMH_OAUTH_JWT_SECRET: ${AMH_OAUTH_JWT_SECRET:?set AMH_OAUTH_JWT_SECRET}
+      AMH_SESSION_SECRET: ${AMH_SESSION_SECRET:?set AMH_SESSION_SECRET}
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - amh_google_oauth_data:/app/data
+      - amh_google_oauth_logs:/app/logs
+
+volumes:
+  amh_google_oauth_data:
+  amh_google_oauth_logs:
