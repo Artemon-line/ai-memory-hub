@@ -31,7 +31,7 @@ CLIENT_MATRIX: tuple[dict[str, str], ...] = (
     {
         "name": "Copilot CLI",
         "status": "Unverified",
-        "snippet": 'mcp server add ai-memory-hub --url "{mcp_url}" --header "Authorization: Bearer <hub-token>"',
+        "snippet": 'copilot mcp add --transport http --header "Authorization: Bearer <hub-token>" ai-memory-hub {mcp_url}',
     },
     {"name": "Pi", "status": "Unverified", "snippet": 'MCP URL: {mcp_url}\nBearer token: <hub-token>'},
     {

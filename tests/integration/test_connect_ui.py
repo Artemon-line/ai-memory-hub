@@ -149,6 +149,8 @@ def test_connect_routes_are_public_secret_free_and_use_configured_mcp_url(tmp_pa
     assert "google-secret" not in connect.text
     assert "oauth-secret" not in connect.text
     assert "Bearer &lt;hub-token&gt;" in connect.text
+    assert "copilot mcp add --transport http" in connect.text
+    assert "ai-memory-hub https://memory.example.com/mcp" in connect.text
     for client_name in ("Codex", "Copilot CLI", "Pi", "OpenCode", "Claude", "Gemini CLI"):
         assert client_name in connect.text
     assert "Unverified" in connect.text
