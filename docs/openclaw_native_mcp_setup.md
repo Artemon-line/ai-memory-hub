@@ -36,9 +36,9 @@ server:
 - ai-memory-hub running with MCP enabled at `http://127.0.0.1:8000/mcp/`.
 - OpenClaw installed and onboarded.
 - A working OpenClaw model/provider configuration.
-- For first validation, keep ai-memory-hub bound to localhost and use
-  unauthenticated local mode. Add bearer-token validation after the basic path
-  works.
+- For first validation, keep ai-memory-hub bound to localhost and use OAuth
+  resource-server mode. `auth: none` is reserved for maintainer-only smoke tests
+  and CI fixtures.
 
 Install OpenClaw natively:
 
@@ -165,8 +165,8 @@ Expected direct verification:
 
 ## Bearer Auth Follow-Up
 
-After unauthenticated localhost validation works, repeat with ai-memory-hub API
-key auth enabled.
+After localhost validation works, repeat with ai-memory-hub OAuth resource-server
+auth enabled.
 
 Open questions to verify before documenting exact auth syntax:
 
@@ -176,7 +176,8 @@ Open questions to verify before documenting exact auth syntax:
   with ai-memory-hub's bearer/API-key mode.
 
 Until this is verified, do not commit bearer tokens into OpenClaw config. Prefer
-local unauthenticated validation bound to `127.0.0.1`.
+OAuth resource-server validation bound to `127.0.0.1`; reserve unauthenticated
+mode for maintainer-only smoke tests.
 
 ## Supported Status Checklist
 

@@ -247,11 +247,12 @@ embedding dimension. For multilingual memory, choose an embedding model that
 supports your languages. Reindex or use a separate vector namespace/index if
 you change embedding model/provider/options on persistent data.
 
-The Compose example is unauthenticated for local smoke testing. Before exposing
-it beyond loopback, put it behind TLS or a trusted private network and use
-`api.auth: oauth_resource_server` for MCP-compliant HTTP authorization. The
-OAuth resource-server example shows the protected resource metadata and bearer
-access-token shape expected by MCP clients.
+The Compose example is for local smoke testing only. Before exposing
+it beyond loopback, use `api.auth: oauth_resource_server` with TLS or a trusted
+private network. User-facing MCP setups should use OAuth resource-server mode,
+even when the service starts on loopback during setup. The OAuth resource-server
+example shows the protected resource metadata and bearer access-token shape
+expected by MCP clients.
 
 Other checked-in provider examples live under `examples/storage_providers`:
 Qdrant, MongoDB, MongoDB Atlas, Milvus, Weaviate, Elasticsearch,

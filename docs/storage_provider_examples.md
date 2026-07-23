@@ -178,6 +178,7 @@ curl -fsS http://127.0.0.1:8000/memory/search \
   -d '{"query":"amber-vector","top_k":3}'
 ```
 
-Keep `api.auth: none` only for local smoke tests. Use
+These examples are for provider smoke testing. User-facing MCP setups should use
 `api.auth: oauth_resource_server` with TLS, a reverse proxy, VPN, or another
-trusted private network before exposing MCP outside loopback.
+trusted private network. Keep `api.auth: none` only for CI/test fixtures and
+maintainer-only loopback smoke tests.

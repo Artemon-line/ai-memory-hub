@@ -168,7 +168,8 @@ mcp:
 api:
   host: '127.0.0.1'
   port: 8000
-  auth: none # none | bearer_token | oauth_resource_server
+  # Test/CI default only. User-facing MCP setups should use oauth_resource_server.
+  auth: none
   # Explicit browser-extension and local-dev origins allowed to call the API.
   # Example:
   # cors_allow_origins:
