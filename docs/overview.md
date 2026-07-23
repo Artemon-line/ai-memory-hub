@@ -255,6 +255,13 @@ When `interfaces.mcp` is enabled, the streamable HTTP MCP endpoint is mounted at
 http://127.0.0.1:8000/mcp/
 ```
 
+For user-facing MCP setup, run with `api.auth: oauth_resource_server` and open
+`/connect`. The Connect UI shows the configured MCP resource URL, enabled
+passport providers, sign-in status, hub-issued token workflow, and client setup
+snippets. The hub config supports `google`, `meta`, and `x` provider entries.
+Snippets remain marked `Unverified` until checked against current client
+releases.
+
 Core tools:
 
 - `memory_validate(conversation_json)`

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import json
@@ -133,6 +134,35 @@ class SQLiteMetadataStore:
                 )
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS oauth_identities (
+                    provider TEXT NOT NULL,
+                    provider_subject TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    email TEXT,
+                    display_name TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    last_login_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY(provider, provider_subject),
+                    FOREIGN KEY(user_id) REFERENCES users(id)
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS web_sessions (
+                    session_id_hash TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    csrf_token_hash TEXT NOT NULL,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    last_seen_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TEXT NOT NULL,
+                    revoked_at TEXT,
+                    FOREIGN KEY(user_id) REFERENCES users(id)
+                )
+                """
+            )
             self._ensure_column(conn, "auth_tokens", "token_id", "TEXT")
             self._ensure_column(conn, "auth_tokens", "token_prefix", "TEXT")
             self._ensure_column(conn, "auth_tokens", "display_name", "TEXT")
@@ -193,6 +223,19 @@ class SQLiteMetadataStore:
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_auth_tokens_token_id
                 ON auth_tokens(token_id)
                 WHERE token_id IS NOT NULL
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_oauth_identities_user
+                ON oauth_identities(user_id)
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_web_sessions_user
+                ON web_sessions(user_id)
+                WHERE revoked_at IS NULL
                 """
             )
             conn.execute(
@@ -434,7 +477,7 @@ class SQLiteMetadataStore:
     ) -> dict[str, Any]:
         owner = _validate_owner_id(owner_id)
         token_hash = _hash_bearer_token(token)
-        token_id = _new_token_id()
+        token_id = _token_id_from_bearer_token(token) or _new_token_id()
         token_name = token_display_name
         token_prefix = _token_prefix(token)
         scopes_json = json.dumps(_normalize_token_scopes(scopes), separators=(",", ":"))
@@ -477,6 +520,126 @@ class SQLiteMetadataStore:
         if row is None:
             raise RuntimeError("auth token could not be created")
         return self._token_from_row(row)
+
+    def find_or_create_oauth_identity(
+        self,
+        *,
+        provider: str,
+        provider_subject: str,
+        email: str | None = None,
+        display_name: str | None = None,
+    ) -> dict[str, Any]:
+        provider_name = _validate_oauth_provider(provider)
+        subject = _validate_oauth_subject(provider_subject)
+        normalized_email = _normalize_email(email)
+        user_id = _oauth_user_id(provider_name, subject)
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO users (id, display_name)
+                VALUES (?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    display_name = COALESCE(excluded.display_name, users.display_name)
+                """,
+                (user_id, display_name or normalized_email),
+            )
+            self._ensure_default_project(conn, user_id)
+            conn.execute(
+                """
+                INSERT INTO oauth_identities
+                    (provider, provider_subject, user_id, email, display_name)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(provider, provider_subject) DO UPDATE SET
+                    email = excluded.email,
+                    display_name = COALESCE(excluded.display_name, oauth_identities.display_name),
+                    last_login_at = CURRENT_TIMESTAMP
+                """,
+                (provider_name, subject, user_id, normalized_email, display_name),
+            )
+            row = conn.execute(
+                """
+                SELECT provider, provider_subject, user_id, email, display_name,
+                       created_at, last_login_at
+                FROM oauth_identities
+                WHERE provider = ? AND provider_subject = ?
+                """,
+                (provider_name, subject),
+            ).fetchone()
+        if row is None:
+            raise RuntimeError("oauth identity could not be created")
+        return self._oauth_identity_from_row(row)
+
+    def create_web_session(
+        self,
+        *,
+        session_id_hash: str,
+        user_id: str,
+        csrf_token_hash: str,
+        expires_at: str,
+    ) -> dict[str, Any]:
+        session_hash = _validate_secret_hash(session_id_hash, field_name="session_id_hash")
+        csrf_hash = _validate_secret_hash(csrf_token_hash, field_name="csrf_token_hash")
+        owner = _validate_owner_id(user_id)
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO web_sessions
+                    (session_id_hash, user_id, csrf_token_hash, expires_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(session_id_hash) DO UPDATE SET
+                    user_id = excluded.user_id,
+                    csrf_token_hash = excluded.csrf_token_hash,
+                    expires_at = excluded.expires_at,
+                    revoked_at = NULL
+                """,
+                (session_hash, owner, csrf_hash, expires_at),
+            )
+            row = conn.execute(
+                """
+                SELECT session_id_hash, user_id, csrf_token_hash, created_at,
+                       last_seen_at, expires_at, revoked_at
+                FROM web_sessions
+                WHERE session_id_hash = ?
+                """,
+                (session_hash,),
+            ).fetchone()
+        if row is None:
+            raise RuntimeError("web session could not be created")
+        return self._web_session_from_row(row)
+
+    def web_session_for_hash(self, session_id_hash: str) -> dict[str, Any] | None:
+        session_hash = _validate_secret_hash(session_id_hash, field_name="session_id_hash")
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT session_id_hash, user_id, csrf_token_hash, created_at,
+                       last_seen_at, expires_at, revoked_at
+                FROM web_sessions
+                WHERE session_id_hash = ?
+                  AND revoked_at IS NULL
+                  AND expires_at > CURRENT_TIMESTAMP
+                """,
+                (session_hash,),
+            ).fetchone()
+            if row is not None:
+                conn.execute(
+                    "UPDATE web_sessions SET last_seen_at = CURRENT_TIMESTAMP WHERE session_id_hash = ?",
+                    (session_hash,),
+                )
+        return self._web_session_from_row(row) if row is not None else None
+
+    def revoke_web_session(self, session_id_hash: str) -> bool:
+        session_hash = _validate_secret_hash(session_id_hash, field_name="session_id_hash")
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE web_sessions
+                SET revoked_at = CURRENT_TIMESTAMP
+                WHERE session_id_hash = ? AND revoked_at IS NULL
+                """,
+                (session_hash,),
+            )
+        return cursor.rowcount > 0
 
     def owner_for_token(self, token: str) -> str | None:
         context = self.auth_context_for_token(token)
@@ -1595,6 +1758,28 @@ class SQLiteMetadataStore:
             "last_used_at": row["last_used_at"],
         }
 
+    def _oauth_identity_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "provider": str(row["provider"]),
+            "provider_subject": str(row["provider_subject"]),
+            "user_id": str(row["user_id"]),
+            "email": row["email"],
+            "display_name": row["display_name"],
+            "created_at": str(row["created_at"]),
+            "last_login_at": str(row["last_login_at"]),
+        }
+
+    def _web_session_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "session_id_hash": str(row["session_id_hash"]),
+            "user_id": str(row["user_id"]),
+            "csrf_token_hash": str(row["csrf_token_hash"]),
+            "created_at": str(row["created_at"]),
+            "last_seen_at": str(row["last_seen_at"]),
+            "expires_at": str(row["expires_at"]),
+            "revoked_at": row["revoked_at"],
+        }
+
     def _project_member_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
         return {
             "project_id": str(row["project_id"]),
@@ -1701,6 +1886,22 @@ def _new_token_id() -> str:
     return f"tok_{secrets.token_hex(16)}"
 
 
+def _token_id_from_bearer_token(token: str) -> str | None:
+    parts = str(token).split(".")
+    if len(parts) != 3:
+        return None
+    try:
+        payload = json.loads(base64.urlsafe_b64decode((parts[1] + "=" * (-len(parts[1]) % 4))))
+    except (ValueError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    jti = payload.get("jti")
+    if not isinstance(jti, str) or not jti.startswith("tok_"):
+        return None
+    return jti if len(jti) <= 128 else None
+
+
 def _token_id_from_hash(token_hash: str) -> str:
     value = str(token_hash)
     return "tok_" + uuid.uuid5(uuid.NAMESPACE_URL, f"ai-memory-hub:{value}").hex
@@ -1754,6 +1955,49 @@ def _validate_owner_id(owner_id: str) -> str:
     if len(value) > 128:
         raise ValueError("owner_id exceeds max length 128")
     return value
+
+
+def _validate_oauth_provider(provider: str) -> str:
+    value = str(provider).strip().lower()
+    if not value:
+        raise ValueError("oauth provider must be non-empty")
+    if len(value) > 64:
+        raise ValueError("oauth provider exceeds max length 64")
+    if not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", value):
+        raise ValueError("oauth provider contains unsupported characters")
+    return value
+
+
+def _validate_oauth_subject(provider_subject: str) -> str:
+    value = str(provider_subject).strip()
+    if not value:
+        raise ValueError("oauth provider subject must be non-empty")
+    if len(value) > 255:
+        raise ValueError("oauth provider subject exceeds max length 255")
+    return value
+
+
+def _normalize_email(email: str | None) -> str | None:
+    if email is None:
+        return None
+    value = str(email).strip().lower()
+    return value or None
+
+
+def _oauth_user_id(provider: str, provider_subject: str) -> str:
+    digest = hashlib.sha256(f"{provider}:{provider_subject}".encode("utf-8")).hexdigest()[:32]
+    return f"user_{digest}"
+
+
+def _validate_secret_hash(value: str, *, field_name: str) -> str:
+    normalized = str(value).strip()
+    if not normalized:
+        raise ValueError(f"{field_name} must be non-empty")
+    if len(normalized) > 255:
+        raise ValueError(f"{field_name} exceeds max length 255")
+    if not re.fullmatch(r"(?:hmac-)?sha256:[a-f0-9]{64}", normalized):
+        raise ValueError(f"{field_name} must be a sha256 hash")
+    return normalized
 
 
 def _validate_project_id(project_id: str) -> str:

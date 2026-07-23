@@ -184,6 +184,33 @@ api:
   #   - chrome-extension://abcdefghijklmnopabcdefghijklmnop
   #   - http://127.0.0.1:5173
   cors_allow_origins: []
+  # User-facing MCP setup should enable OAuth resource-server mode, set
+  # public_base_url, then open /connect to sign in and copy client snippets.
+  connect:
+    enabled: true
+    session_cookie_name: amh_session
+    session_secret_env: AMH_SESSION_SECRET
+    session_ttl_seconds: 43200
+    token_ttl_seconds: 3600
+    passport:
+      providers: [google]
+      google:
+        enabled: false
+        client_id_env: GOOGLE_CLIENT_ID
+        client_secret_env: GOOGLE_CLIENT_SECRET
+        callback_url: ''
+        allowed_domains: []
+        allowed_emails: []
+      meta:
+        enabled: false
+        client_id_env: META_CLIENT_ID
+        client_secret_env: META_CLIENT_SECRET
+        callback_url: ''
+      x:
+        enabled: false
+        client_id_env: X_CLIENT_ID
+        client_secret_env: X_CLIENT_SECRET
+        callback_url: ''
 
 # -------------------------
 # OBSERVABILITY

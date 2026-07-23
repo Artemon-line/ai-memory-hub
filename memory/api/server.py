@@ -10,6 +10,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
 
+from memory.api.connect_ui import connect_status, register_connect_routes
 from memory.auth import install_auth_middleware, protected_resource_metadata
 from memory.backend.log_safety import install_secret_redaction_filter, redact_secrets
 from memory.backend.redaction import redact_content_hashes
@@ -162,6 +163,7 @@ def _register_health_routes(
             "vector_provider": health_state.get("vector_provider"),
             "embedding_provider": embedding_provider,
             "telemetry_enabled": _telemetry_enabled(app),
+            "connect_ui": connect_status(config),
             "health": health_state,
         }
 
@@ -188,6 +190,7 @@ def _register_health_routes(
                     "mcp": config.interfaces.mcp,
                 },
                 "auth_mode": config.api.auth,
+                "connect_ui": connect_status(config),
                 "storage": {
                     "profile": config.storage.profile,
                     "dry_run": config.storage.dry_run,
@@ -699,6 +702,7 @@ def create_app(
     app.state.tracing_status = configure_tracing(cfg.observability.tracing, app=app)
     app.state.metrics_status = configure_metrics(cfg.observability.metrics)
 
+    register_connect_routes(app, agent=agent, config=cfg)
     install_auth_middleware(app, config=cfg, agent=agent)
     _register_request_failure_logging(app, cfg)
     _configure_cors(app, cfg)

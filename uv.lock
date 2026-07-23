@@ -34,6 +34,10 @@ milvus = [
 mongodb = [
     { name = "pymongo" },
 ]
+oauth = [
+    { name = "authlib" },
+    { name = "httpx" },
+]
 observability = [
     { name = "opentelemetry-api" },
     { name = "opentelemetry-exporter-otlp-proto-grpc" },
@@ -85,9 +89,11 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "authlib", marker = "extra == 'oauth'", specifier = ">=1.7.1" },
     { name = "elasticsearch", marker = "extra == 'elasticsearch'", specifier = ">=8.15.0" },
     { name = "fastapi", specifier = ">=0.139.0" },
     { name = "fastmcp", specifier = ">=3.4.2" },
+    { name = "httpx", marker = "extra == 'oauth'", specifier = ">=0.28.1" },
     { name = "jsonschema", specifier = ">=4.25.1" },
     { name = "lancedb", specifier = ">=0.28.0" },
     { name = "mcp", specifier = ">=1.28.1" },
@@ -116,7 +122,7 @@ requires-dist = [
     { name = "uvicorn", specifier = ">=0.42.0" },
     { name = "weaviate-client", marker = "extra == 'weaviate'", specifier = ">=4.9.0" },
 ]
-provides-extras = ["elasticsearch", "milvus", "mongodb", "opensearch", "observability", "postgres", "pinecone", "qdrant", "redis", "tokenizer", "turbopuffer", "vespa", "typesense", "weaviate"]
+provides-extras = ["elasticsearch", "milvus", "mongodb", "opensearch", "observability", "oauth", "postgres", "pinecone", "qdrant", "redis", "tokenizer", "turbopuffer", "vespa", "typesense", "weaviate"]
 
 [package.metadata.requires-dev]
 dev = [
