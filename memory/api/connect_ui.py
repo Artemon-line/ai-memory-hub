@@ -549,14 +549,16 @@ def _issue_hub_token(*, config: HubConfig, owner_id: str) -> str:
         "exp": now + config.api.connect.token_ttl_seconds,
         "jti": "tok_" + secrets.token_hex(16),
     }
-    header = {"alg": "HS256", "typ": "JWT"}
-    signing_input = f"{_b64(json.dumps(header, separators=(',', ':')).encode())}.{_b64(json.dumps(payload, separators=(',', ':')).encode())}"
-    signature = hmac.digest(
-        _oauth_jwt_secret(config).encode("utf-8"),
-        signing_input.encode("ascii"),
-        "sha256",
-    )
-    return f"{signing_input}.{_b64(signature)}"
+    try:
+        from joserfc import jwt
+        from joserfc.jwk import OctKey
+    except ImportError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Hub token issuance requires installing the oauth optional extra",
+        ) from exc
+    key = OctKey.import_key(_oauth_jwt_secret(config).encode("utf-8"))
+    return jwt.encode({"alg": "HS256", "typ": "JWT"}, payload, key, algorithms=["HS256"])
 
 
 def _jwt_payload(token: str) -> dict[str, object]:

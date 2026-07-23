@@ -68,7 +68,7 @@ def _client(
                 "public_base_url": "https://memory.example.com",
                 "oauth": {
                     "authorization_servers": ["https://memory.example.com"],
-                    "jwt_secret": "oauth-secret",
+                    "jwt_secret": "oauth-secret-for-connect-ui-tests",
                 },
                 "connect": connect_config,
             },
