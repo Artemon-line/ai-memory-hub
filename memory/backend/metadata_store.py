@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import hmac
 import json
 import os
 import re
@@ -25,6 +24,7 @@ PROJECT_ROLE_ORDER = {
     PROJECT_ROLE_ADMIN: 3,
 }
 _PROJECT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+_PBKDF2_SHA256_ITERATIONS = 210_000
 
 
 class SQLiteMetadataStore:
@@ -1876,10 +1876,14 @@ def _hash_bearer_token(token: str) -> str:
     if not isinstance(token, str) or not token:
         raise ValueError("bearer token must be a non-empty string")
     secret = os.environ.get("AMH_TOKEN_HASH_SECRET")
-    if secret:
-        digest = hmac.new(secret.encode("utf-8"), token.encode("utf-8"), hashlib.sha256).hexdigest()
-        return "hmac-sha256:" + digest
-    return "sha256:" + hashlib.sha256(token.encode("utf-8")).hexdigest()
+    salt = f"ai-memory-hub:bearer-token:{secret or 'default'}".encode("utf-8")
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        token.encode("utf-8"),
+        salt,
+        _PBKDF2_SHA256_ITERATIONS,
+    ).hex()
+    return "pbkdf2-sha256:" + digest
 
 
 def _new_token_id() -> str:
@@ -1944,7 +1948,13 @@ def _validate_token_lookup(token_id_or_prefix: str) -> str:
 
 
 def _default_project_id(owner_id: str) -> str:
-    digest = hashlib.sha256(owner_id.encode("utf-8")).hexdigest()[:32]
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        owner_id.encode("utf-8"),
+        b"ai-memory-hub:default-project-id",
+        _PBKDF2_SHA256_ITERATIONS,
+        dklen=16,
+    ).hex()
     return f"private-{digest}"
 
 
@@ -1985,7 +1995,13 @@ def _normalize_email(email: str | None) -> str | None:
 
 
 def _oauth_user_id(provider: str, provider_subject: str) -> str:
-    digest = hashlib.sha256(f"{provider}:{provider_subject}".encode("utf-8")).hexdigest()[:32]
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        provider_subject.encode("utf-8"),
+        f"ai-memory-hub:oauth-user-id:{provider}".encode("utf-8"),
+        _PBKDF2_SHA256_ITERATIONS,
+        dklen=16,
+    ).hex()
     return f"user_{digest}"
 
 
@@ -1995,8 +2011,8 @@ def _validate_secret_hash(value: str, *, field_name: str) -> str:
         raise ValueError(f"{field_name} must be non-empty")
     if len(normalized) > 255:
         raise ValueError(f"{field_name} exceeds max length 255")
-    if not re.fullmatch(r"(?:hmac-)?sha256:[a-f0-9]{64}", normalized):
-        raise ValueError(f"{field_name} must be a sha256 hash")
+    if not re.fullmatch(r"(?:pbkdf2-sha256|hmac-sha256|sha256):[a-f0-9]{64}", normalized):
+        raise ValueError(f"{field_name} must be a supported secret hash")
     return normalized
 
 

@@ -22,6 +22,7 @@ from memory.ingestion.base_agent import BaseIngestionAgent
 logger = logging.getLogger(__name__)
 
 OAUTH_STATE_COOKIE = "amh_oauth_state"
+SECRET_HASH_ITERATIONS = 210_000
 CLIENT_MATRIX: tuple[dict[str, str], ...] = (
     {
         "name": "Codex",
@@ -149,9 +150,9 @@ def register_connect_routes(app: FastAPI, *, agent: BaseIngestionAgent, config: 
         csrf_token = secrets.token_urlsafe(32)
         expires_at = _utc_after(config.api.connect.session_ttl_seconds)
         await agent.create_web_session(
-            session_id_hash=_hash_secret(session_id, config),
+            session_id_hash=_hash_secret(session_id, config, purpose="connect-session"),
             user_id=str(identity["user_id"]),
-            csrf_token_hash=_hash_secret(csrf_token, config),
+            csrf_token_hash=_hash_secret(csrf_token, config, purpose="connect-csrf"),
             expires_at=expires_at,
         )
         issued_token = _issue_hub_token(config=config, owner_id=str(identity["user_id"]))
@@ -217,7 +218,7 @@ def register_connect_routes(app: FastAPI, *, agent: BaseIngestionAgent, config: 
         if session is not None and not _csrf_matches(session, csrf_token, config=config):
             raise HTTPException(status_code=403, detail="Invalid CSRF token")
         if session_id:
-            await agent.revoke_web_session(_hash_secret(session_id, config))
+            await agent.revoke_web_session(_hash_secret(session_id, config, purpose="connect-session"))
         if token_id:
             await agent.revoke_auth_token(token_id)
         response = RedirectResponse("/connect", status_code=303)
@@ -247,7 +248,7 @@ async def _session_from_request(
     session_id = request.cookies.get(config.api.connect.session_cookie_name)
     if not session_id:
         return None
-    return await agent.web_session_for_hash(_hash_secret(session_id, config))
+    return await agent.web_session_for_hash(_hash_secret(session_id, config, purpose="connect-session"))
 
 
 async def _exchange_provider_code(
@@ -489,13 +490,20 @@ def _csrf_token_from_cookie(request: Request, *, config: HubConfig) -> str | Non
 
 def _csrf_matches(session: dict[str, object], csrf_token: str, *, config: HubConfig) -> bool:
     expected = str(session.get("csrf_token_hash") or "")
-    return bool(csrf_token) and hmac.compare_digest(expected, _hash_secret(csrf_token, config))
+    actual = _hash_secret(csrf_token, config, purpose="connect-csrf")
+    return bool(csrf_token) and hmac.compare_digest(expected, actual)
 
 
-def _hash_secret(value: str, config: HubConfig) -> str:
+def _hash_secret(value: str, config: HubConfig, *, purpose: str) -> str:
     secret = _session_secret(config)
-    digest = hmac.new(secret.encode("utf-8"), value.encode("utf-8"), hashlib.sha256).hexdigest()
-    return "hmac-sha256:" + digest
+    salt = f"ai-memory-hub:{purpose}:{secret}".encode("utf-8")
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        value.encode("utf-8"),
+        salt,
+        SECRET_HASH_ITERATIONS,
+    ).hex()
+    return "pbkdf2-sha256:" + digest
 
 
 def _session_secret(config: HubConfig) -> str:
@@ -543,7 +551,11 @@ def _issue_hub_token(*, config: HubConfig, owner_id: str) -> str:
     }
     header = {"alg": "HS256", "typ": "JWT"}
     signing_input = f"{_b64(json.dumps(header, separators=(',', ':')).encode())}.{_b64(json.dumps(payload, separators=(',', ':')).encode())}"
-    signature = hmac.new(_oauth_jwt_secret(config).encode("utf-8"), signing_input.encode("ascii"), hashlib.sha256).digest()
+    signature = hmac.digest(
+        _oauth_jwt_secret(config).encode("utf-8"),
+        signing_input.encode("ascii"),
+        "sha256",
+    )
     return f"{signing_input}.{_b64(signature)}"
 
 

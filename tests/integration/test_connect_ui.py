@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import sqlite3
 import time
 from pathlib import Path
 
@@ -238,6 +239,10 @@ def test_configured_meta_passport_callback_can_create_isolated_identity(
 def test_google_callback_creates_session_and_hub_token_for_memory_access(tmp_path, monkeypatch) -> None:
     client = _client(tmp_path, monkeypatch, allowed_domains=["example.com"])
     token, _csrf = _login(client)
+    with sqlite3.connect(tmp_path / "metadata.sqlite3") as conn:
+        stored_session_hash, stored_csrf_hash = conn.execute(
+            "SELECT session_id_hash, csrf_token_hash FROM web_sessions"
+        ).fetchone()
 
     insert = client.post(
         "/memory/insert",
@@ -258,6 +263,8 @@ def test_google_callback_creates_session_and_hub_token_for_memory_access(tmp_pat
     assert insert.status_code == 200
     assert search.status_code == 200
     assert search.json()["results"]
+    assert stored_session_hash.startswith("pbkdf2-sha256:")
+    assert stored_csrf_hash.startswith("pbkdf2-sha256:")
 
 
 def test_google_callback_rejects_invalid_state_and_denied_domain(tmp_path, monkeypatch) -> None:
