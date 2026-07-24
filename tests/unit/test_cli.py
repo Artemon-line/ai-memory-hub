@@ -478,7 +478,7 @@ def test_config_show_redacts_secrets(capsys, tmp_path) -> None:
     config_path.write_text(
         "\n".join(
             [
-                "openai:",
+                "embedding_endpoint:",
                 "  api_key: secret",
                 "storage:",
                 "  vector_providers:",
@@ -523,7 +523,7 @@ def test_config_show_redacts_secrets(capsys, tmp_path) -> None:
 
     body = json.loads(capsys.readouterr().out)
     assert exit_code == 0
-    assert body["config"]["openai"]["api_key"] == "***"
+    assert body["config"]["embedding_endpoint"]["api_key"] == "***"
     vector_providers = body["config"]["storage"]["vector_providers"]
     assert vector_providers["pgvector"]["url"] == "***"
     assert vector_providers["qdrant"]["api_key"] == "***"

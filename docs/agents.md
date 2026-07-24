@@ -339,7 +339,7 @@ are selected at startup:
 - Vectors: `lancedb`, `chromadb`, `qdrant`, `milvus`, `weaviate`,
   `pgvector`, `mongodb_atlas`, `elasticsearch`, `opensearch`, `redis`,
   `typesense`, `pinecone`, `turbopuffer`, or `memory`
-- Embeddings: `openai` or `local`
+- Embeddings: `http` or `local`
 
 For multilingual conversations, retrieval quality is a property of the
 configured embedding model. The agent should send normal Unicode text through

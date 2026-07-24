@@ -10,7 +10,7 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P0 | Storage abstraction baseline: capabilities, schema checks, dimensions, fallback, dry-run, Postgres/PGVector | Implemented | `storage_agnostic_byoa_plan.md` |
 | P0 | Retrieval precision: threshold, hybrid search, metadata rerank | Implemented | `improvements/retrieval_precision_plan.md` |
 | P0 | MCP protocol compliance: initialize instructions, schemas, pagination, logging, completion when client UX needs it | Partial | `mcp_utility_compliance_plan.md`, `mcp_plan.md` |
-| P0 | Bearer-token auth and per-user memory isolation | Partial | `bearer_api_key_auth_plan.md` |
+| P0 | Bearer-token auth and per-user memory isolation | Partial | `bearer_api_key_auth_plan.md`, `improvements/google_oauth_connect_ui_plan.md` |
 | P0 | Project workspaces and shared collaboration boundaries | Partial | `project_workspace_collaboration_plan.md` |
 | P0 | MCP client feedback: response shape clarity, fact freshness, and source quality | Implemented | `improvements/client_feedback_improvement_plan.md` |
 | P0 | Advanced search filters for ask, facts, and profile queries | Implemented | `improvements/client_feedback_improvement_plan.md` |
@@ -135,7 +135,8 @@ Implementation sequence:
 - [x] Prevent cross-user leakage from vector candidates by filtering against
       metadata ownership before returning or answering.
 - [x] Redact bearer tokens from logs, errors, and diagnostics.
-- [x] Keep `auth=none` for CI and loopback-only local development.
+- [x] Keep `auth=none` for CI/test fixtures and maintainer-only loopback smoke
+      tests; do not document it as a user setup option.
 - [x] Leave Google/Apple/Meta OAuth for later `oauth_resource_server` mode or a
       trusted identity-aware reverse proxy.
 

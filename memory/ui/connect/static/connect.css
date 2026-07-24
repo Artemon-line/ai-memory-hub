@@ -1,0 +1,41 @@
+body {
+  font-family: system-ui, sans-serif;
+  margin: 2rem;
+  color: #17202a;
+}
+
+main {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+code,
+textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+textarea {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+section,
+article {
+  border-top: 1px solid #ccd3db;
+  padding: 1rem 0;
+}
+
+.button,
+button {
+  display: inline-block;
+  padding: .55rem .8rem;
+  border: 1px solid #4b5f73;
+  background: #fff;
+  color: #17202a;
+  text-decoration: none;
+  border-radius: 4px;
+}
+
+.muted {
+  color: #5e6b78;
+}

@@ -74,7 +74,7 @@ search, and retrieval.
 
 - [x] Vector store (LanceDB with in-memory fallback)
 - [x] Metadata DB (SQLite)
-- [x] Embedding pipeline (OpenAI or local deterministic provider)
+- [x] Embedding pipeline (HTTP endpoint or local deterministic provider)
 
 ### 1.4 Query API
 

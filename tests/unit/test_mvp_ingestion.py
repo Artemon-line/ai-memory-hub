@@ -517,7 +517,7 @@ def test_ingest_messages_rejects_invalid_timestamp_before_storage() -> None:
         mvp_ingestion.ingest_messages(conversation)
 
 
-def test_openai_compatible_embedding_provider_uses_http_endpoint(
+def test_http_embedding_provider_uses_openai_compatible_endpoint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     requests: list[Any] = []
@@ -540,7 +540,7 @@ def test_openai_compatible_embedding_provider_uses_http_endpoint(
 
     monkeypatch.setattr(mvp_ingestion.urllib.request, "urlopen", fake_urlopen)
 
-    provider = mvp_ingestion.OpenAIEmbeddingProvider(
+    provider = mvp_ingestion.HttpEmbeddingProvider(
         embedding_model="nomic-embed-text",
         dimension=3,
         base_url="http://127.0.0.1:11434/v1/",
@@ -557,7 +557,7 @@ def test_openai_compatible_embedding_provider_uses_http_endpoint(
     assert timeout == 60
 
 
-def test_openai_compatible_embedding_provider_redacts_http_errors(
+def test_http_embedding_provider_redacts_http_errors(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def fake_urlopen(_request: Any, timeout: int) -> Any:
@@ -571,7 +571,7 @@ def test_openai_compatible_embedding_provider_redacts_http_errors(
         )
 
     monkeypatch.setattr(mvp_ingestion.urllib.request, "urlopen", fake_urlopen)
-    provider = mvp_ingestion.OpenAIEmbeddingProvider(dimension=3, api_key="secret-key")
+    provider = mvp_ingestion.HttpEmbeddingProvider(dimension=3, api_key="secret-key")
 
     with pytest.raises(RuntimeError) as exc_info:
         provider.embed_texts(["alpha"])

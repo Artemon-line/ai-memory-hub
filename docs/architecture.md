@@ -23,7 +23,7 @@ Implemented and verified in the codebase:
 - Omitted-ID insertion: normalization assigns a UUID when clients omit `id`.
 - Deterministic ingestion with message hashes, conversation hashes, duplicate detection, same-thread append handling, append-only chunking, and indexing state updates.
 - Message-level chunking by default, plus opt-in token-window chunking for long messages.
-- Embedding providers: OpenAI and local deterministic embeddings.
+- Embedding providers: HTTP endpoint and local deterministic embeddings.
 - Multilingual retrieval is supported when the configured embedding model
   supports the languages involved; ai-memory-hub itself is not English-only.
 - Metadata stores: SQLite, Postgres, and MongoDB.
@@ -95,7 +95,7 @@ Default providers:
 
 - Metadata store: SQLite
 - Vector store: LanceDB with in-memory fallback when allowed
-- Embeddings: OpenAI or local deterministic provider
+- Embeddings: HTTP endpoint or local deterministic provider
 
 Supported providers:
 
@@ -193,7 +193,7 @@ when the new model has the same dimensionality.
        |
        v
 [Configured Providers]
-  Embeddings: openai | local
+  Embeddings: http | local
   Metadata: sqlite | postgres | mongodb
   Vectors: lancedb | qdrant | milvus | weaviate | pgvector |
            mongodb_atlas | elasticsearch | opensearch | redis | vespa |

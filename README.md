@@ -140,8 +140,8 @@ message. To migrate intentionally, point the new configuration at an empty
 vector table, collection, index, or namespace and re-ingest/reindex the memory
 from durable metadata or source transcripts.
 
-Today the real embedding path is OpenAI-compatible: configure an
-OpenAI-compatible embeddings API endpoint, such as OpenAI itself or a local
+Today the real embedding path is a generic HTTP embeddings endpoint using the
+OpenAI-compatible `/v1/embeddings` request/response schema, such as a local
 Ollama-compatible `/v1` endpoint. ai-memory-hub uses a small embeddings-only
 HTTP client and does not require the OpenAI Python SDK. The deterministic local
 embedding mode is for smoke tests and demos, not production-quality semantic or
@@ -215,6 +215,23 @@ MCP endpoint:
 http://127.0.0.1:8000/mcp/
 ```
 
+For user-facing MCP setup, start an OAuth-enabled configuration and open
+`/connect`. The Connect UI shows the active MCP URL, configured passport
+providers, sign-in status, short-lived hub token workflow, and copyable client
+snippets. Google is the current live provider; Meta and X config slots are
+disabled placeholders until their provider-specific flows are implemented. See
+the [Connect UI and OAuth setup guide](docs/connect_ui.md) for packages, Docker
+setup, provider status, and client verification notes.
+
+```bash
+cd examples/google-oauth-connect
+docker compose up --build
+```
+
+```text
+http://127.0.0.1:8000/connect
+```
+
 ## Common Workflows
 
 Use the CLI during development:
@@ -241,17 +258,20 @@ docker compose up --build
 
 That Compose stack uses Postgres for metadata and PGVector for vectors. The
 default checked-in config keeps embeddings deterministic and credential-free for
-local smoke testing. For real memory quality, switch the embedding provider to a
-real OpenAI-compatible local or hosted embedding model and set the matching
-embedding dimension. For multilingual memory, choose an embedding model that
-supports your languages. Reindex or use a separate vector namespace/index if
-you change embedding model/provider/options on persistent data.
+local smoke testing. For real memory quality, switch the embedding provider to
+`http`, point `embedding_endpoint.base_url` at a local or hosted embedding
+endpoint, and set the matching embedding dimension. For multilingual memory,
+choose an embedding model that supports your languages. Reindex or use a
+separate vector namespace/index if you change embedding model/provider/options
+on persistent data.
 
-The Compose example is unauthenticated for local smoke testing. Before exposing
-it beyond loopback, put it behind TLS or a trusted private network and use
-`api.auth: oauth_resource_server` for MCP-compliant HTTP authorization. The
-OAuth resource-server example shows the protected resource metadata and bearer
-access-token shape expected by MCP clients.
+The default and provider Compose examples are for local smoke testing only.
+Before exposing
+it beyond loopback, use `api.auth: oauth_resource_server` with TLS or a trusted
+private network. User-facing MCP setups should start from
+`examples/google-oauth-connect` and open `/connect`; the external OAuth resource
+server example remains available for deployments that already have their own
+issuer.
 
 Other checked-in provider examples live under `examples/storage_providers`:
 Qdrant, MongoDB, MongoDB Atlas, Milvus, Weaviate, Elasticsearch,
@@ -286,6 +306,7 @@ provider matrix, smoke commands, CI coverage, and hosted-provider notes.
 - [Architecture](docs/architecture.md)
 - [Agent integration](docs/agents.md)
 - [MCP plan](docs/mcp_plan.md)
+- [Google OAuth Connect UI plan](docs/improvements/google_oauth_connect_ui_plan.md)
 - [Real-client MCP smoke plan](docs/real_client_mcp_smoke_plan.md)
 - [Browser extension capture plan](docs/browser_extension_capture_plan.md)
 - [Plugin readiness plan](docs/plugin_readiness_plan.md)

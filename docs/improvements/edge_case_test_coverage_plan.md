@@ -105,10 +105,10 @@ Follow-up candidate:
 Question: if a user writes data while auth is enabled, then the server restarts
 with `api.auth: none`, should that data be readable without credentials?
 
-Expected answer: no for user-scoped data. `auth=none` may be used for local
-development and unauthenticated local-default data, but it should not become a
-credential bypass for rows previously stamped with an authenticated owner or a
-non-local project.
+Expected answer: no for user-scoped data. `auth=none` may be used for
+CI/test-fixture data and unauthenticated local-default test data, but it should
+not become a credential bypass for rows previously stamped with an authenticated
+owner or a non-local project.
 
 The current implementation resolves unauthenticated requests to the local
 default project and denies explicit access to non-local projects. Add tests to

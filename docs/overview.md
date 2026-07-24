@@ -255,6 +255,15 @@ When `interfaces.mcp` is enabled, the streamable HTTP MCP endpoint is mounted at
 http://127.0.0.1:8000/mcp/
 ```
 
+For user-facing MCP setup, run with `api.auth: oauth_resource_server` and open
+`/connect`. The Connect UI shows the configured MCP resource URL, enabled
+passport providers, sign-in status, hub-issued token workflow, and client setup
+snippets. Google is the current live provider; `meta` and `x` are disabled
+provider slots until their provider-specific flows are implemented. Snippets
+remain marked `Unverified` until checked against current client releases. See
+the [Connect UI and OAuth setup guide](connect_ui.md) for packages, Docker
+setup, provider status, and client verification notes.
+
 Core tools:
 
 - `memory_validate(conversation_json)`
@@ -805,10 +814,9 @@ paths:
   data_dir: ./data
   logs_dir: ./logs
 
-openai:
+embedding_endpoint:
   base_url: http://localhost:11434/v1
   api_key: dummy_key
-  model: gpt-4.1
 ```
 
 `metadata_schema_versions` means "this app build supports these metadata store

@@ -38,7 +38,7 @@ switch providers through configuration.
 | --- | --- |
 | Metadata | SQLite, Postgres, MongoDB |
 | Vector | LanceDB, Qdrant, Milvus, Weaviate, PGVector, MongoDB Atlas Vector Search, Elasticsearch, OpenSearch, Redis/RediSearch, Pinecone, Turbopuffer, Vespa, Typesense, in-memory |
-| Embeddings | Deterministic local embeddings for smoke tests and OpenAI-compatible embedding endpoints for useful semantic retrieval |
+| Embeddings | Deterministic local embeddings for smoke tests and HTTP embedding endpoints for useful semantic retrieval |
 
 Provider startup checks cover schema compatibility, vector dimensions, selected
 distance modes, fallback behavior, health state, and secret redaction.

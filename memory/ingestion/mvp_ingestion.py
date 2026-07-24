@@ -103,20 +103,20 @@ class LocalEmbeddingProvider:
         return [_hash_to_vector(text, self.dimension) for text in texts]
 
 
-class OpenAIEmbeddingProvider:
-    """OpenAI-compatible embeddings endpoint client without the OpenAI SDK."""
+class HttpEmbeddingProvider:
+    """HTTP embeddings endpoint client using the OpenAI-compatible schema."""
 
     def __init__(
         self,
         embedding_model: str = "text-embedding-3-small",
         dimension: int = 1536,
-        base_url: str = "https://api.openai.com/v1",
+        base_url: str = "http://localhost:11434/v1",
         api_key: str | None = None,
     ):
-        key = api_key or os.getenv("OPENAI_API_KEY")
+        key = api_key or os.getenv("EMBEDDING_ENDPOINT_API_KEY")
         if not key:
             logger.warning(
-                "OPENAI_API_KEY is required when providers.embeddings=openai"
+                "EMBEDDING_ENDPOINT_API_KEY is required when providers.embeddings=http"
             )
 
         self.base_url = base_url.rstrip("/")
@@ -481,12 +481,12 @@ def build_runtime(
         supported_versions=cfg.storage.metadata_schema_versions,
     )
 
-    if cfg.providers.embeddings == "openai":
-        embedding_provider: EmbeddingProvider = OpenAIEmbeddingProvider(
+    if cfg.providers.embeddings == "http":
+        embedding_provider: EmbeddingProvider = HttpEmbeddingProvider(
             cfg.providers.embedding_model,
             cfg.providers.embedding_dimension,
-            cfg.openai.base_url,
-            cfg.openai.api_key,
+            cfg.embedding_endpoint.base_url,
+            cfg.embedding_endpoint.api_key,
         )
     else:
         embedding_provider = LocalEmbeddingProvider()
@@ -3816,8 +3816,85 @@ def authenticate_bearer_token_context(token: str) -> dict[str, object] | None:
                 "owner_id": str(owner_id),
                 "token_id": None,
                 "scopes": ["memory:read", "memory:write"],
-            }
+        }
     return None
+
+
+def find_or_create_oauth_identity(
+    *,
+    provider: str,
+    provider_subject: str,
+    email: str | None = None,
+    display_name: str | None = None,
+) -> dict[str, object]:
+    store = _runtime().metadata_store
+    if not hasattr(store, "find_or_create_oauth_identity"):
+        raise NotImplementedError("metadata store does not support oauth identities")
+    return store.find_or_create_oauth_identity(
+        provider=provider,
+        provider_subject=provider_subject,
+        email=email,
+        display_name=display_name,
+    )
+
+
+def create_web_session(
+    *,
+    session_id_hash: str,
+    user_id: str,
+    csrf_token_hash: str,
+    expires_at: str,
+) -> dict[str, object]:
+    store = _runtime().metadata_store
+    if not hasattr(store, "create_web_session"):
+        raise NotImplementedError("metadata store does not support web sessions")
+    return store.create_web_session(
+        session_id_hash=session_id_hash,
+        user_id=user_id,
+        csrf_token_hash=csrf_token_hash,
+        expires_at=expires_at,
+    )
+
+
+def web_session_for_hash(session_id_hash: str) -> dict[str, object] | None:
+    store = _runtime().metadata_store
+    if not hasattr(store, "web_session_for_hash"):
+        return None
+    return store.web_session_for_hash(session_id_hash)
+
+
+def revoke_web_session(session_id_hash: str) -> bool:
+    store = _runtime().metadata_store
+    if not hasattr(store, "revoke_web_session"):
+        return False
+    return bool(store.revoke_web_session(session_id_hash))
+
+
+def create_auth_token(
+    *,
+    owner_id: str,
+    token: str,
+    token_display_name: str | None = None,
+    expires_at: str | None = None,
+    scopes: list[str] | None = None,
+) -> dict[str, object]:
+    store = _runtime().metadata_store
+    if not hasattr(store, "create_auth_token"):
+        raise NotImplementedError("metadata store does not support auth tokens")
+    return store.create_auth_token(
+        owner_id=owner_id,
+        token=token,
+        token_display_name=token_display_name,
+        expires_at=expires_at,
+        scopes=scopes,
+    )
+
+
+def revoke_auth_token(token_id_or_prefix: str) -> dict[str, object] | None:
+    store = _runtime().metadata_store
+    if not hasattr(store, "revoke_auth_token"):
+        return None
+    return store.revoke_auth_token(token_id_or_prefix)
 
 
 def _fact_answer_text(
@@ -4687,10 +4764,9 @@ def _active_embedding_model(*, cfg: HubConfig, embedding_provider: EmbeddingProv
 
 
 def _embedding_options(*, cfg: HubConfig, embedding_provider_name: str) -> dict[str, Any]:
-    if embedding_provider_name == "openai":
-        return {"base_url": redact_secrets(cfg.openai.base_url)}
+    if embedding_provider_name == "http":
+        return {"base_url": redact_secrets(cfg.embedding_endpoint.base_url)}
     return {}
-
 
 def _vector_index_id(*, provider: str, vector_store: Any, vector_health: dict[str, Any]) -> str:
     candidates = {

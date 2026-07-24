@@ -4,7 +4,7 @@ from enum import StrEnum
 
 
 class EmbeddingProviderName(StrEnum):
-    OPENAI = "openai"
+    HTTP = "http"
     LOCAL = "local"
 
 

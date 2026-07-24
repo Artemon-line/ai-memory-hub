@@ -1065,7 +1065,7 @@ def _capabilities(store: Any) -> dict[str, Any]:
 
 def _redact_config(config: HubConfig) -> dict[str, Any]:
     data = config.model_dump(by_alias=True)
-    _redact_config_path(data, ("openai", "api_key"))
+    _redact_config_path(data, ("embedding_endpoint", "api_key"))
     for path in _PROVIDER_SECRET_PATHS:
         _redact_config_path(data, path)
     return data

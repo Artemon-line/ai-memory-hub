@@ -192,7 +192,8 @@ Done when:
 
 ## P0: Authentication And Exposure Safety
 
-- [x] Support `api.auth: none` for loopback-only local testing and CI.
+- [x] Support `api.auth: none` for CI/test fixtures and maintainer-only
+  loopback smoke tests; do not present it as a plugin user setup option.
 - [x] Support `api.auth: bearer_token` for local or trusted-LAN deployments.
 - [x] Support `api.auth: oauth_resource_server` for future federated MCP
   deployments.

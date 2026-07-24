@@ -246,3 +246,59 @@ class MVPIngestionAgent(BaseIngestionAgent):
 
     async def authenticate_bearer_token_context(self, token: str) -> dict[str, object] | None:
         return mvp_ingestion.authenticate_bearer_token_context(token)
+
+    async def find_or_create_oauth_identity(
+        self,
+        *,
+        provider: str,
+        provider_subject: str,
+        email: str | None = None,
+        display_name: str | None = None,
+    ) -> dict[str, object]:
+        return mvp_ingestion.find_or_create_oauth_identity(
+            provider=provider,
+            provider_subject=provider_subject,
+            email=email,
+            display_name=display_name,
+        )
+
+    async def create_web_session(
+        self,
+        *,
+        session_id_hash: str,
+        user_id: str,
+        csrf_token_hash: str,
+        expires_at: str,
+    ) -> dict[str, object]:
+        return mvp_ingestion.create_web_session(
+            session_id_hash=session_id_hash,
+            user_id=user_id,
+            csrf_token_hash=csrf_token_hash,
+            expires_at=expires_at,
+        )
+
+    async def web_session_for_hash(self, session_id_hash: str) -> dict[str, object] | None:
+        return mvp_ingestion.web_session_for_hash(session_id_hash)
+
+    async def revoke_web_session(self, session_id_hash: str) -> bool:
+        return mvp_ingestion.revoke_web_session(session_id_hash)
+
+    async def create_auth_token(
+        self,
+        *,
+        owner_id: str,
+        token: str,
+        token_display_name: str | None = None,
+        expires_at: str | None = None,
+        scopes: list[str] | None = None,
+    ) -> dict[str, object]:
+        return mvp_ingestion.create_auth_token(
+            owner_id=owner_id,
+            token=token,
+            token_display_name=token_display_name,
+            expires_at=expires_at,
+            scopes=scopes,
+        )
+
+    async def revoke_auth_token(self, token_id_or_prefix: str) -> dict[str, object] | None:
+        return mvp_ingestion.revoke_auth_token(token_id_or_prefix)

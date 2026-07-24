@@ -170,3 +170,43 @@ class BaseIngestionAgent(ABC):
             "token_id": None,
             "scopes": ["memory:read", "memory:write"],
         }
+
+    async def find_or_create_oauth_identity(
+        self,
+        *,
+        provider: str,
+        provider_subject: str,
+        email: str | None = None,
+        display_name: str | None = None,
+    ) -> dict[str, object]:
+        raise NotImplementedError("find_or_create_oauth_identity is not implemented")
+
+    async def create_web_session(
+        self,
+        *,
+        session_id_hash: str,
+        user_id: str,
+        csrf_token_hash: str,
+        expires_at: str,
+    ) -> dict[str, object]:
+        raise NotImplementedError("create_web_session is not implemented")
+
+    async def web_session_for_hash(self, session_id_hash: str) -> dict[str, object] | None:
+        raise NotImplementedError("web_session_for_hash is not implemented")
+
+    async def revoke_web_session(self, session_id_hash: str) -> bool:
+        raise NotImplementedError("revoke_web_session is not implemented")
+
+    async def create_auth_token(
+        self,
+        *,
+        owner_id: str,
+        token: str,
+        token_display_name: str | None = None,
+        expires_at: str | None = None,
+        scopes: list[str] | None = None,
+    ) -> dict[str, object]:
+        raise NotImplementedError("create_auth_token is not implemented")
+
+    async def revoke_auth_token(self, token_id_or_prefix: str) -> dict[str, object] | None:
+        raise NotImplementedError("revoke_auth_token is not implemented")

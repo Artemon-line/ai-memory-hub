@@ -14,15 +14,21 @@ from memory.backend.metadata_store import (
     _default_project_id,
     _hash_bearer_token,
     _new_token_id,
+    _normalize_email,
     _normalize_token_scopes,
+    _oauth_user_id,
     _owner_id_from_payload,
     _parse_token_scopes,
     _stamp_project_id,
+    _token_id_from_bearer_token,
     _token_id_from_hash,
     _token_prefix,
+    _validate_oauth_provider,
+    _validate_oauth_subject,
     _validate_owner_id,
     _validate_project_id,
     _validate_project_role,
+    _validate_secret_hash,
     _validate_token_lookup,
 )
 
@@ -107,6 +113,38 @@ CREATE_AUTH_TOKENS_TOKEN_ID_INDEX_SQL = """
 CREATE UNIQUE INDEX IF NOT EXISTS idx_auth_tokens_token_id
 ON auth_tokens(token_id)
 WHERE token_id IS NOT NULL
+"""
+CREATE_OAUTH_IDENTITIES_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS oauth_identities (
+    provider TEXT NOT NULL,
+    provider_subject TEXT NOT NULL,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    email TEXT NULL,
+    display_name TEXT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_login_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY(provider, provider_subject)
+)
+"""
+CREATE_OAUTH_IDENTITIES_USER_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_oauth_identities_user
+ON oauth_identities(user_id)
+"""
+CREATE_WEB_SESSIONS_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS web_sessions (
+    session_id_hash TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    csrf_token_hash TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL,
+    revoked_at TIMESTAMPTZ NULL
+)
+"""
+CREATE_WEB_SESSIONS_USER_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_web_sessions_user
+ON web_sessions(user_id)
+WHERE revoked_at IS NULL
 """
 CREATE_PROJECTS_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS projects (
@@ -304,6 +342,10 @@ class PostgresMetadataStore:
                 cur.execute("ALTER TABLE auth_tokens ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMPTZ NULL")
                 cur.execute(CREATE_AUTH_TOKENS_OWNER_INDEX_SQL)
                 cur.execute(CREATE_AUTH_TOKENS_TOKEN_ID_INDEX_SQL)
+                cur.execute(CREATE_OAUTH_IDENTITIES_TABLE_SQL)
+                cur.execute(CREATE_OAUTH_IDENTITIES_USER_INDEX_SQL)
+                cur.execute(CREATE_WEB_SESSIONS_TABLE_SQL)
+                cur.execute(CREATE_WEB_SESSIONS_USER_INDEX_SQL)
                 cur.execute(CREATE_PROJECTS_TABLE_SQL)
                 cur.execute(CREATE_PROJECT_MEMBERSHIPS_TABLE_SQL)
                 cur.execute(CREATE_DEFAULT_PROJECT_OWNER_INDEX_SQL)
@@ -416,7 +458,7 @@ class PostgresMetadataStore:
     ) -> dict[str, Any]:
         owner = _validate_owner_id(owner_id)
         token_hash = _hash_bearer_token(token)
-        token_id = _new_token_id()
+        token_id = _token_id_from_bearer_token(token) or _new_token_id()
         token_name = token_display_name
         token_prefix = _token_prefix(token)
         scopes_json = json.dumps(_normalize_token_scopes(scopes), separators=(",", ":"))
@@ -462,6 +504,133 @@ class PostgresMetadataStore:
         if row is None:
             raise RuntimeError("auth token could not be created")
         return self._token_from_row(row)
+
+    def find_or_create_oauth_identity(
+        self,
+        *,
+        provider: str,
+        provider_subject: str,
+        email: str | None = None,
+        display_name: str | None = None,
+    ) -> dict[str, Any]:
+        provider_name = _validate_oauth_provider(provider)
+        subject = _validate_oauth_subject(provider_subject)
+        normalized_email = _normalize_email(email)
+        user_id = _oauth_user_id(provider_name, subject)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO users (id, display_name)
+                    VALUES (%s, %s)
+                    ON CONFLICT (id) DO UPDATE SET
+                        display_name = COALESCE(EXCLUDED.display_name, users.display_name)
+                    """,
+                    (user_id, display_name or normalized_email),
+                )
+                self._ensure_default_project(cur, user_id)
+                cur.execute(
+                    """
+                    INSERT INTO oauth_identities
+                        (provider, provider_subject, user_id, email, display_name)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (provider, provider_subject) DO UPDATE SET
+                        email = EXCLUDED.email,
+                        display_name = COALESCE(EXCLUDED.display_name, oauth_identities.display_name),
+                        last_login_at = NOW()
+                    """,
+                    (provider_name, subject, user_id, normalized_email, display_name),
+                )
+                cur.execute(
+                    """
+                    SELECT provider, provider_subject, user_id, email, display_name,
+                           created_at::text, last_login_at::text
+                    FROM oauth_identities
+                    WHERE provider = %s AND provider_subject = %s
+                    """,
+                    (provider_name, subject),
+                )
+                row = cur.fetchone()
+        if row is None:
+            raise RuntimeError("oauth identity could not be created")
+        return self._oauth_identity_from_row(row)
+
+    def create_web_session(
+        self,
+        *,
+        session_id_hash: str,
+        user_id: str,
+        csrf_token_hash: str,
+        expires_at: str,
+    ) -> dict[str, Any]:
+        session_hash = _validate_secret_hash(session_id_hash, field_name="session_id_hash")
+        csrf_hash = _validate_secret_hash(csrf_token_hash, field_name="csrf_token_hash")
+        owner = _validate_owner_id(user_id)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO web_sessions
+                        (session_id_hash, user_id, csrf_token_hash, expires_at)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (session_id_hash) DO UPDATE SET
+                        user_id = EXCLUDED.user_id,
+                        csrf_token_hash = EXCLUDED.csrf_token_hash,
+                        expires_at = EXCLUDED.expires_at,
+                        revoked_at = NULL
+                    """,
+                    (session_hash, owner, csrf_hash, expires_at),
+                )
+                cur.execute(
+                    """
+                    SELECT session_id_hash, user_id, csrf_token_hash, created_at::text,
+                           last_seen_at::text, expires_at::text, revoked_at::text
+                    FROM web_sessions
+                    WHERE session_id_hash = %s
+                    """,
+                    (session_hash,),
+                )
+                row = cur.fetchone()
+        if row is None:
+            raise RuntimeError("web session could not be created")
+        return self._web_session_from_row(row)
+
+    def web_session_for_hash(self, session_id_hash: str) -> dict[str, Any] | None:
+        session_hash = _validate_secret_hash(session_id_hash, field_name="session_id_hash")
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT session_id_hash, user_id, csrf_token_hash, created_at::text,
+                           last_seen_at::text, expires_at::text, revoked_at::text
+                    FROM web_sessions
+                    WHERE session_id_hash = %s
+                      AND revoked_at IS NULL
+                      AND expires_at > NOW()
+                    """,
+                    (session_hash,),
+                )
+                row = cur.fetchone()
+                if row is not None:
+                    cur.execute(
+                        "UPDATE web_sessions SET last_seen_at = NOW() WHERE session_id_hash = %s",
+                        (session_hash,),
+                    )
+        return self._web_session_from_row(row) if row is not None else None
+
+    def revoke_web_session(self, session_id_hash: str) -> bool:
+        session_hash = _validate_secret_hash(session_id_hash, field_name="session_id_hash")
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE web_sessions
+                    SET revoked_at = NOW()
+                    WHERE session_id_hash = %s AND revoked_at IS NULL
+                    """,
+                    (session_hash,),
+                )
+                return bool(cur.rowcount)
 
     def owner_for_token(self, token: str) -> str | None:
         context = self.auth_context_for_token(token)
@@ -1526,6 +1695,28 @@ class PostgresMetadataStore:
             "revoked_at": row[6],
             "scopes": _parse_token_scopes(row[7]),
             "last_used_at": row[8],
+        }
+
+    def _oauth_identity_from_row(self, row: Any) -> dict[str, Any]:
+        return {
+            "provider": str(row[0]),
+            "provider_subject": str(row[1]),
+            "user_id": str(row[2]),
+            "email": row[3],
+            "display_name": row[4],
+            "created_at": str(row[5]),
+            "last_login_at": str(row[6]),
+        }
+
+    def _web_session_from_row(self, row: Any) -> dict[str, Any]:
+        return {
+            "session_id_hash": str(row[0]),
+            "user_id": str(row[1]),
+            "csrf_token_hash": str(row[2]),
+            "created_at": str(row[3]),
+            "last_seen_at": str(row[4]),
+            "expires_at": str(row[5]),
+            "revoked_at": row[6],
         }
 
     def _project_member_from_row(self, row: Any) -> dict[str, Any]:
