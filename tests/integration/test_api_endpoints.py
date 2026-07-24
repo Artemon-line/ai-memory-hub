@@ -381,6 +381,7 @@ def test_oauth_protected_resource_metadata_is_public_and_secret_free() -> None:
 
     root_response = client.get("/.well-known/oauth-protected-resource")
     response = client.get("/.well-known/oauth-protected-resource/mcp")
+    authorization_server = client.get("/.well-known/oauth-authorization-server")
 
     assert root_response.status_code == 200
     assert root_response.json()["resource"] == "https://memory.example.com/mcp"
@@ -389,7 +390,13 @@ def test_oauth_protected_resource_metadata_is_public_and_secret_free() -> None:
     assert body["resource"] == "https://memory.example.com/mcp"
     assert body["authorization_servers"] == ["https://auth.example.com"]
     assert "memory:read" in body["scopes_supported"]
-    assert "test-secret" not in str(body)
+    assert authorization_server.status_code == 200
+    authorization_body = authorization_server.json()
+    assert authorization_body["issuer"] == "https://memory.example.com"
+    assert authorization_body["authorization_endpoint"] == "https://memory.example.com/connect"
+    assert authorization_body["protected_resources"] == ["https://memory.example.com/mcp"]
+    assert "memory:read" in authorization_body["scopes_supported"]
+    assert "test-secret" not in str({"resource": body, "authorization": authorization_body})
 
 
 def test_oauth_auth_rejects_missing_wrong_audience_and_query_tokens(
