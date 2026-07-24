@@ -41,7 +41,7 @@ class InsertPolicy(StrEnum):
 class ProvidersConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    embeddings: str = EmbeddingProviderName.OPENAI.value
+    embeddings: str = EmbeddingProviderName.HTTP.value
     embedding_model: str = "nomic-embed-text"
     embedding_dimension: int = 768
     vector_db: str = VectorProviderName.LANCEDB.value
@@ -52,8 +52,10 @@ class ProvidersConfig(BaseModel):
     @classmethod
     def validate_embeddings(cls, v: str) -> str:
         v = v.lower()
+        if v == "openai":
+            return EmbeddingProviderName.HTTP.value
         if v not in {item.value for item in EmbeddingProviderName}:
-            raise ValueError("providers.embeddings must be one of: openai, local")
+            raise ValueError("providers.embeddings must be one of: http, local")
         return v
 
     @field_validator("vector_db")
@@ -620,10 +622,9 @@ class ChunkingConfig(BaseModel):
         return self
 
 
-class OpenAIConfig(BaseModel):
+class EmbeddingEndpointConfig(BaseModel):
     base_url: str = "http://localhost:11434/v1"
     api_key: str = "dummy_key"
-    model: str = "gpt-4.1"
 
 
 class MCPConfig(BaseModel):
@@ -1010,10 +1011,27 @@ class HubConfig(BaseModel):
     retrieval: RetrievalConfig = Field(default_factory=RetrievalConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     chunking: ChunkingConfig = Field(default_factory=ChunkingConfig)
-    openai: OpenAIConfig = Field(default_factory=OpenAIConfig)
+    embedding_endpoint: EmbeddingEndpointConfig = Field(
+        default_factory=EmbeddingEndpointConfig
+    )
     mcp: MCPConfig = Field(default_factory=MCPConfig)
     api: APIConfig = Field(default_factory=APIConfig)
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
+
+    @model_validator(mode="before")
+    @classmethod
+    def apply_legacy_embedding_config(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        data = dict(value)
+        providers = data.get("providers")
+        if isinstance(providers, dict) and providers.get("embeddings") == "openai":
+            data["providers"] = {**providers, "embeddings": EmbeddingProviderName.HTTP.value}
+        if "embedding_endpoint" not in data and isinstance(data.get("openai"), dict):
+            legacy = dict(data["openai"])
+            legacy.pop("model", None)
+            data["embedding_endpoint"] = legacy
+        return data
 
 
 def parse_config(config_dict: dict[str, Any] | None) -> HubConfig:

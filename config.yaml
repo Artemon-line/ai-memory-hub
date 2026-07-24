@@ -134,7 +134,7 @@ providers:
   # Embedding provider used for chunk vectors. Multilingual retrieval depends on
   # choosing a model that supports your languages. Reindex or use a separate
   # vector namespace/index when changing model/provider/options on persistent data.
-  embeddings: openai
+  embeddings: http
   embedding_model: 'nomic-embed-text'
   embedding_dimension: 768
   metadata_db: sqlite # active metadata provider: sqlite | postgres | mongodb
@@ -240,6 +240,6 @@ observability:
 # -------------------------
 # PROVIDER SETTINGS
 # -------------------------
-openai:
+embedding_endpoint:
   base_url: 'http://localhost:11434/v1' # for Ollama usage
   api_key: 'dummy_key'

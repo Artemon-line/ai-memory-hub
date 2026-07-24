@@ -126,8 +126,8 @@ providers:
   # Embedding provider used for chunk vectors. Multilingual retrieval depends on
   # choosing a model that supports your languages. Reindex or use a separate
   # vector namespace/index when changing model/provider/options on persistent data.
-  embeddings: openai
-  embedding_model: 'text-embedding-3-small' # OpenAI-compatible embedding model
+  embeddings: http
+  embedding_model: 'text-embedding-3-small' # HTTP embedding endpoint model
   embedding_dimension: 1536 # text-embedding-3-small embedding dimension
   metadata_db: sqlite # active metadata provider: sqlite | postgres | mongodb
   # lancedb | qdrant | milvus | weaviate | mongodb_atlas |
@@ -232,10 +232,9 @@ observability:
 # -------------------------
 # PROVIDER SETTINGS
 # -------------------------
-openai:
-  base_url: 'https://api.openai.com'
+embedding_endpoint:
+  base_url: 'https://api.openai.com/v1'
   api_key: 'your_api_key_here'
-  model: 'gpt-4.1'
 
 # ============================================================
 # VARIATIONS (examples)

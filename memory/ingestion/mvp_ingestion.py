@@ -103,20 +103,20 @@ class LocalEmbeddingProvider:
         return [_hash_to_vector(text, self.dimension) for text in texts]
 
 
-class OpenAIEmbeddingProvider:
-    """OpenAI-compatible embeddings endpoint client without the OpenAI SDK."""
+class HttpEmbeddingProvider:
+    """HTTP embeddings endpoint client using the OpenAI-compatible schema."""
 
     def __init__(
         self,
         embedding_model: str = "text-embedding-3-small",
         dimension: int = 1536,
-        base_url: str = "https://api.openai.com/v1",
+        base_url: str = "http://localhost:11434/v1",
         api_key: str | None = None,
     ):
-        key = api_key or os.getenv("OPENAI_API_KEY")
+        key = api_key or os.getenv("EMBEDDING_ENDPOINT_API_KEY")
         if not key:
             logger.warning(
-                "OPENAI_API_KEY is required when providers.embeddings=openai"
+                "EMBEDDING_ENDPOINT_API_KEY is required when providers.embeddings=http"
             )
 
         self.base_url = base_url.rstrip("/")
@@ -481,12 +481,12 @@ def build_runtime(
         supported_versions=cfg.storage.metadata_schema_versions,
     )
 
-    if cfg.providers.embeddings == "openai":
-        embedding_provider: EmbeddingProvider = OpenAIEmbeddingProvider(
+    if cfg.providers.embeddings == "http":
+        embedding_provider: EmbeddingProvider = HttpEmbeddingProvider(
             cfg.providers.embedding_model,
             cfg.providers.embedding_dimension,
-            cfg.openai.base_url,
-            cfg.openai.api_key,
+            cfg.embedding_endpoint.base_url,
+            cfg.embedding_endpoint.api_key,
         )
     else:
         embedding_provider = LocalEmbeddingProvider()
@@ -4764,10 +4764,9 @@ def _active_embedding_model(*, cfg: HubConfig, embedding_provider: EmbeddingProv
 
 
 def _embedding_options(*, cfg: HubConfig, embedding_provider_name: str) -> dict[str, Any]:
-    if embedding_provider_name == "openai":
-        return {"base_url": redact_secrets(cfg.openai.base_url)}
+    if embedding_provider_name == "http":
+        return {"base_url": redact_secrets(cfg.embedding_endpoint.base_url)}
     return {}
-
 
 def _vector_index_id(*, provider: str, vector_store: Any, vector_health: dict[str, Any]) -> str:
     candidates = {

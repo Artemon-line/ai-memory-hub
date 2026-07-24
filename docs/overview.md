@@ -814,10 +814,9 @@ paths:
   data_dir: ./data
   logs_dir: ./logs
 
-openai:
+embedding_endpoint:
   base_url: http://localhost:11434/v1
   api_key: dummy_key
-  model: gpt-4.1
 ```
 
 `metadata_schema_versions` means "this app build supports these metadata store

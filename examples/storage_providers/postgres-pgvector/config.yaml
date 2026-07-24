@@ -72,7 +72,3 @@ api:
   # oauth_resource_server and expose the service through TLS, a trusted reverse
   # proxy, VPN, or another protected private-network boundary.
   auth: none
-
-openai:
-  base_url: http://localhost:11434/v1
-  api_key: dummy_key

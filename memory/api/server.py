@@ -725,7 +725,6 @@ def create_app(
         + f"  version: {app.version}\n"
         + f"  embeddings: {cfg.providers.embeddings}\n"
         + f"  embedding_model: {cfg.providers.embedding_model}\n"
-        + f"  openai_base_url: {cfg.openai.base_url}\n"
         + f"  vector_db: {cfg.providers.vector_db}\n"
         + f"  mcp enabled: {cfg.interfaces.mcp}\n"
         + f"  api enabled: {cfg.interfaces.api}\n"

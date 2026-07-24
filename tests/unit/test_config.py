@@ -13,12 +13,10 @@ def test_load_config_default():
     
     config_path = Path(__file__).resolve().parent.parent / "config.yaml"
     if config_path.exists():
-        # config.yaml says "openai"
-        assert config.providers.embeddings == "openai"
+        assert config.providers.embeddings == "http"
         assert config.providers.embedding_dimension == 768
     else:
-        # Default in code is also "openai" now (or whatever I set it to)
-        assert config.providers.embeddings == "openai"
+        assert config.providers.embeddings == "http"
 
 def test_load_config_from_file():
     config_path = Path(__file__).resolve().parent.parent / "config.yaml"
@@ -27,8 +25,25 @@ def test_load_config_from_file():
     
     config = load_config(config_path)
     assert isinstance(config, HubConfig)
-    assert config.providers.embeddings == "openai"
+    assert config.providers.embeddings == "http"
     assert config.providers.embedding_dimension == 768
+
+
+def test_legacy_openai_embedding_config_maps_to_http_endpoint() -> None:
+    config = parse_config(
+        {
+            "providers": {"embeddings": "openai"},
+            "openai": {
+                "base_url": "http://127.0.0.1:11434/v1",
+                "api_key": "ollama",
+                "model": "legacy-chat-model",
+            },
+        }
+    )
+
+    assert config.providers.embeddings == "http"
+    assert config.embedding_endpoint.base_url == "http://127.0.0.1:11434/v1"
+    assert config.embedding_endpoint.api_key == "ollama"
 
 def test_load_config_non_existent():
     with pytest.raises(FileNotFoundError):

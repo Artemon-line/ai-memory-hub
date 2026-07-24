@@ -14,8 +14,8 @@ def main():
     # and use the requested embedding model.
     config = HubConfig()
     
-    config.openai.base_url = "http://localhost:11434/v1"
-    config.openai.api_key = "ollama" # dummy key
+    config.embedding_endpoint.base_url = "http://localhost:11434/v1"
+    config.embedding_endpoint.api_key = "ollama" # dummy key
     config.providers.embeddings = "local"
     config.providers.embedding_dimension = 32
     

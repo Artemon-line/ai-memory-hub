@@ -46,8 +46,8 @@ chunking:
   overlap_tokens: 80
 
 providers:
-  # Ollama exposes an OpenAI-compatible embeddings API at /v1/embeddings.
-  embeddings: openai
+  # Ollama exposes an HTTP embeddings API at /v1/embeddings.
+  embeddings: http
   embedding_model: nomic-embed-text
   embedding_dimension: 768
   metadata_db: postgres
@@ -77,6 +77,6 @@ api:
   # proxy, VPN, or another protected private-network boundary.
   auth: none
 
-openai:
+embedding_endpoint:
   base_url: http://host.docker.internal:11434/v1
   api_key: ollama

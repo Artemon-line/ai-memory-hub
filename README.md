@@ -140,8 +140,8 @@ message. To migrate intentionally, point the new configuration at an empty
 vector table, collection, index, or namespace and re-ingest/reindex the memory
 from durable metadata or source transcripts.
 
-Today the real embedding path is OpenAI-compatible: configure an
-OpenAI-compatible embeddings API endpoint, such as OpenAI itself or a local
+Today the real embedding path is a generic HTTP embeddings endpoint using the
+OpenAI-compatible `/v1/embeddings` request/response schema, such as a local
 Ollama-compatible `/v1` endpoint. ai-memory-hub uses a small embeddings-only
 HTTP client and does not require the OpenAI Python SDK. The deterministic local
 embedding mode is for smoke tests and demos, not production-quality semantic or
@@ -258,11 +258,12 @@ docker compose up --build
 
 That Compose stack uses Postgres for metadata and PGVector for vectors. The
 default checked-in config keeps embeddings deterministic and credential-free for
-local smoke testing. For real memory quality, switch the embedding provider to a
-real OpenAI-compatible local or hosted embedding model and set the matching
-embedding dimension. For multilingual memory, choose an embedding model that
-supports your languages. Reindex or use a separate vector namespace/index if
-you change embedding model/provider/options on persistent data.
+local smoke testing. For real memory quality, switch the embedding provider to
+`http`, point `embedding_endpoint.base_url` at a local or hosted embedding
+endpoint, and set the matching embedding dimension. For multilingual memory,
+choose an embedding model that supports your languages. Reindex or use a
+separate vector namespace/index if you change embedding model/provider/options
+on persistent data.
 
 The default and provider Compose examples are for local smoke testing only.
 Before exposing

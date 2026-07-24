@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from memory.api.server import create_app
 
 OLLAMA_BASE_URL = os.getenv("AMH_OLLAMA_BASE_URL", "http://localhost:11434")
-OPENAI_BASE_URL = f"{OLLAMA_BASE_URL.rstrip('/')}/v1"
+HTTP_EMBEDDING_BASE_URL = f"{OLLAMA_BASE_URL.rstrip('/')}/v1"
 CHAT_MODEL = os.getenv("AMH_OLLAMA_CHAT_MODEL", "qwen2.5:0.5b")
 
 
@@ -260,10 +260,10 @@ def _mcp_client(tmp_path: Any) -> TestClient:
     app = create_app(
         config={
             "interfaces": {"mcp": True, "api": False},
-            "openai": {"base_url": OPENAI_BASE_URL, "api_key": "ollama"},
+            "embedding_endpoint": {"base_url": HTTP_EMBEDDING_BASE_URL, "api_key": "ollama"},
             "paths": {"data_dir": str(tmp_path)},
             "providers": {
-                "embeddings": "openai",
+                "embeddings": "http",
                 "embedding_model": "nomic-embed-text",
                 "embedding_dimension": 768,
                 "metadata_db": "sqlite",
@@ -459,7 +459,7 @@ def test_mcp_client_malformed_payloads_return_invalid_input_envelope(
 def test_ollama_chat_completion_smoke() -> None:
     _require_ollama()
     request = Request(
-        f"{OPENAI_BASE_URL}/chat/completions",
+        f"{HTTP_EMBEDDING_BASE_URL}/chat/completions",
         data=json.dumps(
             {
                 "model": CHAT_MODEL,
