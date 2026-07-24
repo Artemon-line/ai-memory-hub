@@ -66,7 +66,8 @@ tokens.
 - [x] Add public Connect UI routes that do not require MCP bearer auth:
       `/`, `/connect`, `/auth/google`, `/auth/google/callback`, and
       `/auth/logout`.
-- [x] Render a minimal HTML page with service status, MCP URL, and auth status.
+- [x] Render a Jinja-backed HTML page with service status, MCP URL, and auth
+      status. Templates and static assets live under `memory/ui/connect`.
 - [x] Derive the MCP URL from `api.public_base_url` plus `/mcp` unless
       `api.oauth.resource` is explicitly configured.
 - [x] Add copyable setup snippets with placeholders for Codex, Copilot CLI, Pi,
@@ -181,10 +182,14 @@ tokens.
 
 Current implementation:
 
-- The Connect UI is server-rendered and enabled through `api.connect`.
+- The Connect UI is server-rendered with Jinja templates under
+  `memory/ui/connect` and enabled through `api.connect`.
 - Passport sign-in providers are configured through `api.connect.passport`.
-  Google, Meta, and X are accepted provider names; Google uses Authlib/httpx
-  through the `oauth` extra for live token exchange and ID-token parsing.
+  This is a hub config namespace, not Node Passport middleware. Google, Meta,
+  and X are accepted provider names; live OAuth authorization and callback
+  handling uses Authlib's Starlette client registry through the `oauth` extra.
+  Test hooks can still inject provider claims without calling external identity
+  providers.
 - Google `sub` values map to deterministic local users. Account linking is
   explicitly deferred; different Google subjects stay distinct unless a future
   admin workflow links them.
