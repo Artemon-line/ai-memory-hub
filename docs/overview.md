@@ -258,9 +258,11 @@ http://127.0.0.1:8000/mcp/
 For user-facing MCP setup, run with `api.auth: oauth_resource_server` and open
 `/connect`. The Connect UI shows the configured MCP resource URL, enabled
 passport providers, sign-in status, hub-issued token workflow, and client setup
-snippets. The hub config supports `google`, `meta`, and `x` provider entries.
-Snippets remain marked `Unverified` until checked against current client
-releases.
+snippets. Google is the current live provider; `meta` and `x` are disabled
+provider slots until their provider-specific flows are implemented. Snippets
+remain marked `Unverified` until checked against current client releases. See
+the [Connect UI and OAuth setup guide](connect_ui.md) for packages, Docker
+setup, provider status, and client verification notes.
 
 Core tools:
 

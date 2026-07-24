@@ -218,8 +218,10 @@ http://127.0.0.1:8000/mcp/
 For user-facing MCP setup, start an OAuth-enabled configuration and open
 `/connect`. The Connect UI shows the active MCP URL, configured passport
 providers, sign-in status, short-lived hub token workflow, and copyable client
-snippets. The hub config supports Google, Meta, and X provider entries; the
-checked-in example enables Google by default.
+snippets. Google is the current live provider; Meta and X config slots are
+disabled placeholders until their provider-specific flows are implemented. See
+the [Connect UI and OAuth setup guide](docs/connect_ui.md) for packages, Docker
+setup, provider status, and client verification notes.
 
 ```bash
 cd examples/google-oauth-connect
