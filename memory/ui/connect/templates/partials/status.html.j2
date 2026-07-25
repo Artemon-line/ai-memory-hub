@@ -1,13 +1,4 @@
 <section>
   <p>Status: <strong>ok</strong></p>
-  <p>Auth: <strong>{{ auth_label|e }}</strong> {{ identity|e }}</p>
   <p>MCP URL: <code>{{ mcp_url|e }}</code></p>
-  {% if signed_in %}
-    <form method="post" action="/auth/logout">
-      <input type="hidden" name="csrf_token" value="{{ (csrf_token or "")|e }}">
-      <button type="submit">Sign Out</button>
-    </form>
-  {% else %}
-    {% include "partials/provider_buttons.html.j2" %}
-  {% endif %}
 </section>

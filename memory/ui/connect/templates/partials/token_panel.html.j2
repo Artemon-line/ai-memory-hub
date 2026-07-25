@@ -1,7 +1,0 @@
-{% if issued_token %}
-  <section>
-    <h2>Hub Token</h2>
-    <p>This token is shown once. Store it in your MCP client, then sign out here if needed.</p>
-    <textarea readonly rows="5">{{ issued_token|e }}</textarea>
-  </section>
-{% endif %}

@@ -96,8 +96,9 @@ def test_oauth_protected_resource_metadata_is_public_and_secret_free(
     )
     assert "https://memory.example.com/mcp" in body
     assert "https://auth.example.com" in body
-    assert "https://memory.example.com/connect" in body
+    assert "https://memory.example.com/oauth/authorize" in body
     assert "https://memory.example.com/oauth/token" in body
+    assert "https://memory.example.com/oauth/register" in body
     assert "code_challenge_methods_supported" in body
     assert "oauth-secret-value" not in body
 
