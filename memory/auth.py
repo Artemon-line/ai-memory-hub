@@ -24,6 +24,7 @@ PUBLIC_PATHS = {
     "/auth/google/callback",
     "/auth/logout",
     "/health",
+    "/oauth/token",
     "/ready",
     "/.well-known/oauth-authorization-server",
     "/.well-known/oauth-protected-resource",
@@ -222,10 +223,12 @@ def authorization_server_metadata(config: HubConfig) -> dict[str, object]:
     metadata: dict[str, object] = {
         "issuer": base,
         "authorization_endpoint": f"{base}/connect",
+        "token_endpoint": f"{base}/oauth/token",
         "scopes_supported": list(config.api.oauth.scopes_supported),
         "response_types_supported": ["code"],
         "grant_types_supported": ["authorization_code"],
         "token_endpoint_auth_methods_supported": ["none"],
+        "code_challenge_methods_supported": ["S256"],
         "protected_resources": [resource],
         "service_documentation": f"{base}/docs",
     }

@@ -394,9 +394,16 @@ def test_oauth_protected_resource_metadata_is_public_and_secret_free() -> None:
     authorization_body = authorization_server.json()
     assert authorization_body["issuer"] == "https://memory.example.com"
     assert authorization_body["authorization_endpoint"] == "https://memory.example.com/connect"
+    assert authorization_body["token_endpoint"] == "https://memory.example.com/oauth/token"
+    assert authorization_body["code_challenge_methods_supported"] == ["S256"]
     assert authorization_body["protected_resources"] == ["https://memory.example.com/mcp"]
     assert "memory:read" in authorization_body["scopes_supported"]
     assert "test-secret" not in str({"resource": body, "authorization": authorization_body})
+
+    token_response = client.post("/oauth/token", data={"grant_type": "authorization_code"})
+    assert token_response.status_code == 400
+    assert token_response.json()["error"] == "unsupported_grant_type"
+    assert "test-secret" not in str(token_response.json())
 
 
 def test_oauth_auth_rejects_missing_wrong_audience_and_query_tokens(

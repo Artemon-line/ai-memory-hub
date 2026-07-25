@@ -9,6 +9,7 @@ import jsonschema
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
+from starlette.responses import JSONResponse
 
 from memory.api.connect_ui import connect_status, register_connect_routes
 from memory.auth import (
@@ -260,7 +261,20 @@ def _register_authorization_server_metadata_routes(app: FastAPI, config: HubConf
     async def metadata() -> dict[str, object]:
         return authorization_server_metadata(config)
 
+    async def token_endpoint() -> JSONResponse:
+        return JSONResponse(
+            {
+                "error": "unsupported_grant_type",
+                "error_description": (
+                    "ai-memory-hub issues MCP bearer tokens through /connect; "
+                    "copy the issued token into the client Authorization header."
+                ),
+            },
+            status_code=400,
+        )
+
     app.get("/.well-known/oauth-authorization-server")(metadata)
+    app.post("/oauth/token")(token_endpoint)
 
 
 def _register_request_failure_logging(app: FastAPI, config: HubConfig) -> None:
