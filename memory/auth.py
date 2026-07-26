@@ -24,7 +24,11 @@ PUBLIC_PATHS = {
     "/auth/google/callback",
     "/auth/logout",
     "/health",
+    "/oauth/authorize",
+    "/oauth/register",
+    "/oauth/token",
     "/ready",
+    "/.well-known/oauth-authorization-server",
     "/.well-known/oauth-protected-resource",
 }
 READ_SCOPE = "memory:read"
@@ -215,9 +219,30 @@ def protected_resource_metadata(config: HubConfig, *, resource_path: str = "/mcp
     }
 
 
+def authorization_server_metadata(config: HubConfig) -> dict[str, object]:
+    base = config.api.public_base_url.rstrip("/") or f"http://{config.api.host}:{config.api.port}"
+    resource = _oauth_resource(config, resource_path="/mcp")
+    metadata: dict[str, object] = {
+        "issuer": base,
+        "authorization_endpoint": f"{base}/oauth/authorize",
+        "token_endpoint": f"{base}/oauth/token",
+        "registration_endpoint": f"{base}/oauth/register",
+        "scopes_supported": list(config.api.oauth.scopes_supported),
+        "response_types_supported": ["code"],
+        "grant_types_supported": ["authorization_code"],
+        "token_endpoint_auth_methods_supported": ["none"],
+        "code_challenge_methods_supported": ["S256"],
+        "protected_resources": [resource],
+        "service_documentation": f"{base}/docs",
+    }
+    return metadata
+
+
 def _is_public_path(path: str) -> bool:
     return (
         path in PUBLIC_PATHS
+        or path.startswith("/connect/static/")
+        or path.startswith("/.well-known/oauth-authorization-server/")
         or path.startswith("/auth/")
         or path.startswith("/.well-known/oauth-protected-resource/")
     )

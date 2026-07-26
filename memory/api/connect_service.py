@@ -20,25 +20,41 @@ SECRET_HASH_ITERATIONS = 210_000
 CLIENT_MATRIX: tuple[dict[str, str], ...] = (
     {
         "name": "Codex",
-        "status": "Unverified",
-        "snippet": '[mcp_servers.ai_memory_hub]\nurl = "{mcp_url}"\nheaders = {{ Authorization = "Bearer <hub-token>" }}',
+        "status": "Verified",
+        "snippet": "codex mcp add ai-memory-hub-local --url {mcp_url}",
     },
     {
         "name": "Copilot CLI",
         "status": "Unverified",
-        "snippet": 'copilot mcp add --transport http --header "Authorization: Bearer <hub-token>" ai-memory-hub {mcp_url}',
+        "snippet": 'copilot mcp add --transport http ai-memory-hub {mcp_url}',
     },
-    {"name": "Pi", "status": "Unverified", "snippet": "MCP URL: {mcp_url}\nBearer token: <hub-token>"},
+    {
+        "name": "Pi",
+        "status": "Verified",
+        "snippet": "pi install npm:pi-mcp-adapter",
+    },
     {
         "name": "OpenCode",
-        "status": "Unverified",
-        "snippet": '{{"mcp": {{"ai-memory-hub": {{"type": "remote", "url": "{mcp_url}", "headers": {{"Authorization": "Bearer <hub-token>"}}}}}}}}',
+        "status": "Verified",
+        "snippet": "opencode mcp add ai-memory-hub-local --url {mcp_url}",
     },
-    {"name": "Claude", "status": "Unverified", "snippet": "mcp add ai-memory-hub {mcp_url}"},
-    {"name": "Hermes", "status": "Unverified", "snippet": "MCP URL: {mcp_url}\nToken: <hub-token>"},
-    {"name": "OpenShell", "status": "Unverified", "snippet": "MCP URL: {mcp_url}\nToken: <hub-token>"},
-    {"name": "OpenClaw", "status": "Unverified", "snippet": "MCP URL: {mcp_url}\nToken: <hub-token>"},
-    {"name": "Gemini CLI", "status": "Unverified", "snippet": "MCP URL: {mcp_url}\nToken: <hub-token>"},
+    {
+        "name": "Claude",
+        "status": "Verified",
+        "snippet": "claude mcp add --transport http ai-memory-hub-local {mcp_url}",
+    },
+    {
+        "name": "Hermes",
+        "status": "Verified",
+        "snippet": "hermes mcp add ai-memory-hub-local --url {mcp_url} --auth oauth",
+    },
+    {"name": "OpenShell", "status": "Unverified", "snippet": "MCP URL: {mcp_url}"},
+    {"name": "OpenClaw", "status": "Unverified", "snippet": "MCP URL: {mcp_url}"},
+    {
+        "name": "Gemini CLI",
+        "status": "Verified",
+        "snippet": "gemini mcp add ai-memory-hub-local {mcp_url} -t http",
+    },
 )
 
 
@@ -87,7 +103,7 @@ class ConnectService:
             else csrf_token
         )
         identity = str(session.get("email") or session.get("user_id")) if isinstance(session, dict) else ""
-        mcp_url = mcp_url_for_config(self.config)
+        mcp_url = mcp_url_for_config(self.config, request=request)
         return {
             "request": request,
             "signed_in": session,
@@ -101,7 +117,7 @@ class ConnectService:
         }
 
     async def complete_login(
-        self, *, provider: str, claims: dict[str, object]
+        self, *, provider: str, claims: dict[str, object], issue_token: bool = True
     ) -> ConnectLoginResult:
         validate_provider_claims(claims, self.config, provider=provider)
         identity = await self.agent.find_or_create_oauth_identity(
@@ -118,14 +134,16 @@ class ConnectService:
             csrf_token_hash=hash_secret(csrf_token, self.config, purpose="connect-csrf"),
             expires_at=utc_after(self.config.api.connect.session_ttl_seconds),
         )
-        issued_token = issue_hub_token(config=self.config, owner_id=str(identity["user_id"]))
-        await self.agent.create_auth_token(
-            owner_id=str(identity["user_id"]),
-            token=issued_token,
-            token_display_name=f"{provider.title()} Connect UI",
-            expires_at=utc_after(self.config.api.connect.token_ttl_seconds),
-            scopes=[READ_SCOPE, WRITE_SCOPE],
-        )
+        issued_token = ""
+        if issue_token:
+            issued_token = issue_hub_token(config=self.config, owner_id=str(identity["user_id"]))
+            await self.agent.create_auth_token(
+                owner_id=str(identity["user_id"]),
+                token=issued_token,
+                token_display_name=f"{provider.title()} Connect UI",
+                expires_at=utc_after(self.config.api.connect.token_ttl_seconds),
+                scopes=[READ_SCOPE, WRITE_SCOPE],
+            )
         return {
             "identity": identity,
             "session_id": session_id,
@@ -176,10 +194,15 @@ def client_snippet_models(*, mcp_url: str) -> list[dict[str, str]]:
     return snippets
 
 
-def mcp_url_for_config(config: HubConfig) -> str:
+def mcp_url_for_config(config: HubConfig, *, request: Request | None = None) -> str:
     if config.api.oauth.resource:
         return config.api.oauth.resource.rstrip("/")
-    base = config.api.public_base_url.rstrip("/") or f"http://{config.api.host}:{config.api.port}"
+    if config.api.public_base_url:
+        base = config.api.public_base_url.rstrip("/")
+    elif request is not None:
+        base = str(request.base_url).rstrip("/")
+    else:
+        base = f"http://{config.api.host}:{config.api.port}"
     return f"{base}/mcp"
 
 

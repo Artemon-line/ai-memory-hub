@@ -16,6 +16,7 @@ Source date: `28-05-2026`
 10. [Advanced Memory Plan](./improvements/advanced_memory_plan.md)
 11. [Graph Quality Gate Plan](./improvements/graph_quality_gate_plan.md)
 12. [Google OAuth Connect UI Plan](./improvements/google_oauth_connect_ui_plan.md)
+13. [OIDC And PKCE Hardening Plan](./improvements/oidc_pkce_hardening_plan.md)
 
 ## Notes
 

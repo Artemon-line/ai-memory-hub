@@ -1,8 +1,7 @@
 # Connect UI and OAuth Setup
 
-The Connect UI is the user-facing setup page for MCP clients. It handles
-browser sign-in, shows the active MCP URL, issues short-lived hub bearer tokens,
-and renders copyable client setup snippets.
+The Connect UI is the user-facing setup page for MCP clients. It shows the
+active MCP URL and renders copyable URL-only client setup snippets.
 
 Open it at:
 
@@ -12,20 +11,21 @@ http://127.0.0.1:8000/connect
 
 ## Responsibility Boundary
 
-The hub owns human sign-in and hub token issuance:
+The MCP client owns sign-in, reauthentication, and token storage:
 
 - `/connect` renders setup and client snippets.
-- `/auth/*` starts and completes provider sign-in.
-- The hub stores OAuth identities and web sessions.
-- The hub issues short-lived MCP bearer tokens.
+- `/connect` does not ask humans to sign in or copy bearer tokens.
+- Clients should use the MCP OAuth metadata and authorization flow when auth is
+  needed.
 
 The MCP endpoint remains a protected resource server:
 
 - `/mcp` and `/memory/*` require a valid bearer token when
   `api.auth: oauth_resource_server` is enabled.
-- MCP tools do not perform Google login directly.
-- Client account switching is client-driven: clear the old MCP token in the
-  client, sign in again at `/connect`, then install the new hub token.
+- The hub exposes protected-resource metadata and OAuth authorization-server
+  metadata for compliant MCP clients.
+- Client account switching is client-driven: use the client's reauth/logout
+  flow rather than copying tokens from `/connect`.
 
 ## Supported Providers
 
@@ -82,8 +82,9 @@ export AMH_OAUTH_JWT_SECRET="$(openssl rand -base64 48)"
 export AMH_SESSION_SECRET="$(openssl rand -base64 48)"
 ```
 
-`AMH_OAUTH_JWT_SECRET` signs hub-issued MCP bearer tokens. Keep it stable while
-you want existing tokens to remain valid.
+`AMH_OAUTH_JWT_SECRET` signs hub-issued MCP bearer tokens returned by the
+OAuth token endpoint. Keep it stable while you want existing tokens to remain
+valid.
 
 `AMH_SESSION_SECRET` signs browser session state. Keep it stable while you want
 browser sign-in sessions to survive restarts.
@@ -190,15 +191,14 @@ exact command or config has been tested.
 
 | Client | Status | Setup shape to verify | Notes |
 | --- | --- | --- | --- |
-| Codex | Unverified | TOML MCP server with `Authorization` header | Verify token refresh and account switching behavior. |
-| Copilot CLI | Unverified | `copilot mcp add --transport http --header "Authorization: Bearer <hub-token>" ai-memory-hub http://127.0.0.1:8000/mcp` | Confirm exact command and persistence location. |
-| Claude Desktop | Unverified | MCP HTTP server config with bearer header | Confirm current JSON shape. |
-| Gemini CLI | Unverified | MCP HTTP server config with bearer header | Confirm current config path and header syntax. |
-| OpenCode | Unverified | MCP HTTP server config with bearer header | Confirm current config path and header syntax. |
-| Pi | Unverified | MCP HTTP server config with bearer header | Confirm whether custom headers are supported. |
-| Hermes | Unverified | MCP URL plus bearer token | Confirm whether custom headers are supported. |
-| OpenShell | Unverified | MCP URL plus bearer token | Confirm whether custom headers are supported. |
-| OpenClaw | Unverified | MCP URL plus bearer token | Confirm whether custom headers are supported. |
+| Codex | Verified | `codex mcp add ai-memory-hub-local --url <mcp-url>` | Verified for streamable HTTP setup. Use the MCP URL shown by `/connect`. |
+| Copilot CLI | Unverified | `copilot mcp add --transport http ai-memory-hub http://127.0.0.1:8000/mcp` | Confirm exact command and persistence location. |
+| Claude CLI | Verified | `claude mcp add --transport http ai-memory-hub-local <mcp-url>` | Verified for streamable HTTP setup. Use the MCP URL shown by `/connect`. |
+| Gemini CLI | Verified | `gemini mcp add ai-memory-hub-local <mcp-url> -t http` | After adding it, run `/mcp auth` inside Gemini CLI. |
+| OpenCode | Verified | `opencode mcp add ai-memory-hub-local --url <mcp-url>` | After adding it, run `opencode mcp add ai-memory-hub-local auth`. |
+| Pi | Verified | `pi install npm:pi-mcp-adapter` | Install the adapter, export an existing MCP config from Codex or OpenCode, then run `/mcp auth` inside Pi. |
+| Hermes | Verified | `hermes mcp add ai-memory-hub-local --url <mcp-url> --auth oauth` | Verified for OAuth-backed streamable HTTP setup. |
+| OpenShell | Unverified | MCP URL | Confirm OAuth behavior. |
+| OpenClaw | Unverified | MCP URL | Confirm OAuth behavior. |
 
-Do not commit real hub tokens or OAuth client secrets. When capturing client
-verification notes, redact bearer tokens as `<hub-token>`.
+Do not commit OAuth client secrets or captured bearer tokens.

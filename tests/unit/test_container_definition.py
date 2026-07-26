@@ -4,13 +4,13 @@ import re
 import tomllib
 from pathlib import Path
 
-PINNED_UV_INSTALL = 'python -m pip install --no-cache-dir "uv==0.10.3"'
+PINNED_UV_IMAGE = "FROM ghcr.io/astral-sh/uv:0.10.3-python3.14-trixie-slim"
 
 
 def test_containerfile_installs_project_after_copying_package() -> None:
     containerfile = Path("Containerfile").read_text(encoding="utf-8")
 
-    assert PINNED_UV_INSTALL in containerfile
+    assert PINNED_UV_IMAGE in containerfile
     assert "python -m pip install --no-cache-dir uv" not in containerfile
     dependency_sync = containerfile.index("--no-install-project")
     package_copy = containerfile.index("COPY memory ./memory")
@@ -58,7 +58,7 @@ def test_pgvector_example_uses_slim_containerfile() -> None:
 
     assert "dockerfile: examples/storage_providers/postgres-pgvector/Containerfile" in compose
     assert "http://127.0.0.1:8000/ready" in compose
-    assert PINNED_UV_INSTALL in containerfile
+    assert PINNED_UV_IMAGE in containerfile
     assert "python -m pip install --no-cache-dir uv" not in containerfile
     assert "--extra postgres" in containerfile
     assert "--extra tokenizer" in containerfile
@@ -79,6 +79,23 @@ def test_pgvector_example_uses_slim_containerfile() -> None:
         "weaviate",
     ):
         assert f"--extra {extra}" not in containerfile
+
+
+def test_google_oauth_example_uses_uv_base_image() -> None:
+    containerfile = Path("examples/google-oauth-connect/Containerfile").read_text(
+        encoding="utf-8"
+    )
+
+    assert PINNED_UV_IMAGE in containerfile
+    assert "python -m pip install --no-cache-dir uv" not in containerfile
+    assert "--extra oauth" in containerfile
+    assert "--no-install-project" in containerfile
+    assert "test -x /app/.venv/bin/aim" in containerfile
+    assert (
+        'CMD ["/app/.venv/bin/aim", "serve", "--config", "/app/config.yaml", '
+        '"--host", "0.0.0.0", "--port", "8000"]'
+    ) in containerfile
+    assert 'CMD ["uv", "run", "aim"' not in containerfile
 
 
 def test_free_provider_examples_use_provider_local_containerfiles() -> None:
@@ -110,7 +127,7 @@ def test_free_provider_examples_use_provider_local_containerfiles() -> None:
         containerfile = (example_dir / "Containerfile").read_text(encoding="utf-8")
 
         assert f"dockerfile: examples/storage_providers/{example}/Containerfile" in compose
-        assert PINNED_UV_INSTALL in containerfile
+        assert PINNED_UV_IMAGE in containerfile
         assert "python -m pip install --no-cache-dir uv" not in containerfile
         assert 'CMD ["/app/.venv/bin/aim", "serve", "--host", "0.0.0.0", "--port", "8000"]' in containerfile
         assert 'CMD ["uv", "run", "aim"' not in containerfile

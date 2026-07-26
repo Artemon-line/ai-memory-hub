@@ -86,14 +86,21 @@ def test_oauth_protected_resource_metadata_is_public_and_secret_free(
     with _client(tmp_path, auth="oauth_resource_server") as client:
         root = client.get("/.well-known/oauth-protected-resource")
         mcp = client.get("/.well-known/oauth-protected-resource/mcp")
+        authorization = client.get("/.well-known/oauth-authorization-server")
 
     assert root.status_code == 200, root.text
     assert mcp.status_code == 200, mcp.text
-    body = json.dumps({"root": root.json(), "mcp": mcp.json()})
+    assert authorization.status_code == 200, authorization.text
+    body = json.dumps(
+        {"root": root.json(), "mcp": mcp.json(), "authorization": authorization.json()}
+    )
     assert "https://memory.example.com/mcp" in body
     assert "https://auth.example.com" in body
+    assert "https://memory.example.com/oauth/authorize" in body
+    assert "https://memory.example.com/oauth/token" in body
+    assert "https://memory.example.com/oauth/register" in body
+    assert "code_challenge_methods_supported" in body
     assert "oauth-secret-value" not in body
-    assert "token" not in body.lower()
 
 
 def test_request_failure_logs_are_structured_and_do_not_include_payload_or_query_secrets(

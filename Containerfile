@@ -1,4 +1,4 @@
-FROM python:3.14-slim
+FROM ghcr.io/astral-sh/uv:0.10.3-python3.14-trixie-slim
 
 ARG VERSION=0.1.0
 ARG REVISION=unknown
@@ -20,14 +20,12 @@ WORKDIR /app
 
 COPY pyproject.toml uv.lock README.md ./
 
-RUN python -m pip install --no-cache-dir "uv==0.10.3" && \
-    uv sync --frozen --no-dev --no-install-project
+RUN uv sync --frozen --no-dev --no-install-project
 
 COPY memory ./memory
 COPY examples/container/config.yaml /app/config.yaml
 
 RUN uv sync --frozen --no-dev && \
-    uv pip install --no-deps . && \
     test -x /app/.venv/bin/aim && \
     /app/.venv/bin/python -c "import memory; from memory.cli import main; assert callable(main)" && \
     mkdir -p /app/data /app/logs /app/.uv-cache && \
@@ -35,7 +33,6 @@ RUN uv sync --frozen --no-dev && \
       --shell /usr/sbin/nologin ai-memory-hub && \
     chgrp -R 0 /app && \
     chmod -R g=u /app && \
-    chown -R 1001:0 /tmp/.uv-cache || true && \
     chown -R 1001:0 /app/.uv-cache && \
     chmod -R g=u /app/.uv-cache
 

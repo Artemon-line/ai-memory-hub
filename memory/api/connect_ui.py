@@ -19,6 +19,10 @@ from memory.api.connect_service import (
 from memory.api.connect_service import (
     connect_status as _connect_status,
 )
+from memory.api.oauth_authorization import (
+    pending_authorization_redirect,
+    register_oauth_authorization_routes,
+)
 from memory.config import HubConfig
 from memory.ingestion.base_agent import BaseIngestionAgent
 
@@ -49,6 +53,7 @@ def register_connect_routes(app: FastAPI, *, agent: BaseIngestionAgent, config: 
     static_dir = CONNECT_UI_ROOT / "static"
     if static_dir.exists():
         app.mount("/connect/static", StaticFiles(directory=str(static_dir)), name="connect-static")
+    register_oauth_authorization_routes(app, service=service, oauth=oauth, config=config)
 
     @app.get("/", include_in_schema=False)
     async def root() -> Response:
@@ -75,7 +80,12 @@ def register_connect_routes(app: FastAPI, *, agent: BaseIngestionAgent, config: 
             )
             raise HTTPException(status_code=403, detail="OAuth login was denied")
         claims = await oauth.callback_claims(request, provider=provider)
-        login = await service.complete_login(provider=provider, claims=claims)
+        pending_mcp_authorization = _has_pending_mcp_authorization(request)
+        login = await service.complete_login(
+            provider=provider,
+            claims=claims,
+            issue_token=not pending_mcp_authorization,
+        )
         logger.info(
             "OAuth login succeeded",
             extra={
@@ -84,6 +94,19 @@ def register_connect_routes(app: FastAPI, *, agent: BaseIngestionAgent, config: 
                 "owner_id": login["identity"]["user_id"],
             },
         )
+        authorization_redirect = pending_authorization_redirect(
+            request, owner_id=str(login["identity"]["user_id"])
+        )
+        if authorization_redirect is not None:
+            authorization_redirect.set_cookie(
+                config.api.connect.session_cookie_name,
+                str(login["session_id"]),
+                httponly=True,
+                secure=secure_cookie(config),
+                samesite="lax",
+                max_age=config.api.connect.session_ttl_seconds,
+            )
+            return authorization_redirect
         response = templates.TemplateResponse(
             request,
             "connect.html.j2",
@@ -133,3 +156,15 @@ def register_connect_routes(app: FastAPI, *, agent: BaseIngestionAgent, config: 
         response.delete_cookie("amh_token_id")
         logger.info("Connect UI logout", extra={"event": "connect_logout"})
         return response
+
+
+def _has_pending_mcp_authorization(request: Request) -> bool:
+    state_data = getattr(request.state, "oauth_provider_state_data", None)
+    if isinstance(state_data, dict) and isinstance(
+        state_data.get("pending_oauth_authorization"), dict
+    ):
+        return True
+    try:
+        return isinstance(request.session.get("pending_oauth_authorization"), dict)
+    except AssertionError:
+        return False

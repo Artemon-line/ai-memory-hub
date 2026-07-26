@@ -10,10 +10,9 @@
 <main>
   <h1>ai-memory-hub Connect</h1>
   {% include "partials/status.html.j2" %}
-  {% include "partials/token_panel.html.j2" %}
   <section>
     <h2>Client Setup</h2>
-    <p class="muted">Account switching is client-driven. Clear the old MCP auth token in the client, sign in here with the other Google account, then use the new hub token.</p>
+    <p class="muted">Use the MCP URL in your client. Authentication and reauthentication are handled by the client.</p>
     {% for client in client_snippets %}
       {% include "partials/client_snippet.html.j2" %}
     {% endfor %}
