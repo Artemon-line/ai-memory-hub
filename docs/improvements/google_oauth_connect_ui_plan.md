@@ -178,6 +178,18 @@ tokens.
       from logs, traces, metrics labels, and error responses.
 - [x] Add readiness/observability status for Connect UI and Google OAuth config
       without exposing secrets.
+- [x] Add a safe diagnostics panel to `/connect` that renders auth mode,
+      endpoint mode, provider health, and OpenTelemetry status without memory
+      counts, identities, bearer tokens, API keys, DSNs, raw queries, or
+      embeddings.
+- [x] Keep `/connect` available when `api.connect.enabled` is true even when
+      `api.auth: none`; render it as a local/trusted no-auth setup page instead
+      of hiding the page.
+- [x] Render `api.auth: bearer_token` as a protected-header mode with client
+      setup guidance but no secret display.
+- [x] Render `api.auth: oauth_resource_server` as the OAuth client-owned
+      authorization mode, showing configured providers as non-clickable
+      readiness chips.
 - [ ] Add negative tests for token leakage in logs and rendered pages.
 
 ## Implementation Notes

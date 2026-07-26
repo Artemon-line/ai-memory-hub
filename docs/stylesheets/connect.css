@@ -1,0 +1,134 @@
+.amh-connect-hero {
+  margin: 1.2rem 0 1.8rem;
+  padding: 1.6rem;
+  border: 1px solid rgba(22, 32, 39, .1);
+  border-radius: .4rem;
+  background:
+    linear-gradient(135deg, rgba(34, 111, 104, .12), transparent 72%),
+    linear-gradient(225deg, rgba(161, 92, 47, .09), transparent 70%),
+    #fbfcfa;
+  box-shadow: 0 14px 34px rgba(25, 42, 37, .08);
+}
+
+.amh-connect-hero .amh-eyebrow {
+  margin: 0 0 .35rem;
+  color: #174d49;
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.amh-connect-hero h2 {
+  margin: 0 0 .55rem;
+  color: #162027;
+  font-size: clamp(1.7rem, 4vw, 2.5rem);
+  line-height: 1.05;
+}
+
+.amh-connect-hero p {
+  max-width: 46rem;
+  color: #536269;
+}
+
+.amh-connect-hero a,
+.amh-doc-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.2rem;
+  padding: 0 .8rem;
+  border: 1px solid #174d49;
+  border-radius: .32rem;
+  color: #fff;
+  background: #174d49;
+  text-decoration: none;
+}
+
+.amh-connect-grid,
+.amh-client-matrix {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .85rem;
+  margin: 1rem 0 1.5rem;
+}
+
+.amh-connect-card,
+.amh-client-matrix article {
+  padding: 1rem;
+  border: 1px solid rgba(22, 32, 39, .1);
+  border-radius: .4rem;
+  background: #fff;
+}
+
+.amh-connect-card h3,
+.amh-client-matrix h3 {
+  margin-top: 0;
+}
+
+.amh-client-matrix {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.amh-client-matrix article {
+  display: grid;
+  gap: .65rem;
+}
+
+.amh-client-matrix h3 {
+  display: flex;
+  gap: .5rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0;
+  font-size: .95rem;
+}
+
+.amh-client-matrix h3 span {
+  display: inline-flex;
+  padding: .18rem .45rem;
+  border-radius: 999px;
+  color: #174d49;
+  background: #d9ebe6;
+  font-size: .68rem;
+}
+
+.amh-client-matrix h3 span.pending {
+  color: #8a5d12;
+  background: #f4ead3;
+}
+
+.amh-client-matrix code {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.amh-client-matrix p {
+  margin-bottom: 0;
+  color: #536269;
+  font-size: .82rem;
+}
+
+.amh-doc-copy {
+  float: right;
+  min-height: 1.75rem;
+  margin: .35rem .35rem -2.2rem 0;
+  padding: 0 .55rem;
+  border-color: rgba(22, 32, 39, .15);
+  color: #174d49;
+  background: #d9ebe6;
+  font-size: .7rem;
+  cursor: pointer;
+}
+
+.amh-doc-copy.is-copied {
+  color: #fff;
+  background: #174d49;
+}
+
+@media (max-width: 760px) {
+  .amh-connect-grid,
+  .amh-client-matrix {
+    grid-template-columns: 1fr;
+  }
+}

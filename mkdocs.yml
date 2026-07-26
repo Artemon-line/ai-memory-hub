@@ -13,6 +13,12 @@ theme:
     - navigation.top
     - content.code.copy
 
+extra_css:
+  - docs/stylesheets/connect.css
+
+extra_javascript:
+  - docs/javascripts/connect.js
+
 markdown_extensions:
   - admonition
   - attr_list

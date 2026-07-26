@@ -1,0 +1,44 @@
+<article class="panel auth-panel">
+  <div class="panel-header">
+    <span class="panel-icon" aria-hidden="true">ID</span>
+    <div>
+      <h2>Sign-in</h2>
+      <p>For MCP clients that support OAuth.</p>
+    </div>
+  </div>
+
+  <dl class="status-list">
+    <div>
+      <dt>Access mode</dt>
+      <dd>
+        <span class="status-pill{% if auth_mode.tone == 'ok' %} status-pill--ok{% elif auth_mode.tone == 'pending' %} status-pill--pending{% endif %}">{{ auth_mode.label|e }}</span>
+      </dd>
+    </div>
+    <div>
+      <dt>Browser session</dt>
+      <dd>
+        <span class="status-pill{% if signed_in %} status-pill--ok{% endif %}">{{ auth_label|e }}</span>
+      </dd>
+    </div>
+    {% if identity %}
+    <div>
+      <dt>Identity</dt>
+      <dd>{{ identity|e }}</dd>
+    </div>
+    {% endif %}
+  </dl>
+  <p class="panel-note">{{ auth_mode.description|e }}</p>
+
+  {% if signed_in and csrf_token %}
+  <form method="post" action="/auth/logout">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token|e }}">
+    <button type="submit" class="button button--secondary">Sign out</button>
+  </form>
+  {% elif auth_mode.value == 'oauth_resource_server' %}
+  {% include "partials/provider_buttons.html.j2" %}
+  {% elif auth_mode.value == 'bearer_token' %}
+  <p class="muted">The Connect page intentionally does not render configured secrets.</p>
+  {% else %}
+  <p class="muted">Keep this service bound to loopback or another trusted interface.</p>
+  {% endif %}
+</article>

@@ -33,6 +33,9 @@ def _client(
     *,
     allowed_domains: list[str] | None = None,
     passport: dict[str, object] | None = None,
+    api_auth: str = "oauth_resource_server",
+    observability: dict[str, object] | None = None,
+    health_state: dict[str, object] | None = None,
 ) -> TestClient:
     monkeypatch.setenv("GOOGLE_CLIENT_ID", "google-client-id")
     monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "google-client-secret")
@@ -54,7 +57,8 @@ def _client(
         embedding_provider=StubEmbedder(),
         metadata_store=store,
         vector_store=InMemoryVectorStore(dimension=32),
-        health_state={
+        health_state=health_state
+        or {
             "mode": "ok",
             "metadata_provider": "sqlite",
             "vector_provider": "memory",
@@ -70,7 +74,7 @@ def _client(
     app = create_app(
         config={
             "api": {
-                "auth": "oauth_resource_server",
+                "auth": api_auth,
                 "public_base_url": "https://memory.example.com",
                 "oauth": {
                     "authorization_servers": ["https://memory.example.com"],
@@ -78,6 +82,7 @@ def _client(
                 },
                 "connect": connect_config,
             },
+            "observability": observability or {},
             "paths": {"data_dir": str(tmp_path / "data")},
             "providers": {"embeddings": "local", "vector_db": "in_memory"},
         },
@@ -256,6 +261,45 @@ def test_connect_routes_are_public_secret_free_and_use_configured_mcp_url(tmp_pa
     for client_name in ("Codex", "Copilot CLI", "Pi", "OpenCode", "Claude", "Gemini CLI"):
         assert client_name in connect.text
     assert "Unverified" in connect.text
+    assert "OAuth resource server" in connect.text
+    assert "Diagnostics" in connect.text
+    assert "Metadata store" in connect.text
+    assert "sqlite" in connect.text
+    assert "Vector store" in connect.text
+    assert "memory" in connect.text
+    assert "Embeddings" in connect.text
+    assert "local / local" in connect.text
+    assert "OpenTelemetry traces" in connect.text
+    assert "disabled" in connect.text
+
+
+def test_connect_ui_renders_local_no_auth_mode_without_hiding_setup(
+    tmp_path, monkeypatch
+) -> None:
+    client = _client(
+        tmp_path,
+        monkeypatch,
+        api_auth="none",
+        observability={
+            "tracing": {"enabled": True, "endpoint": "http://otel.example.local:4317"},
+            "metrics": {"enabled": True, "endpoint": "http://otel.example.local:4317"},
+        },
+    )
+
+    connect = client.get("/connect")
+
+    assert connect.status_code == 200
+    assert "Local no-auth mode" in connect.text
+    assert "loopback or trusted networks" in connect.text
+    assert "codex mcp add ai-memory-hub-local --url https://memory.example.com/mcp" in connect.text
+    assert "Sign In With Google" not in connect.text
+    assert 'href="/auth/google"' not in connect.text
+    assert "google-secret" not in connect.text
+    assert "oauth-secret" not in connect.text
+    assert "OpenTelemetry traces" in connect.text
+    assert "OpenTelemetry metrics" in connect.text
+    assert "enabled" in connect.text
+    assert "http://otel.example.local:4317" not in connect.text
 
 
 def test_connect_ui_renders_configured_passport_providers(tmp_path, monkeypatch) -> None:
