@@ -86,8 +86,10 @@ tokens.
       than hand-rolling protocol handling.
 - [x] Start Google login from `/auth/google` using OIDC scopes:
       `openid email profile`.
-- [x] Validate the Google callback, ID token, issuer, audience, nonce, state, and
-      expiry.
+- [ ] Validate the Google callback, ID token signature, issuer, audience, nonce,
+      state, and expiry. Current implementation checks state plus selected
+      decoded claims; see `oidc_pkce_hardening_plan.md` for the remaining OIDC
+      verification work.
 - [x] Reject users outside configured hosted-domain or email allowlists.
 - [x] Never log Google tokens, ID-token claims beyond safe identifiers, or raw
       callback query strings.
@@ -205,6 +207,8 @@ Remaining follow-ups:
 - Verify exact client setup syntax and token-storage behavior per client.
 - Add rate limiting once a shared rate-limit mechanism exists.
 - Add explicit audit-event coverage and log/rendered-page token-leakage tests.
+- Complete OIDC ID-token signature verification, nonce validation, and provider
+  PKCE support in `oidc_pkce_hardening_plan.md`.
 
 ## Done When
 

@@ -20,25 +20,41 @@ SECRET_HASH_ITERATIONS = 210_000
 CLIENT_MATRIX: tuple[dict[str, str], ...] = (
     {
         "name": "Codex",
-        "status": "Unverified",
-        "snippet": '[mcp_servers.ai_memory_hub]\nurl = "{mcp_url}"',
+        "status": "Verified",
+        "snippet": "codex mcp add ai-memory-hub-local --url {mcp_url}",
     },
     {
         "name": "Copilot CLI",
         "status": "Unverified",
         "snippet": 'copilot mcp add --transport http ai-memory-hub {mcp_url}',
     },
-    {"name": "Pi", "status": "Unverified", "snippet": "MCP URL: {mcp_url}"},
+    {
+        "name": "Pi",
+        "status": "Verified",
+        "snippet": "pi install npm:pi-mcp-adapter",
+    },
     {
         "name": "OpenCode",
-        "status": "Unverified",
-        "snippet": '{{"mcp": {{"ai-memory-hub": {{"type": "remote", "url": "{mcp_url}"}}}}}}',
+        "status": "Verified",
+        "snippet": "opencode mcp add ai-memory-hub-local --url {mcp_url}",
     },
-    {"name": "Claude", "status": "Unverified", "snippet": "mcp add ai-memory-hub {mcp_url}"},
-    {"name": "Hermes", "status": "Unverified", "snippet": "MCP URL: {mcp_url}"},
+    {
+        "name": "Claude",
+        "status": "Verified",
+        "snippet": "claude mcp add --transport http ai-memory-hub-local {mcp_url}",
+    },
+    {
+        "name": "Hermes",
+        "status": "Verified",
+        "snippet": "hermes mcp add ai-memory-hub-local --url {mcp_url} --auth oauth",
+    },
     {"name": "OpenShell", "status": "Unverified", "snippet": "MCP URL: {mcp_url}"},
     {"name": "OpenClaw", "status": "Unverified", "snippet": "MCP URL: {mcp_url}"},
-    {"name": "Gemini CLI", "status": "Unverified", "snippet": "MCP URL: {mcp_url}"},
+    {
+        "name": "Gemini CLI",
+        "status": "Verified",
+        "snippet": "gemini mcp add ai-memory-hub-local {mcp_url} -t http",
+    },
 )
 
 

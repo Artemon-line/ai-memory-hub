@@ -191,13 +191,13 @@ exact command or config has been tested.
 
 | Client | Status | Setup shape to verify | Notes |
 | --- | --- | --- | --- |
-| Codex | Unverified | TOML MCP server URL | Verify OAuth discovery and reauth behavior. |
+| Codex | Verified | `codex mcp add ai-memory-hub-local --url <mcp-url>` | Verified for streamable HTTP setup. Use the MCP URL shown by `/connect`. |
 | Copilot CLI | Unverified | `copilot mcp add --transport http ai-memory-hub http://127.0.0.1:8000/mcp` | Confirm exact command and persistence location. |
-| Claude Desktop | Unverified | MCP HTTP server URL | Confirm current JSON shape. |
-| Gemini CLI | Unverified | MCP HTTP server URL | Confirm current config path and OAuth behavior. |
-| OpenCode | Unverified | MCP HTTP server URL | Confirm current config path and OAuth behavior. |
-| Pi | Unverified | MCP URL | Confirm OAuth behavior. |
-| Hermes | Unverified | MCP URL | Confirm OAuth behavior. |
+| Claude CLI | Verified | `claude mcp add --transport http ai-memory-hub-local <mcp-url>` | Verified for streamable HTTP setup. Use the MCP URL shown by `/connect`. |
+| Gemini CLI | Verified | `gemini mcp add ai-memory-hub-local <mcp-url> -t http` | After adding it, run `/mcp auth` inside Gemini CLI. |
+| OpenCode | Verified | `opencode mcp add ai-memory-hub-local --url <mcp-url>` | After adding it, run `opencode mcp add ai-memory-hub-local auth`. |
+| Pi | Verified | `pi install npm:pi-mcp-adapter` | Install the adapter, export an existing MCP config from Codex or OpenCode, then run `/mcp auth` inside Pi. |
+| Hermes | Verified | `hermes mcp add ai-memory-hub-local --url <mcp-url> --auth oauth` | Verified for OAuth-backed streamable HTTP setup. |
 | OpenShell | Unverified | MCP URL | Confirm OAuth behavior. |
 | OpenClaw | Unverified | MCP URL | Confirm OAuth behavior. |
 
