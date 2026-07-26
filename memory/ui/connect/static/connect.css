@@ -57,6 +57,13 @@ textarea {
   box-shadow: var(--shadow);
 }
 
+.brand-mark {
+  display: block;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 18px;
+}
+
 .eyebrow {
   margin: 0 0 10px;
   color: var(--accent-strong);
