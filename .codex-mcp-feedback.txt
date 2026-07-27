@@ -1,0 +1,6 @@
+- `ai-memory-hub-local`: feedback says the MCP was “straightforward” to use; `memory_search`, `memory_insert`, and `memory_ask` were called out as simple operations.
+- `ai-memory-hub-local`: implementation note found: pass `conversation_json` as an object, not a string; use `project_id` for shared workspaces.
+- `ai-memory-hub-local`: another feedback item says retrieval worked in one call with no errors or ambiguity, but stored profile extraction was noisy.
+- Exact commands found: none.
+- OAuth/auth flow feedback found: none.
+- Other MCP client names found: none in the retrieved recent memories.

@@ -1,0 +1,33 @@
+<article class="panel diagnostics-panel">
+  <div class="panel-header">
+    <span class="panel-icon" aria-hidden="true">OPS</span>
+    <div>
+      <h2>Diagnostics</h2>
+      <p>Safe server health and observability state.</p>
+    </div>
+  </div>
+  <div class="diagnostics-grid">
+    <section aria-label="Server health">
+      <h3>Server</h3>
+      <dl class="status-list">
+        {% for row in diagnostics.server %}
+        <div>
+          <dt>{{ row.label|e }}</dt>
+          <dd><span class="status-pill{% if row.tone == 'ok' %} status-pill--ok{% elif row.tone == 'pending' %} status-pill--pending{% endif %}">{{ row.value|e }}</span></dd>
+        </div>
+        {% endfor %}
+      </dl>
+    </section>
+    <section aria-label="Observability">
+      <h3>Observability</h3>
+      <dl class="status-list">
+        {% for row in diagnostics.observability %}
+        <div>
+          <dt>{{ row.label|e }}</dt>
+          <dd><span class="status-pill{% if row.tone == 'ok' %} status-pill--ok{% elif row.tone == 'pending' %} status-pill--pending{% endif %}">{{ row.value|e }}</span></dd>
+        </div>
+        {% endfor %}
+      </dl>
+    </section>
+  </div>
+</article>

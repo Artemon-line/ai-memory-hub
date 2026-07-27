@@ -71,7 +71,7 @@ tokens.
 - [x] Derive the MCP URL from `api.public_base_url` plus `/mcp` unless
       `api.oauth.resource` is explicitly configured.
 - [x] Add copyable setup snippets with placeholders for Codex, Copilot CLI, Pi,
-      OpenCode, Claude, Hermes, OpenShell, OpenClaw, and Gemini CLI.
+      OpenCode, Claude, Hermes, OpenClaw, and Gemini CLI.
 - [x] Mark every unverified client snippet as unverified until tested against
       current official docs or local client behavior.
 - [x] Add tests for route availability, secret-free rendering, and correct MCP
@@ -129,8 +129,8 @@ tokens.
 ## Phase 5: MCP Client Setup Matrix
 
 - [x] Create a client setup matrix for:
-      Codex, Copilot CLI, Pi, OpenCode, Claude, Hermes, OpenShell, OpenClaw, and
-      Gemini CLI.
+      Codex, Copilot CLI, Pi, OpenCode, Claude, Hermes, OpenClaw, and Gemini
+      CLI.
 - [ ] For each client, document:
       config file path or command, exact MCP URL snippet, OAuth support status,
       token storage behavior, reauth/account-switch behavior, and known limits.
@@ -178,6 +178,18 @@ tokens.
       from logs, traces, metrics labels, and error responses.
 - [x] Add readiness/observability status for Connect UI and Google OAuth config
       without exposing secrets.
+- [x] Add a safe diagnostics panel to `/connect` that renders auth mode,
+      endpoint mode, provider health, and OpenTelemetry status without memory
+      counts, identities, bearer tokens, API keys, DSNs, raw queries, or
+      embeddings.
+- [x] Keep `/connect` available when `api.connect.enabled` is true even when
+      `api.auth: none`; render it as a local/trusted no-auth setup page instead
+      of hiding the page.
+- [x] Render `api.auth: bearer_token` as a protected-header mode with client
+      setup guidance but no secret display.
+- [x] Render `api.auth: oauth_resource_server` as the OAuth client-owned
+      authorization mode, showing configured providers as non-clickable
+      readiness chips.
 - [ ] Add negative tests for token leakage in logs and rendered pages.
 
 ## Implementation Notes

@@ -64,34 +64,34 @@ curl -fsS http://127.0.0.1:8000/ready
 
 ## Register ai-memory-hub In OpenClaw
 
-Add ai-memory-hub as a Streamable HTTP MCP server:
+Add ai-memory-hub as a Streamable HTTP MCP server with OAuth:
 
 ```bash
-openclaw mcp add ai-memory-hub \
-  --url http://127.0.0.1:8000/mcp/ \
-  --transport streamable-http \
-  --timeout 20 \
-  --connect-timeout 5 \
-  --include 'memory_validate,memory_insert,memory_search,memory_retrieve,memory_ask,memory_fact_search,memory_profile_get'
+openclaw mcp add ai-memory-hub-local --url http://127.0.0.1:8000/mcp --transport streamable-http --auth oauth
+openclaw mcp login ai-memory-hub-local
+openclaw mcp login ai-memory-hub-local --code <code>
 ```
+
+Run the final command after browser approval, replacing `<code>` with the
+authorization code returned by the approval flow.
 
 Inspect the saved definition:
 
 ```bash
-openclaw mcp show ai-memory-hub --json
-openclaw mcp status ai-memory-hub --verbose
+openclaw mcp show ai-memory-hub-local --json
+openclaw mcp status ai-memory-hub-local --verbose
 ```
 
 Probe the live server:
 
 ```bash
-openclaw mcp probe ai-memory-hub --json
-openclaw mcp doctor ai-memory-hub --probe
+openclaw mcp probe ai-memory-hub-local --json
+openclaw mcp doctor ai-memory-hub-local --probe
 ```
 
 Expected probe result:
 
-- OpenClaw connects to `http://127.0.0.1:8000/mcp/`.
+- OpenClaw connects to `http://127.0.0.1:8000/mcp`.
 - The tool list includes ai-memory-hub memory tools.
 - No auth, transport, or tool-filter diagnostics block usage.
 
@@ -115,7 +115,7 @@ After changing OpenClaw config, run:
 
 ```bash
 openclaw doctor
-openclaw mcp doctor ai-memory-hub --probe
+openclaw mcp doctor ai-memory-hub-local --probe
 ```
 
 ## Manual Validation Prompt
@@ -184,7 +184,7 @@ mode for maintainer-only smoke tests.
 Do not mark OpenClaw supported until these are complete:
 
 - [x] Native setup documented.
-- [ ] `openclaw mcp probe ai-memory-hub --json` succeeds.
+- [ ] `openclaw mcp probe ai-memory-hub-local --json` succeeds.
 - [ ] OpenClaw agent can call `memory_validate`.
 - [ ] OpenClaw agent can call `memory_insert`.
 - [ ] OpenClaw agent can call `memory_retrieve`.

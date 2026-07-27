@@ -13,6 +13,7 @@ from typing import Any, TypedDict
 from fastapi import HTTPException, Request
 
 from memory.auth import READ_SCOPE, WRITE_SCOPE
+from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig
 from memory.ingestion.base_agent import BaseIngestionAgent
 
@@ -25,7 +26,7 @@ CLIENT_MATRIX: tuple[dict[str, str], ...] = (
     },
     {
         "name": "Copilot CLI",
-        "status": "Unverified",
+        "status": "Verified",
         "snippet": 'copilot mcp add --transport http ai-memory-hub {mcp_url}',
     },
     {
@@ -48,8 +49,16 @@ CLIENT_MATRIX: tuple[dict[str, str], ...] = (
         "status": "Verified",
         "snippet": "hermes mcp add ai-memory-hub-local --url {mcp_url} --auth oauth",
     },
-    {"name": "OpenShell", "status": "Unverified", "snippet": "MCP URL: {mcp_url}"},
-    {"name": "OpenClaw", "status": "Unverified", "snippet": "MCP URL: {mcp_url}"},
+    {
+        "name": "OpenClaw",
+        "status": "Unverified",
+        "snippet": (
+            "openclaw mcp add ai-memory-hub-local --url {mcp_url} "
+            "--transport streamable-http --auth oauth\n"
+            "openclaw mcp login ai-memory-hub-local\n"
+            "openclaw mcp login ai-memory-hub-local --code <code>"
+        ),
+    },
     {
         "name": "Gemini CLI",
         "status": "Verified",
@@ -104,16 +113,20 @@ class ConnectService:
         )
         identity = str(session.get("email") or session.get("user_id")) if isinstance(session, dict) else ""
         mcp_url = mcp_url_for_config(self.config, request=request)
+        health_state = redact_content_hashes(await self.agent.health())
+        auth_mode = access_mode_model(self.config)
         return {
             "request": request,
             "signed_in": session,
             "auth_label": "Signed in" if session else "Not signed in",
+            "auth_mode": auth_mode,
             "identity": identity,
             "issued_token": issued_token,
             "csrf_token": csrf,
             "mcp_url": mcp_url,
             "providers": enabled_passport_provider_models(self.config),
             "client_snippets": client_snippet_models(mcp_url=mcp_url),
+            "diagnostics": diagnostics_model(config=self.config, health_state=health_state),
         }
 
     async def complete_login(
@@ -177,6 +190,87 @@ def connect_status(config: HubConfig) -> dict[str, object]:
         "passport": {"providers": providers},
         "google_oauth": providers.get("google", {}),
     }
+
+
+def access_mode_model(config: HubConfig) -> dict[str, str]:
+    if config.api.auth == "none":
+        return {
+            "value": "none",
+            "label": "Local no-auth mode",
+            "tone": "pending",
+            "description": "Use on loopback or trusted networks only. No bearer token is required.",
+        }
+    if config.api.auth == "bearer_token":
+        return {
+            "value": "bearer_token",
+            "label": "Bearer/API key mode",
+            "tone": "ok",
+            "description": "Clients must send the configured secret in an Authorization or API-key header.",
+        }
+    return {
+        "value": "oauth_resource_server",
+        "label": "OAuth resource server",
+        "tone": "ok",
+        "description": "MCP clients own sign-in, reauthentication, and token storage.",
+    }
+
+
+def diagnostics_model(
+    *, config: HubConfig, health_state: dict[str, Any]
+) -> dict[str, list[dict[str, str]]]:
+    return {
+        "server": [
+            _diagnostic_row("Ready mode", health_state.get("mode")),
+            _diagnostic_row("Metadata store", health_state.get("metadata_provider")),
+            _diagnostic_row("Vector store", health_state.get("vector_provider")),
+            _diagnostic_row("Embeddings", _embedding_label(config=config, health_state=health_state)),
+            _diagnostic_row(
+                "Vector fallback",
+                "active" if health_state.get("vector_fallback_active") else "inactive",
+                tone="pending" if health_state.get("vector_fallback_active") else "ok",
+            ),
+        ],
+        "observability": [
+            _diagnostic_row(
+                "Structured logs",
+                "enabled" if config.observability.logging.enabled else "disabled",
+                tone="ok" if config.observability.logging.enabled else "pending",
+            ),
+            _diagnostic_row(
+                "OpenTelemetry traces",
+                "enabled" if config.observability.tracing.enabled else "disabled",
+                tone="ok" if config.observability.tracing.enabled else "pending",
+            ),
+            _diagnostic_row(
+                "OpenTelemetry metrics",
+                "enabled" if config.observability.metrics.enabled else "disabled",
+                tone="ok" if config.observability.metrics.enabled else "pending",
+            ),
+            _diagnostic_row(
+                "OTLP endpoint",
+                "configured"
+                if config.observability.tracing.enabled or config.observability.metrics.enabled
+                else "not used",
+            ),
+        ],
+    }
+
+
+def _diagnostic_row(label: str, value: object, *, tone: str = "neutral") -> dict[str, str]:
+    text = str(value or "unknown")
+    return {"label": label, "value": text, "tone": tone}
+
+
+def _embedding_label(*, config: HubConfig, health_state: dict[str, Any]) -> str:
+    embedding = health_state.get("embedding")
+    if isinstance(embedding, dict):
+        provider = str(embedding.get("provider") or config.providers.embeddings)
+        model = str(embedding.get("model") or "").strip()
+        return f"{provider} / {model}" if model else provider
+    embedding_health = health_state.get("embedding_health")
+    if isinstance(embedding_health, dict):
+        return str(embedding_health.get("provider") or config.providers.embeddings)
+    return str(config.providers.embeddings)
 
 
 def client_snippet_models(*, mcp_url: str) -> list[dict[str, str]]:
