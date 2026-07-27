@@ -249,9 +249,9 @@ exact command or config has been tested.
 <p>Verified for streamable HTTP setup. Use the MCP URL shown by `/connect`.</p>
 </article>
 <article>
-<h3>Copilot CLI <span class="pending">Unverified</span></h3>
+<h3>Copilot CLI <span>Verified</span></h3>
 <code>copilot mcp add --transport http ai-memory-hub http://127.0.0.1:8000/mcp</code>
-<p>Confirm exact command and persistence location.</p>
+<p>Verified for streamable HTTP setup.</p>
 </article>
 <article>
 <h3>Claude CLI <span>Verified</span></h3>
@@ -279,14 +279,9 @@ exact command or config has been tested.
 <p>Verified for OAuth-backed streamable HTTP setup.</p>
 </article>
 <article>
-<h3>OpenShell <span class="pending">Unverified</span></h3>
-<code>MCP URL</code>
-<p>Confirm OAuth behavior.</p>
-</article>
-<article>
 <h3>OpenClaw <span class="pending">Unverified</span></h3>
-<code>MCP URL</code>
-<p>Confirm OAuth behavior.</p>
+<code>openclaw mcp add ai-memory-hub-local --url &lt;mcp-url&gt; --transport streamable-http --auth oauth</code>
+<p>Then run `openclaw mcp login ai-memory-hub-local`. After approval, run `openclaw mcp login ai-memory-hub-local --code &lt;code&gt;`.</p>
 </article>
 </div>
 

@@ -26,7 +26,7 @@ CLIENT_MATRIX: tuple[dict[str, str], ...] = (
     },
     {
         "name": "Copilot CLI",
-        "status": "Unverified",
+        "status": "Verified",
         "snippet": 'copilot mcp add --transport http ai-memory-hub {mcp_url}',
     },
     {
@@ -49,8 +49,16 @@ CLIENT_MATRIX: tuple[dict[str, str], ...] = (
         "status": "Verified",
         "snippet": "hermes mcp add ai-memory-hub-local --url {mcp_url} --auth oauth",
     },
-    {"name": "OpenShell", "status": "Unverified", "snippet": "MCP URL: {mcp_url}"},
-    {"name": "OpenClaw", "status": "Unverified", "snippet": "MCP URL: {mcp_url}"},
+    {
+        "name": "OpenClaw",
+        "status": "Unverified",
+        "snippet": (
+            "openclaw mcp add ai-memory-hub-local --url {mcp_url} "
+            "--transport streamable-http --auth oauth\n"
+            "openclaw mcp login ai-memory-hub-local\n"
+            "openclaw mcp login ai-memory-hub-local --code <code>"
+        ),
+    },
     {
         "name": "Gemini CLI",
         "status": "Verified",

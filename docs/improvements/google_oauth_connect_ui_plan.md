@@ -71,7 +71,7 @@ tokens.
 - [x] Derive the MCP URL from `api.public_base_url` plus `/mcp` unless
       `api.oauth.resource` is explicitly configured.
 - [x] Add copyable setup snippets with placeholders for Codex, Copilot CLI, Pi,
-      OpenCode, Claude, Hermes, OpenShell, OpenClaw, and Gemini CLI.
+      OpenCode, Claude, Hermes, OpenClaw, and Gemini CLI.
 - [x] Mark every unverified client snippet as unverified until tested against
       current official docs or local client behavior.
 - [x] Add tests for route availability, secret-free rendering, and correct MCP
@@ -129,8 +129,8 @@ tokens.
 ## Phase 5: MCP Client Setup Matrix
 
 - [x] Create a client setup matrix for:
-      Codex, Copilot CLI, Pi, OpenCode, Claude, Hermes, OpenShell, OpenClaw, and
-      Gemini CLI.
+      Codex, Copilot CLI, Pi, OpenCode, Claude, Hermes, OpenClaw, and Gemini
+      CLI.
 - [ ] For each client, document:
       config file path or command, exact MCP URL snippet, OAuth support status,
       token storage behavior, reauth/account-switch behavior, and known limits.

@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, urlparse
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 
-from memory.api.connect_service import mcp_url_for_config
+from memory.api.connect_service import client_snippet_models, mcp_url_for_config
 from memory.api.server import create_app
 from memory.backend.metadata_store import SQLiteMetadataStore
 from memory.backend.vector_store import InMemoryVectorStore
@@ -235,6 +235,16 @@ def test_mcp_url_prefers_configured_resource_and_public_base_url() -> None:
     )
 
 
+def test_copilot_cli_snippet_is_verified() -> None:
+    snippets = client_snippet_models(mcp_url="https://memory.example.com/mcp")
+    copilot = next(snippet for snippet in snippets if snippet["name"] == "Copilot CLI")
+
+    assert copilot["status"] == "Verified"
+    assert copilot["snippet"] == (
+        "copilot mcp add --transport http ai-memory-hub https://memory.example.com/mcp"
+    )
+
+
 def test_connect_routes_are_public_secret_free_and_use_configured_mcp_url(tmp_path, monkeypatch) -> None:
     client = _client(tmp_path, monkeypatch)
 
@@ -256,10 +266,17 @@ def test_connect_routes_are_public_secret_free_and_use_configured_mcp_url(tmp_pa
     assert "Authorization=Bearer" not in connect.text
     assert "Sign In With Google" not in connect.text
     assert "codex mcp add ai-memory-hub-local --url https://memory.example.com/mcp" in connect.text
+    assert (
+        "openclaw mcp add ai-memory-hub-local --url https://memory.example.com/mcp "
+        "--transport streamable-http --auth oauth"
+    ) in connect.text
+    assert "openclaw mcp login ai-memory-hub-local" in connect.text
+    assert "openclaw mcp login ai-memory-hub-local --code &lt;code&gt;" in connect.text
     assert "copilot mcp add --transport http" in connect.text
     assert "--header" not in connect.text
-    for client_name in ("Codex", "Copilot CLI", "Pi", "OpenCode", "Claude", "Gemini CLI"):
+    for client_name in ("Codex", "Copilot CLI", "Pi", "OpenCode", "Claude", "OpenClaw", "Gemini CLI"):
         assert client_name in connect.text
+    assert "OpenShell" not in connect.text
     assert "Unverified" in connect.text
     assert "OAuth resource server" in connect.text
     assert "Diagnostics" in connect.text
