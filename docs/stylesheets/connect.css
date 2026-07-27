@@ -126,6 +126,53 @@
   background: #174d49;
 }
 
+@media (prefers-color-scheme: dark) {
+  .amh-connect-hero {
+    border-color: rgba(231, 236, 233, .12);
+    background:
+      linear-gradient(135deg, rgba(105, 197, 184, .13), transparent 72%),
+      linear-gradient(225deg, rgba(239, 199, 120, .08), transparent 70%),
+      #17201d;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, .26);
+  }
+
+  .amh-connect-hero .amh-eyebrow,
+  .amh-connect-hero h2,
+  .amh-connect-hero a,
+  .amh-doc-copy,
+  .amh-client-matrix h3 span {
+    color: #9adbd1;
+  }
+
+  .amh-connect-hero p,
+  .amh-client-matrix p {
+    color: #a8b7b0;
+  }
+
+  .amh-connect-hero a,
+  .amh-doc-copy.is-copied {
+    border-color: #9adbd1;
+    color: #101614;
+    background: #9adbd1;
+  }
+
+  .amh-connect-card,
+  .amh-client-matrix article {
+    border-color: rgba(231, 236, 233, .12);
+    background: #17201d;
+  }
+
+  .amh-client-matrix h3 span,
+  .amh-doc-copy {
+    background: #173a36;
+  }
+
+  .amh-client-matrix h3 span.pending {
+    color: #efc778;
+    background: #3a2d16;
+  }
+}
+
 @media (max-width: 760px) {
   .amh-connect-grid,
   .amh-client-matrix {
