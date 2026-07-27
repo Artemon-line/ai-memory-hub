@@ -86,7 +86,7 @@ packages = ["memory"]
 [dependency-groups]
 dev = [
     "mcp-pytest>=0.1.1",
-    "pyright>=1.1.400",
+    "pyright>=1.1.411",
     "pytest>=8.4.0",
     "pytest-asyncio>=1.4.0",
     "ruff>=0.8.0",
