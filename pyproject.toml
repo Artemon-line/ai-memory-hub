@@ -5,12 +5,12 @@ description = "Local-first deterministic memory ingestion hub"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "fastapi>=0.139.0",
-    "fastmcp>=3.4.2",
+    "fastapi>=0.140.7",
+    "fastmcp>=3.4.4",
     "itsdangerous>=2.2.0",
     "jinja2>=3.1.6",
     "jsonschema>=4.25.1",
-    "lancedb>=0.28.0",
+    "lancedb>=0.34.0",
     "mcp>=1.28.1",
     "pydantic>=2.13.4",
     "python-dotenv>=1.2.2",
@@ -42,7 +42,7 @@ observability = [
     "opentelemetry-instrumentation-psycopg>=0.50b0",
 ]
 oauth = [
-    "authlib>=1.7.1",
+    "authlib>=1.7.2",
     "httpx>=0.28.1",
 ]
 postgres = [
@@ -86,7 +86,7 @@ packages = ["memory"]
 [dependency-groups]
 dev = [
     "mcp-pytest>=0.1.1",
-    "pyright>=1.1.400",
+    "pyright>=1.1.411",
     "pytest>=8.4.0",
     "pytest-asyncio>=1.4.0",
     "ruff>=0.8.0",

@@ -1,7 +1,10 @@
 {% if providers %}
-  {% for provider in providers %}
-    <a class="button" href="{{ provider.href|e }}">Sign In With {{ provider.label|e }}</a>
-  {% endfor %}
+  <div class="provider-list" aria-label="Configured sign-in providers">
+    {% for provider in providers %}
+      <span class="provider-chip">{{ provider.label|e }}</span>
+    {% endfor %}
+  </div>
+  <p class="muted">Provider sign-in starts from the MCP client authorization flow.</p>
 {% else %}
   <p class="muted">No sign-in providers are enabled.</p>
 {% endif %}

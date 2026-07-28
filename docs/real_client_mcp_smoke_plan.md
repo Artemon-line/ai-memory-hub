@@ -135,14 +135,13 @@ Candidate order:
 | Agent | Native support status | Manual validation | Automated coverage | Next research question |
 |-------|-----------------------|-------------------|--------------------|------------------------|
 | Hermes Agent | Candidate | Not started | Not started | Determine whether Hermes supports MCP tools or another native tool protocol that can call ai-memory-hub. |
-| NVIDIA OpenShell | Candidate | Not started | Not started | Determine whether OpenShell supports MCP tools or another native tool protocol that can call ai-memory-hub. |
 | Claude Code | Tracked | Planned | Weekly slot implemented when configured | Keep validating the native CLI command and MCP config path. |
 | Codex CLI | Tracked | Partially validated through prior local use | Weekly slot implemented when configured | Confirm the native CLI command template can use temporary `CODEX_HOME` with MCP and local provider config. |
 | Codex App | Candidate | Not started | Not started | Determine whether it exposes MCP config and scriptable delegation suitable for repeatable smoke. |
 | Copilot CLI | Tracked | Planned | Weekly slot implemented when configured | Keep validating the native command template and provider override path. |
 | OpenCode | Tracked | Partially validated through prior local use | Weekly slot implemented when configured | Confirm the native config path can reliably provide MCP and provider settings. |
 | Gemini CLI | Tracked | Not started | Skipped by default pending provider support | Confirm a native no-vendor-credential local-provider path. |
-| OpenClaw | Setup documented | Not started | Not started | Run `openclaw mcp probe ai-memory-hub --json`, then manually validate an agent turn using `openclaw_native_mcp_setup.md`. |
+| OpenClaw | Setup documented | Not started | Not started | Run `openclaw mcp probe ai-memory-hub-local --json`, then manually validate an agent turn using `openclaw_native_mcp_setup.md`. |
 | Droid | Candidate | Not started | Not started | Determine whether Droid has headless execution and external MCP/tool configuration. |
 | Pi | Candidate | Not started | Not started | Determine whether Pi plugins can call streamable HTTP MCP tools and run non-interactively. |
 

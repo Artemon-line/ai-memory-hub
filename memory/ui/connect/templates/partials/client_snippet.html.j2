@@ -1,6 +1,12 @@
-<article>
-  <h3>{{ client.name|e }}</h3>
-  <p>{{ client.status|e }}</p>
-  <textarea id="{{ client.element_id|e }}" readonly rows="4">{{ client.snippet|e }}</textarea>
-  <button type="button" data-copy="{{ client.element_id|e }}">Copy</button>
+<article class="client-card">
+  <header class="client-card-header">
+    <h3>{{ client.name|e }}</h3>
+    <span class="status-pill{% if client.status == 'Verified' %} status-pill--ok{% else %} status-pill--pending{% endif %}">{{ client.status|e }}</span>
+  </header>
+  <div class="snippet-wrap">
+    <textarea id="{{ client.element_id|e }}" readonly rows="3" spellcheck="false">{{ client.snippet|e }}</textarea>
+  </div>
+  <button class="copy-button" type="button" data-copy="{{ client.element_id|e }}" aria-label="Copy {{ client.name|e }} setup snippet">
+    <span aria-hidden="true">Copy</span>
+  </button>
 </article>
