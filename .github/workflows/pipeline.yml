@@ -41,7 +41,7 @@ jobs:
             --junitxml=reports/junit/pytest-unit-integration.xml
 
       - name: Publish unit and integration test results
-        uses: EnricoMi/publish-unit-test-result-action@b3f8796819acf652cecbf27a64fa9ac8d7e137ee # v2
+        uses: EnricoMi/publish-unit-test-result-action@d0a4676d0e0b938bc201470d88276b7c74c712b3 # v2
         if: >-
           ${{
             always() &&
@@ -123,7 +123,7 @@ jobs:
         run: docker logs ollama-ci > ollama.log 2>&1 || true
 
       - name: Publish E2E test results
-        uses: EnricoMi/publish-unit-test-result-action@b3f8796819acf652cecbf27a64fa9ac8d7e137ee # v2
+        uses: EnricoMi/publish-unit-test-result-action@d0a4676d0e0b938bc201470d88276b7c74c712b3 # v2
         if: >-
           ${{
             always() &&
@@ -212,7 +212,7 @@ jobs:
           fi
 
       - name: Publish storage config test results
-        uses: EnricoMi/publish-unit-test-result-action@b3f8796819acf652cecbf27a64fa9ac8d7e137ee # v2
+        uses: EnricoMi/publish-unit-test-result-action@d0a4676d0e0b938bc201470d88276b7c74c712b3 # v2
         if: >-
           ${{
             always() &&
@@ -285,7 +285,7 @@ jobs:
           --junitxml=reports/junit/pytest-postgres-storage.xml
 
       - name: Publish postgres storage test results
-        uses: EnricoMi/publish-unit-test-result-action@b3f8796819acf652cecbf27a64fa9ac8d7e137ee # v2
+        uses: EnricoMi/publish-unit-test-result-action@d0a4676d0e0b938bc201470d88276b7c74c712b3 # v2
         if: >-
           ${{
             always() &&
