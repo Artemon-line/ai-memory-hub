@@ -2393,9 +2393,10 @@ class LanceDBVectorStore:
         )
 
         # reuse existing table if possible
-        names = {
-            item[0] if isinstance(item, (list, tuple)) else item for item in self._db.list_tables()
-        }
+        table_names = self._db.list_tables()
+        if hasattr(table_names, "tables"):
+            table_names = table_names.tables
+        names = {item[0] if isinstance(item, (list, tuple)) else item for item in table_names}
         if self.table_name in names:
             existing_table = self._db.open_table(self.table_name)
             existing_schema = existing_table.schema

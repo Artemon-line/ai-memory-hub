@@ -94,6 +94,22 @@ class MongoDBMetadataStore:
                 output[str(row["id"])] = payload
         return output
 
+    def list_conversations(
+        self, *, limit: int | None = None, project_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        query: dict[str, Any] = {}
+        if project_id is not None:
+            query["project_id"] = _validate_project_id(project_id)
+        rows = self._conversations.find(query).sort([("created_at", 1), ("id", 1)])
+        if limit is not None:
+            rows = rows.limit(int(limit))
+        output: list[dict[str, Any]] = []
+        for row in rows:
+            payload = _payload(row)
+            if payload is not None:
+                output.append(payload)
+        return output
+
     def search_text(
         self, query: str, limit: int = 20, project_id: str | None = None
     ) -> list[dict[str, Any]]:

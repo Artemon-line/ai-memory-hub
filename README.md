@@ -140,6 +140,30 @@ message. To migrate intentionally, point the new configuration at an empty
 vector table, collection, index, or namespace and re-ingest/reindex the memory
 from durable metadata or source transcripts.
 
+### Changing Embedding Models
+
+Changing embedding model, provider, dimension, or embedding options creates a
+new vector space. Treat it as a reindex operation, even when the old and new
+models produce the same number of dimensions.
+
+Safe migration checklist:
+
+1. Stop the hub and any clients that are writing memory.
+2. Back up the metadata database and the current vector store.
+3. Update `providers.embeddings`, `providers.embedding_model`, and
+   `providers.embedding_dimension` for the new model.
+4. Point `providers.vector_db` at an empty vector table, collection, index, or
+   namespace. Keep the same metadata database if you want to preserve existing
+   conversations, facts, projects, and auth data.
+5. Recalculate embeddings from the stored metadata:
+   `uv run aim reindex --config <new-config.yaml> --json`.
+6. Run `uv run aim storage-check --config <new-config.yaml> --json`, then test
+   `search` and `ask` before retiring the old vector store.
+
+If startup reports that reindexing is required, do not disable the guardrail to
+force the old vector index to load. Switch back to the old embedding settings, or
+move the new settings to an empty vector destination and run `aim reindex`.
+
 Today the real embedding path is a generic HTTP embeddings endpoint using the
 OpenAI-compatible `/v1/embeddings` request/response schema, such as a local
 Ollama-compatible `/v1` endpoint. ai-memory-hub uses a small embeddings-only

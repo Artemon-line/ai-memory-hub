@@ -134,9 +134,9 @@ providers:
   # Embedding provider used for chunk vectors. Multilingual retrieval depends on
   # choosing a model that supports your languages. Reindex or use a separate
   # vector namespace/index when changing model/provider/options on persistent data.
-  embeddings: http
-  embedding_model: 'nomic-embed-text'
-  embedding_dimension: 768
+  embeddings: local
+  embedding_model: local-hash
+  embedding_dimension: 32
   metadata_db: sqlite # active metadata provider: sqlite | postgres | mongodb
   # lancedb | qdrant | milvus | weaviate | mongodb_atlas |
   # elasticsearch | opensearch | redis | pinecone | turbopuffer | vespa | typesense | pgvector | memory | in_memory

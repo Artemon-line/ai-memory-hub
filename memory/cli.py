@@ -162,6 +162,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Treat string input as a strict User:/Assistant: raw transcript.",
     )
 
+    reindex = subparsers.add_parser(
+        "reindex", help="Recalculate embeddings for conversations already stored in metadata."
+    )
+    _add_common_options(reindex)
+    reindex.add_argument("--limit", type=int, default=None, help="Maximum conversations to reindex.")
+    reindex.add_argument("--project-id", default=None, help="Only reindex one project workspace.")
+    reindex.add_argument(
+        "--include-inactive",
+        action="store_true",
+        help="Also reindex pending_review or rejected conversations.",
+    )
+
     import_command = subparsers.add_parser(
         "import", help="Import an external conversation format."
     )
@@ -387,6 +399,8 @@ def _dispatch(args: argparse.Namespace) -> int:
         return _tokenizer_check(args)
     if args.command == "ingest":
         return _ingest(args)
+    if args.command == "reindex":
+        return _reindex(args)
     if args.command == "import":
         return _import_conversations(args)
     if args.command == "search":
@@ -441,6 +455,20 @@ def _ingest(args: argparse.Namespace) -> int:
     result = redact_content_hashes(result)
     _emit_result(args, result, text_formatter=_format_ingest_text)
     return EXIT_OK
+
+
+def _reindex(args: argparse.Namespace) -> int:
+    if args.limit is not None and args.limit < 1:
+        raise ValueError("limit must be a positive integer")
+    _configure_memory_runtime(args.config)
+    result = mvp_ingestion.reindex_stored_conversations(
+        limit=args.limit,
+        project_id=args.project_id,
+        include_inactive=args.include_inactive,
+    )
+    result = redact_content_hashes(result)
+    _emit_result(args, result, text_formatter=_format_reindex_text)
+    return EXIT_OK if result["status"] == "ok" else EXIT_COMMAND_FAILURE
 
 
 def _import_conversations(args: argparse.Namespace) -> int:
@@ -869,6 +897,13 @@ def _print_json(value: Any) -> None:
 
 def _format_ingest_text(result: dict[str, Any]) -> str:
     return f"stored {result.get('id')} chunks={result.get('chunks', 0)} status={result.get('status')}"
+
+
+def _format_reindex_text(result: dict[str, Any]) -> str:
+    return (
+        f"reindexed={result.get('reindexed', 0)} chunks={result.get('chunks', 0)} "
+        f"skipped={result.get('skipped', 0)} failed={result.get('failed', 0)}"
+    )
 
 
 def _format_import_text(result: dict[str, Any]) -> str:

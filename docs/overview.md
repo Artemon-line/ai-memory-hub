@@ -195,6 +195,7 @@ script after installation.
 
 ```bash
 python -m memory.cli ingest conversation.json --json
+python -m memory.cli reindex --json
 python -m memory.cli import manual copilot-chat.txt --source vscode-copilot --json
 python -m memory.cli search "local-first tools" --top-k 5 --json
 python -m memory.cli retrieve <MEMORY_ID> --json
@@ -370,6 +371,80 @@ retrieval. If a persistent vector index was built with a different embedding
 model or provider, reindex it or use a separate vector namespace/index. Dimension
 checks catch many unsafe swaps, but same-dimension model changes can still
 corrupt ranking if mixed silently.
+
+### Changing Embedding Models For Existing Data
+
+Use this runbook when you already have a metadata database containing your
+conversations and you want to switch to another embedding model.
+
+Do not point a new embedding model at the old vector table, collection, index, or
+namespace. The vectors already stored there were produced in the old model's
+embedding space. Mixing them with new vectors corrupts ranking, and
+same-dimension models are not interchangeable.
+
+1. Stop `aim serve` and any API, MCP, or CLI clients that can insert memory.
+2. Back up metadata and vectors.
+   - Default local metadata: back up `data/metadata.sqlite3`.
+   - Default local vectors: back up `data/lancedb`.
+   - PGVector: back up the configured `storage.vector_providers.pgvector.table_name`.
+   - Hosted vector stores: take the provider's normal snapshot/export before
+     changing collections, indexes, namespaces, or tables.
+3. Choose the new embedding settings and set all of them together:
+
+```yaml
+providers:
+  embeddings: http
+  embedding_model: nomic-embed-text
+  embedding_dimension: 768
+
+embeddings:
+  endpoint: http://127.0.0.1:11434/v1
+```
+
+4. Point the new config at an empty vector destination.
+   - SQLite + LanceDB: keep `paths.data_dir` unchanged if you want the same
+     `data/metadata.sqlite3`, but back up and replace only the `data/lancedb`
+     vector directory. Use a new `paths.data_dir` only when you want a separate
+     metadata database too.
+   - PGVector: use a new `storage.vector_providers.pgvector.table_name`, such
+     as `memory_vectors_nomic_768`.
+   - Qdrant, Milvus, Weaviate, Redis, Typesense, MongoDB Atlas, Elasticsearch,
+     OpenSearch, Pinecone, Turbopuffer, and Vespa: use a new collection, index,
+     namespace, table, or schema name that contains no old-model vectors.
+5. Keep the same metadata database unless you intentionally want a completely
+   separate memory store. Keeping metadata preserves conversations, facts,
+   generated summaries, projects, users, and tokens while the vector store is
+   rebuilt.
+6. Recalculate embeddings from the stored metadata:
+
+```bash
+uv run aim reindex --config new-embedding-config.yaml --json
+```
+
+`aim reindex` reads the existing conversation payloads from metadata, rebuilds
+chunks, embeds them with the active embedding config, and writes vectors to the
+active vector store with replacement semantics. It does not require original
+transcript files or hand-written JSON files.
+
+Useful options:
+
+- `--project-id <id>` reindexes one project workspace.
+- `--limit <n>` reindexes only the first `n` stored conversations, useful for a
+  smoke test before a full run.
+- `--include-inactive` also recalculates vectors for `pending_review` or
+  `rejected` conversations. The default only reindexes active memory.
+
+7. Verify the new index before removing the old one:
+
+```bash
+uv run aim storage-check --config new-embedding-config.yaml --json
+uv run aim search "project memory smoke" --config new-embedding-config.yaml --top-k 5 --json
+uv run aim ask "What do you remember about this project?" --config new-embedding-config.yaml --top-k 5 --json
+```
+
+Rollback is simple if you kept the backups: restore the old config that points
+at the old embedding model and old vector destination. The metadata database can
+stay in place when the migration only replayed duplicate conversation payloads.
 
 ```yaml
 providers:
@@ -708,8 +783,8 @@ available in `example.config.yaml`.
 ```yaml
 providers:
   embeddings: local
-  embedding_model: nomic-embed-text
-  embedding_dimension: 768
+  embedding_model: local-hash
+  embedding_dimension: 32
   metadata_db: sqlite
   vector_db: lancedb
 
