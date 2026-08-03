@@ -1012,6 +1012,25 @@ class SQLiteMetadataStore:
             result[str(row["id"])] = json.loads(str(row["payload"]))
         return result
 
+    def list_conversations(
+        self, *, limit: int | None = None, project_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if project_id is not None:
+            clauses.append("project_id = ?")
+            params.append(_validate_project_id(project_id))
+        sql = "SELECT payload FROM conversations"
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
+        sql += " ORDER BY created_at ASC, id ASC"
+        if limit is not None:
+            sql += " LIMIT ?"
+            params.append(int(limit))
+        with self._connect() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        return [json.loads(str(row["payload"])) for row in rows]
+
     def search_text(
         self, query: str, limit: int = 50, project_id: str | None = None
     ) -> list[dict[str, Any]]:
