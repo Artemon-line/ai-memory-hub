@@ -155,15 +155,14 @@ Safe migration checklist:
 4. Point `providers.vector_db` at an empty vector table, collection, index, or
    namespace. Keep the same metadata database if you want to preserve existing
    conversations, facts, projects, and auth data.
-5. Re-ingest the original conversation JSON files, or export the stored
-   `conversations.payload` values from metadata and replay them with
-   `uv run aim ingest <file> --config <new-config.yaml> --json`.
+5. Recalculate embeddings from the stored metadata:
+   `uv run aim reindex --config <new-config.yaml> --json`.
 6. Run `uv run aim storage-check --config <new-config.yaml> --json`, then test
    `search` and `ask` before retiring the old vector store.
 
 If startup reports that reindexing is required, do not disable the guardrail to
 force the old vector index to load. Switch back to the old embedding settings, or
-move the new settings to an empty vector destination and replay the memory.
+move the new settings to an empty vector destination and run `aim reindex`.
 
 Today the real embedding path is a generic HTTP embeddings endpoint using the
 OpenAI-compatible `/v1/embeddings` request/response schema, such as a local

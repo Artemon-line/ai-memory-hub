@@ -933,6 +933,27 @@ class PostgresMetadataStore:
             result[str(row[0])] = json.loads(str(row[1]))
         return result
 
+    def list_conversations(
+        self, *, limit: int | None = None, project_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if project_id is not None:
+            clauses.append("project_id = %s")
+            params.append(_validate_project_id(project_id))
+        sql = "SELECT payload::text FROM conversations"
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
+        sql += " ORDER BY created_at ASC, id ASC"
+        if limit is not None:
+            sql += " LIMIT %s"
+            params.append(int(limit))
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, tuple(params))
+                rows = cur.fetchall()
+        return [json.loads(str(row[0])) for row in rows]
+
     def search_text(
         self, query: str, limit: int = 50, project_id: str | None = None
     ) -> list[dict[str, Any]]:

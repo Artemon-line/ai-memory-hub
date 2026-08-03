@@ -196,6 +196,7 @@ def test_parser_includes_core_commands() -> None:
 
     commands = (
         "ingest",
+        "reindex",
         "import",
         "search",
         "retrieve",
@@ -244,6 +245,89 @@ def test_ingest_cli_reads_json_file(capsys, monkeypatch, tmp_path) -> None:
     body = json.loads(capsys.readouterr().out)
     assert exit_code == 0
     assert body["id"] == "memory-1"
+
+
+def test_reindex_cli_recalculates_from_metadata(capsys, monkeypatch) -> None:
+    monkeypatch.setattr(cli, "_configure_memory_runtime", lambda config_path: None)
+    captured = {}
+
+    def fake_reindex(**kwargs):
+        captured.update(kwargs)
+        return {
+            "status": "ok",
+            "total": 2,
+            "reindexed": 2,
+            "chunks": 4,
+            "skipped": 0,
+            "failed": 0,
+            "failures": [],
+        }
+
+    monkeypatch.setattr(cli.mvp_ingestion, "reindex_stored_conversations", fake_reindex)
+
+    exit_code = cli.main(
+        [
+            "reindex",
+            "--project-id",
+            "local-default",
+            "--limit",
+            "2",
+            "--include-inactive",
+            "--json",
+        ]
+    )
+
+    body = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert body["reindexed"] == 2
+    assert body["chunks"] == 4
+    assert captured == {
+        "limit": 2,
+        "project_id": "local-default",
+        "include_inactive": True,
+    }
+
+
+def test_reindex_cli_uses_stored_metadata_payloads(capsys, tmp_path) -> None:
+    data_dir = (tmp_path / "data").as_posix()
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "providers:",
+                "  embeddings: local",
+                "  embedding_dimension: 32",
+                "  metadata_db: sqlite",
+                "  vector_db: lancedb",
+                "paths:",
+                f"  data_dir: {data_dir}",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    payload_path = tmp_path / "conversation.json"
+    payload_path.write_text(
+        json.dumps(
+            {
+                "source": "codex",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "messages": [{"role": "user", "text": "remember the reindex test"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    ingest_code = cli.main(["ingest", str(payload_path), "--config", str(config_path), "--json"])
+    _ = json.loads(capsys.readouterr().out)
+    reindex_code = cli.main(["reindex", "--config", str(config_path), "--json"])
+    body = json.loads(capsys.readouterr().out)
+
+    assert ingest_code == 0
+    assert reindex_code == 0
+    assert body["total"] == 1
+    assert body["reindexed"] == 1
+    assert body["chunks"] == 1
+    assert body["failed"] == 0
 
 
 def test_manual_import_cli_ingests_unified_payload(capsys, monkeypatch, tmp_path) -> None:

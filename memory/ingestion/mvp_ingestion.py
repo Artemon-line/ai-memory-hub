@@ -1967,6 +1967,64 @@ def _mark_chunks_indexing_failed(metadata_id: str, chunks: list[dict[str, Any]])
         )
 
 
+def reindex_stored_conversations(
+    *, limit: int | None = None, project_id: str | None = None, include_inactive: bool = False
+) -> dict[str, Any]:
+    if limit is not None and int(limit) < 1:
+        raise ValueError("limit must be a positive integer")
+    if project_id is not None:
+        project_id = _validate_project_id(project_id)
+    store = _runtime().metadata_store
+    if not hasattr(store, "list_conversations"):
+        raise NotImplementedError("metadata store does not support conversation reindex")
+
+    conversations = store.list_conversations(limit=limit, project_id=project_id)
+    reindexed = 0
+    chunks_reindexed = 0
+    skipped = 0
+    failures: list[dict[str, str]] = []
+    for conversation in conversations:
+        memory_id = str(conversation.get("id", ""))
+        chunks: list[dict[str, Any]] = []
+        try:
+            if not include_inactive and not _conversation_is_active(conversation):
+                skipped += 1
+                continue
+            if project_id is not None and not _conversation_project_matches(conversation, project_id):
+                skipped += 1
+                continue
+            owner_id = _owner_id_from_conversation(conversation)
+            conversation_project_id = _project_id_from_conversation(conversation)
+            with _ingestion_stage(
+                "chunk",
+                message_count=len(conversation.get("messages", [])),
+                reindex=True,
+            ):
+                chunks = chunk_messages(conversation)
+            embeddings = embed_chunks(
+                chunks,
+                project_id=conversation_project_id,
+                owner_id=owner_id,
+            )
+            store_vectors(memory_id, embeddings, replace=True)
+            _mark_chunks_indexed(memory_id, chunks)
+            reindexed += 1
+            chunks_reindexed += len(chunks)
+        except Exception as exc:
+            if chunks:
+                _mark_chunks_indexing_failed(memory_id, chunks)
+            failures.append({"id": memory_id, "error": str(exc)})
+    return {
+        "status": "ok" if not failures else "error",
+        "total": len(conversations),
+        "reindexed": reindexed,
+        "chunks": chunks_reindexed,
+        "skipped": skipped,
+        "failed": len(failures),
+        "failures": failures,
+    }
+
+
 def search(
     query: str,
     top_k: int = 5,

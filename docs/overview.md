@@ -195,6 +195,7 @@ script after installation.
 
 ```bash
 python -m memory.cli ingest conversation.json --json
+python -m memory.cli reindex --json
 python -m memory.cli import manual copilot-chat.txt --source vscode-copilot --json
 python -m memory.cli search "local-first tools" --top-k 5 --json
 python -m memory.cli retrieve <MEMORY_ID> --json
@@ -414,35 +415,24 @@ embeddings:
    separate memory store. Keeping metadata preserves conversations, facts,
    generated summaries, projects, users, and tokens while the vector store is
    rebuilt.
-6. Replay the original conversation payloads through normal ingestion:
+6. Recalculate embeddings from the stored metadata:
 
 ```bash
-uv run aim ingest conversation-001.json --config new-embedding-config.yaml --json
-uv run aim ingest conversation-002.json --config new-embedding-config.yaml --json
+uv run aim reindex --config new-embedding-config.yaml --json
 ```
 
-Re-ingesting the same source conversation is intentional. Deduplication preserves
-the existing conversation identity, and the active empty vector store receives
-fresh chunks embedded with the new model.
+`aim reindex` reads the existing conversation payloads from metadata, rebuilds
+chunks, embeds them with the active embedding config, and writes vectors to the
+active vector store with replacement semantics. It does not require original
+transcript files or hand-written JSON files.
 
-If you no longer have the original transcript files, export the stored
-conversation payloads from metadata and ingest those files. For the default
-SQLite metadata store:
+Useful options:
 
-```bash
-sqlite3 data/metadata.sqlite3 "SELECT payload FROM conversations" > conversations.jsonl
-```
-
-For Postgres metadata:
-
-```bash
-psql "$DATABASE_URL" -At -c "SELECT payload::text FROM conversations" > conversations.jsonl
-```
-
-Then replay each JSON line with the CLI or split the JSONL into one file per
-conversation before ingestion. A first-class `reindex` command is planned as a
-release-follow-up; until then, replaying source payloads is the supported
-operator workflow.
+- `--project-id <id>` reindexes one project workspace.
+- `--limit <n>` reindexes only the first `n` stored conversations, useful for a
+  smoke test before a full run.
+- `--include-inactive` also recalculates vectors for `pending_review` or
+  `rejected` conversations. The default only reindexes active memory.
 
 7. Verify the new index before removing the old one:
 

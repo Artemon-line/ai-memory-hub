@@ -201,6 +201,8 @@ release requirements:
       covered by CI.
 - [x] MCP client setup is reachable from README.
 - [x] Security/auth guidance is reachable before LAN/container exposure docs.
+- [x] Embedding model changes are documented as a DB-backed reindex workflow,
+      with `aim reindex` recalculating vectors from stored metadata.
 - [x] Release notes link to the generated docs site.
 - [x] Known limitations are explicit:
   - no hosted memory service;
