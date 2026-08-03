@@ -419,7 +419,7 @@ Implementation sequence:
 
 - [x] Define release version policy: GitHub tag must match `pyproject.toml`.
 - [x] Add release tag validation for `vMAJOR.MINOR.PATCH`.
-- [ ] Add Docker Hub secrets: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`, and optional namespace.
+- [x] Add Docker Hub secrets: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`, and optional namespace.
 - [x] Add release workflow triggered by `release.published`.
 - [x] Build from `Containerfile` with Docker Buildx.
 - [x] Push versioned tags for every release.

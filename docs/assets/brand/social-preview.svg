@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
+  <title id="title">ai-memory-hub social preview</title>
+  <desc id="desc">Repository social preview for ai-memory-hub, a local-first memory service for AI agents.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#f7f1df"/>
+      <stop offset=".58" stop-color="#eef4ed"/>
+      <stop offset="1" stop-color="#e7f0ee"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#17201d"/>
+      <stop offset="1" stop-color="#244b47"/>
+    </linearGradient>
+    <filter id="soft-shadow" x="-12%" y="-12%" width="124%" height="124%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#162027" flood-opacity=".18"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <path d="M0 520 C190 478 300 602 500 552 C687 505 740 382 942 430 C1087 464 1160 558 1280 525 L1280 640 L0 640 Z" fill="#dbe9e5"/>
+  <path d="M0 0 H1280 V78 H0 Z" fill="#c83265" opacity=".08"/>
+  <path d="M78 0 V640 M1202 0 V640 M0 78 H1280 M0 562 H1280" fill="none" stroke="#8c1232" stroke-width="4" opacity=".14"/>
+
+  <rect x="104" y="98" width="1072" height="444" rx="26" fill="#ffffff" opacity=".82" filter="url(#soft-shadow)"/>
+  <rect x="128" y="122" width="430" height="396" rx="24" fill="url(#panel)"/>
+
+  <g transform="translate(209 169) scale(4.05)">
+    <rect width="64" height="64" rx="14" fill="#202522"/>
+    <circle cx="32" cy="32" r="25" fill="#174d49"/>
+    <g fill="#5f8f84" opacity=".92">
+      <ellipse cx="19" cy="18" rx="4" ry="2.7" transform="rotate(-32 19 18)"/>
+      <ellipse cx="31" cy="13" rx="4" ry="2.7" transform="rotate(-8 31 13)"/>
+      <ellipse cx="45" cy="18" rx="4" ry="2.7" transform="rotate(35 45 18)"/>
+      <ellipse cx="15" cy="43" rx="4" ry="2.7" transform="rotate(30 15 43)"/>
+      <ellipse cx="32" cy="50" rx="4" ry="2.7" transform="rotate(8 32 50)"/>
+      <ellipse cx="49" cy="43" rx="4" ry="2.7" transform="rotate(-30 49 43)"/>
+    </g>
+    <g fill="#c83265">
+      <circle cx="20" cy="16" r="3.4"/>
+      <circle cx="32" cy="12" r="3.2"/>
+      <circle cx="44" cy="16" r="3.4"/>
+      <circle cx="13" cy="29" r="3.2"/>
+      <circle cx="51" cy="29" r="3.2"/>
+      <circle cx="18" cy="46" r="3.4"/>
+      <circle cx="32" cy="52" r="3.2"/>
+      <circle cx="46" cy="46" r="3.4"/>
+    </g>
+    <path d="M12 34c8-10 15-11 20-7 5-4 12-3 20 7-9-2-15-2-20-1-5-1-11-1-20 1Z" fill="#eadcc0"/>
+    <path d="M12 35c8 11 32 11 40 0-9 2-15 2-20 2s-11 0-20-2Z" fill="#f7f1df"/>
+    <path d="M13 34.5c10 1.6 28 1.6 38 0" fill="none" stroke="#6d4f4e" stroke-width="2.8" stroke-linecap="round"/>
+    <circle cx="32" cy="39" r="3.6" fill="#226f68"/>
+    <path d="M24 41h16" stroke="#226f68" stroke-width="3" stroke-linecap="round"/>
+  </g>
+
+  <text x="612" y="214" fill="#162027" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="58" font-weight="800">ai-memory-hub</text>
+  <text x="614" y="284" fill="#244b47" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="31" font-weight="650">Local-first memory for AI agents</text>
+  <text x="614" y="346" fill="#37433f" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="23" font-weight="460">Store conversations once. Search, retrieve,</text>
+  <text x="614" y="380" fill="#37433f" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="23" font-weight="460">and ask over them from MCP or HTTP clients.</text>
+
+  <g font-family="Inter, Segoe UI, Arial, sans-serif" font-size="22" font-weight="700">
+    <rect x="614" y="426" width="124" height="42" rx="21" fill="#174d49"/>
+    <text x="676" y="454" text-anchor="middle" fill="#f7f1df">MCP</text>
+    <rect x="758" y="426" width="132" height="42" rx="21" fill="#c83265"/>
+    <text x="824" y="454" text-anchor="middle" fill="#fff7ee">HTTP</text>
+    <rect x="910" y="426" width="196" height="42" rx="21" fill="#eadcc0"/>
+    <text x="1008" y="454" text-anchor="middle" fill="#162027">Local-first</text>
+  </g>
+
+  <text x="614" y="506" fill="#6d4f4e" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="20" font-weight="560">SQLite/LanceDB default · Bring your own embeddings</text>
+</svg>
