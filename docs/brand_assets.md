@@ -10,9 +10,11 @@ Use the SVG files as the source assets:
 
 - `docs/assets/brand/ai-memory-hub-mark.svg`
 - `docs/assets/brand/ai-memory-hub-wordmark.svg`
+- `docs/assets/brand/social-preview.svg`
 
 Favicon and app-icon exports are also checked in:
 
+- `docs/assets/brand/social-preview.png`
 - `docs/assets/brand/favicon.svg`
 - `docs/assets/brand/favicon.ico`
 - `docs/assets/brand/favicon-16x16.png`

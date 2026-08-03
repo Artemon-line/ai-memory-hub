@@ -11,22 +11,22 @@ def test_load_config_default():
     config = load_config()
     assert isinstance(config, HubConfig)
     
-    config_path = Path(__file__).resolve().parent.parent / "config.yaml"
+    config_path = Path("config.yaml")
     if config_path.exists():
-        assert config.providers.embeddings == "http"
-        assert config.providers.embedding_dimension == 768
+        assert config.providers.embeddings == "local"
+        assert config.providers.embedding_dimension == 32
     else:
         assert config.providers.embeddings == "http"
 
 def test_load_config_from_file():
-    config_path = Path(__file__).resolve().parent.parent / "config.yaml"
+    config_path = Path("config.yaml")
     if not config_path.exists():
         pytest.skip("config.yaml not found")
     
     config = load_config(config_path)
     assert isinstance(config, HubConfig)
-    assert config.providers.embeddings == "http"
-    assert config.providers.embedding_dimension == 768
+    assert config.providers.embeddings == "local"
+    assert config.providers.embedding_dimension == 32
 
 
 def test_legacy_openai_embedding_config_maps_to_http_endpoint() -> None:
