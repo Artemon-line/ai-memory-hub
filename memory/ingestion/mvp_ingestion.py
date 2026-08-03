@@ -1978,6 +1978,12 @@ def reindex_stored_conversations(
     if not hasattr(store, "list_conversations"):
         raise NotImplementedError("metadata store does not support conversation reindex")
 
+    runtime = _runtime()
+    vector_health = runtime.vector_store.health() if hasattr(runtime.vector_store, "health") else {}
+    replace_existing = _vector_row_count(
+        vector_store=runtime.vector_store,
+        vector_health=vector_health,
+    ) != 0
     conversations = store.list_conversations(limit=limit, project_id=project_id)
     reindexed = 0
     chunks_reindexed = 0
@@ -2006,7 +2012,7 @@ def reindex_stored_conversations(
                 project_id=conversation_project_id,
                 owner_id=owner_id,
             )
-            store_vectors(memory_id, embeddings, replace=True)
+            store_vectors(memory_id, embeddings, replace=replace_existing)
             _mark_chunks_indexed(memory_id, chunks)
             reindexed += 1
             chunks_reindexed += len(chunks)
