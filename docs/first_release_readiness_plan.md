@@ -59,9 +59,9 @@ Missing or not yet enforced:
 - [x] Issue templates.
 - [x] Branch protection, required checks, Docker Hub secrets, and repository
       settings documented.
-- [ ] Branch protection policy that blocks direct pushes to `main`.
-- [ ] Required status checks selected in GitHub settings.
-- [ ] Repository topics and description applied in GitHub settings.
+- [x] Branch protection policy that blocks direct pushes to `main`.
+- [x] Required status checks selected in GitHub settings.
+- [x] Repository topics and description applied in GitHub settings.
 
 ## Release Scope
 
@@ -169,8 +169,8 @@ Add these root-level files before release:
 Use `release_container_docs_plan.md` for the detailed workflow. Minimum first
 release requirements:
 
-- [ ] Create Docker Hub repository for `ai-memory-hub`.
-- [ ] Add GitHub Actions secrets:
+- [x] Create Docker Hub repository for `ai-memory-hub`.
+- [x] Add GitHub Actions secrets:
   - `DOCKERHUB_USERNAME`
   - `DOCKERHUB_TOKEN`
   - optional `DOCKERHUB_NAMESPACE`
@@ -195,7 +195,7 @@ release requirements:
 
 - [x] README first screen clearly says what the project is, who it is for, and
       why local-first agent memory matters.
-- [ ] Quick start works from a clean checkout.
+- [x] Quick start works from a clean checkout.
 - [ ] Docker/Compose quick start works from a clean checkout.
 - [x] Deterministic quickstart checks and real-client smoke harness runs are
       covered by CI.

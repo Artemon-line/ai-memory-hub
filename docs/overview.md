@@ -708,8 +708,8 @@ available in `example.config.yaml`.
 ```yaml
 providers:
   embeddings: local
-  embedding_model: nomic-embed-text
-  embedding_dimension: 768
+  embedding_model: local-hash
+  embedding_dimension: 32
   metadata_db: sqlite
   vector_db: lancedb
 
