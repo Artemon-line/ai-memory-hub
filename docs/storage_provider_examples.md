@@ -14,6 +14,13 @@ for both ingestion and search. If you switch models on a persistent vector
 store, reindex the data or use a separate vector namespace/index; same-dimension
 model swaps can still corrupt ranking.
 
+For an existing database of conversations, keep metadata in place and rebuild
+vectors in an empty provider destination. Back up the current metadata database
+and vector store, change the embedding config, choose a new collection, table,
+index, or namespace for vectors, then replay the original conversation payloads
+with `uv run aim ingest <file> --config <new-config.yaml> --json`. The full
+operator runbook is in [Technical Overview](overview.md#changing-embedding-models-for-existing-data).
+
 Each running hub uses one metadata provider and one vector provider. The active
 providers are selected by `providers.metadata_db` and `providers.vector_db`.
 Provider settings under `storage.metadata_providers` and

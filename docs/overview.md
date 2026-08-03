@@ -371,6 +371,91 @@ model or provider, reindex it or use a separate vector namespace/index. Dimensio
 checks catch many unsafe swaps, but same-dimension model changes can still
 corrupt ranking if mixed silently.
 
+### Changing Embedding Models For Existing Data
+
+Use this runbook when you already have a metadata database containing your
+conversations and you want to switch to another embedding model.
+
+Do not point a new embedding model at the old vector table, collection, index, or
+namespace. The vectors already stored there were produced in the old model's
+embedding space. Mixing them with new vectors corrupts ranking, and
+same-dimension models are not interchangeable.
+
+1. Stop `aim serve` and any API, MCP, or CLI clients that can insert memory.
+2. Back up metadata and vectors.
+   - Default local metadata: back up `data/metadata.sqlite3`.
+   - Default local vectors: back up `data/lancedb`.
+   - PGVector: back up the configured `storage.vector_providers.pgvector.table_name`.
+   - Hosted vector stores: take the provider's normal snapshot/export before
+     changing collections, indexes, namespaces, or tables.
+3. Choose the new embedding settings and set all of them together:
+
+```yaml
+providers:
+  embeddings: http
+  embedding_model: nomic-embed-text
+  embedding_dimension: 768
+
+embeddings:
+  endpoint: http://127.0.0.1:11434/v1
+```
+
+4. Point the new config at an empty vector destination.
+   - SQLite + LanceDB: keep `paths.data_dir` unchanged if you want the same
+     `data/metadata.sqlite3`, but back up and replace only the `data/lancedb`
+     vector directory. Use a new `paths.data_dir` only when you want a separate
+     metadata database too.
+   - PGVector: use a new `storage.vector_providers.pgvector.table_name`, such
+     as `memory_vectors_nomic_768`.
+   - Qdrant, Milvus, Weaviate, Redis, Typesense, MongoDB Atlas, Elasticsearch,
+     OpenSearch, Pinecone, Turbopuffer, and Vespa: use a new collection, index,
+     namespace, table, or schema name that contains no old-model vectors.
+5. Keep the same metadata database unless you intentionally want a completely
+   separate memory store. Keeping metadata preserves conversations, facts,
+   generated summaries, projects, users, and tokens while the vector store is
+   rebuilt.
+6. Replay the original conversation payloads through normal ingestion:
+
+```bash
+uv run aim ingest conversation-001.json --config new-embedding-config.yaml --json
+uv run aim ingest conversation-002.json --config new-embedding-config.yaml --json
+```
+
+Re-ingesting the same source conversation is intentional. Deduplication preserves
+the existing conversation identity, and the active empty vector store receives
+fresh chunks embedded with the new model.
+
+If you no longer have the original transcript files, export the stored
+conversation payloads from metadata and ingest those files. For the default
+SQLite metadata store:
+
+```bash
+sqlite3 data/metadata.sqlite3 "SELECT payload FROM conversations" > conversations.jsonl
+```
+
+For Postgres metadata:
+
+```bash
+psql "$DATABASE_URL" -At -c "SELECT payload::text FROM conversations" > conversations.jsonl
+```
+
+Then replay each JSON line with the CLI or split the JSONL into one file per
+conversation before ingestion. A first-class `reindex` command is planned as a
+release-follow-up; until then, replaying source payloads is the supported
+operator workflow.
+
+7. Verify the new index before removing the old one:
+
+```bash
+uv run aim storage-check --config new-embedding-config.yaml --json
+uv run aim search "project memory smoke" --config new-embedding-config.yaml --top-k 5 --json
+uv run aim ask "What do you remember about this project?" --config new-embedding-config.yaml --top-k 5 --json
+```
+
+Rollback is simple if you kept the backups: restore the old config that points
+at the old embedding model and old vector destination. The metadata database can
+stay in place when the migration only replayed duplicate conversation payloads.
+
 ```yaml
 providers:
   metadata_db: postgres
