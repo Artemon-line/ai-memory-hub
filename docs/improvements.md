@@ -17,6 +17,7 @@ Source date: `28-05-2026`
 11. [Graph Quality Gate Plan](./improvements/graph_quality_gate_plan.md)
 12. [Google OAuth Connect UI Plan](./improvements/google_oauth_connect_ui_plan.md)
 13. [OIDC And PKCE Hardening Plan](./improvements/oidc_pkce_hardening_plan.md)
+14. [Neo4j Aura Graph Memory Plan](./improvements/neo4j_aura_graph_memory_plan.md)
 
 ## Notes
 

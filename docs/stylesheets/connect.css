@@ -110,15 +110,41 @@
 }
 
 .amh-doc-copy {
-  float: right;
+  float: none;
   min-height: 1.75rem;
-  margin: .35rem .35rem -2.2rem 0;
+  margin: .35rem .35rem .4rem 0;
   padding: 0 .55rem;
   border-color: rgba(22, 32, 39, .15);
   color: #174d49;
   background: #d9ebe6;
   font-size: .7rem;
   cursor: pointer;
+}
+
+.amh-copy-block {
+  position: relative;
+}
+
+.amh-copy-block.highlight {
+  padding-top: 2.45rem;
+}
+
+.amh-copy-block > .amh-doc-copy {
+  position: absolute;
+  top: .42rem;
+  right: .42rem;
+  z-index: 3;
+  margin: 0;
+}
+
+body.amh-has-copy-blocks .amh-copy-block .md-clipboard,
+body.amh-has-copy-blocks .amh-copy-block .md-code__nav,
+body.amh-has-copy-blocks .amh-copy-block .md-code__button,
+.amh-copy-block > .md-clipboard,
+.amh-copy-block .md-clipboard,
+.amh-copy-block .md-code__nav,
+.amh-copy-block .md-code__button {
+  display: none;
 }
 
 .amh-doc-copy.is-copied {
