@@ -18,6 +18,7 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P0 | MCP client smoke coverage for Codex, Gemini, Copilot, Claude, opencode | Implemented | `mcp_client_smoke_plan.md` |
 | P0 | Required real-client MCP smoke coverage | Implemented | `real_client_mcp_smoke_plan.md` |
 | P0 | Bruno black-box API/MCP integration test layer | Implemented | `bruno_integration_test_plan.md` |
+| P0 | Handoff memory for cross-agent and cross-environment task continuity | Planned | `improvements/handoff_memory_plan.md` |
 | P1 | CLI foundation and command contract | Implemented | `cli_implementation_plan.md` |
 | P1 | CLI `ingest`, `search`, `retrieve`, and `ask` commands | Implemented | `cli_implementation_plan.md` |
 | P1 | CLI `serve` command for container/runtime entrypoint | Implemented | `cli_implementation_plan.md`, `release_container_docs_plan.md` |
@@ -328,6 +329,32 @@ and storage adapter details.
 - [x] Add source/date/tag filter smoke coverage for API and MCP search/ask.
 - [x] Verify the unauthenticated smoke collection with the real Bruno CLI locally.
 - [ ] Promote to required CI only after repeated stable runs.
+
+## P0: Handoff Memory For Task Continuity
+
+Use `improvements/handoff_memory_plan.md` as the source of truth.
+
+This is the next top planned agent-workflow feature. It addresses the practical
+failure mode where useful agent work disappears when a session runs out of
+context, budget, time, or access to a specific environment. The hub should let
+Agent A save a compact continuation packet and Agent B resume from it later,
+whether the next session starts in a local machine, cloud IDE, hosted agent
+runtime, or another MCP-capable client.
+
+Implementation sequence:
+
+- [ ] Define the handoff packet model: goal, status, decisions, changed files,
+      commands run, validation, blockers, next steps, and citations.
+- [ ] Add retrieval-only generated handoff views from existing memory before
+      adding stored records.
+- [ ] Add stored handoff records with MCP and HTTP create/get/update/search
+      surfaces.
+- [ ] Add MCP prompts and CLI commands for create/resume workflows.
+- [ ] Enforce owner, project, shared-project, and secret-redaction boundaries.
+- [ ] Treat A2A as an optional later integration surface after MCP/HTTP handoff
+      behavior is stable.
+- [ ] Link handoffs into graph memory later for agent/task/file/decision
+      provenance.
 
 ## P1: CLI Foundation And Commands
 
