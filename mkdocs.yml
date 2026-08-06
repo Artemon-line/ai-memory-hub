@@ -17,6 +17,7 @@ theme:
 
 extra_css:
   - docs/stylesheets/connect.css
+  - docs/stylesheets/leap-day-dark.css
 
 extra_javascript:
   - docs/javascripts/connect.js
@@ -87,3 +88,4 @@ nav:
       - Explicit Memory Save Intent Plan: docs/improvements/explicit_memory_save_intent_plan.md
       - Google OAuth Connect UI Plan: docs/improvements/google_oauth_connect_ui_plan.md
       - Vector Database Options: docs/improvements/vector_dbs.md
+      - Neo4j Aura Graph Memory Plan: docs/improvements/neo4j_aura_graph_memory_plan.md

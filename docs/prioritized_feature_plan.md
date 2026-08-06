@@ -34,7 +34,7 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P2 | MongoDB metadata and MongoDB Atlas Vector Search | Implemented | `storage_agnostic_byoa_plan.md` |
 | P3 | Elasticsearch/OpenSearch vector providers | Implemented | `storage_agnostic_byoa_plan.md` |
 | P3 | Milvus/Zilliz and Weaviate vector providers | Implemented | `storage_agnostic_byoa_plan.md` |
-| P3 | Provider backlog: Redis/RediSearch, Pinecone, Turbopuffer, Vespa, and Typesense implemented; Meilisearch, DuckDB VSS, and sqlite-vec remain planned | Partial | `storage_agnostic_byoa_plan.md`, `improvements/vector_dbs.md` |
+| P3 | Provider backlog: Redis/RediSearch, Pinecone, Turbopuffer, Vespa, and Typesense implemented; Neo4j AuraDB, Meilisearch, DuckDB VSS, and sqlite-vec remain planned | Partial | `storage_agnostic_byoa_plan.md`, `improvements/vector_dbs.md`, `improvements/neo4j_aura_graph_memory_plan.md` |
 | P3 | Release notes, image scanning, SBOM, and provenance | Implemented | `release_container_docs_plan.md` |
 | P3 | Topic/project summaries, digests, consolidation | Planned here | This doc and `roadmap.md` |
 | P3 | UI and developer experience | Planned here | This doc and `roadmap.md` |
@@ -526,7 +526,9 @@ Implementation sequence:
 ## P3: Next Vector Provider Candidates
 
 Use `storage_agnostic_byoa_plan.md` as the source of truth, with
-`improvements/vector_dbs.md` as the raw candidate list.
+`improvements/vector_dbs.md` as the raw candidate list. Use
+`improvements/neo4j_aura_graph_memory_plan.md` for the Neo4j AuraDB vector
+provider, graph mirror, and graph-aware retrieval path.
 
 Implementation sequence:
 
@@ -536,6 +538,8 @@ Implementation sequence:
 - [x] Vespa adapter for large-scale hybrid retrieval.
 - [x] Typesense adapter after confirming vector API maturity and filtering
       semantics.
+- [ ] Neo4j AuraDB adapter as a vector provider first, then a graph-record mirror
+      and graph-aware retrieval backend.
 - [ ] Meilisearch adapter after confirming direct user-provided vector CRUD and
       search semantics fit the hub-owned embedding contract.
 - [ ] DuckDB VSS and/or sqlite-vec embedded adapter for local analytical or
@@ -581,7 +585,9 @@ Implementation sequence:
 
 ## P4: Advanced Memory
 
-Use `improvements/advanced_memory_plan.md` as the source of truth.
+Use `improvements/advanced_memory_plan.md` as the source of truth. Use
+`improvements/neo4j_aura_graph_memory_plan.md` for the optional Neo4j-backed
+graph mirror and retrieval backend path.
 
 Implementation sequence:
 

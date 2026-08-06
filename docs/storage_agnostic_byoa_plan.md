@@ -322,6 +322,7 @@ Current implemented provider matrix:
 - [x] Vectors: Turbopuffer
 - [x] Vectors: Vespa
 - [x] Vectors: Typesense
+- [ ] Vectors: Neo4j AuraDB
 
 Candidate vector-provider backlog from `improvements/vector_dbs.md`:
 
@@ -342,6 +343,10 @@ Candidate vector-provider backlog from `improvements/vector_dbs.md`:
 - [x] Typesense: lightweight search engine with vector support, explicit
       URL/API-key/collection config, fake-client contract coverage, optional
       live test gate, and local Docker Compose example.
+- [ ] Neo4j AuraDB: managed graph database option planned first as a vector
+      provider, then as a graph-record mirror and graph-aware retrieval backend;
+      source-of-truth metadata remains SQLite/Postgres/MongoDB until a separate
+      metadata adapter satisfies the full contract.
 - [x] Meilisearch: deferred from the normal provider matrix until direct
       user-provided vector CRUD/search semantics fit the hub-owned embedding
       contract.
@@ -378,8 +383,9 @@ Recommended implementation order:
 9. Turbopuffer: serverless/object-storage-backed option after consistency and latency behavior are validated.
 10. Vespa: large-scale hybrid retrieval option after schema deployment and ranking semantics are designed.
 11. Typesense/Meilisearch: lightweight search-engine vector options after vector/filter maturity is confirmed.
-12. DuckDB VSS/sqlite-vec: embedded analytical or single-file options after extension loading and persistence semantics are designed.
-13. Faiss/ScaNN/HNSWlib: library-only options, not normal storage providers; consider only for experimental local adapters.
+12. Neo4j AuraDB: managed graph database option that can start as vector search and later power graph-aware retrieval.
+13. DuckDB VSS/sqlite-vec: embedded analytical or single-file options after extension loading and persistence semantics are designed.
+14. Faiss/ScaNN/HNSWlib: library-only options, not normal storage providers; consider only for experimental local adapters.
 
 ### Phase 6a: Provider Config Model
 

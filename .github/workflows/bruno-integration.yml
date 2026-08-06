@@ -2,12 +2,6 @@ name: bruno-integration
 
 on:
   pull_request:
-    paths:
-      - ".github/workflows/bruno-integration.yml"
-      - "memory/**"
-      - "tests/bruno/**"
-      - "pyproject.toml"
-      - "uv.lock"
   push:
     branches: [main]
     paths:

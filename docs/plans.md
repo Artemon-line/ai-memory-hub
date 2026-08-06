@@ -48,6 +48,7 @@ The public docs are now split into three kinds of pages:
 | Page | Scope |
 | --- | --- |
 | [Storage BYOA plan](storage_agnostic_byoa_plan.md) | Storage abstraction and provider behavior. |
+| [Neo4j Aura graph memory plan](improvements/neo4j_aura_graph_memory_plan.md) | Neo4j AuraDB vector provider, graph record mirror, and graph-aware retrieval path. |
 | [Deterministic ingestion plan](deterministic_ingestion_plan.md) | Schema-first ingestion, dedupe, and deterministic behavior. |
 | [Browser extension capture plan](browser_extension_capture_plan.md) | Browser capture boundary, API contract, and future extension repos. |
 | [Token budget plan](token_budget_plan.md) | Token accounting and context construction. |
@@ -63,4 +64,5 @@ The public docs are now split into three kinds of pages:
 The [improvement plans](improvements.md) collect focused follow-up work for
 client feedback, MCP result shapes, retrieval precision, context building,
 conversation grouping, memory quality, edge-case coverage, explicit save intent,
-Google OAuth connect UX, and vector database evaluation.
+Google OAuth connect UX, vector database evaluation, and Neo4j Aura graph
+memory.
