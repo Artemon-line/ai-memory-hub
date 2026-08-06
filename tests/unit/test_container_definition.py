@@ -188,7 +188,7 @@ def test_container_smoke_retains_stopped_container_for_logs() -> None:
 def test_supply_chain_workflow_scans_without_blocking_prs() -> None:
     workflow = Path(".github/workflows/supply-chain.yml").read_text(encoding="utf-8")
 
-    assert "aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0" in workflow
+    assert "aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0" in workflow
     assert "exit-code: \"0\"" in workflow
     assert "format: cyclonedx" in workflow
     assert "ai-memory-hub.cdx.json" in workflow
