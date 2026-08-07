@@ -80,6 +80,7 @@ nav:
       - Improvement Plans: docs/improvements.md
       - Client Feedback Improvement Plan: docs/improvements/client_feedback_improvement_plan.md
       - Top Priority MCP Result Shape: docs/improvements/top_priority_mcp_result_shape.md
+      - Handoff Memory Plan: docs/improvements/handoff_memory_plan.md
       - Retrieval Precision Plan: docs/improvements/retrieval_precision_plan.md
       - Context Building Plan: docs/improvements/context_building_plan.md
       - Conversation Grouping Plan: docs/improvements/conversation_grouping_plan.md

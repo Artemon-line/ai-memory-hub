@@ -54,6 +54,7 @@ The public docs are now split into three kinds of pages:
 | [Token budget plan](token_budget_plan.md) | Token accounting and context construction. |
 | [CLI implementation plan](cli_implementation_plan.md) | CLI commands and behavior. |
 | [Project workspace collaboration plan](project_workspace_collaboration_plan.md) | Workspace collaboration model. |
+| [Handoff memory plan](improvements/handoff_memory_plan.md) | Cross-agent and cross-environment task continuity when context or budget runs out. |
 | [Project promotion plan](project_promotion_plan.md) | Promotion assets and external-facing positioning. |
 | [Release promotion assets](release_promotion_assets.md) | Release announcement and demo assets. |
 | [Repository governance settings](repository_governance_settings.md) | Repository settings and governance checklist. |
@@ -64,5 +65,5 @@ The public docs are now split into three kinds of pages:
 The [improvement plans](improvements.md) collect focused follow-up work for
 client feedback, MCP result shapes, retrieval precision, context building,
 conversation grouping, memory quality, edge-case coverage, explicit save intent,
-Google OAuth connect UX, vector database evaluation, and Neo4j Aura graph
-memory.
+handoff memory, Google OAuth connect UX, vector database evaluation, and Neo4j
+Aura graph memory.
