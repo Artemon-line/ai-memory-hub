@@ -5,6 +5,7 @@ import logging
 import os
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 from uuid import UUID
 
 import pytest
@@ -91,15 +92,25 @@ def test_oauth_protected_resource_metadata_is_public_and_secret_free(
     assert root.status_code == 200, root.text
     assert mcp.status_code == 200, mcp.text
     assert authorization.status_code == 200, authorization.text
+    root_json = root.json()
+    mcp_json = mcp.json()
+    authorization_json = authorization.json()
     body = json.dumps(
-        {"root": root.json(), "mcp": mcp.json(), "authorization": authorization.json()}
+        {"root": root_json, "mcp": mcp_json, "authorization": authorization_json}
     )
-    assert "https://memory.example.com/mcp" in body
-    assert "https://auth.example.com" in body
-    assert "https://memory.example.com/oauth/authorize" in body
-    assert "https://memory.example.com/oauth/token" in body
-    assert "https://memory.example.com/oauth/register" in body
-    assert "code_challenge_methods_supported" in body
+    assert root_json["resource"] == "https://memory.example.com/mcp"
+    assert mcp_json["resource"] == "https://memory.example.com/mcp"
+    authorization_servers = root_json["authorization_servers"]
+    assert {urlparse(url).hostname for url in authorization_servers} == {"auth.example.com"}
+    assert authorization_json["issuer"] == "https://memory.example.com"
+    assert authorization_json["authorization_endpoint"] == (
+        "https://memory.example.com/oauth/authorize"
+    )
+    assert authorization_json["token_endpoint"] == "https://memory.example.com/oauth/token"
+    assert authorization_json["registration_endpoint"] == (
+        "https://memory.example.com/oauth/register"
+    )
+    assert authorization_json["code_challenge_methods_supported"] == ["S256"]
     assert "oauth-secret-value" not in body
 
 

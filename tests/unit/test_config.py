@@ -1,4 +1,6 @@
 import logging
+import os
+import stat
 from pathlib import Path
 
 import pytest
@@ -657,4 +659,6 @@ def test_bearer_token_auth_generates_token_hash_secret(
     secret_path = tmp_path / ".token_hash_secret"
     assert secret
     assert secret_path.read_text(encoding="utf-8").strip() == secret
+    if os.name == "posix":
+        assert stat.S_IMODE(secret_path.stat().st_mode) == stat.S_IRUSR | stat.S_IWUSR
     assert secret == ensure_token_hash_secret(config)

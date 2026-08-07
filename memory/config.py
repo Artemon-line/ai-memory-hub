@@ -4,6 +4,7 @@ import logging
 import os
 import re
 import secrets
+import stat
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -25,6 +26,7 @@ from memory.provider_models import (
 logger = logging.getLogger(__name__)
 
 
+_SECRET_FILE_MODE = stat.S_IRUSR | stat.S_IWUSR
 VECTOR_PROVIDER_VALUES = tuple(item.value for item in VectorProviderName)
 METADATA_PROVIDER_VALUES = tuple(item.value for item in MetadataProviderName)
 _VALID_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]*$")
@@ -1075,12 +1077,33 @@ def ensure_token_hash_secret(config: HubConfig) -> str | None:
     secret_path = Path(config.paths.data_dir) / ".token_hash_secret"
     secret_path.parent.mkdir(parents=True, exist_ok=True)
     if secret_path.exists():
-        secret = secret_path.read_text(encoding="utf-8").strip()
+        secret = _read_token_hash_secret_file(secret_path)
     else:
         secret = secrets.token_urlsafe(48)
-        secret_path.write_text(secret + "\n", encoding="utf-8")
+        _write_token_hash_secret_file(secret_path, secret)
     os.environ[env_name] = secret
     return secret
+
+
+def _read_token_hash_secret_file(secret_path: Path) -> str:
+    return secret_path.read_text(encoding="utf-8").strip()
+
+
+def _write_token_hash_secret_file(secret_path: Path, secret: str) -> None:
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    fd = os.open(secret_path, flags, _SECRET_FILE_MODE)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            fd = -1
+            handle.write(secret)
+            handle.write("\n")
+    finally:
+        if fd != -1:
+            os.close(fd)
+    try:
+        secret_path.chmod(_SECRET_FILE_MODE)
+    except OSError:
+        logger.debug("Could not tighten token hash secret file permissions")
 
 
 def _validate_absolute_uri(value: str, *, field_name: str) -> None:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 
@@ -21,6 +22,16 @@ ASSERT_BLOCK_PATTERN = re.compile(r"(?ms)^assert \{\n(?P<body>.*?)^\}")
 
 def _is_generated(path: Path) -> bool:
     return bool(IGNORED_PARTS.intersection(path.parts))
+
+
+def _iter_files(root: Path, *suffixes: str) -> list[Path]:
+    matches: list[Path] = []
+    for directory, dirnames, filenames in os.walk(root):
+        dirnames[:] = [name for name in dirnames if name not in IGNORED_PARTS]
+        for filename in filenames:
+            if filename.endswith(suffixes):
+                matches.append(Path(directory) / filename)
+    return matches
 
 
 def _load_yaml(path: Path) -> None:
@@ -57,11 +68,7 @@ def _validate_bru_asserts(path: Path) -> None:
 
 def main() -> None:
     root = Path("tests/bruno")
-    yaml_files = [
-        path
-        for path in list(root.rglob("*.yml")) + list(root.rglob("*.yaml"))
-        if not _is_generated(path)
-    ]
+    yaml_files = _iter_files(root, ".yml", ".yaml")
     yaml_files.extend(
         [
             Path(".github/workflows/bruno-integration.yml"),
@@ -69,10 +76,8 @@ def main() -> None:
             *Path("examples/storage_providers").rglob("*.yaml"),
         ]
     )
-    json_files = [path for path in root.rglob("*.json") if not _is_generated(path)]
-    bru_files = [
-        path for path in BRUNO_COLLECTION_ROOT.rglob("*.bru") if not _is_generated(path)
-    ]
+    json_files = _iter_files(root, ".json")
+    bru_files = _iter_files(BRUNO_COLLECTION_ROOT, ".bru")
 
     for path in yaml_files:
         _load_yaml(path)
