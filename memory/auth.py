@@ -142,18 +142,21 @@ class AuthMiddleware(BaseHTTPMiddleware):
         stored_context = await self._agent.authenticate_bearer_token_context(token)
         if _is_hub_issued_claim(claims, self._config) and stored_context is None:
             return None
-        if stored_context is not None:
-            scopes = stored_context.get("scopes", [])
-            if not isinstance(scopes, list | tuple | set | frozenset):
-                scopes = []
+        if _is_hub_issued_claim(claims, self._config):
+            if stored_context is None:
+                return None
+            stored_owner_id = stored_context.get("owner_id")
+            if not isinstance(stored_owner_id, str) or stored_owner_id != claims.owner_id:
+                return None
+            scopes = _context_scopes(stored_context) & claims.scopes
             return AuthContext(
-                owner_id=str(stored_context["owner_id"]),
+                owner_id=claims.owner_id,
                 token_id=(
                     str(stored_context["token_id"])
                     if stored_context.get("token_id") is not None
                     else claims.token_id
                 ),
-                scopes=frozenset(str(scope) for scope in scopes),
+                scopes=frozenset(scopes),
                 auth_mode="oauth_resource_server",
             )
         return AuthContext(
@@ -279,6 +282,13 @@ def _has_query_access_token(request: Request) -> bool:
 
 def _has_required_scopes(actual: frozenset[str], required: set[str]) -> bool:
     return not required or required.issubset(actual)
+
+
+def _context_scopes(context: dict[str, object]) -> frozenset[str]:
+    scopes = context.get("scopes", [])
+    if not isinstance(scopes, list | tuple | set | frozenset):
+        return frozenset()
+    return frozenset(str(scope) for scope in scopes if str(scope).strip())
 
 
 def _resource_metadata_url(config: HubConfig, path: str) -> str:
