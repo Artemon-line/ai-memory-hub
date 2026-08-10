@@ -387,9 +387,11 @@ class PostgresMetadataStore:
 
     def insert(self, conversation_json: dict[str, Any]) -> str:
         memory_id = self._validate_memory_id(conversation_json["id"])
+        project_id = self._ensure_payload_project(conversation_json)
         payload = json.dumps(conversation_json, separators=(",", ":"), ensure_ascii=False)
         with self._connect() as conn:
             with conn.cursor() as cur:
+                self._ensure_project_for_payload(cur, conversation_json)
                 cur.execute(
                     INSERT_CONVERSATION_SQL,
                     (
@@ -398,7 +400,7 @@ class PostgresMetadataStore:
                         str(conversation_json.get("timestamp", "")),
                         conversation_json.get("title"),
                         self._conversation_hash(conversation_json),
-                        self._project_id(conversation_json),
+                        project_id,
                         self._upstream_thread_id(conversation_json),
                         payload,
                     ),
@@ -875,11 +877,13 @@ class PostgresMetadataStore:
 
     def insert_new(self, conversation_json: dict[str, Any]) -> tuple[str, bool]:
         memory_id = self._validate_memory_id(conversation_json["id"])
+        project_id = self._ensure_payload_project(conversation_json)
         payload = json.dumps(conversation_json, separators=(",", ":"), ensure_ascii=False)
         conversation_hash = self._conversation_hash(conversation_json)
         try:
             with self._connect() as conn:
                 with conn.cursor() as cur:
+                    self._ensure_project_for_payload(cur, conversation_json)
                     cur.execute(
                         INSERT_NEW_CONVERSATION_SQL,
                         (
@@ -888,7 +892,7 @@ class PostgresMetadataStore:
                             str(conversation_json.get("timestamp", "")),
                             conversation_json.get("title"),
                             conversation_hash,
-                            self._project_id(conversation_json),
+                            project_id,
                             self._upstream_thread_id(conversation_json),
                             payload,
                         ),
@@ -1403,6 +1407,19 @@ class PostgresMetadataStore:
             value = metadata.get("project_id")
             return str(value) if value is not None else None
         return None
+
+    def _ensure_payload_project(self, conversation_json: dict[str, Any]) -> str:
+        project_id = self._project_id(conversation_json)
+        if project_id is not None:
+            return _validate_project_id(project_id)
+        owner_id = _owner_id_from_payload(conversation_json)
+        project_id = _default_project_id(owner_id) if owner_id else LOCAL_DEFAULT_PROJECT_ID
+        _stamp_project_id(conversation_json, project_id)
+        return project_id
+
+    def _ensure_project_for_payload(self, cur: Any, conversation_json: dict[str, Any]) -> None:
+        owner_id = _owner_id_from_payload(conversation_json)
+        self._ensure_default_project(cur, owner_id)
 
     def _upstream_thread_id(self, conversation_json: dict[str, Any]) -> str | None:
         metadata = conversation_json.get("metadata", {})

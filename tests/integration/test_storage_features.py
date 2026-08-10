@@ -22,7 +22,11 @@ from memory.backend.errors import (
     VectorDimensionError,
 )
 from memory.backend.log_safety import redact_secrets
-from memory.backend.metadata_store import SQLiteMetadataStore
+from memory.backend.metadata_store import (
+    LOCAL_DEFAULT_PROJECT_ID,
+    SQLiteMetadataStore,
+    _default_project_id,
+)
 from memory.backend.mongodb_metadata_store import MongoDBMetadataStore
 from memory.backend.postgres_metadata_store import PostgresMetadataStore
 from memory.backend.vector_store import (
@@ -3294,6 +3298,115 @@ class _UniqueViolationConnection:
 
     def cursor(self):
         return _UniqueViolationCursor()
+
+
+class _PostgresMetadataRecordingCursor:
+    def __init__(self, state: dict[str, Any]):
+        self.state = state
+        self._current: list[tuple[Any, ...]] = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def execute(self, query: str, params: object | None = None) -> None:
+        normalized = " ".join(query.split())
+        self.state["queries"].append(normalized)
+        self.state["params"].append(params)
+        if normalized.startswith("SELECT id FROM projects"):
+            self._current = []
+        else:
+            self._current = []
+
+    def fetchone(self):
+        if not self._current:
+            return None
+        return self._current.pop(0)
+
+    def fetchall(self):
+        rows = list(self._current)
+        self._current = []
+        return rows
+
+
+class _PostgresMetadataRecordingConnection:
+    def __init__(self, state: dict[str, Any]):
+        self.state = state
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def cursor(self):
+        return _PostgresMetadataRecordingCursor(self.state)
+
+
+def _recording_postgres_metadata_store(state: dict[str, Any]) -> PostgresMetadataStore:
+    store = PostgresMetadataStore.__new__(PostgresMetadataStore)
+    store._connect = lambda: _PostgresMetadataRecordingConnection(state)
+    return store
+
+
+def test_postgres_insert_stamps_missing_default_project() -> None:
+    state: dict[str, Any] = {"queries": [], "params": []}
+    store = _recording_postgres_metadata_store(state)
+    payload = {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "source": "manual",
+        "timestamp": "2026-01-01T00:00:00Z",
+        "messages": [{"role": "user", "text": "first", "hash": "sha256:" + ("1" * 64)}],
+        "metadata": {
+            "imported_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-01T00:00:00Z",
+            "conversation_hash": "sha256:" + ("a" * 64),
+            "owner_id": "owner-a",
+        },
+    }
+
+    assert store.insert(payload) == payload["id"]
+
+    expected_project = _default_project_id("owner-a")
+    assert payload["metadata"]["project_id"] == expected_project
+    insert_params = next(
+        params
+        for query, params in zip(state["queries"], state["params"])
+        if query.startswith("INSERT INTO conversations")
+    )
+    assert insert_params[5] == expected_project
+    stored_payload = json.loads(str(insert_params[7]))
+    assert stored_payload["metadata"]["project_id"] == expected_project
+
+
+def test_postgres_insert_new_stamps_missing_local_default_project() -> None:
+    state: dict[str, Any] = {"queries": [], "params": []}
+    store = _recording_postgres_metadata_store(state)
+    payload = {
+        "id": "22222222-2222-4222-8222-222222222222",
+        "source": "manual",
+        "timestamp": "2026-01-01T00:00:00Z",
+        "messages": [{"role": "user", "text": "first", "hash": "sha256:" + ("1" * 64)}],
+        "metadata": {
+            "imported_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-01T00:00:00Z",
+            "conversation_hash": "sha256:" + ("a" * 64),
+        },
+    }
+
+    assert store.insert_new(payload) == (payload["id"], True)
+
+    assert payload["metadata"]["project_id"] == LOCAL_DEFAULT_PROJECT_ID
+    insert_params = next(
+        params
+        for query, params in zip(state["queries"], state["params"])
+        if query.startswith("INSERT INTO conversations")
+    )
+    assert insert_params[5] == LOCAL_DEFAULT_PROJECT_ID
+    stored_payload = json.loads(str(insert_params[7]))
+    assert stored_payload["metadata"]["project_id"] == LOCAL_DEFAULT_PROJECT_ID
 
 
 def test_postgres_insert_new_deduplicates_same_id_same_hash() -> None:
