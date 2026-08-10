@@ -5,6 +5,10 @@ import tomllib
 from pathlib import Path
 
 PINNED_UV_IMAGE = "FROM ghcr.io/astral-sh/uv:0.11.32-python3.14-trixie-slim"
+PINNED_PGVECTOR_IMAGE = (
+    "pgvector/pgvector:pg16"
+    "@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b"
+)
 
 
 def test_containerfile_installs_project_after_copying_package() -> None:
@@ -57,6 +61,8 @@ def test_pgvector_example_uses_slim_containerfile() -> None:
     )
 
     assert "dockerfile: examples/storage_providers/postgres-pgvector/Containerfile" in compose
+    assert f"image: {PINNED_PGVECTOR_IMAGE}" in compose
+    assert "image: pgvector/pgvector:pg16\n" not in compose
     assert "http://127.0.0.1:8000/ready" in compose
     assert PINNED_UV_IMAGE in containerfile
     assert "python -m pip install --no-cache-dir uv" not in containerfile
@@ -79,6 +85,17 @@ def test_pgvector_example_uses_slim_containerfile() -> None:
         "weaviate",
     ):
         assert f"--extra {extra}" not in containerfile
+
+
+def test_postgres_service_images_are_digest_pinned() -> None:
+    for workflow_path in (
+        Path(".github/workflows/pipeline.yml"),
+        Path(".github/workflows/bruno-integration.yml"),
+    ):
+        workflow = workflow_path.read_text(encoding="utf-8")
+
+        assert f"image: {PINNED_PGVECTOR_IMAGE}" in workflow
+        assert "image: pgvector/pgvector:pg16\n" not in workflow
 
 
 def test_google_oauth_example_uses_uv_base_image() -> None:

@@ -28,11 +28,51 @@ def test_manual_paste_importer_returns_unified_payload() -> None:
     ]
 
 
+@pytest.mark.parametrize("speaker", ["User", "You", "Human"])
+def test_manual_paste_importer_normalizes_user_aliases(speaker: str) -> None:
+    payload = ManualPasteImporter().import_text(f"{speaker}: Hello\nAssistant: Hi")[0]
+
+    assert [message["role"] for message in payload["messages"]] == ["user", "assistant"]
+
+
 @pytest.mark.parametrize("speaker", ["Assistant", "AI", "Bot", "Claude", "Gemini", "ChatGPT"])
 def test_manual_paste_importer_normalizes_assistant_aliases(speaker: str) -> None:
     payload = ManualPasteImporter().import_text(f"Human: Hello\n{speaker}: Hi")[0]
 
     assert [message["role"] for message in payload["messages"]] == ["user", "assistant"]
+
+
+def test_manual_paste_importer_preserves_multiline_content() -> None:
+    payload = ManualPasteImporter().import_text(
+        "\n"
+        "user: show this snippet\n"
+        "```python\n"
+        "print('Assistant: still code')\n"
+        "```\n"
+        "\n"
+        "chatgpt:Sure\n"
+        "Note: unsupported labels stay in the message body"
+    )[0]
+
+    assert payload == {
+        "source": "manual-paste",
+        "messages": [
+            {
+                "role": "user",
+                "text": (
+                    "show this snippet\n"
+                    "```python\n"
+                    "print('Assistant: still code')\n"
+                    "```\n"
+                ),
+            },
+            {
+                "role": "assistant",
+                "text": "Sure\nNote: unsupported labels stay in the message body",
+            },
+        ],
+        "metadata": {"importer": "manual"},
+    }
 
 
 @pytest.mark.parametrize(
@@ -41,11 +81,22 @@ def test_manual_paste_importer_normalizes_assistant_aliases(speaker: str) -> Non
         ("unlabelled text", "first speaker label"),
         ("", "supported speaker labels"),
         ("User:\nAssistant: response", "empty message"),
+        ("User:   \nAssistant: response", "empty message"),
     ],
 )
 def test_manual_paste_importer_rejects_ambiguous_input(text: str, message: str) -> None:
     with pytest.raises(ValueError, match=message):
         ManualPasteImporter().import_text(text)
+
+
+def test_manual_paste_importer_rejects_non_text_input() -> None:
+    with pytest.raises(ValueError, match="must be text"):
+        ManualPasteImporter().import_text(b"User: hello")  # type: ignore[arg-type]
+
+
+def test_manual_paste_importer_rejects_oversized_input() -> None:
+    with pytest.raises(ValueError, match="exceeds 5000000 bytes"):
+        ManualPasteImporter().import_text(f"User: {'x' * 5_000_000}")
 
 
 def test_importer_registry_exposes_manual_importer() -> None:
@@ -56,4 +107,3 @@ def test_importer_registry_exposes_manual_importer() -> None:
 def test_importer_registry_rejects_unknown_importer() -> None:
     with pytest.raises(ValueError, match="supported importers: manual"):
         get_importer("unknown")
-
