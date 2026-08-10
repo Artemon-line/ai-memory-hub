@@ -1,4 +1,4 @@
-FROM ghcr.io/astral-sh/uv:0.10.3-python3.14-trixie-slim
+FROM ghcr.io/astral-sh/uv:0.11.32-python3.14-trixie-slim
 
 ARG VERSION=0.1.0
 ARG REVISION=unknown

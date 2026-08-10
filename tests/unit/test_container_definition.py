@@ -4,7 +4,7 @@ import re
 import tomllib
 from pathlib import Path
 
-PINNED_UV_IMAGE = "FROM ghcr.io/astral-sh/uv:0.10.3-python3.14-trixie-slim"
+PINNED_UV_IMAGE = "FROM ghcr.io/astral-sh/uv:0.11.32-python3.14-trixie-slim"
 
 
 def test_containerfile_installs_project_after_copying_package() -> None:
