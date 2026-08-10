@@ -1590,18 +1590,63 @@ def test_schema_file_from_config_is_used(tmp_path: Path) -> None:
     }
     schema_path.write_text(json.dumps(schema), encoding="utf-8")
 
-    try:
-        mvp_ingestion.build_runtime(
-            {
-                "providers": {"embeddings": "local", "vector_db": "in_memory"},
-                "paths": {"data_dir": str(tmp_path / "data")},
-                "schema": {"file": str(schema_path)},
-            }
-        )
-        with pytest.raises(jsonschema.ValidationError):
-            mvp_ingestion.validate_json(_valid_conversation())
-    finally:
-        ingestion_validate.set_schema_path(None)
+    mvp_ingestion.configure_runtime(
+        config={
+            "providers": {"embeddings": "local", "vector_db": "in_memory"},
+            "paths": {"data_dir": str(tmp_path / "data")},
+            "schema": {"file": str(schema_path)},
+        }
+    )
+
+    with pytest.raises(jsonschema.ValidationError):
+        mvp_ingestion.validate_json(_valid_conversation())
+
+
+def test_custom_schema_runtime_does_not_leak_to_default_runtime(tmp_path: Path) -> None:
+    schema_path = tmp_path / "conversation.custom.schema.json"
+    schema = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+            "id": {"type": "string"},
+            "source": {"type": "string"},
+            "timestamp": {"type": "string"},
+            "messages": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "role": {"type": "string"},
+                        "text": {"type": "string"},
+                        "hash": {"type": "string"},
+                    },
+                    "required": ["role", "text", "hash"],
+                },
+            },
+            "metadata": {
+                "type": "object",
+                "required": ["imported_at", "updated_at", "conversation_hash"],
+            },
+            "must_exist": {"type": "string"},
+        },
+        "required": ["id", "source", "timestamp", "messages", "metadata", "must_exist"],
+        "additionalProperties": True,
+    }
+    schema_path.write_text(json.dumps(schema), encoding="utf-8")
+
+    mvp_ingestion.configure_runtime(
+        config={
+            "providers": {"embeddings": "local", "vector_db": "in_memory"},
+            "paths": {"data_dir": str(tmp_path / "custom-data")},
+            "schema": {"file": str(schema_path)},
+        }
+    )
+    with pytest.raises(jsonschema.ValidationError):
+        mvp_ingestion.validate_json(_valid_conversation())
+
+    _configure_stubs()
+
+    mvp_ingestion.validate_json(mvp_ingestion.normalize_conversation_json(_valid_conversation()))
 
 
 def test_schema_missing_code_required_fields_fails_startup(tmp_path: Path) -> None:
