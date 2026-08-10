@@ -17,7 +17,7 @@ from memory.backend.log_safety import redact_secrets
 from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig
 from memory.ingestion.base_agent import BaseIngestionAgent
-from memory.ingestion.mvp_ingestion import normalize_conversation_json
+from memory.ingestion.mvp_ingestion import normalize_conversation_json, validate_json
 from memory.ingestion.save_intent import (
     InsertDisposition,
     SaveIntentError,
@@ -28,7 +28,6 @@ from memory.ingestion.thread_models import (
     result_mode_error_message,
     result_mode_values,
 )
-from memory.ingestion.validate import validate_conversation
 from memory.observability.metrics import metrics
 from memory.observability.tracing import start_observability_span
 
@@ -678,7 +677,7 @@ def build_tool_handlers(
 
         try:
             normalized = normalize_conversation_json(conversation_json, source="mcp")
-            validate_conversation(normalized)
+            validate_json(normalized)
         except jsonschema.ValidationError as exc:
             return _envelope(
                 status="error",
@@ -745,7 +744,7 @@ def build_tool_handlers(
                 config.memory.insert_policy if config is not None else "permissive"
             )
             disposition = validate_insert_save_intent(normalized, insert_policy=insert_policy)
-            validate_conversation(normalized)
+            validate_json(normalized)
         except jsonschema.ValidationError as exc:
             return _envelope(
                 status="error",

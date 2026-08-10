@@ -42,6 +42,17 @@ def _client(tmp_path: Path) -> TestClient:
     return TestClient(create_app(config=_config(tmp_path)))
 
 
+def _custom_schema_client(tmp_path: Path) -> TestClient:
+    schema_path = tmp_path / "conversation.custom.schema.json"
+    schema = json.loads(Path("memory/schema/conversation.schema.json").read_text(encoding="utf-8"))
+    schema["properties"]["must_exist"] = {"type": "string"}
+    schema["required"] = [*schema["required"], "must_exist"]
+    schema_path.write_text(json.dumps(schema), encoding="utf-8")
+    config = _config(tmp_path)
+    config["schema"] = {"file": str(schema_path)}
+    return TestClient(create_app(config=config))
+
+
 def _strict_save_intent_client(tmp_path: Path) -> TestClient:
     return TestClient(create_app(config=_config(tmp_path, insert_policy="require_save_intent")))
 
@@ -420,6 +431,35 @@ def test_api_and_mcp_validation_errors_do_not_echo_sensitive_payload_text(
     assert mcp_insert["status"] == "error"
     assert mcp_insert["error_code"] == "invalid_input"
     assert secret not in json.dumps(mcp_insert)
+
+
+def test_api_and_mcp_use_configured_conversation_schema(tmp_path: Path) -> None:
+    payload = _conversation(text="Custom schema runtime phrase.")
+
+    with _custom_schema_client(tmp_path) as client:
+        api_insert = client.post("/memory/insert", json=payload)
+        headers = _initialize_mcp(client)
+        mcp_validate = _call_tool(
+            client,
+            headers,
+            request_id=2,
+            name="memory_validate",
+            arguments={"conversation_json": payload},
+        )
+        mcp_insert = _call_tool(
+            client,
+            headers,
+            request_id=3,
+            name="memory_insert",
+            arguments={"conversation_json": payload},
+        )
+
+    assert api_insert.status_code == 400
+    assert "must_exist" in api_insert.text
+    for result in (mcp_validate, mcp_insert):
+        assert result["status"] == "error"
+        assert result["error_code"] == "invalid_input"
+        assert "must_exist" in result["error_message"]
 
 
 def test_api_and_mcp_insert_remain_permissive_by_default(tmp_path: Path) -> None:

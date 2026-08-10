@@ -75,8 +75,8 @@ from memory.ingestion.tokenizer import (
     truncate_to_tokens,
 )
 from memory.ingestion.validate import (
+    SCHEMA_PATH,
     load_schema,
-    set_schema_path,
     validate_conversation,
     validate_schema_compatibility,
 )
@@ -182,6 +182,8 @@ class RuntimeDependencies:
     metadata_store: Any
     vector_store: Any
     health_state: dict[str, Any]
+    schema_path: Path = SCHEMA_PATH
+    conversation_schema: dict[str, Any] | None = None
     allow_trusted_appends: bool = False
     tokenizer_enabled: bool = False
     tokenizer_encoding: str = "cl100k_base"
@@ -450,12 +452,9 @@ def build_runtime(
         parse_config(config) if isinstance(config, dict) else (config or load_config())
     )
     ensure_token_hash_secret(cfg)
-    set_schema_path(cfg.schema_config.file)
-    try:
-        validate_schema_compatibility(load_schema())
-    except Exception:
-        set_schema_path(None)
-        raise
+    schema_path = Path(cfg.schema_config.file) if cfg.schema_config.file else SCHEMA_PATH
+    conversation_schema = load_schema(schema_path)
+    validate_schema_compatibility(conversation_schema)
     data_dir = Path(cfg.paths.data_dir)
     try:
         if cfg.providers.metadata_db == "postgres":
@@ -582,6 +581,8 @@ def build_runtime(
         metadata_store=metadata_store,
         vector_store=vector_store,
         health_state=health_state,
+        schema_path=schema_path,
+        conversation_schema=conversation_schema,
         allow_trusted_appends=cfg.storage.allow_trusted_appends,
         tokenizer_enabled=cfg.tokenizer.enabled,
         tokenizer_encoding=cfg.tokenizer.encoding,
@@ -763,7 +764,9 @@ def _runtime() -> RuntimeDependencies:
 
 
 def validate_json(obj: dict[str, Any]) -> None:
-    validate_conversation(obj)
+    runtime = _runtime()
+    schema = runtime.conversation_schema or load_schema(runtime.schema_path)
+    validate_conversation(obj, schema=schema)
 
 
 def infer_topics(messages: list[dict[str, Any]]) -> list[str]:

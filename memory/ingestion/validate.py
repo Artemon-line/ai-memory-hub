@@ -32,9 +32,10 @@ def _is_uuid(value: object) -> bool:
     return True
 
 
-def load_schema() -> dict[str, Any]:
+def load_schema(path: str | Path | None = None) -> dict[str, Any]:
     """Load the conversation JSON schema from disk."""
-    with _ACTIVE_SCHEMA_PATH.open("r", encoding="utf-8") as handle:
+    schema_path = _ACTIVE_SCHEMA_PATH if path is None else Path(path)
+    with schema_path.open("r", encoding="utf-8") as handle:
         return json.load(handle)
 
 
@@ -99,15 +100,15 @@ def set_schema_path(path: str | Path | None) -> None:
     _ACTIVE_SCHEMA_PATH = Path(path)
 
 
-def validate_conversation(payload: dict[str, Any]) -> None:
+def validate_conversation(payload: dict[str, Any], schema: dict[str, Any] | None = None) -> None:
     """Validate a conversation payload against the JSON schema.
 
     Raises jsonschema.ValidationError if invalid.
     """
-    schema = load_schema()
-    jsonschema.Draft202012Validator.check_schema(schema)
+    active_schema = load_schema() if schema is None else schema
+    jsonschema.Draft202012Validator.check_schema(active_schema)
     validator = jsonschema.Draft202012Validator(
-        schema,
+        active_schema,
         format_checker=_FORMAT_CHECKER,
     )
     validator.validate(payload)
