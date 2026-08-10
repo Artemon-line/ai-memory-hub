@@ -686,6 +686,9 @@ class PassportProviderConfig(BaseModel):
     authorization_url: str = ""
     token_url: str = ""
     issuer: str = ""
+    discovery_url: str = ""
+    jwks_url: str = ""
+    oidc_algorithms: list[str] = Field(default_factory=lambda: ["RS256"])
     scopes: list[str] = Field(default_factory=lambda: ["openid", "email", "profile"])
     allowed_domains: list[str] = Field(default_factory=list)
     allowed_emails: list[str] = Field(default_factory=list)
@@ -698,13 +701,25 @@ class PassportProviderConfig(BaseModel):
             _validate_absolute_uri(normalized, field_name="api.connect.passport.callback_url")
         return normalized
 
-    @field_validator("authorization_url", "token_url", "issuer")
+    @field_validator("authorization_url", "token_url", "issuer", "discovery_url", "jwks_url")
     @classmethod
     def validate_provider_urls(cls, value: str) -> str:
         normalized = value.strip()
         if normalized:
             _validate_absolute_uri(normalized, field_name="api.connect.passport provider URL")
         return normalized.rstrip("/")
+
+    @field_validator("oidc_algorithms")
+    @classmethod
+    def normalize_oidc_algorithms(cls, values: list[str]) -> list[str]:
+        normalized: list[str] = []
+        for value in values:
+            algorithm = str(value).strip().upper()
+            if algorithm and algorithm not in normalized:
+                normalized.append(algorithm)
+        if not normalized:
+            raise ValueError("api.connect.passport provider oidc_algorithms must not be empty")
+        return normalized
 
     @field_validator("scopes")
     @classmethod
@@ -734,6 +749,7 @@ def _passport_provider_defaults(provider: str) -> PassportProviderConfig:
             authorization_url="https://accounts.google.com/o/oauth2/v2/auth",
             token_url="https://oauth2.googleapis.com/token",
             issuer="https://accounts.google.com",
+            discovery_url="https://accounts.google.com/.well-known/openid-configuration",
         )
     if provider == "meta":
         return PassportProviderConfig(
@@ -794,6 +810,10 @@ class PassportConfig(BaseModel):
                 configured.token_url = defaults.token_url
             if not configured.issuer:
                 configured.issuer = defaults.issuer
+            if not configured.discovery_url:
+                configured.discovery_url = defaults.discovery_url
+            if not configured.jwks_url:
+                configured.jwks_url = defaults.jwks_url
         return self
 
 
@@ -821,6 +841,10 @@ class ConnectUIConfig(BaseModel):
                 self.google.token_url = defaults.token_url
             if not self.google.issuer:
                 self.google.issuer = defaults.issuer
+            if not self.google.discovery_url:
+                self.google.discovery_url = defaults.discovery_url
+            if not self.google.jwks_url:
+                self.google.jwks_url = defaults.jwks_url
             self.passport.google = self.google
             if "google" not in self.passport.providers:
                 self.passport.providers.insert(0, "google")

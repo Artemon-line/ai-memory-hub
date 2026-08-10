@@ -24,48 +24,48 @@ The Connect UI currently:
 
 Known gaps:
 
-- Google ID tokens are decoded locally but not verified against Google signing
-  keys.
-- The returned ID token `nonce` is not compared with the nonce saved at login
-  start.
+- Google ID tokens are verified against provider JWKS for OIDC-configured
+  providers.
+- The returned ID token `nonce` is compared with the nonce saved at login start.
 - Provider login does not send PKCE parameters.
-- Provider metadata and JWKS behavior are not modeled explicitly.
-- Tests cover wrong audience and expired claims through injected test claims,
-  but do not prove real OIDC signature, key, issuer, nonce, or PKCE behavior.
+- Provider metadata and JWKS behavior are modeled for OIDC-configured providers.
+- Tests prove valid signed ID-token handling, rejected unsigned tokens, nonce
+  mismatch, replayed state, expired state, and bounded state storage. Broader
+  provider metadata/JWKS failure matrix and provider PKCE coverage remain.
 
 ## Phase 1: OIDC Provider Metadata
 
-- [ ] Add provider config fields for OIDC discovery:
+- [x] Add provider config fields for OIDC discovery:
       `issuer`, `discovery_url`, and optional `jwks_url`.
-- [ ] Default Google to `https://accounts.google.com` and
+- [x] Default Google to `https://accounts.google.com` and
       `https://accounts.google.com/.well-known/openid-configuration`.
-- [ ] Load provider metadata through the `oauth` extra using HTTPX.
-- [ ] Cache discovered metadata and JWKS in memory with conservative expiry.
-- [ ] Reject insecure metadata URLs outside loopback test fixtures.
+- [x] Load provider metadata through the `oauth` extra using HTTPX.
+- [x] Cache discovered metadata and JWKS in memory with conservative expiry.
+- [x] Reject insecure metadata URLs outside loopback test fixtures.
 - [ ] Add tests for metadata discovery success, missing JWKS URI, wrong issuer,
       HTTP failure, and cache reuse.
 
 ## Phase 2: ID Token Verification
 
-- [ ] Replace local base64-only ID token decoding with JOSE verification.
-- [ ] Verify the ID token signature against the provider JWKS.
-- [ ] Require an allowed signing algorithm, initially `RS256` for Google.
-- [ ] Validate `iss`, `aud`, `exp`, `iat`, and `sub` after signature
+- [x] Replace local base64-only ID token decoding with JOSE verification.
+- [x] Verify the ID token signature against the provider JWKS.
+- [x] Require an allowed signing algorithm, initially `RS256` for Google.
+- [x] Validate `iss`, `aud`, `exp`, `iat`, and `sub` after signature
       verification.
-- [ ] Add small clock-skew tolerance for time claims.
-- [ ] Continue enforcing hosted-domain and email allowlists after token
+- [x] Add small clock-skew tolerance for time claims.
+- [x] Continue enforcing hosted-domain and email allowlists after token
       verification.
-- [ ] Return a 403 for invalid identity tokens without leaking raw token details.
+- [x] Return a 403 for invalid identity tokens without leaking raw token details.
 - [ ] Add tests for valid signed token, wrong key, wrong algorithm, wrong
       issuer, wrong audience, expired token, future-issued token, and missing
       subject.
 
 ## Phase 3: Nonce Binding
 
-- [ ] Store the generated provider `nonce` with the OAuth state.
-- [ ] Require the verified ID token `nonce` to match the stored nonce.
-- [ ] Treat missing nonce as invalid for providers configured as OIDC.
-- [ ] Consume the state record once, including on failed callback validation.
+- [x] Store the generated provider `nonce` with the OAuth state.
+- [x] Require the verified ID token `nonce` to match the stored nonce.
+- [x] Treat missing nonce as invalid for providers configured as OIDC.
+- [x] Consume the state record once, including on failed callback validation.
 - [ ] Add tests for matching nonce, missing nonce, wrong nonce, replayed state,
       and expired state.
 
@@ -82,7 +82,7 @@ Known gaps:
 
 ## Phase 5: Dependency And Docs Cleanup
 
-- [ ] Make the `oauth` extra description mention HTTPX plus JOSE/OIDC token
+- [x] Make the `oauth` extra description mention HTTPX plus JOSE/OIDC token
       verification dependencies, not only Authlib.
 - [ ] Remove or use any stale Authlib client helper code so the dependency story
       matches implementation.
