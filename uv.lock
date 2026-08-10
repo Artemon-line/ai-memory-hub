@@ -40,6 +40,7 @@ oauth = [
     { name = "authlib" },
     { name = "cryptography" },
     { name = "httpx" },
+    { name = "joserfc" },
 ]
 observability = [
     { name = "opentelemetry-api" },
@@ -100,6 +101,7 @@ requires-dist = [
     { name = "httpx", marker = "extra == 'oauth'", specifier = ">=0.28.1" },
     { name = "itsdangerous", specifier = ">=2.2.0" },
     { name = "jinja2", specifier = ">=3.1.6" },
+    { name = "joserfc", marker = "extra == 'oauth'", specifier = ">=1.6.8" },
     { name = "jsonschema", specifier = ">=4.25.1" },
     { name = "lancedb", specifier = ">=0.34.0" },
     { name = "mcp", specifier = ">=1.28.1" },

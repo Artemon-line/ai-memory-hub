@@ -91,7 +91,7 @@ implemented. Treat them as disabled placeholders.
 
 | Provider | Status | Notes |
 | --- | --- | --- |
-| Google | Supported | Uses Authlib through the `oauth` extra. |
+| Google | Supported | Verifies OIDC ID tokens with JOSE/JWKS through the `oauth` extra. |
 | Meta | Placeholder | Config slot exists; keep disabled. |
 | X | Placeholder | Config slot exists; keep disabled. |
 
@@ -114,8 +114,9 @@ For package installs:
 pip install "ai-memory-hub[oauth]"
 ```
 
-The `oauth` extra installs Authlib and HTTPX. Without it, the Connect UI can
-render, but live OAuth sign-in returns a configuration error.
+The `oauth` extra installs HTTPX and JOSE/OIDC token verification dependencies.
+Without it, the Connect UI can render, but live OAuth sign-in returns a
+configuration error.
 
 ## Google Setup
 

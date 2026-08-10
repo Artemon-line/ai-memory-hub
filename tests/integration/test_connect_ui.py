@@ -9,6 +9,8 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from fastapi.testclient import TestClient
+from joserfc import jwt
+from joserfc.jwk import RSAKey
 from starlette.requests import Request
 
 from memory.api.connect_service import client_snippet_models, mcp_url_for_config
@@ -93,7 +95,6 @@ def _client(
 
 
 async def _google_exchange(**kwargs):
-    _ = kwargs
     return {
         "iss": "https://accounts.google.com",
         "aud": "google-client-id",
@@ -101,12 +102,13 @@ async def _google_exchange(**kwargs):
         "email": "Alice@Example.com",
         "name": "Alice Example",
         "hd": "example.com",
+        "nonce": str(kwargs.get("nonce") or ""),
         "exp": int(time.time()) + 300,
+        "iat": int(time.time()),
     }
 
 
 async def _google_exchange_b(**kwargs):
-    _ = kwargs
     return {
         "iss": "https://accounts.google.com",
         "aud": "google-client-id",
@@ -114,7 +116,9 @@ async def _google_exchange_b(**kwargs):
         "email": "bob@example.com",
         "name": "Bob Example",
         "hd": "example.com",
+        "nonce": str(kwargs.get("nonce") or ""),
         "exp": int(time.time()) + 300,
+        "iat": int(time.time()),
     }
 
 
@@ -128,6 +132,83 @@ async def _meta_exchange(**kwargs):
         "name": "Meta User",
         "exp": int(time.time()) + 300,
     }
+
+
+class _OAuthHTTPResponse:
+    def __init__(self, payload: dict[str, object], *, status_code: int = 200) -> None:
+        self._payload = payload
+        self.status_code = status_code
+
+    def json(self) -> dict[str, object]:
+        return self._payload
+
+
+class _OAuthHTTPClient:
+    def __init__(
+        self, *, id_token: str, jwks: dict[str, object] | None = None, post_status: int = 200
+    ) -> None:
+        self.id_token = id_token
+        self.jwks = jwks or {"keys": []}
+        self.post_status = post_status
+
+    async def __aenter__(self) -> "_OAuthHTTPClient":
+        return self
+
+    async def __aexit__(self, *_args: object) -> None:
+        return None
+
+    async def post(
+        self, _url: str, *, data: dict[str, object], headers: dict[str, str]
+    ) -> _OAuthHTTPResponse:
+        _ = data, headers
+        return _OAuthHTTPResponse({"id_token": self.id_token}, status_code=self.post_status)
+
+    async def get(self, url: str, *, headers: dict[str, str]) -> _OAuthHTTPResponse:
+        _ = headers
+        if url == "https://accounts.google.com/.well-known/openid-configuration":
+            return _OAuthHTTPResponse(
+                {
+                    "issuer": "https://accounts.google.com",
+                    "jwks_uri": "https://accounts.google.com/oauth2/v3/certs",
+                }
+            )
+        if url == "https://accounts.google.com/oauth2/v3/certs":
+            return _OAuthHTTPResponse(self.jwks)
+        return _OAuthHTTPResponse({}, status_code=404)
+
+
+def _disable_google_exchange_override(client: TestClient) -> None:
+    client.app.state._state.pop("google_oauth_exchange", None)
+
+
+def _install_oidc_httpx(monkeypatch, *, id_token: str, jwks: dict[str, object]) -> None:
+    import httpx
+
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda *args, **kwargs: _OAuthHTTPClient(id_token=id_token, jwks=jwks),
+    )
+
+
+def _signed_google_id_token(
+    key: RSAKey, *, nonce: str, claims: dict[str, object] | None = None
+) -> str:
+    now = int(time.time())
+    payload = {
+        "iss": "https://accounts.google.com",
+        "aud": "google-client-id",
+        "sub": "google-subject-a",
+        "email": "Alice@Example.com",
+        "name": "Alice Example",
+        "hd": "example.com",
+        "nonce": nonce,
+        "exp": now + 300,
+        "iat": now,
+    }
+    if claims:
+        payload.update(claims)
+    return jwt.encode({"alg": "RS256", "kid": "google-key-a"}, payload, key)
 
 
 def _pkce_challenge(verifier: str) -> str:
@@ -564,6 +645,86 @@ def test_google_callback_rejects_wrong_audience_and_expired_token(tmp_path, monk
 
     assert wrong_response.status_code == 403
     assert expired_response.status_code == 403
+
+
+def test_google_callback_verifies_signed_id_token_and_matching_nonce(
+    tmp_path, monkeypatch
+) -> None:
+    client = _client(tmp_path, monkeypatch, allowed_domains=["example.com"])
+    _disable_google_exchange_override(client)
+    key = RSAKey.generate_key(2048, parameters={"kid": "google-key-a", "alg": "RS256"})
+    start = client.get("/auth/google", follow_redirects=False)
+    redirect = urlparse(start.headers["location"])
+    params = parse_qs(redirect.query)
+    id_token = _signed_google_id_token(key, nonce=params["nonce"][0])
+    _install_oidc_httpx(
+        monkeypatch,
+        id_token=id_token,
+        jwks={"keys": [key.as_dict(private=False)]},
+    )
+
+    callback = client.get(f"/auth/google/callback?code=fake-code&state={params['state'][0]}")
+
+    assert start.status_code == 303
+    assert callback.status_code == 200
+
+
+def test_google_callback_rejects_unsigned_id_token(tmp_path, monkeypatch) -> None:
+    client = _client(tmp_path, monkeypatch)
+    _disable_google_exchange_override(client)
+    key = RSAKey.generate_key(2048, parameters={"kid": "google-key-a", "alg": "RS256"})
+    start = client.get("/auth/google", follow_redirects=False)
+    state = parse_qs(urlparse(start.headers["location"]).query)["state"][0]
+    _install_oidc_httpx(
+        monkeypatch,
+        id_token="not-a-signed-token",
+        jwks={"keys": [key.as_dict(private=False)]},
+    )
+
+    response = client.get(f"/auth/google/callback?code=fake-code&state={state}")
+
+    assert response.status_code == 403
+
+
+def test_google_callback_rejects_wrong_nonce_and_replayed_state(tmp_path, monkeypatch) -> None:
+    client = _client(tmp_path, monkeypatch)
+    _disable_google_exchange_override(client)
+    key = RSAKey.generate_key(2048, parameters={"kid": "google-key-a", "alg": "RS256"})
+    start = client.get("/auth/google", follow_redirects=False)
+    state = parse_qs(urlparse(start.headers["location"]).query)["state"][0]
+    id_token = _signed_google_id_token(key, nonce="attacker-nonce")
+    _install_oidc_httpx(
+        monkeypatch,
+        id_token=id_token,
+        jwks={"keys": [key.as_dict(private=False)]},
+    )
+
+    wrong_nonce = client.get(f"/auth/google/callback?code=fake-code&state={state}")
+    replay = client.get(f"/auth/google/callback?code=fake-code&state={state}")
+
+    assert wrong_nonce.status_code == 403
+    assert replay.status_code == 400
+
+
+def test_google_callback_rejects_expired_state(tmp_path, monkeypatch) -> None:
+    client = _client(tmp_path, monkeypatch)
+    start = client.get("/auth/google", follow_redirects=False)
+    state = parse_qs(urlparse(start.headers["location"]).query)["state"][0]
+    client.app.state.oauth_provider_states[state]["created_at"] = int(time.time()) - 601
+
+    response = client.get(f"/auth/google/callback?code=fake-code&state={state}")
+
+    assert response.status_code == 400
+
+
+def test_google_oauth_state_store_is_capped(tmp_path, monkeypatch) -> None:
+    client = _client(tmp_path, monkeypatch)
+
+    for _ in range(140):
+        response = client.get("/auth/google", follow_redirects=False)
+        assert response.status_code == 303
+
+    assert len(client.app.state.oauth_provider_states) <= 128
 
 
 def test_oauth_authorization_code_is_single_use(tmp_path, monkeypatch) -> None:
