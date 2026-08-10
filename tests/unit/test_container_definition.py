@@ -185,22 +185,54 @@ def test_container_smoke_retains_stopped_container_for_logs() -> None:
     assert "TIKTOKEN_CACHE_DIR" not in workflow
 
 
-def test_supply_chain_workflow_scans_without_blocking_prs() -> None:
+def test_supply_chain_workflow_blocks_high_and_critical_vulnerabilities() -> None:
     workflow = Path(".github/workflows/supply-chain.yml").read_text(encoding="utf-8")
 
     assert "aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0" in workflow
+    report_start = workflow.index("Write Trivy image scan report")
+    sbom_start = workflow.index("Generate CycloneDX SBOM")
+    upload_start = workflow.index("Upload supply-chain artifacts")
+    scan_start = workflow.index("Run Trivy image scan")
+    scan_block = workflow[scan_start:]
+    assert report_start < sbom_start < upload_start < scan_start
+    assert "severity: CRITICAL,HIGH" in scan_block
+    assert "exit-code: \"1\"" in scan_block
     assert "exit-code: \"0\"" in workflow
     assert "format: cyclonedx" in workflow
     assert "ai-memory-hub.cdx.json" in workflow
     assert "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7" in workflow
 
 
-def test_dependency_review_workflow_reports_in_warning_mode() -> None:
+def test_dependency_review_workflow_blocks_disallowed_dependency_changes() -> None:
     workflow = Path(".github/workflows/dependency-review.yml").read_text(encoding="utf-8")
 
     assert "actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0" in workflow
-    assert "warn-only: true" in workflow
+    assert "warn-only: false" in workflow
     assert "vulnerability-check: true" in workflow
+    assert "license-check: true" in workflow
+
+
+def test_storage_provider_live_jobs_wait_for_services() -> None:
+    workflow = Path(".github/workflows/storage-providers.yml").read_text(encoding="utf-8")
+
+    mongodb_wait = workflow.index("Wait for MongoDB")
+    mongodb_test = workflow.index("Run MongoDB live test")
+    assert mongodb_wait < mongodb_test
+    assert "MongoClient('mongodb://127.0.0.1:27017'" in workflow
+    assert ".admin.command('ping')" in workflow
+
+
+def test_bruno_oauth_metadata_readiness_fails_with_diagnostics() -> None:
+    workflow = Path(".github/workflows/bruno-integration.yml").read_text(encoding="utf-8")
+
+    oauth_start = workflow.index("Verify OAuth resource-server metadata")
+    auth_start = workflow.index("Seed bearer auth users and shared project")
+    oauth_block = workflow[oauth_start:auth_start]
+    assert "ready=false" in oauth_block
+    assert "ready=true" in oauth_block
+    assert 'if [ "$ready" != "true" ]; then' in oauth_block
+    assert "cat bruno-oauth-server.log" in oauth_block
+    assert "rm bruno-oauth-server.pid" in oauth_block
 
 
 def test_docker_publish_attests_published_image() -> None:

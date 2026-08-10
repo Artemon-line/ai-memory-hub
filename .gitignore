@@ -220,3 +220,6 @@ data/
 
 # Codex
 .codex/
+
+# Clawpatch
+.clawpatch
