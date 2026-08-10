@@ -236,9 +236,10 @@ curl -fsS http://127.0.0.1:8000/ready
 These are valuable but should not block `v0.1.0` unless the image is promoted as
 production-ready.
 
-- [x] Add Trivy image scan in warning mode for PR/scheduled reporting.
+- [x] Add Trivy image scan that blocks high/critical findings while preserving
+  JSON/SBOM reports.
 - [x] Block Docker release publishing on high/critical Trivy image findings.
-- [x] Add dependency vulnerability reporting.
+- [x] Add blocking dependency vulnerability and license review.
 - [x] Add SBOM generation for Docker images.
 - [x] Add GitHub artifact attestations or provenance.
 - [x] Add CodeQL for Python static security analysis.

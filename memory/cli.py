@@ -139,7 +139,7 @@ class CLIArgumentParser(argparse.ArgumentParser):
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = CLIArgumentParser(prog="ai-memory-hub")
+    parser = CLIArgumentParser(prog="aim")
     parser.add_argument("--config", default=None, help="Path to a config YAML file.")
     parser.add_argument("--json", action="store_true", help="Print JSON output.")
     parser.add_argument("--quiet", action="store_true", help="Suppress non-essential text output.")
@@ -368,7 +368,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         args = parser.parse_args(argv)
     except UsageError as exc:
-        args = argparse.Namespace(json=False, quiet=False, verbose=False)
+        args = argparse.Namespace(
+            json=_argv_has_flag(argv, "--json"),
+            quiet=_argv_has_flag(argv, "--quiet"),
+            verbose=_argv_has_flag(argv, "--verbose"),
+        )
         return _emit_error(args, "usage_error", str(exc), exit_code=EXIT_USAGE)
     _normalize_common_args(args)
     try:
@@ -386,6 +390,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     except Exception as exc:
         message = f"{type(exc).__name__}: {exc}" if args.verbose else str(exc)
         return _emit_error(args, "runtime_error", message, exit_code=EXIT_RUNTIME)
+
+
+def _argv_has_flag(argv: Sequence[str] | None, flag: str) -> bool:
+    args = sys.argv[1:] if argv is None else argv
+    return flag in args
 
 
 def _normalize_common_args(args: argparse.Namespace) -> None:

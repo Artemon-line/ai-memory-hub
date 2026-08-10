@@ -194,6 +194,7 @@ def test_graph_relationships_cli_outputs_review_records(capsys, monkeypatch) -> 
 def test_parser_includes_core_commands() -> None:
     help_text = cli.build_parser().format_help()
 
+    assert help_text.startswith("usage: aim")
     commands = (
         "ingest",
         "reindex",
@@ -224,6 +225,17 @@ def test_usage_errors_return_stable_exit_code(capsys) -> None:
     captured = capsys.readouterr()
     assert exit_code == cli.EXIT_USAGE
     assert "usage_error" in captured.err
+
+
+def test_usage_errors_honor_json_output(capsys) -> None:
+    exit_code = cli.main(["search", "hello", "--top-k", "not-int", "--json"])
+
+    captured = capsys.readouterr()
+    body = json.loads(captured.out)
+    assert exit_code == cli.EXIT_USAGE
+    assert body["status"] == "error"
+    assert body["error_code"] == "usage_error"
+    assert captured.err == ""
 
 
 def test_ingest_cli_reads_json_file(capsys, monkeypatch, tmp_path) -> None:

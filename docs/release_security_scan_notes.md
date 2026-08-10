@@ -41,8 +41,8 @@ hardening pass rather than a formal audit sign-off.
 
 - Docker base images and provider service images use mutable tags. Pin by digest
   when you are ready to manage image refresh cadence explicitly.
-- Dependency Review is still warning-only. Promote it to blocking after you have
-  a clear vulnerability triage policy.
+- Dependency Review is configured as a blocking check for vulnerable or
+  disallowed dependency changes.
 
 ## GitHub Settings To Verify
 

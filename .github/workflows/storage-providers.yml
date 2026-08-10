@@ -138,6 +138,16 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --dev --extra mongodb
+      - name: Wait for MongoDB
+        run: |
+          for i in {1..60}; do
+            uv run python -c \
+              "from pymongo import MongoClient; \
+              MongoClient('mongodb://127.0.0.1:27017', serverSelectionTimeoutMS=2000).admin.command('ping')" \
+              && exit 0
+            sleep 2
+          done
+          exit 1
       - name: Run MongoDB live test
         env:
           PYTHONHASHSEED: "0"
