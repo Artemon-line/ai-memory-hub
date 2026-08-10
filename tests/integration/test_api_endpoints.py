@@ -165,6 +165,37 @@ def _oauth_client() -> TestClient:
     return TestClient(app)
 
 
+def _sqlite_oauth_client(tmp_path) -> tuple[TestClient, SQLiteMetadataStore]:
+    config = parse_config(
+        {
+            "api": {
+                "auth": "oauth_resource_server",
+                "public_base_url": "https://memory.example.com",
+                "oauth": {
+                    "authorization_servers": ["https://memory.example.com"],
+                    "jwt_secret": "test-secret",
+                },
+            },
+            "paths": {"data_dir": str(tmp_path / "data")},
+            "providers": {"embeddings": "local", "vector_db": "in_memory"},
+        }
+    )
+    ensure_token_hash_secret(config)
+    store = SQLiteMetadataStore(tmp_path / "metadata.sqlite3")
+    runtime = mvp_ingestion.RuntimeDependencies(
+        embedding_provider=StubEmbedder(),
+        metadata_store=store,
+        vector_store=InMemoryVectorStore(dimension=1),
+        health_state={"mode": "ok", "vector_fallback_active": False},
+    )
+    agent = MVPIngestionAgent(
+        config={"providers": {"agent": "mvp"}, "interfaces": {"api": "true"}},
+        runtime=runtime,
+    )
+    app = create_app(config=config, ingestion_agent=agent)
+    return TestClient(app), store
+
+
 def _oauth_token(**claims: object) -> str:
     now = int(time.time())
     payload = {
@@ -176,6 +207,10 @@ def _oauth_token(**claims: object) -> str:
         **claims,
     }
     return _sign_hs256(payload, "test-secret")
+
+
+def _hub_oauth_token(**claims: object) -> str:
+    return _oauth_token(iss="https://memory.example.com", **claims)
 
 
 def _sign_hs256(payload: dict[str, object], secret: str) -> str:
@@ -464,6 +499,42 @@ def test_oauth_auth_accepts_valid_token_and_enforces_scopes() -> None:
     assert 'error="insufficient_scope"' in challenge
     assert 'scope="memory:write"' in challenge
     assert full_response.status_code == 200
+
+
+def test_hub_oauth_token_cannot_widen_claim_scopes_from_stored_context(tmp_path) -> None:
+    client, store = _sqlite_oauth_client(tmp_path)
+    token = _hub_oauth_token(scope="memory:read")
+    store.create_auth_token(owner_id="owner-a", token=token, scopes=["memory:read", "memory:write"])
+
+    search = client.post(
+        "/memory/search",
+        json={"query": "hello"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    insert = client.post(
+        "/memory/insert",
+        json=_conversation(),
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert search.status_code == 200
+    assert insert.status_code == 403
+    assert 'error="insufficient_scope"' in insert.headers["www-authenticate"]
+
+
+def test_hub_oauth_token_rejects_stored_owner_mismatch(tmp_path) -> None:
+    client, store = _sqlite_oauth_client(tmp_path)
+    token = _hub_oauth_token(sub="owner-a")
+    store.create_auth_token(owner_id="owner-b", token=token)
+
+    response = client.post(
+        "/memory/search",
+        json={"query": "hello"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 401
+    assert 'error="invalid_token"' in response.headers["www-authenticate"]
 
 
 def test_oauth_auth_protects_mcp_initialize() -> None:
