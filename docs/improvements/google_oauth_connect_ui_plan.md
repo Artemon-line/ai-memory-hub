@@ -82,7 +82,7 @@ tokens.
 - [x] Add config for Google OAuth:
       client id env var, client secret env var, callback URL, allowed hosted
       domains, and allowed email list if configured.
-- [x] Use Authlib or a similarly maintained Python OAuth/OIDC library rather
+- [x] Use maintained Python OAuth/OIDC libraries rather
       than hand-rolling protocol handling.
 - [x] Start Google login from `/auth/google` using OIDC scopes:
       `openid email profile`.
@@ -200,7 +200,8 @@ Current implementation:
 - Passport sign-in providers are configured through `api.connect.passport`.
   This is a hub config namespace, not Node Passport middleware. Google, Meta,
   and X are accepted provider names; live OAuth authorization and callback
-  handling uses Authlib's Starlette client registry through the `oauth` extra.
+  handling uses HTTPX plus JOSE/OIDC token verification through the `oauth`
+  extra.
   Test hooks can still inject provider claims without calling external identity
   providers.
 - Google `sub` values map to deterministic local users. Account linking is

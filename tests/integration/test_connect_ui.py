@@ -144,6 +144,8 @@ class _OAuthHTTPResponse:
 
 
 class _OAuthHTTPClient:
+    token_requests: list[dict[str, object]] = []
+
     def __init__(
         self, *, id_token: str, jwks: dict[str, object] | None = None, post_status: int = 200
     ) -> None:
@@ -160,7 +162,8 @@ class _OAuthHTTPClient:
     async def post(
         self, _url: str, *, data: dict[str, object], headers: dict[str, str]
     ) -> _OAuthHTTPResponse:
-        _ = data, headers
+        _ = headers
+        self.token_requests.append(dict(data))
         return _OAuthHTTPResponse({"id_token": self.id_token}, status_code=self.post_status)
 
     async def get(self, url: str, *, headers: dict[str, str]) -> _OAuthHTTPResponse:
@@ -184,6 +187,7 @@ def _disable_google_exchange_override(client: TestClient) -> None:
 def _install_oidc_httpx(monkeypatch, *, id_token: str, jwks: dict[str, object]) -> None:
     import httpx
 
+    _OAuthHTTPClient.token_requests = []
     monkeypatch.setattr(
         httpx,
         "AsyncClient",
@@ -667,6 +671,33 @@ def test_google_callback_verifies_signed_id_token_and_matching_nonce(
 
     assert start.status_code == 303
     assert callback.status_code == 200
+
+
+def test_google_login_uses_provider_pkce_s256_and_token_verifier(
+    tmp_path, monkeypatch
+) -> None:
+    client = _client(tmp_path, monkeypatch, allowed_domains=["example.com"])
+    _disable_google_exchange_override(client)
+    key = RSAKey.generate_key(2048, parameters={"kid": "google-key-a", "alg": "RS256"})
+    start = client.get("/auth/google", follow_redirects=False)
+    params = parse_qs(urlparse(start.headers["location"]).query)
+    id_token = _signed_google_id_token(key, nonce=params["nonce"][0])
+    _install_oidc_httpx(
+        monkeypatch,
+        id_token=id_token,
+        jwks={"keys": [key.as_dict(private=False)]},
+    )
+
+    callback = client.get(f"/auth/google/callback?code=fake-code&state={params['state'][0]}")
+    token_request = _OAuthHTTPClient.token_requests[0]
+    code_verifier = str(token_request["code_verifier"])
+
+    assert start.status_code == 303
+    assert callback.status_code == 200
+    assert params["code_challenge_method"] == ["S256"]
+    assert params["code_challenge"] == [_pkce_challenge(code_verifier)]
+    assert code_verifier not in start.headers["location"]
+    assert client.app.state.oauth_provider_states == {}
 
 
 def test_google_callback_rejects_unsigned_id_token(tmp_path, monkeypatch) -> None:

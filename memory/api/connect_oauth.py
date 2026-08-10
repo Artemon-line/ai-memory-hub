@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import time
 from typing import Any, cast
@@ -45,9 +46,11 @@ class ConnectOAuthRegistry:
             raise HTTPException(status_code=503, detail="OAuth client id is not configured")
         state = _nonce()
         nonce = _nonce()
+        code_verifier = _nonce()
         provider_state: dict[str, object] = {
             "provider": provider_name,
             "nonce": nonce,
+            "code_verifier": code_verifier,
             "created_at": int(time.time()),
         }
         if state_data:
@@ -65,6 +68,8 @@ class ConnectOAuthRegistry:
                 "scope": " ".join(provider_config.scopes),
                 "state": state,
                 "nonce": nonce,
+                "code_challenge": _pkce_challenge(code_verifier),
+                "code_challenge_method": "S256",
                 "access_type": "offline",
                 "prompt": "select_account",
             }
@@ -102,6 +107,7 @@ class ConnectOAuthRegistry:
             provider_name,
             code=str(code),
             nonce=str(state_data.get("nonce") or ""),
+            code_verifier=str(state_data.get("code_verifier") or ""),
         )
         claims = await self._claims_from_token(
             token,
@@ -131,7 +137,7 @@ class ConnectOAuthRegistry:
         return data
 
     async def _exchange_code_for_token(
-        self, provider: str, *, code: str, nonce: str
+        self, provider: str, *, code: str, nonce: str, code_verifier: str
     ) -> dict[str, object]:
         provider_config = passport_provider_config(self.config, provider)
         if provider_config is None:
@@ -151,15 +157,18 @@ class ConnectOAuthRegistry:
             ) from exc
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
+                token_request_data: dict[str, object] = {
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "redirect_uri": provider_callback_url(self.config, provider),
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                }
+                if code_verifier:
+                    token_request_data["code_verifier"] = code_verifier
                 response = await client.post(
                     provider_config.token_url,
-                    data={
-                        "grant_type": "authorization_code",
-                        "code": code,
-                        "redirect_uri": provider_callback_url(self.config, provider),
-                        "client_id": client_id,
-                        "client_secret": client_secret,
-                    },
+                    data=token_request_data,
                     headers={"Accept": "application/json"},
                 )
         except httpx.HTTPError as exc:
@@ -171,40 +180,6 @@ class ConnectOAuthRegistry:
             payload["nonce"] = nonce
             return payload
         raise HTTPException(status_code=502, detail="OAuth token response was invalid")
-
-    def _client(self, provider: str) -> Any:
-        provider_name = normalize_passport_provider(provider)
-        provider_config = passport_provider_config(self.config, provider_name)
-        if provider_config is None or not provider_config.enabled:
-            raise HTTPException(status_code=404, detail="OAuth provider is not enabled")
-        client_id = env_secret(provider_config.client_id_env)
-        client_secret = env_secret(provider_config.client_secret_env)
-        if not client_id:
-            raise HTTPException(status_code=503, detail="OAuth client id is not configured")
-        if not provider_config.authorization_url:
-            raise HTTPException(status_code=503, detail="OAuth authorization URL is not configured")
-        if not provider_config.token_url:
-            raise HTTPException(status_code=503, detail="OAuth token URL is not configured")
-        try:
-            from authlib.integrations.starlette_client import OAuth
-        except ImportError as exc:
-            raise HTTPException(
-                status_code=503,
-                detail="OAuth support requires installing the oauth optional extra",
-            ) from exc
-        oauth = OAuth()
-        oauth.register(
-            name=provider_name,
-            client_id=client_id,
-            client_secret=client_secret,
-            authorize_url=provider_config.authorization_url,
-            access_token_url=provider_config.token_url,
-            client_kwargs={"scope": " ".join(provider_config.scopes)},
-        )
-        client = oauth.create_client(provider_name)
-        if client is None:
-            raise HTTPException(status_code=503, detail="OAuth provider could not be initialized")
-        return client
 
     async def _claims_from_token(
         self, token: Any, *, provider: str, nonce: str
@@ -339,6 +314,11 @@ def _jwt_payload(token: str) -> dict[str, object] | None:
     except (ValueError, json.JSONDecodeError, UnicodeEncodeError):
         return None
     return payload if isinstance(payload, dict) else None
+
+
+def _pkce_challenge(verifier: str) -> str:
+    digest = hashlib.sha256(verifier.encode("ascii")).digest()
+    return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
 
 
 def _provider_uses_oidc(provider_config: Any) -> bool:
