@@ -61,6 +61,18 @@ def test_graph_retrieval_reports_baseline_and_no_regression() -> None:
     assert graph["mrr"] >= baseline["mrr"]
 
 
+def test_baseline_retrieval_ranks_stronger_text_matches_first() -> None:
+    case = graph_quality.GraphRetrievalCase("rank", "alpha beta", ("strong",))
+    corpus = [
+        {"conversation": graph_quality._conversation("weak", "Weak", "alpha")},
+        {"conversation": graph_quality._conversation("strong", "Strong", "alpha beta")},
+    ]
+
+    result = graph_quality._evaluate_baseline_case(case, corpus, top_k=2)
+
+    assert result["result_ids"] == ["strong", "weak"]
+
+
 def test_graph_quality_detects_graph_retrieval_regression() -> None:
     report = run_evaluation()
     report["graph_retrieval"]["summary"]["mrr"] = 0.0

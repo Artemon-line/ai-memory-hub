@@ -162,3 +162,22 @@ def test_agent_memory_filter_narrows_records() -> None:
     )
 
     assert [record["id"] for record in filter_derived_records_for_agent(records, agent_filter)] == ["entity:1"]
+
+
+def test_agent_memory_filter_rejects_malformed_sensitivity_without_raising() -> None:
+    records = [
+        {
+            "id": "entity:bad",
+            "record_type": "entity",
+            "metadata": {"source": "codex", "sensitivity": "confidential"},
+        },
+        {
+            "id": "entity:ok",
+            "record_type": "entity",
+            "metadata": {"source": "codex", "sensitivity": "internal"},
+        },
+    ]
+
+    result = filter_derived_records_for_agent(records, AgentMemoryFilter())
+
+    assert [record["id"] for record in result] == ["entity:ok"]

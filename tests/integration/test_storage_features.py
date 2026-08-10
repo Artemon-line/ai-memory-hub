@@ -137,6 +137,111 @@ def test_mongodb_insert_new_rejects_same_id_different_hash() -> None:
         store.insert_new(second)
 
 
+def test_mongodb_supersede_fact_marks_target_fact() -> None:
+    store = MongoDBMetadataStore(uri="mongodb://example", client=FakeMongoClient())
+    store.insert_facts(
+        [
+            {
+                "id": "fact-old",
+                "subject": "user",
+                "predicate": "owns",
+                "object": "red guitar",
+                "created_at": "2026-01-01T00:00:00Z",
+                "project_id": "project-a",
+                "deleted_at": None,
+                "superseded_by": None,
+                "superseded_at": None,
+            },
+            {
+                "id": "fact-new",
+                "subject": "user",
+                "predicate": "owns",
+                "object": "yellow guitar",
+                "created_at": "2026-01-02T00:00:00Z",
+                "project_id": "project-a",
+                "deleted_at": None,
+                "superseded_by": None,
+                "superseded_at": None,
+            },
+        ]
+    )
+
+    assert store.supersede_fact("fact-old", "fact-new", project_id="project-a") is True
+
+    by_id = {
+        fact["id"]: fact
+        for fact in store.search_facts(
+            subject="user",
+            include_superseded=True,
+            project_id="project-a",
+        )
+    }
+    assert by_id["fact-old"]["superseded_by"] == "fact-new"
+    assert by_id["fact-new"]["superseded_by"] is None
+    active_ids = {
+        fact["id"]
+        for fact in store.search_facts(subject="user", project_id="project-a")
+    }
+    assert active_ids == {"fact-new"}
+
+
+def test_mongodb_insert_new_resolves_duplicate_key_race() -> None:
+    class DuplicateKeyError(Exception):
+        pass
+
+    class RacingCollection(FakeMongoCollection):
+        def __init__(self, existing_doc: dict[str, Any]) -> None:
+            super().__init__()
+            self.existing_doc = existing_doc
+            self.raced = False
+
+        def find(self, query: dict[str, Any] | None = None) -> Any:
+            if not self.raced:
+                return FakeMongoCursor([])
+            return FakeMongoCursor(
+                [dict(self.existing_doc)]
+                if _matches_query(self.existing_doc, query or {})
+                else []
+            )
+
+        def insert_one(self, doc: dict[str, Any]) -> None:
+            _ = doc
+            self.raced = True
+            raise DuplicateKeyError("duplicate key")
+
+    client = FakeMongoClient()
+    conversation_hash = "sha256:" + ("a" * 64)
+    existing = {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "payload": {
+            "id": "11111111-1111-4111-8111-111111111111",
+            "messages": [{"role": "user", "text": "hello"}],
+            "metadata": {
+                "conversation_hash": conversation_hash,
+                "project_id": "local-default",
+            },
+        },
+        "conversation_hash": conversation_hash,
+        "project_id": "local-default",
+    }
+    client["ai_memory_hub"].collections["conversations"] = RacingCollection(existing)
+    store = MongoDBMetadataStore(uri="mongodb://example", client=client)
+
+    memory_id, inserted = store.insert_new(
+        {
+            "id": "22222222-2222-4222-8222-222222222222",
+            "messages": [{"role": "user", "text": "hello"}],
+            "metadata": {
+                "conversation_hash": conversation_hash,
+                "project_id": "local-default",
+            },
+        }
+    )
+
+    assert memory_id == "11111111-1111-4111-8111-111111111111"
+    assert inserted is False
+
+
 def test_mongodb_schema_version_document_and_indexes() -> None:
     client = FakeMongoClient()
     store = MongoDBMetadataStore(uri="mongodb://example", client=client)

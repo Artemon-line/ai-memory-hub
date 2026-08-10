@@ -67,7 +67,12 @@ class MongoDBMetadataStore:
         )
         if existing_hash is not None:
             return str(existing_hash["id"]), False
-        self._conversations.insert_one(conversation)
+        try:
+            self._conversations.insert_one(conversation)
+        except Exception as exc:
+            if not _is_duplicate_key_error(exc):
+                raise
+            return self._resolve_insert_new_conflict(memory_id, conversation_json)
         return memory_id, True
 
     def append_messages(
@@ -214,7 +219,7 @@ class MongoDBMetadataStore:
         self, fact_id: str, superseded_by: str, project_id: str | None = None
     ) -> bool:
         query: dict[str, Any] = {
-            "id": str(superseded_by),
+            "id": str(fact_id),
             "deleted_at": None,
         }
         if project_id is not None:
@@ -223,7 +228,7 @@ class MongoDBMetadataStore:
             query,
             {
                 "$set": {
-                    "superseded_by": str(fact_id),
+                    "superseded_by": str(superseded_by),
                     "superseded_at": _utc_now(),
                     "updated_at": _utc_now(),
                 }
@@ -438,6 +443,10 @@ def _clean_mongo_doc(row: dict[str, Any]) -> dict[str, Any]:
     cleaned = dict(row)
     cleaned.pop("_id", None)
     return cleaned
+
+
+def _is_duplicate_key_error(exc: Exception) -> bool:
+    return exc.__class__.__name__ == "DuplicateKeyError"
 
 
 def _utc_now() -> str:
