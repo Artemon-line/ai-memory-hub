@@ -37,7 +37,6 @@ mongodb = [
     { name = "pymongo" },
 ]
 oauth = [
-    { name = "authlib" },
     { name = "cryptography" },
     { name = "httpx" },
     { name = "joserfc" },
@@ -93,7 +92,6 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "authlib", marker = "extra == 'oauth'", specifier = ">=1.7.2" },
     { name = "cryptography", marker = "extra == 'oauth'", specifier = ">=50.0.0" },
     { name = "elasticsearch", marker = "extra == 'elasticsearch'", specifier = ">=8.15.0" },
     { name = "fastapi", specifier = ">=0.141.1" },

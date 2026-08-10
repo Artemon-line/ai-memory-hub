@@ -83,8 +83,8 @@ Known gaps:
 ## Phase 5: Dependency And Docs Cleanup
 
 - [x] Make the `oauth` extra description mention HTTPX plus JOSE/OIDC token
-      verification dependencies, not only Authlib.
-- [ ] Remove or use any stale Authlib client helper code so the dependency story
+      verification dependencies.
+- [x] Remove or use any stale Authlib client helper code so the dependency story
       matches implementation.
 - [ ] Update `docs/connect_ui.md` to distinguish:
       rendering `/connect`, provider OAuth/OIDC login, hub token issuance, and
