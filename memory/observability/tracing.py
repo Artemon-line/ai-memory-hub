@@ -12,6 +12,15 @@ from memory.config import TracingConfig
 logger = logging.getLogger(__name__)
 
 _SAFE_ATTRIBUTE_TYPES = (str, bool, int, float)
+_SECRET_ATTRIBUTE_KEY_PARTS = (
+    "authorization",
+    "api_key",
+    "apikey",
+    "secret",
+    "password",
+    "token",
+    "dsn",
+)
 
 
 @dataclass(frozen=True)
@@ -154,9 +163,22 @@ def start_observability_span(
 
 def _set_safe_span_attributes(span: Any, attributes: dict[str, Any]) -> None:
     for key, value in attributes.items():
-        if isinstance(value, _SAFE_ATTRIBUTE_TYPES):
+        if isinstance(value, str):
+            span.set_attribute(key, _safe_span_attribute_value(key, value))
+        elif isinstance(value, (bool, int, float)):
             span.set_attribute(key, value)
         elif value is None:
             continue
         else:
-            span.set_attribute(key, str(value))
+            span.set_attribute(key, _safe_span_attribute_value(key, str(value)))
+
+
+def _safe_span_attribute_value(key: str, value: str) -> str:
+    if _is_secret_attribute_key(key):
+        return "***"
+    return redact_secrets(value)
+
+
+def _is_secret_attribute_key(key: str) -> bool:
+    normalized = str(key).casefold()
+    return any(part in normalized for part in _SECRET_ATTRIBUTE_KEY_PARTS)

@@ -84,6 +84,30 @@ def test_tracing_setup_does_not_raise_when_exporter_setup_fails(monkeypatch) -> 
     assert status.exporter == "http://otel-collector:4317"
 
 
+def test_span_attributes_are_redacted_before_export() -> None:
+    class FakeSpan:
+        def __init__(self) -> None:
+            self.attributes = {}
+
+        def set_attribute(self, key, value) -> None:
+            self.attributes[key] = value
+
+    span = FakeSpan()
+
+    tracing._set_safe_span_attributes(
+        span,
+        {
+            "authorization": "Bearer secret-token",
+            "dsn": {"url": "postgres://user:secret@example/db"},
+            "count": 3,
+        },
+    )
+
+    assert "secret-token" not in span.attributes["authorization"]
+    assert "secret" not in span.attributes["dsn"]
+    assert span.attributes["count"] == 3
+
+
 def test_observability_extra_declares_otel_dependencies() -> None:
     with Path("pyproject.toml").open("rb") as pyproject_file:
         pyproject = tomllib.load(pyproject_file)

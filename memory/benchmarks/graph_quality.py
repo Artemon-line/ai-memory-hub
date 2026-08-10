@@ -276,7 +276,7 @@ def _evaluate_baseline_case(
         score = len(tokens & set(_tokens(text)))
         if score:
             scored.append((score, str(item["conversation"]["id"])))
-    result_ids = [conversation_id for _, conversation_id in sorted(scored, key=lambda row: (row[0], row[1]))[:top_k]]
+    result_ids = [conversation_id for _, conversation_id in sorted(scored, key=lambda row: (-row[0], row[1]))[:top_k]]
     return _retrieval_case_report(case, result_ids)
 
 

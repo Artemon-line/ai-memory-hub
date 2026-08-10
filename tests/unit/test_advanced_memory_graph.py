@@ -40,3 +40,11 @@ def test_extract_memory_graph_ignores_nearby_entities_without_relationship_patte
 
     assert {entity["normalized_name"] for entity in graph["entities"]} >= {"codex", "opencode", "pgvector"}
     assert graph["relationships"] == []
+
+
+def test_extract_memory_graph_returns_empty_graph_when_conversation_id_is_missing() -> None:
+    graph = extract_memory_graph(
+        {"messages": [{"role": "user", "text": "Codex uses PGVector."}]}
+    )
+
+    assert graph == {"entities": [], "relationships": []}

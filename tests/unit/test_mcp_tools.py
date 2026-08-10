@@ -522,6 +522,15 @@ async def test_mcp_tool_handlers_search_pagination_and_filters() -> None:
         for row in filtered_tags["results"]
     )
 
+    wrapped_tags = await handlers["memory_search"](
+        "hello", tags={"item": ["beta"]}, top_k=10  # type: ignore[arg-type]
+    )
+    assert wrapped_tags["status"] == "ok"
+    assert all(
+        "beta" in row["conversation"]["metadata"].get("tags", [])
+        for row in wrapped_tags["results"]
+    )
+
     filtered_thread = await handlers["memory_search"](
         "hello", thread_id="thread-beta", top_k=10
     )

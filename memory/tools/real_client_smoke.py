@@ -112,6 +112,7 @@ def run_harness(args: argparse.Namespace) -> HarnessResult:
     finally:
         _terminate_process(gateway_process)
         _terminate_process(hub_process)
+        shutil.rmtree(workspace, ignore_errors=True)
 
 
 def run_client(

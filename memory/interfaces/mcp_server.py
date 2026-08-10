@@ -373,10 +373,10 @@ def _apply_search_filters(
 ) -> list[dict[str, Any]]:
     dt_from = _parse_date(date_from or "", field_name="date_from")
     dt_to = _parse_date(date_to or "", field_name="date_to")
-    required_tags = set(_coerce_tags(tags))
     filtered: list[dict[str, Any]] = []
     tags = unwrap_array(tags)
     source = unwrap_array(source)
+    required_tags = set(_coerce_tags(tags))
     for row in rows:
         conversation = row.get("conversation")
         if not isinstance(conversation, dict):

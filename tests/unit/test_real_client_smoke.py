@@ -92,3 +92,33 @@ def test_summary_is_written_for_all_skipped_clients(tmp_path: Path, monkeypatch)
     summary = json.loads((tmp_path / "summary.json").read_text(encoding="utf-8"))
     assert summary["status"] == "ok"
     assert summary["clients"][0]["status"] == "skipped"
+
+
+def test_run_harness_removes_temporary_workspace(tmp_path: Path, monkeypatch) -> None:
+    artifact_dir = tmp_path / "artifacts"
+    workspace = tmp_path / "workspace"
+    created_paths = [str(artifact_dir), str(workspace)]
+
+    monkeypatch.setattr(real_client_smoke.tempfile, "mkdtemp", lambda prefix: created_paths.pop(0))
+    monkeypatch.setattr(real_client_smoke, "_start_hub", lambda **kwargs: None)
+    monkeypatch.setattr(real_client_smoke, "_start_gateway", lambda **kwargs: None)
+    monkeypatch.setattr(real_client_smoke, "_wait_for_hub", lambda *args, **kwargs: None)
+    monkeypatch.setattr(real_client_smoke, "_wait_for_gateway", lambda *args, **kwargs: None)
+    monkeypatch.setattr(real_client_smoke, "_terminate_process", lambda process: None)
+    monkeypatch.delenv("AMH_REAL_CLIENT_CLAUDE_COMMAND", raising=False)
+    args = argparse.Namespace(
+        artifact_dir=None,
+        client=["claude"],
+        hub_url="http://127.0.0.1:8000",
+        gateway_url="http://127.0.0.1:9000",
+        startup_timeout=1,
+        client_timeout=1,
+        require_configured=False,
+        require_success_for=[],
+    )
+
+    result = real_client_smoke.run_harness(args)
+
+    assert result.status == "ok"
+    assert artifact_dir.exists()
+    assert not workspace.exists()

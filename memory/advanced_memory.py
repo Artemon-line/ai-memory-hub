@@ -357,12 +357,19 @@ def _record_matches_agent_filter(record: dict[str, Any], agent_filter: AgentMemo
     allowed_types = {item.value for item in agent_filter.allowed_record_types}
     if allowed_types and str(record_type) not in allowed_types:
         return False
-    sensitivity = SensitivityClass(str(metadata.get("sensitivity", SensitivityClass.PRIVATE.value)))
+    sensitivity = _record_sensitivity(metadata)
     if _sensitivity_rank(sensitivity) > _sensitivity_rank(agent_filter.max_sensitivity):
         return False
     if agent_filter.trusted_capture_only and metadata.get("trusted_capture") is not True:
         return False
     return True
+
+
+def _record_sensitivity(metadata: dict[str, Any]) -> SensitivityClass:
+    try:
+        return SensitivityClass(str(metadata.get("sensitivity", SensitivityClass.PRIVATE.value)))
+    except ValueError:
+        return SensitivityClass.SECRET
 
 
 def _sensitivity_rank(value: SensitivityClass) -> int:
@@ -435,7 +442,9 @@ def extract_memory_graph(conversation: dict[str, Any]) -> dict[str, list[dict[st
     relationships: list[RelationshipRecord] = []
     seen_entities: set[str] = set()
     seen_relationships: set[str] = set()
-    conversation_id = str(conversation.get("id") or "")
+    conversation_id = str(conversation.get("id") or "").strip()
+    if not conversation_id:
+        return {"entities": [], "relationships": []}
     owner_id = _optional_str(conversation.get("owner_id"))
     project_id = _optional_str(conversation.get("project_id"))
     timestamp = _optional_str(conversation.get("timestamp"))

@@ -21,7 +21,7 @@ hardening pass rather than a formal audit sign-off.
 - The root image remains a SQLite/LanceDB quickstart image. Optional providers
   stay in provider-local images or local `uv sync --extra ...` installs.
 - Repository-owned container builds use the pinned
-  `ghcr.io/astral-sh/uv:0.10.3-python3.14-trixie-slim` base image instead of
+  `ghcr.io/astral-sh/uv:0.11.32-python3.14-trixie-slim` base image instead of
   installing uv through pip.
 - Docker publish now checks out the requested manual release tag, builds a local
   candidate image, blocks on high/critical Trivy findings before pushing, then
