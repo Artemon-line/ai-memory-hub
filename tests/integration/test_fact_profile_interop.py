@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 
 from memory.api.server import create_app
@@ -26,8 +26,8 @@ def _config(tmp_path: Path, *, auth: str = "none") -> dict[str, Any]:
     }
 
 
-def _auth_client(tmp_path: Path) -> TestClient:
-    os.environ["AMH_TOKEN_HASH_SECRET"] = "fact-profile-interop-secret"
+def _auth_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    monkeypatch.setenv("AMH_TOKEN_HASH_SECRET", "fact-profile-interop-secret")
     config = parse_config(_config(tmp_path, auth="bearer_token"))
     ensure_token_hash_secret(config)
     store = SQLiteMetadataStore(Path(config.paths.data_dir) / "metadata.sqlite3")
@@ -122,12 +122,12 @@ def _fact_objects(payload: dict[str, Any]) -> list[str]:
 
 
 def test_api_inserted_facts_are_readable_through_mcp_same_owner_and_project(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     payload = _conversation(text="My name is Alex Prism. I own a cherry Gibson guitar.")
     headers = {"Authorization": "Bearer token-a"}
 
-    with _auth_client(tmp_path) as client:
+    with _auth_client(tmp_path, monkeypatch) as client:
         insert = client.post(
             "/memory/insert",
             json={**payload, "project_id": "fact-shared"},
@@ -160,12 +160,12 @@ def test_api_inserted_facts_are_readable_through_mcp_same_owner_and_project(
 
 
 def test_mcp_inserted_facts_are_readable_through_api_same_owner_and_project(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     payload = _conversation(text="My name is Morgan Slate. I own a blue Jazzmaster guitar.")
     headers = {"Authorization": "Bearer token-a"}
 
-    with _auth_client(tmp_path) as client:
+    with _auth_client(tmp_path, monkeypatch) as client:
         mcp_headers = _initialize_mcp(client, token="token-a")
         insert = _call_tool(
             client,
@@ -199,12 +199,14 @@ def test_mcp_inserted_facts_are_readable_through_api_same_owner_and_project(
     }
 
 
-def test_cross_owner_fact_and_profile_queries_do_not_leak(tmp_path: Path) -> None:
+def test_cross_owner_fact_and_profile_queries_do_not_leak(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     payload = _conversation(text="My name is Ada Cipher. I own a silver Gibson guitar.")
     owner_a_headers = {"Authorization": "Bearer token-a"}
     owner_b_headers = {"Authorization": "Bearer token-b"}
 
-    with _auth_client(tmp_path) as client:
+    with _auth_client(tmp_path, monkeypatch) as client:
         insert = client.post("/memory/insert", json=payload, headers=owner_a_headers)
         facts_a = client.post(
             "/memory/facts/search",
@@ -246,11 +248,11 @@ def test_cross_owner_fact_and_profile_queries_do_not_leak(tmp_path: Path) -> Non
 
 
 def test_auth_none_restart_cannot_read_owner_scoped_facts_through_api_or_mcp(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     payload = _conversation(text="My name is Rowan Vault. I own a violet Gibson guitar.")
 
-    with _auth_client(tmp_path) as client:
+    with _auth_client(tmp_path, monkeypatch) as client:
         insert = client.post(
             "/memory/insert",
             json=payload,
@@ -288,12 +290,14 @@ def test_auth_none_restart_cannot_read_owner_scoped_facts_through_api_or_mcp(
     assert mcp_profile["facts"] == []
 
 
-def test_supersession_through_mcp_is_visible_through_api(tmp_path: Path) -> None:
+def test_supersession_through_mcp_is_visible_through_api(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     old_payload = _conversation(text="I own a cherry Gibson guitar.")
     new_payload = _conversation(text="I own a TV yellow Gibson guitar.")
     headers = {"Authorization": "Bearer token-a"}
 
-    with _auth_client(tmp_path) as client:
+    with _auth_client(tmp_path, monkeypatch) as client:
         old_insert = client.post("/memory/insert", json=old_payload, headers=headers)
         new_insert = client.post("/memory/insert", json=new_payload, headers=headers)
         before = client.post(

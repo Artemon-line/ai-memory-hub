@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -52,10 +51,14 @@ def _base_config(tmp_path: Path, *, auth: str) -> dict[str, Any]:
     return config
 
 
-def _client(tmp_path: Path, *, auth: str) -> TestClient:
+def _client(
+    tmp_path: Path, *, auth: str, monkeypatch: pytest.MonkeyPatch | None = None
+) -> TestClient:
     config = _base_config(tmp_path, auth=auth)
     if auth == "bearer_token":
-        os.environ["AMH_TOKEN_HASH_SECRET"] = "operational-observability-secret"
+        if monkeypatch is None:
+            raise ValueError("monkeypatch is required for bearer_token test clients")
+        monkeypatch.setenv("AMH_TOKEN_HASH_SECRET", "operational-observability-secret")
         parsed = parse_config(config)
         ensure_token_hash_secret(parsed)
         SQLiteMetadataStore(Path(parsed.paths.data_dir) / "metadata.sqlite3").create_auth_token(
@@ -67,9 +70,10 @@ def _client(tmp_path: Path, *, auth: str) -> TestClient:
 
 def test_health_and_ready_are_public_and_secret_free_under_every_auth_mode(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     for auth in ("none", "bearer_token", "oauth_resource_server"):
-        with _client(tmp_path / auth, auth=auth) as client:
+        with _client(tmp_path / auth, auth=auth, monkeypatch=monkeypatch) as client:
             health = client.get("/health")
             ready = client.get("/ready")
 
@@ -117,10 +121,11 @@ def test_oauth_protected_resource_metadata_is_public_and_secret_free(
 def test_request_failure_logs_are_structured_and_do_not_include_payload_or_query_secrets(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     secret_query = "query-token-secret"
     secret_payload = "payload-secret-phrase"
-    with _client(tmp_path, auth="bearer_token") as client:
+    with _client(tmp_path, auth="bearer_token", monkeypatch=monkeypatch) as client:
         with caplog.at_level(logging.INFO, logger="memory.api.server"):
             response = client.post(
                 f"/memory/search?access_token={secret_query}",
@@ -144,9 +149,10 @@ def test_request_failure_logs_are_structured_and_do_not_include_payload_or_query
 def test_http_request_id_is_propagated_to_response_and_error_logs(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     request_id = "pytest-request-id-123"
-    with _client(tmp_path, auth="bearer_token") as client:
+    with _client(tmp_path, auth="bearer_token", monkeypatch=monkeypatch) as client:
         with caplog.at_level(logging.INFO, logger="memory.api.server"):
             response = client.post(
                 "/memory/search",

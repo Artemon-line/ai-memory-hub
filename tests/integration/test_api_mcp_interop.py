@@ -1,9 +1,9 @@
 import json
-import os
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 
 from memory.api.server import create_app
@@ -156,8 +156,8 @@ def _client(
     return TestClient(app)
 
 
-def _auth_client(tmp_path: Path) -> TestClient:
-    os.environ["AMH_TOKEN_HASH_SECRET"] = "test-token-secret"
+def _auth_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    monkeypatch.setenv("AMH_TOKEN_HASH_SECRET", "test-token-secret")
     config = {
         "api": {"auth": "bearer_token"},
         "interfaces": {"api": True, "mcp": True},
@@ -312,11 +312,11 @@ def test_mcp_insert_can_be_read_through_api(tmp_path: Path) -> None:
 
 
 def test_api_project_insert_can_be_read_through_mcp_with_same_project(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     payload = _conversation(text="The shared API to MCP project phrase is copper atlas.")
 
-    with _auth_client(tmp_path) as client:
+    with _auth_client(tmp_path, monkeypatch) as client:
         owner_headers = {"Authorization": "Bearer token-a"}
         insert = client.post(
             "/memory/insert",
@@ -362,11 +362,11 @@ def test_api_project_insert_can_be_read_through_mcp_with_same_project(
 
 
 def test_mcp_project_insert_can_be_read_through_api_with_same_project(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     payload = _conversation(text="The shared MCP to API project phrase is silver quay.")
 
-    with _auth_client(tmp_path) as client:
+    with _auth_client(tmp_path, monkeypatch) as client:
         headers = _initialize_mcp(client, token="token-a")
         insert = _call_tool(
             client,
@@ -405,11 +405,11 @@ def test_mcp_project_insert_can_be_read_through_api_with_same_project(
 
 
 def test_api_bearer_insert_is_readable_by_mcp_same_owner_and_hidden_from_other_owner(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     payload = _conversation(text="Owner A API to MCP private phrase is green citadel.")
 
-    with _auth_client(tmp_path) as client:
+    with _auth_client(tmp_path, monkeypatch) as client:
         owner_a = {"Authorization": "Bearer token-a"}
         insert = client.post("/memory/insert", json=payload, headers=owner_a)
         headers_a = _initialize_mcp(client, token="token-a")
@@ -460,11 +460,11 @@ def test_api_bearer_insert_is_readable_by_mcp_same_owner_and_hidden_from_other_o
 
 
 def test_mcp_bearer_insert_is_readable_by_api_same_owner_and_hidden_from_other_owner(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     payload = _conversation(text="Owner A MCP to API private phrase is violet engine.")
 
-    with _auth_client(tmp_path) as client:
+    with _auth_client(tmp_path, monkeypatch) as client:
         headers = _initialize_mcp(client, token="token-a")
         insert = _call_tool(
             client,

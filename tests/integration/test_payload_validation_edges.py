@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 
 from memory.api.server import create_app
@@ -29,8 +29,8 @@ def _config(
     }
 
 
-def _auth_client(tmp_path: Path) -> TestClient:
-    os.environ["AMH_TOKEN_HASH_SECRET"] = "payload-validation-secret"
+def _auth_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    monkeypatch.setenv("AMH_TOKEN_HASH_SECRET", "payload-validation-secret")
     config = parse_config(_config(tmp_path, auth="bearer_token"))
     ensure_token_hash_secret(config)
     store = SQLiteMetadataStore(Path(config.paths.data_dir) / "metadata.sqlite3")
@@ -152,12 +152,12 @@ def _call_tool(
 
 
 def test_api_insert_ignores_client_supplied_owner_id_and_stamps_authenticated_owner(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     payload = _conversation(text="API owner stamp phrase is blue archive.")
     payload["metadata"]["owner_id"] = "client-supplied"
 
-    with _auth_client(tmp_path) as client:
+    with _auth_client(tmp_path, monkeypatch) as client:
         insert = client.post(
             "/memory/insert",
             json=payload,
@@ -175,12 +175,12 @@ def test_api_insert_ignores_client_supplied_owner_id_and_stamps_authenticated_ow
 
 
 def test_mcp_insert_ignores_client_supplied_owner_id_and_stamps_authenticated_owner(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     payload = _conversation(text="MCP owner stamp phrase is green archive.")
     payload["metadata"]["owner_id"] = "client-supplied"
 
-    with _auth_client(tmp_path) as client:
+    with _auth_client(tmp_path, monkeypatch) as client:
         headers = _initialize_mcp(client, token="token-a")
         insert = _call_tool(
             client,
@@ -202,10 +202,12 @@ def test_mcp_insert_ignores_client_supplied_owner_id_and_stamps_authenticated_ow
     assert retrieve["memory"]["metadata"]["owner_id"] == "owner-a"
 
 
-def test_api_and_mcp_reject_invalid_project_id_formats(tmp_path: Path) -> None:
+def test_api_and_mcp_reject_invalid_project_id_formats(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     bad_project_id = "bad/project"
 
-    with _auth_client(tmp_path) as client:
+    with _auth_client(tmp_path, monkeypatch) as client:
         api_search = client.post(
             "/memory/search",
             json={"query": "anything", "project_id": bad_project_id},
