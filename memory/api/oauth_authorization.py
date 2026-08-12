@@ -3,10 +3,12 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import ipaddress
+import re
 import secrets
 import time
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 from fastapi import HTTPException, Request
 from starlette.responses import JSONResponse, RedirectResponse, Response
@@ -17,6 +19,9 @@ from memory.auth import READ_SCOPE, WRITE_SCOPE
 from memory.config import HubConfig
 
 AUTHORIZATION_CODE_TTL_SECONDS = 300
+PKCE_VERIFIER_PATTERN = re.compile(r"^[A-Za-z0-9._~-]{43,128}$")
+LOCALHOST_NAMES = {"localhost"}
+REDIRECT_URI_SCHEMES = {"http", "https"}
 
 
 def register_oauth_authorization_routes(
@@ -28,7 +33,12 @@ def register_oauth_authorization_routes(
 ) -> None:
     @app.post("/oauth/register", include_in_schema=False)
     async def oauth_register(request: Request) -> JSONResponse:
-        payload = await request.json()
+        try:
+            payload = await request.json()
+        except ValueError as exc:
+            raise _oauth_error(
+                "invalid_client_metadata", "Request body must be a JSON object"
+            ) from exc
         redirect_uris = _redirect_uris_from_payload(payload)
         client_id = "amh_client_" + secrets.token_urlsafe(24)
         _registered_clients(request)[client_id] = {
@@ -70,6 +80,7 @@ def register_oauth_authorization_routes(
         if form.get("grant_type") != "authorization_code":
             raise _oauth_error("unsupported_grant_type", "Only authorization_code is supported")
         code = str(form.get("code") or "")
+        _sweep_expired_authorization_codes(request)
         record = _authorization_codes(request).pop(code, None)
         if record is None:
             raise _oauth_error("invalid_grant", "Authorization code is invalid or expired")
@@ -147,6 +158,7 @@ def _validated_authorization_request(request: Request, params: dict[str, str]) -
 def _authorization_code_redirect(
     request: Request, auth_request: dict[str, str], *, owner_id: str
 ) -> RedirectResponse:
+    _sweep_expired_authorization_codes(request)
     code = "amh_code_" + secrets.token_urlsafe(32)
     _authorization_codes(request)[code] = {
         **auth_request,
@@ -170,14 +182,49 @@ def _redirect_uris_from_payload(payload: Any) -> list[str]:
     values = payload.get("redirect_uris")
     if not isinstance(values, list) or not values:
         raise _oauth_error("invalid_client_metadata", "redirect_uris is required")
-    redirect_uris = [str(value).strip() for value in values if str(value).strip()]
-    if not redirect_uris or any("\r" in value or "\n" in value for value in redirect_uris):
+    redirect_uris = [_validated_redirect_uri(value) for value in values]
+    if not redirect_uris:
         raise _oauth_error("invalid_client_metadata", "redirect_uris contains invalid values")
     return redirect_uris
 
 
+def _validated_redirect_uri(value: object) -> str:
+    if not isinstance(value, str) or not value or value.strip() != value:
+        raise _oauth_error("invalid_client_metadata", "redirect_uris contains invalid values")
+    if "\r" in value or "\n" in value:
+        raise _oauth_error("invalid_client_metadata", "redirect_uris contains invalid values")
+    try:
+        parsed = urlparse(value)
+        _ = parsed.port
+    except ValueError as exc:
+        raise _oauth_error(
+            "invalid_client_metadata", "redirect_uris contains invalid values"
+        ) from exc
+    if (
+        parsed.scheme not in REDIRECT_URI_SCHEMES
+        or not parsed.netloc
+        or parsed.fragment
+        or parsed.username
+        or parsed.password
+        or not parsed.hostname
+        or not _is_loopback_host(parsed.hostname)
+    ):
+        raise _oauth_error("invalid_client_metadata", "redirect_uris contains invalid values")
+    return value
+
+
+def _is_loopback_host(hostname: str) -> bool:
+    normalized = hostname.rstrip(".").lower()
+    if normalized in LOCALHOST_NAMES:
+        return True
+    try:
+        return ipaddress.ip_address(normalized).is_loopback
+    except ValueError:
+        return False
+
+
 def _pkce_verifier_matches(verifier: str, record: dict[str, object]) -> bool:
-    if not verifier:
+    if not PKCE_VERIFIER_PATTERN.fullmatch(verifier):
         return False
     digest = hashlib.sha256(verifier.encode("ascii")).digest()
     challenge = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
@@ -195,6 +242,18 @@ def _authorization_codes(request: Request) -> dict[str, dict[str, object]]:
     if not hasattr(request.app.state, "oauth_authorization_codes"):
         request.app.state.oauth_authorization_codes = {}
     return request.app.state.oauth_authorization_codes
+
+
+def _sweep_expired_authorization_codes(request: Request) -> None:
+    now = int(time.time())
+    codes = _authorization_codes(request)
+    expired = []
+    for code, record in codes.items():
+        expires_at = record.get("expires_at")
+        if not isinstance(expires_at, int) or expires_at <= now:
+            expired.append(code)
+    for code in expired:
+        codes.pop(code, None)
 
 
 def _session(request: Request) -> dict[str, Any]:

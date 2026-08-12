@@ -143,6 +143,20 @@ valid.
 `AMH_SESSION_SECRET` signs browser session state. Keep it stable while you want
 browser sign-in sessions to survive restarts.
 
+## Dynamic MCP Clients
+
+MCP clients can dynamically register with the hub's local authorization server.
+Dynamic registration is intentionally limited to loopback redirect URIs such as
+`http://127.0.0.1:<port>/callback`, `http://localhost:<port>/callback`, or
+`http://[::1]:<port>/callback`. Remote hosts, fragments, userinfo, relative
+paths, and non-HTTP schemes are rejected.
+
+Registered dynamic clients and unredeemed authorization codes are process-local
+state. Restarting the hub requires clients to register again, and unredeemed
+codes expire after a short TTL. This keeps the first local MCP setup simple; use
+a durable/shared authorization component before relying on dynamic client state
+across multiple hub processes.
+
 ## Hub Config
 
 User-facing MCP setup should use `api.auth: oauth_resource_server`, set

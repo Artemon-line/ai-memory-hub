@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+import pytest
 from fastapi.testclient import TestClient
 from joserfc import jwt
 from joserfc.jwk import RSAKey
@@ -605,6 +606,171 @@ def test_oauth_authorization_code_flow_issues_mcp_bearer_token(tmp_path, monkeyp
     assert token.json()["scope"] == "memory:read memory:write"
     assert token_count == 1
     assert search.status_code == 200
+
+
+def test_oauth_register_rejects_malformed_json(tmp_path, monkeypatch) -> None:
+    client = _client(tmp_path, monkeypatch)
+
+    response = client.post(
+        "/oauth/register",
+        content="{",
+        headers={"content-type": "application/json"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["error"] == "invalid_client_metadata"
+
+
+@pytest.mark.parametrize(
+    "redirect_uri",
+    [
+        None,
+        42,
+        {"uri": "http://127.0.0.1/callback"},
+        "/oauth/callback",
+        "javascript:alert(1)",
+        "http://memory.example.com/callback",
+        "https://memory.example.com/callback",
+        "http://127.0.0.1/callback#fragment",
+        " http://127.0.0.1/callback",
+        "http://user:pass@127.0.0.1/callback",
+        "http://[::1",
+    ],
+)
+def test_oauth_register_rejects_untrusted_redirect_uris(
+    tmp_path, monkeypatch, redirect_uri: object
+) -> None:
+    client = _client(tmp_path, monkeypatch)
+
+    response = client.post(
+        "/oauth/register",
+        json={
+            "client_name": "Untrusted client",
+            "redirect_uris": [redirect_uri],
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["error"] == "invalid_client_metadata"
+
+
+@pytest.mark.parametrize(
+    "redirect_uri",
+    [
+        "http://localhost/oauth/callback",
+        "http://localhost:49152/oauth/callback",
+        "http://127.0.0.1:49152/oauth/callback",
+        "http://127.1.2.3:49152/oauth/callback",
+        "http://[::1]:49152/oauth/callback",
+        "https://localhost/oauth/callback",
+    ],
+)
+def test_oauth_register_accepts_loopback_redirect_uris(
+    tmp_path, monkeypatch, redirect_uri: str
+) -> None:
+    client = _client(tmp_path, monkeypatch)
+
+    response = client.post(
+        "/oauth/register",
+        json={
+            "client_name": "Local MCP client",
+            "redirect_uris": [redirect_uri],
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["redirect_uris"] == [redirect_uri]
+
+
+def test_logged_in_user_can_authorize_registered_loopback_client(tmp_path, monkeypatch) -> None:
+    client = _client(tmp_path, monkeypatch, allowed_domains=["example.com"])
+    login = client.get("/auth/google", follow_redirects=False)
+    login_state = parse_qs(urlparse(login.headers["location"]).query)["state"][0]
+    callback = client.get(f"/auth/google/callback?code=fake-code&state={login_state}")
+    redirect_uri = "http://127.0.0.1:49152/oauth/callback"
+    verifier = "logged-in-pkce-verifier-abcdefghijklmnopqrstuvwxyz0123456789"
+    register = client.post(
+        "/oauth/register",
+        json={
+            "client_name": "Local MCP client",
+            "redirect_uris": [redirect_uri],
+        },
+    )
+
+    authorize = client.get(
+        "/oauth/authorize",
+        params={
+            "response_type": "code",
+            "client_id": register.json()["client_id"],
+            "redirect_uri": redirect_uri,
+            "code_challenge": _pkce_challenge(verifier),
+            "code_challenge_method": "S256",
+            "state": "local-client-state",
+            "scope": "memory:read memory:write",
+            "resource": "https://memory.example.com/mcp",
+        },
+        follow_redirects=False,
+    )
+    redirect = urlparse(authorize.headers["location"])
+    params = parse_qs(redirect.query)
+
+    assert login.status_code == 303
+    assert callback.status_code == 200
+    assert register.status_code == 201
+    assert authorize.status_code == 303
+    assert f"{redirect.scheme}://{redirect.netloc}{redirect.path}" == redirect_uri
+    assert params["state"] == ["local-client-state"]
+    assert params["code"][0].startswith("amh_code_")
+
+
+def test_oauth_token_rejects_non_ascii_pkce_verifier_as_invalid_grant(
+    tmp_path, monkeypatch
+) -> None:
+    client = _client(tmp_path, monkeypatch)
+    client.app.state.oauth_authorization_codes = {
+        "amh_code_non_ascii": {
+            "client_id": "amh_client_test",
+            "redirect_uri": "http://127.0.0.1:49152/oauth/callback",
+            "code_challenge": _pkce_challenge(
+                "valid-pkce-verifier-abcdefghijklmnopqrstuvwxyz0123456789"
+            ),
+            "owner_id": "owner-a",
+            "expires_at": int(time.time()) + 300,
+            "resource": "https://memory.example.com/mcp",
+        }
+    }
+
+    response = client.post(
+        "/oauth/token",
+        data={
+            "grant_type": "authorization_code",
+            "code": "amh_code_non_ascii",
+            "redirect_uri": "http://127.0.0.1:49152/oauth/callback",
+            "client_id": "amh_client_test",
+            "code_verifier": "invalid-pkce-verifier-éabcdefghijklmnopqrstuvwxyz0123456789",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["error"] == "invalid_grant"
+
+
+def test_oauth_token_sweeps_expired_authorization_codes(tmp_path, monkeypatch) -> None:
+    client = _client(tmp_path, monkeypatch)
+    client.app.state.oauth_authorization_codes = {
+        "amh_code_expired": {"expires_at": int(time.time()) - 1},
+        "amh_code_live": {"expires_at": int(time.time()) + 300},
+    }
+
+    response = client.post(
+        "/oauth/token",
+        data={"grant_type": "authorization_code", "code": "amh_code_expired"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["error"] == "invalid_grant"
+    assert "amh_code_expired" not in client.app.state.oauth_authorization_codes
+    assert "amh_code_live" in client.app.state.oauth_authorization_codes
 
 
 def test_google_callback_rejects_invalid_state_and_denied_domain(tmp_path, monkeypatch) -> None:
