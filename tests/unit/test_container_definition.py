@@ -4,6 +4,8 @@ import re
 import tomllib
 from pathlib import Path
 
+import yaml
+
 PINNED_UV_IMAGE = "FROM ghcr.io/astral-sh/uv:0.11.32-python3.14-trixie-slim"
 PINNED_PGVECTOR_IMAGE = (
     "pgvector/pgvector:pg16"
@@ -221,12 +223,21 @@ def test_supply_chain_workflow_blocks_high_and_critical_vulnerabilities() -> Non
 
 
 def test_dependency_review_workflow_blocks_disallowed_dependency_changes() -> None:
-    workflow = Path(".github/workflows/dependency-review.yml").read_text(encoding="utf-8")
+    workflow_text = Path(".github/workflows/dependency-review.yml").read_text(encoding="utf-8")
+    workflow = yaml.safe_load(workflow_text)
+    steps = workflow["jobs"]["dependency-review"]["steps"]
+    review_step = next(
+        step
+        for step in steps
+        if step.get("uses")
+        == "actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294"
+    )
+    review_config = review_step["with"]
 
-    assert "actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0" in workflow
-    assert "warn-only: false" in workflow
-    assert "vulnerability-check: true" in workflow
-    assert "license-check: true" in workflow
+    assert "actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0" in workflow_text
+    assert review_config["warn-only"] is False
+    assert review_config["vulnerability-check"] is True
+    assert review_config["license-check"] is True
 
 
 def test_storage_provider_live_jobs_wait_for_services() -> None:
