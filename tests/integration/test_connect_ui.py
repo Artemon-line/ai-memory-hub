@@ -376,6 +376,64 @@ def test_connect_routes_are_public_secret_free_and_use_configured_mcp_url(tmp_pa
     assert "disabled" in connect.text
 
 
+def test_logout_rejects_oversized_form_without_revoking_session(tmp_path, monkeypatch) -> None:
+    client = _client(tmp_path, monkeypatch, allowed_domains=["example.com"])
+    start = client.get("/auth/google", follow_redirects=False)
+    state = parse_qs(urlparse(start.headers["location"]).query)["state"][0]
+    callback = client.get(f"/auth/google/callback?code=fake-code&state={state}")
+    csrf_token = client.cookies.get("amh_csrf")
+    oversized_body = f"csrf_token={csrf_token}&padding={'x' * 5000}"
+
+    response = client.post(
+        "/auth/logout",
+        content=oversized_body,
+        headers={"content-type": "application/x-www-form-urlencoded"},
+        follow_redirects=False,
+    )
+    with sqlite3.connect(tmp_path / "metadata.sqlite3") as conn:
+        revoked_at = conn.execute("SELECT revoked_at FROM web_sessions").fetchone()[0]
+
+    assert start.status_code == 303
+    assert callback.status_code == 200
+    assert response.status_code == 413
+    assert revoked_at is None
+
+
+def test_logout_accepts_bounded_form_and_revokes_session(tmp_path, monkeypatch) -> None:
+    client = _client(tmp_path, monkeypatch, allowed_domains=["example.com"])
+    start = client.get("/auth/google", follow_redirects=False)
+    state = parse_qs(urlparse(start.headers["location"]).query)["state"][0]
+    callback = client.get(f"/auth/google/callback?code=fake-code&state={state}")
+    csrf_token = client.cookies.get("amh_csrf")
+
+    response = client.post(
+        "/auth/logout",
+        data={"csrf_token": csrf_token},
+        follow_redirects=False,
+    )
+    with sqlite3.connect(tmp_path / "metadata.sqlite3") as conn:
+        revoked_at = conn.execute("SELECT revoked_at FROM web_sessions").fetchone()[0]
+
+    assert start.status_code == 303
+    assert callback.status_code == 200
+    assert response.status_code == 303
+    assert revoked_at is not None
+
+
+def test_logout_rejects_malformed_form_encoding(tmp_path, monkeypatch) -> None:
+    client = _client(tmp_path, monkeypatch)
+
+    response = client.post(
+        "/auth/logout",
+        content=b"csrf_token=\xff",
+        headers={"content-type": "application/x-www-form-urlencoded"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid logout form encoding"
+
+
 def test_connect_ui_renders_local_no_auth_mode_without_hiding_setup(
     tmp_path, monkeypatch
 ) -> None:
