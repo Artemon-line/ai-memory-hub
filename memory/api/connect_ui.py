@@ -29,6 +29,7 @@ from memory.ingestion.base_agent import BaseIngestionAgent
 logger = logging.getLogger(__name__)
 
 CONNECT_UI_ROOT = Path(__file__).resolve().parents[1] / "ui" / "connect"
+LOGOUT_FORM_MAX_BYTES = 4096
 templates = Jinja2Templates(directory=str(CONNECT_UI_ROOT / "templates"))
 
 
@@ -147,7 +148,7 @@ def register_connect_routes(app: FastAPI, *, agent: BaseIngestionAgent, config: 
 
     @app.post("/auth/logout", include_in_schema=False)
     async def auth_logout(request: Request) -> Response:
-        form = parse_qs((await request.body()).decode("utf-8"))
+        form = parse_qs(_logout_form_text(await _bounded_logout_body(request)))
         csrf_token = str((form.get("csrf_token") or [""])[0])
         await service.logout(request, csrf_token=csrf_token)
         response = RedirectResponse("/connect", status_code=303)
@@ -156,6 +157,31 @@ def register_connect_routes(app: FastAPI, *, agent: BaseIngestionAgent, config: 
         response.delete_cookie("amh_token_id")
         logger.info("Connect UI logout", extra={"event": "connect_logout"})
         return response
+
+
+async def _bounded_logout_body(request: Request) -> bytes:
+    length = request.headers.get("content-length")
+    if length is not None:
+        try:
+            declared_length = int(length)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid logout form length") from exc
+        if declared_length > LOGOUT_FORM_MAX_BYTES:
+            raise HTTPException(status_code=413, detail="Logout form is too large")
+
+    chunks = bytearray()
+    async for chunk in request.stream():
+        chunks.extend(chunk)
+        if len(chunks) > LOGOUT_FORM_MAX_BYTES:
+            raise HTTPException(status_code=413, detail="Logout form is too large")
+    return bytes(chunks)
+
+
+def _logout_form_text(body: bytes) -> str:
+    try:
+        return body.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(status_code=400, detail="Invalid logout form encoding") from exc
 
 
 def _has_pending_mcp_authorization(request: Request) -> bool:
