@@ -20,6 +20,7 @@ from memory.api.connect_service import (
     connect_status as _connect_status,
 )
 from memory.api.oauth_authorization import (
+    pending_authorization_model,
     pending_authorization_redirect,
     register_oauth_authorization_routes,
 )
@@ -62,10 +63,12 @@ def register_connect_routes(app: FastAPI, *, agent: BaseIngestionAgent, config: 
 
     @app.get("/connect", include_in_schema=False)
     async def connect(request: Request) -> Response:
+        model = await service.page_model(request)
+        model["pending_oauth_authorization"] = pending_authorization_model(request)
         return templates.TemplateResponse(
             request,
             "connect.html.j2",
-            await service.page_model(request),
+            model,
         )
 
     @app.get("/auth/{provider}", include_in_schema=False)

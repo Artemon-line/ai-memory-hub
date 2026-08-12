@@ -25,6 +25,8 @@ PUBLIC_PATHS = {
     "/auth/logout",
     "/health",
     "/oauth/authorize",
+    "/oauth/authorize/approve",
+    "/oauth/authorize/deny",
     "/oauth/register",
     "/oauth/token",
     "/ready",
