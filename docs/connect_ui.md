@@ -151,11 +151,18 @@ Dynamic registration is intentionally limited to loopback redirect URIs such as
 `http://[::1]:<port>/callback`. Remote hosts, fragments, userinfo, relative
 paths, and non-HTTP schemes are rejected.
 
+When a browser is already signed in, `/oauth/authorize` does not silently issue
+an authorization code for a newly registered dynamic client. The request is
+parked in the browser session and `/connect` requires an explicit
+CSRF-protected approval before redirecting back to the local client.
+
 Registered dynamic clients and unredeemed authorization codes are process-local
 state. Restarting the hub requires clients to register again, and unredeemed
-codes expire after a short TTL. This keeps the first local MCP setup simple; use
-a durable/shared authorization component before relying on dynamic client state
-across multiple hub processes.
+codes expire after a short TTL. The in-memory stores are capped so repeated
+unauthenticated registrations or abandoned authorization attempts cannot grow
+without bound. This keeps the first local MCP setup simple; use a durable/shared
+authorization component before relying on dynamic client state across multiple
+hub processes.
 
 ## Hub Config
 

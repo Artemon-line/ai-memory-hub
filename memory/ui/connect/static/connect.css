@@ -251,6 +251,31 @@ form {
   margin-top: 18px;
 }
 
+.oauth-approval {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid rgba(34, 111, 104, .22);
+  border-radius: 8px;
+  background: var(--accent-soft);
+}
+
+.oauth-approval h3,
+.oauth-approval form {
+  margin: 0;
+}
+
+.oauth-approval code {
+  overflow-wrap: anywhere;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .provider-list {
   display: flex;
   flex-wrap: wrap;

@@ -740,11 +740,12 @@ def test_oauth_register_accepts_loopback_redirect_uris(
     assert response.json()["redirect_uris"] == [redirect_uri]
 
 
-def test_logged_in_user_can_authorize_registered_loopback_client(tmp_path, monkeypatch) -> None:
+def test_logged_in_user_must_approve_registered_loopback_client(tmp_path, monkeypatch) -> None:
     client = _client(tmp_path, monkeypatch, allowed_domains=["example.com"])
     login = client.get("/auth/google", follow_redirects=False)
     login_state = parse_qs(urlparse(login.headers["location"]).query)["state"][0]
     callback = client.get(f"/auth/google/callback?code=fake-code&state={login_state}")
+    csrf_token = client.cookies.get("amh_csrf")
     redirect_uri = "http://127.0.0.1:49152/oauth/callback"
     verifier = "logged-in-pkce-verifier-abcdefghijklmnopqrstuvwxyz0123456789"
     register = client.post(
@@ -769,16 +770,58 @@ def test_logged_in_user_can_authorize_registered_loopback_client(tmp_path, monke
         },
         follow_redirects=False,
     )
-    redirect = urlparse(authorize.headers["location"])
+    connect = client.get(authorize.headers["location"])
+    approve = client.post(
+        "/oauth/authorize/approve",
+        data={"csrf_token": csrf_token},
+        follow_redirects=False,
+    )
+    redirect = urlparse(approve.headers["location"])
     params = parse_qs(redirect.query)
 
     assert login.status_code == 303
     assert callback.status_code == 200
     assert register.status_code == 201
     assert authorize.status_code == 303
+    assert authorize.headers["location"] == "/connect"
+    assert connect.status_code == 200
+    assert "Authorize local client" in connect.text
+    assert "Local MCP client" in connect.text
+    assert redirect_uri in connect.text
+    assert approve.status_code == 303
     assert f"{redirect.scheme}://{redirect.netloc}{redirect.path}" == redirect_uri
     assert params["state"] == ["local-client-state"]
     assert params["code"][0].startswith("amh_code_")
+
+
+def test_oauth_authorize_approve_rejects_missing_csrf(tmp_path, monkeypatch) -> None:
+    client = _client(tmp_path, monkeypatch, allowed_domains=["example.com"])
+    login = client.get("/auth/google", follow_redirects=False)
+    login_state = parse_qs(urlparse(login.headers["location"]).query)["state"][0]
+    callback = client.get(f"/auth/google/callback?code=fake-code&state={login_state}")
+    register = client.post(
+        "/oauth/register",
+        json={"client_name": "Local MCP client", "redirect_uris": ["http://127.0.0.1/cb"]},
+    )
+    authorize = client.get(
+        "/oauth/authorize",
+        params={
+            "response_type": "code",
+            "client_id": register.json()["client_id"],
+            "redirect_uri": "http://127.0.0.1/cb",
+            "code_challenge": _pkce_challenge(
+                "csrf-pkce-verifier-abcdefghijklmnopqrstuvwxyz0123456789"
+            ),
+            "code_challenge_method": "S256",
+        },
+        follow_redirects=False,
+    )
+
+    approve = client.post("/oauth/authorize/approve", data={}, follow_redirects=False)
+
+    assert callback.status_code == 200
+    assert authorize.status_code == 303
+    assert approve.status_code == 403
 
 
 def test_oauth_token_rejects_non_ascii_pkce_verifier_as_invalid_grant(
@@ -980,6 +1023,58 @@ def test_google_oauth_state_store_is_capped(tmp_path, monkeypatch) -> None:
         assert response.status_code == 303
 
     assert len(client.app.state.oauth_provider_states) <= 128
+
+
+def test_oauth_registered_client_store_is_capped_and_expires_records(
+    tmp_path, monkeypatch
+) -> None:
+    client = _client(tmp_path, monkeypatch)
+
+    expired = client.post(
+        "/oauth/register",
+        json={"client_name": "expired", "redirect_uris": ["http://127.0.0.1/expired"]},
+    )
+    expired_client_id = expired.json()["client_id"]
+    client.app.state.oauth_registered_clients[expired_client_id]["expires_at"] = (
+        int(time.time()) - 1
+    )
+    for index in range(140):
+        response = client.post(
+            "/oauth/register",
+            json={
+                "client_name": f"client-{index}",
+                "redirect_uris": [f"http://127.0.0.1:{49152 + index}/callback"],
+            },
+        )
+        assert response.status_code == 201
+
+    assert expired_client_id not in client.app.state.oauth_registered_clients
+    assert len(client.app.state.oauth_registered_clients) <= 128
+
+
+def test_oauth_authorization_code_store_is_capped(tmp_path, monkeypatch) -> None:
+    client = _client(tmp_path, monkeypatch)
+    redirect_uri = "http://127.0.0.1:49152/oauth/callback"
+    client.app.state.oauth_registered_clients = {
+        "amh_client_test": {
+            "client_id": "amh_client_test",
+            "client_name": "Test MCP client",
+            "redirect_uris": [redirect_uri],
+            "created_at": int(time.time()),
+            "expires_at": int(time.time()) + 300,
+        }
+    }
+    client.app.state.oauth_authorization_codes = {}
+    for index in range(140):
+        client.app.state.oauth_authorization_codes[f"amh_code_old_{index}"] = {
+            "created_at": index,
+            "expires_at": int(time.time()) + 300,
+        }
+
+    token = _mcp_oauth_token(client, state="cap-state")
+
+    assert token
+    assert len(client.app.state.oauth_authorization_codes) <= 128
 
 
 def test_oauth_authorization_code_is_single_use(tmp_path, monkeypatch) -> None:

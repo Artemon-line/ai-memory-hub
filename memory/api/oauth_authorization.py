@@ -14,11 +14,20 @@ from fastapi import HTTPException, Request
 from starlette.responses import JSONResponse, RedirectResponse, Response
 
 from memory.api.connect_oauth import ConnectOAuthRegistry
-from memory.api.connect_service import ConnectService, issue_hub_token, jwt_payload, utc_after
+from memory.api.connect_service import (
+    ConnectService,
+    csrf_matches,
+    issue_hub_token,
+    jwt_payload,
+    utc_after,
+)
 from memory.auth import READ_SCOPE, WRITE_SCOPE
 from memory.config import HubConfig
 
 AUTHORIZATION_CODE_TTL_SECONDS = 300
+AUTHORIZATION_CODE_MAX_RECORDS = 128
+OAUTH_CLIENT_TTL_SECONDS = 86_400
+OAUTH_CLIENT_MAX_RECORDS = 128
 PKCE_VERIFIER_PATTERN = re.compile(r"^[A-Za-z0-9._~-]{43,128}$")
 LOCALHOST_NAMES = {"localhost"}
 REDIRECT_URI_SCHEMES = {"http", "https"}
@@ -41,16 +50,23 @@ def register_oauth_authorization_routes(
             ) from exc
         redirect_uris = _redirect_uris_from_payload(payload)
         client_id = "amh_client_" + secrets.token_urlsafe(24)
-        _registered_clients(request)[client_id] = {
+        clients = _registered_clients(request)
+        _sweep_expired_registered_clients(request)
+        while len(clients) >= OAUTH_CLIENT_MAX_RECORDS:
+            _drop_oldest_record(clients)
+        issued_at = int(time.time())
+        clients[client_id] = {
             "client_id": client_id,
             "redirect_uris": redirect_uris,
             "client_name": str(payload.get("client_name") or "MCP client"),
-            "created_at": int(time.time()),
+            "created_at": issued_at,
+            "expires_at": issued_at + OAUTH_CLIENT_TTL_SECONDS,
         }
         return JSONResponse(
             {
                 "client_id": client_id,
-                "client_id_issued_at": int(time.time()),
+                "client_id_issued_at": issued_at,
+                "client_id_expires_at": issued_at + OAUTH_CLIENT_TTL_SECONDS,
                 "redirect_uris": redirect_uris,
                 "token_endpoint_auth_method": "none",
                 "grant_types": ["authorization_code"],
@@ -72,7 +88,31 @@ def register_oauth_authorization_routes(
                 provider=provider,
                 state_data={"pending_oauth_authorization": auth_request},
             )
+        _session(request)["pending_oauth_authorization"] = auth_request
+        return RedirectResponse("/connect", status_code=303)
+
+    @app.post("/oauth/authorize/approve", include_in_schema=False)
+    async def oauth_authorize_approve(request: Request) -> Response:
+        form = dict((await request.form()).items())
+        session = await service.session_from_request(request)
+        if session is None:
+            raise HTTPException(status_code=403, detail="Connect session is required")
+        if not csrf_matches(session, str(form.get("csrf_token") or ""), config=config):
+            raise HTTPException(status_code=403, detail="Invalid CSRF token")
+        pending = _session(request).pop("pending_oauth_authorization", None)
+        auth_request = _validated_pending_authorization_request(request, pending)
         return _authorization_code_redirect(request, auth_request, owner_id=str(session["user_id"]))
+
+    @app.post("/oauth/authorize/deny", include_in_schema=False)
+    async def oauth_authorize_deny(request: Request) -> Response:
+        form = dict((await request.form()).items())
+        session = await service.session_from_request(request)
+        if session is None:
+            raise HTTPException(status_code=403, detail="Connect session is required")
+        if not csrf_matches(session, str(form.get("csrf_token") or ""), config=config):
+            raise HTTPException(status_code=403, detail="Invalid CSRF token")
+        _session(request).pop("pending_oauth_authorization", None)
+        return RedirectResponse("/connect", status_code=303)
 
     @app.post("/oauth/token", include_in_schema=False)
     async def oauth_token(request: Request) -> JSONResponse:
@@ -129,9 +169,30 @@ def pending_authorization_redirect(request: Request, *, owner_id: str) -> Redire
     return _authorization_code_redirect(request, pending, owner_id=owner_id)
 
 
+def pending_authorization_model(request: Request) -> dict[str, str] | None:
+    try:
+        pending = request.session.get("pending_oauth_authorization")
+    except AssertionError:
+        return None
+    if not isinstance(pending, dict):
+        return None
+    try:
+        auth_request = _validated_pending_authorization_request(request, pending)
+    except HTTPException:
+        return None
+    client = _registered_clients(request).get(auth_request["client_id"]) or {}
+    return {
+        "client_name": str(client.get("client_name") or "MCP client"),
+        "redirect_uri": auth_request["redirect_uri"],
+        "scope": auth_request["scope"] or f"{READ_SCOPE} {WRITE_SCOPE}",
+        "resource": auth_request["resource"],
+    }
+
+
 def _validated_authorization_request(request: Request, params: dict[str, str]) -> dict[str, str]:
     if params.get("response_type") != "code":
         raise _oauth_error("unsupported_response_type", "Only response_type=code is supported")
+    _sweep_expired_registered_clients(request)
     client_id = str(params.get("client_id") or "")
     client = _registered_clients(request).get(client_id)
     if client is None:
@@ -155,15 +216,36 @@ def _validated_authorization_request(request: Request, params: dict[str, str]) -
     }
 
 
+def _validated_pending_authorization_request(
+    request: Request, pending: object
+) -> dict[str, str]:
+    if not isinstance(pending, dict):
+        raise _oauth_error("invalid_request", "No pending authorization request")
+    _sweep_expired_registered_clients(request)
+    values = {key: str(pending.get(key) or "") for key in _AUTH_REQUEST_FIELDS}
+    client = _registered_clients(request).get(values["client_id"])
+    if client is None:
+        raise _oauth_error("invalid_client", "Unknown OAuth client_id")
+    if values["redirect_uri"] not in client["redirect_uris"]:
+        raise _oauth_error("invalid_request", "redirect_uri is not registered")
+    if values["code_challenge_method"] != "S256" or not values["code_challenge"]:
+        raise _oauth_error("invalid_request", "PKCE S256 is required")
+    return values
+
+
 def _authorization_code_redirect(
     request: Request, auth_request: dict[str, str], *, owner_id: str
 ) -> RedirectResponse:
     _sweep_expired_authorization_codes(request)
+    codes = _authorization_codes(request)
+    while len(codes) >= AUTHORIZATION_CODE_MAX_RECORDS:
+        _drop_oldest_record(codes)
     code = "amh_code_" + secrets.token_urlsafe(32)
-    _authorization_codes(request)[code] = {
+    codes[code] = {
         **auth_request,
         "code": code,
         "owner_id": owner_id,
+        "created_at": int(time.time()),
         "expires_at": int(time.time()) + AUTHORIZATION_CODE_TTL_SECONDS,
     }
     query = {"code": code}
@@ -256,6 +338,27 @@ def _sweep_expired_authorization_codes(request: Request) -> None:
         codes.pop(code, None)
 
 
+def _sweep_expired_registered_clients(request: Request) -> None:
+    now = int(time.time())
+    clients = _registered_clients(request)
+    expired = []
+    for client_id, record in clients.items():
+        expires_at = record.get("expires_at")
+        if not isinstance(expires_at, int) or expires_at <= now:
+            expired.append(client_id)
+    for client_id in expired:
+        clients.pop(client_id, None)
+
+
+def _drop_oldest_record(records: dict[str, dict[str, object]]) -> None:
+    def created_at_for(key: str) -> int:
+        created_at = records[key].get("created_at")
+        return created_at if isinstance(created_at, int) else 0
+
+    if records:
+        records.pop(min(records, key=created_at_for), None)
+
+
 def _session(request: Request) -> dict[str, Any]:
     try:
         return request.session
@@ -276,3 +379,14 @@ def _oauth_error(error: str, description: str) -> HTTPException:
         status_code=400,
         detail={"error": error, "error_description": description},
     )
+
+
+_AUTH_REQUEST_FIELDS = (
+    "client_id",
+    "redirect_uri",
+    "code_challenge",
+    "code_challenge_method",
+    "resource",
+    "scope",
+    "state",
+)
