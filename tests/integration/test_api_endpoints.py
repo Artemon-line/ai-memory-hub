@@ -522,6 +522,27 @@ def test_hub_oauth_token_cannot_widen_claim_scopes_from_stored_context(tmp_path)
     assert 'error="insufficient_scope"' in insert.headers["www-authenticate"]
 
 
+def test_external_oauth_token_cannot_borrow_stored_context_scopes(tmp_path) -> None:
+    client, store = _sqlite_oauth_client(tmp_path)
+    token = _oauth_token(scope="memory:read")
+    store.create_auth_token(owner_id="owner-a", token=token, scopes=["memory:read", "memory:write"])
+
+    search = client.post(
+        "/memory/search",
+        json={"query": "hello"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    insert = client.post(
+        "/memory/insert",
+        json=_conversation(),
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert search.status_code == 200
+    assert insert.status_code == 403
+    assert 'error="insufficient_scope"' in insert.headers["www-authenticate"]
+
+
 def test_hub_oauth_token_rejects_stored_owner_mismatch(tmp_path) -> None:
     client, store = _sqlite_oauth_client(tmp_path)
     token = _hub_oauth_token(sub="owner-a")
