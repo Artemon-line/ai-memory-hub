@@ -31,6 +31,7 @@ uv run python -m pyright
 For documentation changes:
 
 ```bash
+uv sync --group docs
 uv run python tools/prepare_mkdocs.py
 uv run python -m mkdocs build --strict
 uv run pytest tests/unit/test_docs_build.py -q

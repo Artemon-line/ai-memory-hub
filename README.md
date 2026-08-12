@@ -350,6 +350,7 @@ provider matrix, smoke commands, CI coverage, and hosted-provider notes.
 Build the docs locally:
 
 ```bash
+uv sync --group docs
 uv run python tools/prepare_mkdocs.py
 uv run python -m mkdocs build --strict
 ```
@@ -376,6 +377,7 @@ Contributions are welcome. Keep changes focused, add tests for behavior changes,
 and run the relevant checks before opening a pull request.
 
 ```bash
+uv sync --dev --group docs
 uv run python -m ruff check memory tests tools
 uv run python -m pyright
 uv run pytest

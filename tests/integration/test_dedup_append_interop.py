@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 
 from memory.api.server import create_app
@@ -31,8 +31,8 @@ def _client(tmp_path: Path) -> TestClient:
     return TestClient(create_app(config=_config(tmp_path)))
 
 
-def _auth_client(tmp_path: Path) -> TestClient:
-    os.environ["AMH_TOKEN_HASH_SECRET"] = "dedup-append-secret"
+def _auth_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    monkeypatch.setenv("AMH_TOKEN_HASH_SECRET", "dedup-append-secret")
     config = parse_config(_config(tmp_path, auth="bearer_token"))
     ensure_token_hash_secret(config)
     store = SQLiteMetadataStore(Path(config.paths.data_dir) / "metadata.sqlite3")
@@ -295,12 +295,12 @@ def test_same_id_different_content_conflicts_are_deterministic_across_api_and_mc
 
 
 def test_same_conversation_content_is_allowed_and_isolated_across_projects(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     first = _conversation(text="Same content across projects phrase is brass mirror.")
     second = _conversation(text="Same content across projects phrase is brass mirror.")
 
-    with _auth_client(tmp_path) as client:
+    with _auth_client(tmp_path, monkeypatch) as client:
         owner_headers = {"Authorization": "Bearer token-a"}
         api_insert = client.post(
             "/memory/insert",
