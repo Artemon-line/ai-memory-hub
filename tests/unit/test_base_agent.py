@@ -14,9 +14,16 @@ class DummyAgent(BaseIngestionAgent):
         return {"id": memory_id}
 
 
+class LegacyTokenAgent(DummyAgent):
+    async def authenticate_bearer_token(self, token: str) -> str | None:
+        if token == "legacy-token":
+            return "owner-a"
+        return None
+
+
 def test_base_agent_is_abstract() -> None:
     with pytest.raises(TypeError):
-        BaseIngestionAgent(config={}) # type: ignore
+        BaseIngestionAgent(config={})  # type: ignore
 
 
 @pytest.mark.asyncio
@@ -40,3 +47,14 @@ def test_postprocess_default_noop() -> None:
     agent = DummyAgent(config={})
     result = {"ok": True}
     assert agent.postprocess_result(result) == result
+
+
+@pytest.mark.asyncio
+async def test_legacy_token_context_does_not_grant_scopes() -> None:
+    agent = LegacyTokenAgent(config={})
+
+    context = await agent.authenticate_bearer_token_context("legacy-token")
+    missing = await agent.authenticate_bearer_token_context("missing-token")
+
+    assert context == {"owner_id": "owner-a", "token_id": None, "scopes": []}
+    assert missing is None

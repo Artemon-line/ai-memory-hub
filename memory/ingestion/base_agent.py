@@ -168,7 +168,7 @@ class BaseIngestionAgent(ABC):
         return {
             "owner_id": owner_id,
             "token_id": None,
-            "scopes": ["memory:read", "memory:write"],
+            "scopes": [],
         }
 
     async def find_or_create_oauth_identity(
