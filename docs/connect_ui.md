@@ -160,9 +160,14 @@ Registered dynamic clients and unredeemed authorization codes are process-local
 state. Restarting the hub requires clients to register again, and unredeemed
 codes expire after a short TTL. The in-memory stores are capped so repeated
 unauthenticated registrations or abandoned authorization attempts cannot grow
-without bound. This keeps the first local MCP setup simple; use a durable/shared
-authorization component before relying on dynamic client state across multiple
-hub processes.
+without bound.
+
+Run the built-in local authorization server as a single hub process. Startup
+fails when `api.auth: oauth_resource_server` is paired with common multi-worker
+deployment hints such as `WEB_CONCURRENCY=2`, `UVICORN_WORKERS=2`, or
+`GUNICORN_WORKERS=2`. This keeps the first local MCP setup simple; use a
+durable/shared authorization component before relying on dynamic client state
+across multiple hub processes.
 
 ## Hub Config
 

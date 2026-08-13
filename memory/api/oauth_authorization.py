@@ -4,6 +4,7 @@ import base64
 import hashlib
 import hmac
 import ipaddress
+import os
 import re
 import secrets
 import time
@@ -31,6 +32,7 @@ OAUTH_CLIENT_MAX_RECORDS = 128
 PKCE_VERIFIER_PATTERN = re.compile(r"^[A-Za-z0-9._~-]{43,128}$")
 LOCALHOST_NAMES = {"localhost"}
 REDIRECT_URI_SCHEMES = {"http", "https"}
+MULTI_WORKER_ENV_VARS = ("WEB_CONCURRENCY", "UVICORN_WORKERS", "GUNICORN_WORKERS")
 
 
 def register_oauth_authorization_routes(
@@ -40,6 +42,8 @@ def register_oauth_authorization_routes(
     oauth: ConnectOAuthRegistry,
     config: HubConfig,
 ) -> None:
+    _assert_process_local_oauth_state_allowed(config)
+
     @app.post("/oauth/register", include_in_schema=False)
     async def oauth_register(request: Request) -> JSONResponse:
         try:
@@ -324,6 +328,33 @@ def _authorization_codes(request: Request) -> dict[str, dict[str, object]]:
     if not hasattr(request.app.state, "oauth_authorization_codes"):
         request.app.state.oauth_authorization_codes = {}
     return request.app.state.oauth_authorization_codes
+
+
+def _assert_process_local_oauth_state_allowed(config: HubConfig) -> None:
+    if config.api.auth != "oauth_resource_server":
+        return
+    if _configured_worker_count() <= 1:
+        return
+    raise RuntimeError(
+        "Connect OAuth dynamic client registration uses process-local state. "
+        "Run ai-memory-hub as a single worker, or place a shared authorization "
+        "component in front of the hub before enabling multiple workers."
+    )
+
+
+def _configured_worker_count() -> int:
+    counts = [_worker_count_from_env(name) for name in MULTI_WORKER_ENV_VARS]
+    return max(counts, default=1)
+
+
+def _worker_count_from_env(name: str) -> int:
+    raw_value = os.environ.get(name)
+    if raw_value is None:
+        return 1
+    try:
+        return int(raw_value)
+    except ValueError:
+        return 1
 
 
 def _sweep_expired_authorization_codes(request: Request) -> None:
