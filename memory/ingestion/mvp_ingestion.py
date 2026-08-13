@@ -9,10 +9,11 @@ import time
 import urllib.error
 import urllib.request
 from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterator, Protocol, Sequence
+from typing import Any, Callable, Iterator, Protocol, Sequence
 from uuid import uuid4
 
 from memory.advanced_memory import (
@@ -307,6 +308,9 @@ class FactFilters:
 
 
 _RUNTIME: RuntimeDependencies | None = None
+_RUNTIME_OVERRIDE: ContextVar[RuntimeDependencies | None] = ContextVar(
+    "amh_mvp_runtime_override", default=None
+)
 _SEARCH_CANDIDATE_MULTIPLIER = 3
 _CONVERSATION_GROUP_SCORE_WINDOW = 0.25
 _MAX_MESSAGES = 10_000
@@ -756,8 +760,101 @@ def configure_runtime(
     return _RUNTIME
 
 
+@contextmanager
+def runtime_context(runtime: RuntimeDependencies) -> Iterator[None]:
+    token = _RUNTIME_OVERRIDE.set(runtime)
+    try:
+        yield
+    finally:
+        _RUNTIME_OVERRIDE.reset(token)
+
+
+class MVPIngestionService:
+    """Runtime-bound facade for the deterministic MVP ingestion operations."""
+
+    def __init__(self, runtime: RuntimeDependencies):
+        self._runtime = runtime
+
+    def _call(self, operation: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+        with runtime_context(self._runtime):
+            return operation(*args, **kwargs)
+
+    def ingest_messages(self, conversation_json: Any, **kwargs: Any) -> dict[str, Any]:
+        return self._call(ingest_messages, conversation_json, **kwargs)
+
+    def store_pending_review_memory(
+        self, conversation_json: dict[str, Any], **kwargs: Any
+    ) -> dict[str, Any]:
+        return self._call(store_pending_review_memory, conversation_json, **kwargs)
+
+    def search(self, *, query: str, **kwargs: Any) -> dict[str, Any]:
+        return self._call(search, query=query, **kwargs)
+
+    def retrieve(self, memory_id: str, **kwargs: Any) -> dict[str, Any] | None:
+        return self._call(retrieve, memory_id, **kwargs)
+
+    def ask(self, *, question: str, **kwargs: Any) -> dict[str, Any]:
+        return self._call(ask, question=question, **kwargs)
+
+    def runtime_health(self) -> dict[str, Any]:
+        return self._call(runtime_health)
+
+    def fact_search(self, **kwargs: Any) -> dict[str, Any]:
+        return self._call(fact_search, **kwargs)
+
+    def profile_get(self, subject: str = "user", **kwargs: Any) -> dict[str, Any]:
+        return self._call(profile_get, subject, **kwargs)
+
+    def fact_supersede(
+        self, fact_id: str, superseded_by: str, **kwargs: Any
+    ) -> dict[str, Any]:
+        return self._call(fact_supersede, fact_id, superseded_by, **kwargs)
+
+    def approve_pending_memory(self, memory_id: str, **kwargs: Any) -> dict[str, Any]:
+        return self._call(approve_pending_memory, memory_id, **kwargs)
+
+    def reject_pending_memory(self, memory_id: str, **kwargs: Any) -> dict[str, Any]:
+        return self._call(reject_pending_memory, memory_id, **kwargs)
+
+    def project_list(self, **kwargs: Any) -> dict[str, Any]:
+        return self._call(project_list, **kwargs)
+
+    def project_default_get(self, **kwargs: Any) -> dict[str, Any]:
+        return self._call(project_default_get, **kwargs)
+
+    def project_get(self, project_id: str, **kwargs: Any) -> dict[str, Any]:
+        return self._call(project_get, project_id, **kwargs)
+
+    def authenticate_bearer_token(self, token: str) -> str | None:
+        return self._call(authenticate_bearer_token, token)
+
+    def authenticate_bearer_token_context(self, token: str) -> dict[str, object] | None:
+        return self._call(authenticate_bearer_token_context, token)
+
+    def find_or_create_oauth_identity(self, **kwargs: Any) -> dict[str, object]:
+        return self._call(find_or_create_oauth_identity, **kwargs)
+
+    def create_web_session(self, **kwargs: Any) -> dict[str, object]:
+        return self._call(create_web_session, **kwargs)
+
+    def web_session_for_hash(self, session_id_hash: str) -> dict[str, object] | None:
+        return self._call(web_session_for_hash, session_id_hash)
+
+    def revoke_web_session(self, session_id_hash: str) -> bool:
+        return self._call(revoke_web_session, session_id_hash)
+
+    def create_auth_token(self, **kwargs: Any) -> dict[str, object]:
+        return self._call(create_auth_token, **kwargs)
+
+    def revoke_auth_token(self, token_id_or_prefix: str) -> dict[str, object] | None:
+        return self._call(revoke_auth_token, token_id_or_prefix)
+
+
 def _runtime() -> RuntimeDependencies:
     global _RUNTIME
+    runtime_override = _RUNTIME_OVERRIDE.get()
+    if runtime_override is not None:
+        return runtime_override
     if _RUNTIME is None:
         _RUNTIME = build_runtime()
     return _RUNTIME

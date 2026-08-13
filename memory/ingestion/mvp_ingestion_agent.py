@@ -20,7 +20,8 @@ class MVPIngestionAgent(BaseIngestionAgent):
         runtime: mvp_ingestion.RuntimeDependencies | None = None,
     ):
         super().__init__(config)
-        mvp_ingestion.configure_runtime(runtime=runtime, config=config)
+        configured_runtime = mvp_ingestion.configure_runtime(runtime=runtime, config=config)
+        self._service = mvp_ingestion.MVPIngestionService(configured_runtime)
 
     async def ingest_messages(
         self,
@@ -31,7 +32,7 @@ class MVPIngestionAgent(BaseIngestionAgent):
     ) -> Dict[str, Any]:
         payload = self.preprocess_messages(conversation_json)
         try:
-            result = mvp_ingestion.ingest_messages(
+            result = self._service.ingest_messages(
                 payload, owner_id=owner_id, project_id=project_id
             )
         except jsonschema.ValidationError:
@@ -46,7 +47,7 @@ class MVPIngestionAgent(BaseIngestionAgent):
         project_id: str | None = None,
     ) -> Dict[str, Any]:
         payload = self.preprocess_messages(conversation_json)
-        result = mvp_ingestion.store_pending_review_memory(
+        result = self._service.store_pending_review_memory(
             payload, owner_id=owner_id, project_id=project_id
         )
         return self.postprocess_result(result)
@@ -66,7 +67,7 @@ class MVPIngestionAgent(BaseIngestionAgent):
         tags: list[str] | tuple[str, ...] | None = None,
         thread_id: str | None = None,
     ) -> Dict[str, Any]:
-        return mvp_ingestion.search(
+        return self._service.search(
             query=query,
             top_k=top_k,
             result_mode=result_mode,
@@ -88,7 +89,7 @@ class MVPIngestionAgent(BaseIngestionAgent):
         project_id: str | None = None,
         memory_status: str = "active",
     ) -> Optional[Dict[str, Any]]:
-        return mvp_ingestion.retrieve(
+        return self._service.retrieve(
             memory_id,
             owner_id=owner_id,
             project_id=project_id,
@@ -111,7 +112,7 @@ class MVPIngestionAgent(BaseIngestionAgent):
         tags: list[str] | tuple[str, ...] | None = None,
         thread_id: str | None = None,
     ) -> Dict[str, Any]:
-        return mvp_ingestion.ask(
+        return self._service.ask(
             question=question,
             top_k=top_k,
             max_context_tokens=max_context_tokens,
@@ -127,7 +128,7 @@ class MVPIngestionAgent(BaseIngestionAgent):
         )
 
     async def health(self) -> Dict[str, Any]:
-        return mvp_ingestion.runtime_health()
+        return self._service.runtime_health()
 
     async def fact_search(
         self,
@@ -148,7 +149,7 @@ class MVPIngestionAgent(BaseIngestionAgent):
         freshness_from: str | None = None,
         freshness_to: str | None = None,
     ) -> Dict[str, Any]:
-        return mvp_ingestion.fact_search(
+        return self._service.fact_search(
             subject=subject,
             predicate=predicate,
             include_superseded=include_superseded,
@@ -184,7 +185,7 @@ class MVPIngestionAgent(BaseIngestionAgent):
         freshness_from: str | None = None,
         freshness_to: str | None = None,
     ) -> Dict[str, Any]:
-        return mvp_ingestion.profile_get(
+        return self._service.profile_get(
             subject=subject,
             owner_id=owner_id,
             project_id=project_id,
@@ -209,9 +210,9 @@ class MVPIngestionAgent(BaseIngestionAgent):
         owner_id: str | None = None,
         project_id: str | None = None,
     ) -> Dict[str, Any]:
-        return mvp_ingestion.fact_supersede(
-            fact_id=fact_id,
-            superseded_by=superseded_by,
+        return self._service.fact_supersede(
+            fact_id,
+            superseded_by,
             owner_id=owner_id,
             project_id=project_id,
         )
@@ -219,33 +220,33 @@ class MVPIngestionAgent(BaseIngestionAgent):
     async def approve_pending_memory(
         self, memory_id: str, *, owner_id: str | None = None, project_id: str | None = None
     ) -> Dict[str, Any]:
-        return mvp_ingestion.approve_pending_memory(
+        return self._service.approve_pending_memory(
             memory_id, owner_id=owner_id, project_id=project_id
         )
 
     async def reject_pending_memory(
         self, memory_id: str, *, owner_id: str | None = None, project_id: str | None = None
     ) -> Dict[str, Any]:
-        return mvp_ingestion.reject_pending_memory(
+        return self._service.reject_pending_memory(
             memory_id, owner_id=owner_id, project_id=project_id
         )
 
     async def project_list(self, *, owner_id: str | None = None) -> Dict[str, Any]:
-        return mvp_ingestion.project_list(owner_id=owner_id)
+        return self._service.project_list(owner_id=owner_id)
 
     async def project_default_get(self, *, owner_id: str | None = None) -> Dict[str, Any]:
-        return mvp_ingestion.project_default_get(owner_id=owner_id)
+        return self._service.project_default_get(owner_id=owner_id)
 
     async def project_get(
         self, project_id: str, *, owner_id: str | None = None
     ) -> Dict[str, Any]:
-        return mvp_ingestion.project_get(project_id, owner_id=owner_id)
+        return self._service.project_get(project_id, owner_id=owner_id)
 
     async def authenticate_bearer_token(self, token: str) -> str | None:
-        return mvp_ingestion.authenticate_bearer_token(token)
+        return self._service.authenticate_bearer_token(token)
 
     async def authenticate_bearer_token_context(self, token: str) -> dict[str, object] | None:
-        return mvp_ingestion.authenticate_bearer_token_context(token)
+        return self._service.authenticate_bearer_token_context(token)
 
     async def find_or_create_oauth_identity(
         self,
@@ -255,7 +256,7 @@ class MVPIngestionAgent(BaseIngestionAgent):
         email: str | None = None,
         display_name: str | None = None,
     ) -> dict[str, object]:
-        return mvp_ingestion.find_or_create_oauth_identity(
+        return self._service.find_or_create_oauth_identity(
             provider=provider,
             provider_subject=provider_subject,
             email=email,
@@ -270,7 +271,7 @@ class MVPIngestionAgent(BaseIngestionAgent):
         csrf_token_hash: str,
         expires_at: str,
     ) -> dict[str, object]:
-        return mvp_ingestion.create_web_session(
+        return self._service.create_web_session(
             session_id_hash=session_id_hash,
             user_id=user_id,
             csrf_token_hash=csrf_token_hash,
@@ -278,10 +279,10 @@ class MVPIngestionAgent(BaseIngestionAgent):
         )
 
     async def web_session_for_hash(self, session_id_hash: str) -> dict[str, object] | None:
-        return mvp_ingestion.web_session_for_hash(session_id_hash)
+        return self._service.web_session_for_hash(session_id_hash)
 
     async def revoke_web_session(self, session_id_hash: str) -> bool:
-        return mvp_ingestion.revoke_web_session(session_id_hash)
+        return self._service.revoke_web_session(session_id_hash)
 
     async def create_auth_token(
         self,
@@ -292,7 +293,7 @@ class MVPIngestionAgent(BaseIngestionAgent):
         expires_at: str | None = None,
         scopes: list[str] | None = None,
     ) -> dict[str, object]:
-        return mvp_ingestion.create_auth_token(
+        return self._service.create_auth_token(
             owner_id=owner_id,
             token=token,
             token_display_name=token_display_name,
@@ -301,4 +302,4 @@ class MVPIngestionAgent(BaseIngestionAgent):
         )
 
     async def revoke_auth_token(self, token_id_or_prefix: str) -> dict[str, object] | None:
-        return mvp_ingestion.revoke_auth_token(token_id_or_prefix)
+        return self._service.revoke_auth_token(token_id_or_prefix)

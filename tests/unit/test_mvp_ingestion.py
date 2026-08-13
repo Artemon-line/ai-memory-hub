@@ -9,6 +9,7 @@ import pytest
 
 from memory.ingestion import mvp_ingestion
 from memory.ingestion import validate as ingestion_validate
+from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
 from memory.ingestion.summary_models import (
     GeneratedSummary,
     SummaryBasis,
@@ -1647,6 +1648,59 @@ def test_custom_schema_runtime_does_not_leak_to_default_runtime(tmp_path: Path) 
     _configure_stubs()
 
     mvp_ingestion.validate_json(mvp_ingestion.normalize_conversation_json(_valid_conversation()))
+
+
+@pytest.mark.asyncio
+async def test_mvp_agents_keep_independent_schema_runtimes(tmp_path: Path) -> None:
+    schema_path = tmp_path / "conversation.custom.schema.json"
+    schema = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+            "id": {"type": "string"},
+            "source": {"type": "string"},
+            "timestamp": {"type": "string"},
+            "messages": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "role": {"type": "string"},
+                        "text": {"type": "string"},
+                        "hash": {"type": "string"},
+                    },
+                    "required": ["role", "text", "hash"],
+                },
+            },
+            "metadata": {
+                "type": "object",
+                "required": ["imported_at", "updated_at", "conversation_hash"],
+            },
+            "must_exist": {"type": "string"},
+        },
+        "required": ["id", "source", "timestamp", "messages", "metadata", "must_exist"],
+        "additionalProperties": True,
+    }
+    schema_path.write_text(json.dumps(schema), encoding="utf-8")
+    custom_agent = MVPIngestionAgent(
+        config={
+            "providers": {"embeddings": "local", "vector_db": "in_memory"},
+            "paths": {"data_dir": str(tmp_path / "custom-data")},
+            "schema": {"file": str(schema_path)},
+        }
+    )
+    default_agent = MVPIngestionAgent(
+        config={
+            "providers": {"embeddings": "local", "vector_db": "in_memory"},
+            "paths": {"data_dir": str(tmp_path / "default-data")},
+        }
+    )
+
+    with pytest.raises(jsonschema.ValidationError):
+        await custom_agent.ingest_messages(_valid_conversation())
+    result = await default_agent.ingest_messages(_valid_conversation())
+
+    assert result["status"] == "ok"
 
 
 def test_schema_missing_code_required_fields_fails_startup(tmp_path: Path) -> None:
