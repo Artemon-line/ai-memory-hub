@@ -4,6 +4,8 @@ import argparse
 import json
 from pathlib import Path
 
+import pytest
+
 from memory.tools import real_client_smoke
 
 
@@ -120,5 +122,41 @@ def test_run_harness_removes_temporary_workspace(tmp_path: Path, monkeypatch) ->
     result = real_client_smoke.run_harness(args)
 
     assert result.status == "ok"
+    assert artifact_dir.exists()
+    assert not workspace.exists()
+
+
+def test_run_harness_removes_temporary_workspace_after_startup_failure(
+    tmp_path: Path, monkeypatch
+) -> None:
+    artifact_dir = tmp_path / "artifacts"
+    workspace = tmp_path / "workspace"
+    created_paths = [str(artifact_dir), str(workspace)]
+
+    monkeypatch.setattr(real_client_smoke.tempfile, "mkdtemp", lambda prefix: created_paths.pop(0))
+    monkeypatch.setattr(real_client_smoke, "_start_hub", lambda **kwargs: None)
+    monkeypatch.setattr(real_client_smoke, "_start_gateway", lambda **kwargs: None)
+    monkeypatch.setattr(real_client_smoke, "_wait_for_hub", lambda *args, **kwargs: None)
+
+    def fail_gateway(*args, **kwargs) -> None:
+        _ = args, kwargs
+        raise RuntimeError("gateway failed")
+
+    monkeypatch.setattr(real_client_smoke, "_wait_for_gateway", fail_gateway)
+    monkeypatch.setattr(real_client_smoke, "_terminate_process", lambda process: None)
+    args = argparse.Namespace(
+        artifact_dir=None,
+        client=["claude"],
+        hub_url="http://127.0.0.1:8000",
+        gateway_url="http://127.0.0.1:9000",
+        startup_timeout=1,
+        client_timeout=1,
+        require_configured=False,
+        require_success_for=[],
+    )
+
+    with pytest.raises(RuntimeError, match="gateway failed"):
+        real_client_smoke.run_harness(args)
+
     assert artifact_dir.exists()
     assert not workspace.exists()
