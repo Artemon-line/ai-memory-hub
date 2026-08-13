@@ -376,6 +376,22 @@ def test_connect_routes_are_public_secret_free_and_use_configured_mcp_url(tmp_pa
     assert "disabled" in connect.text
 
 
+def test_connect_oauth_rejects_known_multi_worker_state(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("WEB_CONCURRENCY", "2")
+
+    with pytest.raises(RuntimeError, match="process-local state"):
+        _client(tmp_path, monkeypatch)
+
+
+def test_connect_no_auth_allows_multi_worker_env_hint(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("WEB_CONCURRENCY", "2")
+
+    client = _client(tmp_path, monkeypatch, api_auth="none")
+    connect = client.get("/connect")
+
+    assert connect.status_code == 200
+
+
 def test_logout_rejects_oversized_form_without_revoking_session(tmp_path, monkeypatch) -> None:
     client = _client(tmp_path, monkeypatch, allowed_domains=["example.com"])
     start = client.get("/auth/google", follow_redirects=False)
