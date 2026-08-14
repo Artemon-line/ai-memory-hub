@@ -5,27 +5,55 @@ from pathlib import Path
 
 import pytest
 
+import memory.config as config_module
 from memory.config import HubConfig, ensure_token_hash_secret, load_config, parse_config
 
 
-def test_load_config_default():
-    # Now this should load config.yaml if it exists
-    config = load_config()
-    assert isinstance(config, HubConfig)
-    
-    config_path = Path("config.yaml")
-    if config_path.exists():
-        assert config.providers.embeddings == "local"
-        assert config.providers.embedding_dimension == 32
-    else:
-        assert config.providers.embeddings == "http"
+def _write_config(path: Path, *, embeddings: str, dimension: int) -> None:
+    path.write_text(
+        "\n".join(
+            [
+                "providers:",
+                f"  embeddings: {embeddings}",
+                f"  embedding_dimension: {dimension}",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
 
-def test_load_config_from_file():
-    config_path = Path("config.yaml")
-    if not config_path.exists():
-        pytest.skip("config.yaml not found")
-    
+
+def test_load_config_default_uses_defaults_without_config_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(config_module, "__file__", str(tmp_path / "memory" / "config.py"))
+
+    config = load_config()
+
+    assert isinstance(config, HubConfig)
+    assert config.providers.embeddings == "http"
+    assert config.providers.embedding_dimension == 768
+
+
+def test_load_config_default_reads_repo_root_config_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(config_module, "__file__", str(tmp_path / "memory" / "config.py"))
+    _write_config(tmp_path / "config.yaml", embeddings="local", dimension=32)
+
+    config = load_config()
+
+    assert isinstance(config, HubConfig)
+    assert config.providers.embeddings == "local"
+    assert config.providers.embedding_dimension == 32
+
+
+def test_load_config_from_file(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    _write_config(config_path, embeddings="local", dimension=32)
+
     config = load_config(config_path)
+
     assert isinstance(config, HubConfig)
     assert config.providers.embeddings == "local"
     assert config.providers.embedding_dimension == 32
