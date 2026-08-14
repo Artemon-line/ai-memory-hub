@@ -1,5 +1,6 @@
 import json
 import sys
+from contextlib import AsyncExitStack
 from pathlib import Path
 from typing import Any
 
@@ -34,67 +35,90 @@ async def test_memory_scenario_e2e():
         args=[str(Path(__file__).parent / "mcp_server_entry.py")],
     )
 
-    try:
-        async with stdio_client(server_params) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
+    async with AsyncExitStack() as stack:
+        try:
+            read, write = await stack.enter_async_context(stdio_client(server_params))
+            session = await stack.enter_async_context(ClientSession(read, write))
+            await session.initialize()
+        except Exception as e:
+            if _is_connection_setup_error(e):
+                pytest.skip("Ollama is not running. Skipping E2E test.")
+            raise
 
-                # 1. Insert memories
-                memories = [
-                    "Hello from SQLite!",
-                    "I love VRAM and GPUs",
-                    "I enjoy cooking pasta",
-                ]
+        await _run_memory_scenario(session)
 
-                ids = []
-                for text in memories:
-                    payload = {
-                        "conversation_json": {
-                            "messages": [{"role": "user", "content": text}]
-                        }
-                    }
-                    result = await session.call_tool("memory_insert", payload)
 
-                    # Verify tool execution succeeded
-                    assert not result.isError, (
-                        f"Tool call failed for '{text}': {result}"
-                    )
+async def _run_memory_scenario(session: ClientSession) -> None:
+    # 1. Insert memories
+    memories = [
+        "Hello from SQLite!",
+        "I love VRAM and GPUs",
+        "I enjoy cooking pasta",
+    ]
 
-                    # Parse the JSON response from the tool
-                    # FastMCP tool results have a 'content' list
-                    assert len(result.content) > 0
-                    res_data = json.loads(_get_text_from_content(result.content))
-                    assert res_data["status"] == "ok", (
-                        f"Insert failed for '{text}': {res_data}"
-                    )
-                    ids.append(res_data["id"])
+    ids = []
+    for text in memories:
+        payload = {
+            "conversation_json": {
+                "messages": [{"role": "user", "content": text}]
+            }
+        }
+        result = await session.call_tool("memory_insert", payload)
 
-                # 2. Ask "GPU"
-                # We use memory_ask which performs search + answering
-                ask_payload = {"question": "GPU", "top_k": 3}
-                ask_result = await session.call_tool("memory_ask", ask_payload)
+        # Verify tool execution succeeded
+        assert not result.isError, f"Tool call failed for '{text}': {result}"
 
-                assert not ask_result.isError, f"memory_ask failed: {ask_result}"
+        # Parse the JSON response from the tool
+        # FastMCP tool results have a 'content' list
+        assert len(result.content) > 0
+        res_data = json.loads(_get_text_from_content(result.content))
+        assert res_data["status"] == "ok", f"Insert failed for '{text}': {res_data}"
+        ids.append(res_data["id"])
 
-                assert len(ask_result.content) > 0
-                ask_res = json.loads(_get_text_from_content(ask_result.content))
+    # 2. Ask "GPU"
+    # We use memory_ask which performs search + answering
+    ask_payload = {"question": "GPU", "top_k": 3}
+    ask_result = await session.call_tool("memory_ask", ask_payload)
 
-                assert ask_res["status"] == "ok"
-                assert "answer" in ask_res
-                assert "citations" in ask_res
+    assert not ask_result.isError, f"memory_ask failed: {ask_result}"
 
-                # Verify that the answer mentions GPUs or at least includes citations
-                # The exact answer depends on the prompt, but it should contain our GPU memory
-                citation_texts = [c["text"] for c in ask_res["citations"]]
-                assert any("GPU" in t for t in citation_texts), (
-                    f"GPU not found in citations: {citation_texts}"
-                )
+    assert len(ask_result.content) > 0
+    ask_res = json.loads(_get_text_from_content(ask_result.content))
 
-    except Exception as e:
-        if (
-            "ConnectionRefusedError" in str(e)
-            or "Connection reset by peer" in str(e)
-            or "Connection error" in str(e)
-        ):
-            pytest.skip("Ollama is not running. Skipping E2E test.")
-        raise e
+    assert ask_res["status"] == "ok"
+    assert "answer" in ask_res
+    assert "citations" in ask_res
+
+    # Verify that the answer mentions GPUs or at least includes citations
+    # The exact answer depends on the prompt, but it should contain our GPU memory
+    citation_texts = [c["text"] for c in ask_res["citations"]]
+    assert any("GPU" in t for t in citation_texts), (
+        f"GPU not found in citations: {citation_texts}"
+    )
+
+
+def _is_connection_setup_error(exc: Exception) -> bool:
+    message = str(exc)
+    return (
+        "ConnectionRefusedError" in message
+        or "Connection reset by peer" in message
+        or "Connection error" in message
+    )
+
+
+@pytest.mark.asyncio
+async def test_memory_scenario_tool_connection_error_fails_after_setup():
+    class FailedToolResult:
+        isError = True
+        content: list[Any] = []
+
+        def __repr__(self) -> str:
+            return "Connection error from initialized MCP tool"
+
+    class InitializedSession:
+        async def call_tool(self, name: str, payload: dict[str, Any]) -> FailedToolResult:
+            _ = name, payload
+            return FailedToolResult()
+
+    with pytest.raises(AssertionError, match="Connection error from initialized MCP tool"):
+        await _run_memory_scenario(InitializedSession())  # type: ignore[arg-type]
