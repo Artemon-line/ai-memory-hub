@@ -686,8 +686,8 @@ class PostgresMetadataStore:
                 rows = cur.fetchall()
         return [self._token_from_row(row) for row in rows]
 
-    def revoke_auth_token(self, token_id_or_prefix: str) -> dict[str, Any] | None:
-        handle = _validate_token_lookup(token_id_or_prefix)
+    def revoke_auth_token(self, token_id: str) -> dict[str, Any] | None:
+        handle = _validate_token_lookup(token_id)
         with self._connect() as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -697,19 +697,13 @@ class PostgresMetadataStore:
                            scopes::text, last_used_at::text
                     FROM auth_tokens
                     WHERE token_id = %s
-                       OR token_id LIKE %s
-                       OR token_prefix = %s
-                    ORDER BY token_id ASC
                     """,
-                    (handle, f"{handle}%", handle),
+                    (handle,),
                 )
-                rows = cur.fetchall()
-                if not rows:
+                row = cur.fetchone()
+                if row is None:
                     return None
-                token_ids = {str(row[1]) for row in rows}
-                if len(token_ids) > 1:
-                    raise ValueError("token identifier is ambiguous")
-                token_hash = str(rows[0][0])
+                token_hash = str(row[0])
                 cur.execute(
                     """
                     UPDATE auth_tokens

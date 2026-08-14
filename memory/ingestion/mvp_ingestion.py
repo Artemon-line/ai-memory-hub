@@ -846,8 +846,8 @@ class MVPIngestionService:
     def create_auth_token(self, **kwargs: Any) -> dict[str, object]:
         return self._call(create_auth_token, **kwargs)
 
-    def revoke_auth_token(self, token_id_or_prefix: str) -> dict[str, object] | None:
-        return self._call(revoke_auth_token, token_id_or_prefix)
+    def revoke_auth_token(self, token_id: str) -> dict[str, object] | None:
+        return self._call(revoke_auth_token, token_id)
 
 
 def _runtime() -> RuntimeDependencies:
@@ -4054,11 +4054,11 @@ def create_auth_token(
     )
 
 
-def revoke_auth_token(token_id_or_prefix: str) -> dict[str, object] | None:
+def revoke_auth_token(token_id: str) -> dict[str, object] | None:
     store = _runtime().metadata_store
     if not hasattr(store, "revoke_auth_token"):
         return None
-    return store.revoke_auth_token(token_id_or_prefix)
+    return store.revoke_auth_token(token_id)
 
 
 def _fact_answer_text(
