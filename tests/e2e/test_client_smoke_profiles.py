@@ -465,8 +465,16 @@ def test_ollama_chat_completion_smoke() -> None:
                 "model": CHAT_MODEL,
                 "messages": [
                     {
+                        "role": "system",
+                        "content": (
+                            "You are a deterministic smoke-test responder. "
+                            "Output only the exact requested words, with no synonyms, "
+                            "substitutions, punctuation, or extra text."
+                        ),
+                    },
+                    {
                         "role": "user",
-                        "content": "Reply with exactly two words: memory smoke",
+                        "content": "Output exactly: memory smoke",
                     }
                 ],
                 "max_tokens": 8,
