@@ -688,27 +688,21 @@ class SQLiteMetadataStore:
             ).fetchall()
         return [self._token_from_row(row) for row in rows]
 
-    def revoke_auth_token(self, token_id_or_prefix: str) -> dict[str, Any] | None:
-        handle = _validate_token_lookup(token_id_or_prefix)
+    def revoke_auth_token(self, token_id: str) -> dict[str, Any] | None:
+        handle = _validate_token_lookup(token_id)
         with self._connect() as conn:
-            rows = conn.execute(
+            row = conn.execute(
                 """
                 SELECT token_hash, token_id, owner_id, display_name, token_prefix,
                        created_at, expires_at, revoked_at, scopes, last_used_at
                 FROM auth_tokens
                 WHERE token_id = ?
-                   OR token_id LIKE ?
-                   OR token_prefix = ?
-                ORDER BY token_id ASC
                 """,
-                (handle, f"{handle}%", handle),
-            ).fetchall()
-            if not rows:
+                (handle,),
+            ).fetchone()
+            if row is None:
                 return None
-            token_ids = {str(row["token_id"]) for row in rows}
-            if len(token_ids) > 1:
-                raise ValueError("token identifier is ambiguous")
-            token_hash = str(rows[0]["token_hash"])
+            token_hash = str(row["token_hash"])
             conn.execute(
                 """
                 UPDATE auth_tokens
@@ -1957,12 +1951,12 @@ def _parse_token_scopes(value: Any) -> list[str]:
     return _normalize_token_scopes(str(parsed).split())
 
 
-def _validate_token_lookup(token_id_or_prefix: str) -> str:
-    value = str(token_id_or_prefix).strip()
+def _validate_token_lookup(token_id: str) -> str:
+    value = str(token_id).strip()
     if not value:
-        raise ValueError("token identifier must be non-empty")
+        raise ValueError("token_id must be non-empty")
     if len(value) > 128:
-        raise ValueError("token identifier exceeds max length 128")
+        raise ValueError("token_id exceeds max length 128")
     return value
 
 

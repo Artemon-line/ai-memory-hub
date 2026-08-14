@@ -208,5 +208,5 @@ class BaseIngestionAgent(ABC):
     ) -> dict[str, object]:
         raise NotImplementedError("create_auth_token is not implemented")
 
-    async def revoke_auth_token(self, token_id_or_prefix: str) -> dict[str, object] | None:
+    async def revoke_auth_token(self, token_id: str) -> dict[str, object] | None:
         raise NotImplementedError("revoke_auth_token is not implemented")

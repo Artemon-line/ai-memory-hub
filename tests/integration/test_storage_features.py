@@ -495,7 +495,12 @@ def test_sqlite_admin_user_token_and_project_management(tmp_path: Path) -> None:
         "jane": "admin",
     }
 
-    revoked = store.revoke_auth_token(token["token_id"][:12])
+    partial_revoked = store.revoke_auth_token(token["token_id"][:12])
+
+    assert partial_revoked is None
+    assert store.owner_for_token("amh_secret_value") == "jane"
+
+    revoked = store.revoke_auth_token(token["token_id"])
 
     assert revoked is not None
     assert revoked["revoked_at"] is not None

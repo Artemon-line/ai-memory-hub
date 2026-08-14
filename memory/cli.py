@@ -308,7 +308,7 @@ def build_parser() -> argparse.ArgumentParser:
     admin_token_list.add_argument("--user", required=True, help="User/principal id.")
     admin_token_revoke = admin_token_subparsers.add_parser("revoke", help="Revoke a bearer token.")
     _add_common_options(admin_token_revoke)
-    admin_token_revoke.add_argument("token_id", help="Token id, or an unambiguous token id prefix.")
+    admin_token_revoke.add_argument("token_id", help="Full token id to revoke.")
 
     admin_project = admin_subparsers.add_parser("project", help="Manage project workspaces.")
     _add_common_options(admin_project)

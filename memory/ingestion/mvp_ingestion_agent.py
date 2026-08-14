@@ -301,5 +301,5 @@ class MVPIngestionAgent(BaseIngestionAgent):
             scopes=scopes,
         )
 
-    async def revoke_auth_token(self, token_id_or_prefix: str) -> dict[str, object] | None:
-        return self._service.revoke_auth_token(token_id_or_prefix)
+    async def revoke_auth_token(self, token_id: str) -> dict[str, object] | None:
+        return self._service.revoke_auth_token(token_id)
