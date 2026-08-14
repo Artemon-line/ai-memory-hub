@@ -159,7 +159,7 @@ def register_oauth_authorization_routes(
         )
 
 
-def pending_authorization_redirect(request: Request, *, owner_id: str) -> RedirectResponse | None:
+def pending_authorization_approval_redirect(request: Request) -> RedirectResponse | None:
     state_data = getattr(request.state, "oauth_provider_state_data", None)
     pending = (
         state_data.get("pending_oauth_authorization")
@@ -170,7 +170,9 @@ def pending_authorization_redirect(request: Request, *, owner_id: str) -> Redire
         pending = _session(request).pop("pending_oauth_authorization", None)
     if not isinstance(pending, dict):
         return None
-    return _authorization_code_redirect(request, pending, owner_id=owner_id)
+    auth_request = _validated_pending_authorization_request(request, pending)
+    _session(request)["pending_oauth_authorization"] = auth_request
+    return RedirectResponse("/connect", status_code=303)
 
 
 def pending_authorization_model(request: Request) -> dict[str, str] | None:

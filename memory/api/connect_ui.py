@@ -20,8 +20,8 @@ from memory.api.connect_service import (
     connect_status as _connect_status,
 )
 from memory.api.oauth_authorization import (
+    pending_authorization_approval_redirect,
     pending_authorization_model,
-    pending_authorization_redirect,
     register_oauth_authorization_routes,
 )
 from memory.config import HubConfig
@@ -98,14 +98,20 @@ def register_connect_routes(app: FastAPI, *, agent: BaseIngestionAgent, config: 
                 "owner_id": login["identity"]["user_id"],
             },
         )
-        authorization_redirect = pending_authorization_redirect(
-            request, owner_id=str(login["identity"]["user_id"])
-        )
+        authorization_redirect = pending_authorization_approval_redirect(request)
         if authorization_redirect is not None:
             authorization_redirect.set_cookie(
                 config.api.connect.session_cookie_name,
                 str(login["session_id"]),
                 httponly=True,
+                secure=secure_cookie(config),
+                samesite="lax",
+                max_age=config.api.connect.session_ttl_seconds,
+            )
+            authorization_redirect.set_cookie(
+                "amh_csrf",
+                str(login["csrf_token"]),
+                httponly=False,
                 secure=secure_cookie(config),
                 samesite="lax",
                 max_age=config.api.connect.session_ttl_seconds,
