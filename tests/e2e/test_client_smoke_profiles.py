@@ -496,4 +496,8 @@ def test_ollama_chat_completion_smoke() -> None:
     assert isinstance(message, dict)
     content = message.get("content")
     assert isinstance(content, str)
-    assert content.strip()
+    assert _normalized_chat_content(content) == "memory smoke"
+
+
+def _normalized_chat_content(content: str) -> str:
+    return " ".join(content.strip().lower().split())
