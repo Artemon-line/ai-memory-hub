@@ -229,7 +229,11 @@ curl -fsS http://127.0.0.1:8000/ready
 ```
 
 8. Run the README quick start from a clean checkout.
-9. Fix any release-note, Docker, docs, or setup issues before stable release.
+9. Run the configured static-analysis finding review manually and revalidate
+   until no open findings remain, with false positives or accepted risks
+   documented.
+10. Fix any release-note, Docker, docs, setup, or finding-review issues before
+    stable release.
 
 ## P1: Supply Chain And Security Hardening
 
@@ -289,6 +293,7 @@ Use this checklist for the release PR:
 - [ ] Branch protection enabled.
 - [ ] Required checks selected.
 - [ ] `main` is green.
+- [ ] Manual static-analysis finding review revalidated with no open findings.
 - [ ] `v0.1.0-rc.1` release candidate drill completed.
 - [ ] Stable `v0.1.0` release published.
 - [ ] Docker image pull/run verified.

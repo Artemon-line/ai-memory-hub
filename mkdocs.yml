@@ -2,6 +2,11 @@ site_name: ai-memory-hub
 site_description: Local-first deterministic memory ingestion hub
 repo_url: https://github.com/Artemon-line/ai-memory-hub
 repo_name: Artemon-line/ai-memory-hub
+copyright: >
+  Dedicated to my little brother,<br>
+  Andrii Hladenko.<br>
+  Вічна Слава Героям.
+  <img src="docs/assets/flags/ua.svg" alt="Ukraine flag" width="18" height="14">
 docs_dir: .docs-build
 site_dir: site
 strict: true

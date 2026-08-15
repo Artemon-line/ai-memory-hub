@@ -476,6 +476,12 @@ Use `recurring_codebase_cleanup_plan.md` as the source of truth.
   accidental hardcoding, complex control flow, and unsafe logging patterns.
 - [ ] Open one focused monthly cleanup PR for the highest-impact findings.
 - [ ] Review public docs and examples before each release.
+- [ ] Before each release, run the configured static-analysis finding tool
+  manually and revalidate until no open findings remain, with false positives or
+  accepted risks documented.
+- [ ] Future improvement: add a non-blocking CI/manual-dispatch lane for the
+  chosen static-analysis finding tool, then consider promoting it to a release
+  gate after repeated stable low-noise runs.
 - [ ] Add regression tests for cleanup work that changes behavior.
 - [ ] Keep cleanup PRs narrow enough that review can distinguish behavior
   preservation from intentional behavior changes.
