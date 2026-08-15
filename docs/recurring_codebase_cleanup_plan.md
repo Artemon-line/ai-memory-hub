@@ -11,8 +11,9 @@ Run this cleanup loop on a predictable schedule:
 
 - Weekly: automated detection checks and issue/PR triage.
 - Monthly: one focused cleanup PR for the highest-impact findings.
-- Before releases: documentation freshness, container/runtime assumptions, and
-  public command examples.
+- Before releases: documentation freshness, container/runtime assumptions,
+  public command examples, and static-analysis finding revalidation until no
+  open findings remain.
 - After major feature work: targeted cleanup around the changed subsystem before
   moving to the next feature.
 
@@ -59,6 +60,24 @@ rg -n "/app/\\.venv/bin/aim|localhost|127\\.0\\.0\\.1|0\\.0\\.0\\.0|8000" README
 rg -n "except Exception|if .* else|elif|pass$|# noqa|type: ignore" memory tests
 rg -n "api_key|password|secret|token|dsn|Authorization|X-API-Key" memory docs README.md examples
 ```
+
+Before a release, also run the configured static-analysis and LLM-review tools
+manually. Revalidate findings until the report has no open findings. Treat the
+tool output as triage input, not as automatic policy:
+
+- Fix real issues before release.
+- Mark false positives or accepted risks with enough context that a future pass
+  can understand the decision.
+- Revalidate stale findings against current `main` before opening a branch.
+- Batch related findings into PR-sized GitHub issues when tracking is useful.
+- Skip issue or PR ceremony for findings that are already fixed, after focused
+  proof shows current `main` closes them.
+
+Future improvement: add a CI lane for the chosen static-analysis finding tool
+once the local/manual loop is stable. Start as manual dispatch or non-blocking
+scheduled CI, upload the report as an artifact, and promote to a release gate
+only after the job has low noise, predictable runtime, and clear handling for
+false positives or accepted risks.
 
 Then run structure and verification checks appropriate to the touched area:
 
