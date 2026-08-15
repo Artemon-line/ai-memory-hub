@@ -384,6 +384,14 @@ uv run pytest
 uv run python -m mkdocs build --strict
 ```
 
+## Dedication
+
+Dedicated to my little brother,
+
+Andrii Hladenko.
+
+Вічна Слава Героям. ![Ukraine flag](docs/assets/flags/ua.svg)
+
 ## License
 
 This project is licensed under the MIT License. See [LICENSE](LICENSE) for
