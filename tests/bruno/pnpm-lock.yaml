@@ -8,6 +8,8 @@ overrides:
   axios: 1.18.0
   fast-uri: 3.1.5
   form-data: 4.0.6
+  js-yaml: 4.3.1
+  nanoid: 3.3.18
   uuid: 11.1.1
 
 importers:
@@ -834,6 +836,7 @@ packages:
 
   crypto-js@4.2.0:
     resolution: {integrity: sha512-KALDyEYgpY+Rlob/iriUtjV6d5Eq+Y191A5g4UqLAi8CyGP9N1+FdVbkc1SxKc2r4YAYqG8JzO2KGL+AizD70Q==}
+    deprecated: Active development of CryptoJS has been discontinued. This library is no longer maintained.
 
   css-select@5.2.2:
     resolution: {integrity: sha512-TizTzUddG/xYLA3NXodFM0fSbNizXjOKhqiQQwvhlspadZokn1KDy0NZFS0wuEubIYAV5/c1/lAr0TaaFXEXzw==}
@@ -1172,8 +1175,8 @@ packages:
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
 
-  js-yaml@4.3.0:
-    resolution: {integrity: sha512-1td788aAnnZ5qs7V2QIRl1owjtYpbKt749Y3xauqQgwIIGF/xXWz1wMTEBx5O3LK3lXLVuqXPdPxj2BoFHaW9Q==}
+  js-yaml@4.3.1:
+    resolution: {integrity: sha512-CY6crGq313MX8GkwvB7tzgp99vjQxY1++5y10/BKN/GUfHqWaOGQMNZkBvqSzsZKWk/ijwHlWzzkLulsGHhjWQ==}
     hasBin: true
 
   jscodeshift@17.4.0:
@@ -1300,8 +1303,8 @@ packages:
   nanoclone@0.2.1:
     resolution: {integrity: sha512-wynEP02LmIbLpcYw8uBKpcfF6dmg2vcpKqxeH5UcoKEYdExslsdUA4ugFauuaeYdTB76ez6gJW8XAZ6CgkXYxA==}
 
-  nanoid@3.3.8:
-    resolution: {integrity: sha512-WNLf5Sd8oZxOm+TzppcYk8gVOgP+l58xNy58D0nbUnOxOWRWvlcCV4kUF7ltmI6PsrLl/BgKEyS4mqsGChFN0w==}
+  nanoid@3.3.18:
+    resolution: {integrity: sha512-DTg4MJbGMWkfi6VZFdNt2/caMbQy4Ou+Op/hJQvGEWcnVfoA1QA+xzRKAzw9jD6+GVOOeYr/mIcuDSdug6F6+w==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
 
@@ -2725,7 +2728,7 @@ snapshots:
       http-proxy-agent: 7.0.2
       https-proxy-agent: 7.0.6
       iconv-lite: 0.6.3
-      js-yaml: 4.3.0
+      js-yaml: 4.3.1
       lodash: 4.18.1
       qs: 6.15.3
       socks-proxy-agent: 8.0.5
@@ -2744,10 +2747,10 @@ snapshots:
     dependencies:
       '@usebruno/common': 0.24.0
       '@usebruno/schema': 0.28.0
-      js-yaml: 4.3.0
+      js-yaml: 4.3.1
       jscodeshift: 17.4.0
       lodash: 4.18.1
-      nanoid: 3.3.8
+      nanoid: 3.3.18
       xml2js: 0.6.2
     transitivePeerDependencies:
       - '@babel/preset-env'
@@ -2780,7 +2783,7 @@ snapshots:
       jsonwebtoken: 9.0.3
       lodash: 4.18.1
       moment: 2.30.1
-      nanoid: 3.3.8
+      nanoid: 3.3.18
       node-fetch: 2.7.0
       path: 0.12.7
       quickjs-emscripten: 0.32.0
@@ -2836,7 +2839,7 @@ snapshots:
 
   '@usebruno/schema@0.28.0':
     dependencies:
-      nanoid: 3.3.8
+      nanoid: 3.3.18
       yup: 0.32.11
 
   agent-base@6.0.2:
@@ -3357,7 +3360,7 @@ snapshots:
 
   js-tokens@4.0.0: {}
 
-  js-yaml@4.3.0:
+  js-yaml@4.3.1:
     dependencies:
       argparse: 2.0.1
 
@@ -3486,7 +3489,7 @@ snapshots:
 
   nanoclone@0.2.1: {}
 
-  nanoid@3.3.8: {}
+  nanoid@3.3.18: {}
 
   neo-async@2.6.2: {}
 
