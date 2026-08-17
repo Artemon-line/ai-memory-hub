@@ -47,7 +47,7 @@ oauth = [
     "joserfc>=1.6.8",
 ]
 postgres = [
-    "psycopg[binary]>=3.2.4",
+    "psycopg[binary]>=3.3.4",
 ]
 pinecone = [
     "pinecone>=7.0.0",
