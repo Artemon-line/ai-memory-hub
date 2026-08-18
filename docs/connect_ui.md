@@ -237,22 +237,36 @@ http://127.0.0.1:8000/connect
 
 ## Docker Compose
 
-The Docker example installs `--extra oauth` in the image and binds the service
-to loopback:
+The main Docker example combines Postgres, PGVector, Ollama embeddings, Google
+OAuth, and a public HTTPS URL for agents running off the local host. It
+installs the `postgres`, `tokenizer`, and `oauth` extras in the hub image and
+binds the hub service to loopback:
 
 ```bash {.amh-copy-block}
 export GOOGLE_CLIENT_ID="your-google-client-id"
 export GOOGLE_CLIENT_SECRET="your-google-client-secret"
 export AMH_OAUTH_JWT_SECRET="$(openssl rand -base64 48)"
 export AMH_SESSION_SECRET="$(openssl rand -base64 48)"
-cd examples/google-oauth-connect
+cd examples/local-stack
+export AMH_CONFIG_FILE=config.oauth-ngrok.yaml
 docker compose up --build
 ```
 
 Open:
 
 ```text {.amh-copy-block}
-http://127.0.0.1:8000/connect
+https://YOUR-NGROK-DOMAIN.ngrok-free.app/connect
+```
+
+The included template uses ngrok because it is convenient for a local machine.
+Any stable HTTPS tunnel or reverse proxy works if the public base URL and Google
+redirect URI match. Before starting Compose, replace every
+`https://YOUR-NGROK-DOMAIN.ngrok-free.app` placeholder in
+`examples/local-stack/config.oauth-ngrok.yaml` with the
+active HTTPS URL and register the matching Google redirect URI:
+
+```text {.amh-copy-block}
+https://YOUR-NGROK-DOMAIN.ngrok-free.app/auth/google/callback
 ```
 
 Restart behavior:

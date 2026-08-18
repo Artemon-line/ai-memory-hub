@@ -52,7 +52,7 @@ Start ai-memory-hub from this repo in whichever local mode you are validating.
 For example, use the checked-in PGVector stack:
 
 ```bash
-cd examples/storage_providers/postgres-pgvector
+cd examples/local-stack
 docker compose up --build
 ```
 

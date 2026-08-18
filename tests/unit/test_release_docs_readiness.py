@@ -19,7 +19,7 @@ def test_readme_quick_start_has_source_and_docker_paths() -> None:
     assert "curl -X POST http://127.0.0.1:8000/memory/insert" in readme
     assert "docker build -t ai-memory-hub:local -f Containerfile ." in readme
     assert "docker run --rm -p 127.0.0.1:8000:8000 ai-memory-hub:local" in readme
-    assert "cd examples/storage_providers/postgres-pgvector" in readme
+    assert "cd examples/local-stack" in readme
     assert "docker compose up --build" in readme
 
 
