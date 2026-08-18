@@ -15,7 +15,7 @@ default.
 | Runtime summary | `/observability` returns redacted runtime and telemetry configuration. |
 | Tracing | Optional OpenTelemetry setup with FastAPI, HTTP client, requests, and psycopg instrumentation. |
 | Metrics | API/MCP outcome and latency metrics, health metrics, provider failure counts, vector row gauges, and fallback state. |
-| Local stack | `examples/observability` compose profile with OpenTelemetry Collector, Jaeger, Prometheus, and Grafana-compatible metric flow. |
+| Local stack | `examples/local-stack` compose profile with OpenTelemetry Collector, Jaeger, Prometheus, and Grafana-compatible metric flow. |
 
 ## Privacy Rules
 
@@ -63,10 +63,10 @@ uv sync --extra observability
 
 ## Local Observability Stack
 
-The local example lives in `examples/observability`:
+The local example lives in `examples/local-stack`:
 
 ```bash
-docker compose -f examples/observability/compose.yaml up --build
+docker compose -f examples/local-stack/compose.yaml up --build
 ```
 
 The example starts ai-memory-hub with OTLP export, an OpenTelemetry Collector,

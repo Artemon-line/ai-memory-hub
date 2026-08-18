@@ -499,7 +499,8 @@ Security tests:
 Update:
 
 - README security section.
-- `examples/storage_providers/postgres-pgvector/codex_opencode_docker_pgvector_test.md`.
+- Historical Postgres/PGVector compose handoff notes were replaced by
+  `examples/local-stack`.
 - `docs/agents.md`.
 - `docs/mcp_plan.md`.
 

@@ -983,14 +983,14 @@ For a reusable Docker/Podman Compose setup that runs ai-memory-hub with Postgres
 metadata and PGVector vectors:
 
 ```bash
-cd examples/storage_providers/postgres-pgvector
+cd examples/local-stack
 docker compose up --build
 ```
 
 The example binds ai-memory-hub on host port `8000` for LAN clients. Use
 `http://<HOST_LAN_IP>:8000/mcp/` from another PC on the same network. It also
 enables tokenizer budgeting with the optional `tiktoken` extra. For remote
-Ollama embeddings, see `examples/storage_providers/postgres-pgvector/config.ollama.yaml`.
+Ollama embeddings, see `examples/local-stack/config.oauth-ngrok.yaml`.
 
 Additional checked-in provider examples are under `examples/storage_providers`.
 They cover SQLite/LanceDB, in-memory vectors, Qdrant, MongoDB metadata,

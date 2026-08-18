@@ -289,10 +289,10 @@ Label rules:
 
 ## Phase 5: Local Observability Compose Profile
 
-Add `examples/observability/`:
+Add observability files to `examples/local-stack/`:
 
 ```text
-examples/observability/
+examples/local-stack/
   compose.yaml
   config.yaml
   otel-collector.yaml

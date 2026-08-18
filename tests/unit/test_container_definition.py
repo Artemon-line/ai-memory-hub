@@ -30,7 +30,6 @@ def test_containerfile_installs_project_after_copying_package() -> None:
         "milvus",
         "mongodb",
         "opensearch",
-        "observability",
         "postgres",
         "pinecone",
         "qdrant",
@@ -54,15 +53,13 @@ def test_containerfile_installs_project_after_copying_package() -> None:
     assert "vector_db: lancedb" in config
 
 
-def test_pgvector_example_uses_slim_containerfile() -> None:
-    compose = Path("examples/storage_providers/postgres-pgvector/compose.yaml").read_text(
-        encoding="utf-8"
-    )
-    containerfile = Path("examples/storage_providers/postgres-pgvector/Containerfile").read_text(
-        encoding="utf-8"
-    )
+def test_local_stack_uses_oauth_containerfile() -> None:
+    compose = Path("examples/local-stack/compose.yaml").read_text(encoding="utf-8")
+    containerfile = Path("examples/local-stack/Containerfile.oauth").read_text(encoding="utf-8")
 
-    assert "dockerfile: examples/storage_providers/postgres-pgvector/Containerfile" in compose
+    assert "dockerfile: examples/local-stack/Containerfile.oauth" in compose
+    assert "GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}" in compose
+    assert "AMH_OAUTH_JWT_SECRET: ${AMH_OAUTH_JWT_SECRET:-}" in compose
     assert f"image: {PINNED_PGVECTOR_IMAGE}" in compose
     assert "image: pgvector/pgvector:pg16\n" not in compose
     assert "http://127.0.0.1:8000/ready" in compose
@@ -70,7 +67,14 @@ def test_pgvector_example_uses_slim_containerfile() -> None:
     assert "python -m pip install --no-cache-dir uv" not in containerfile
     assert "--extra postgres" in containerfile
     assert "--extra tokenizer" in containerfile
-    assert 'CMD ["/app/.venv/bin/aim", "serve", "--host", "0.0.0.0", "--port", "8000"]' in containerfile
+    assert "--extra oauth" in containerfile
+    assert "--extra observability" in containerfile
+    assert "uv pip install --python /app/.venv/bin/python --no-deps --reinstall ." in containerfile
+    assert 'cd /tmp && /app/.venv/bin/python -c "import memory; import memory.cli"' in containerfile
+    assert (
+        'CMD ["/app/.venv/bin/aim", "serve", "--config", "/app/config.yaml", '
+        '"--host", "0.0.0.0", "--port", "8000"]'
+    ) in containerfile
     assert 'CMD ["uv", "run", "aim"' not in containerfile
     for extra in (
         "chromadb",
@@ -87,6 +91,13 @@ def test_pgvector_example_uses_slim_containerfile() -> None:
         "weaviate",
     ):
         assert f"--extra {extra}" not in containerfile
+
+    oauth_config = Path(
+        "examples/local-stack/config.oauth-ngrok.yaml"
+    ).read_text(encoding="utf-8")
+    assert "auth: oauth_resource_server" in oauth_config
+    assert "embedding_model: nomic-embed-text" in oauth_config
+    assert "base_url: http://host.docker.internal:11434/v1" in oauth_config
 
 
 def test_postgres_service_images_are_digest_pinned() -> None:
@@ -128,7 +139,6 @@ def test_free_provider_examples_use_provider_local_containerfiles() -> None:
         "milvus",
         "mongodb",
         "opensearch",
-        "observability",
         "pinecone",
         "postgres",
         "qdrant",
@@ -156,15 +166,11 @@ def test_free_provider_examples_use_provider_local_containerfiles() -> None:
             assert f"--extra {extra}" not in containerfile
 
 
-def test_observability_compose_profile_is_wired() -> None:
-    compose = Path("examples/observability/compose.yaml").read_text(encoding="utf-8")
-    config = Path("examples/observability/config.yaml").read_text(encoding="utf-8")
-    collector = Path("examples/observability/otel-collector.yaml").read_text(
-        encoding="utf-8"
-    )
-    prometheus = Path("examples/observability/prometheus.yaml").read_text(
-        encoding="utf-8"
-    )
+def test_local_stack_observability_is_wired() -> None:
+    compose = Path("examples/local-stack/compose.yaml").read_text(encoding="utf-8")
+    config = Path("examples/local-stack/config.oauth-ngrok.yaml").read_text(encoding="utf-8")
+    collector = Path("examples/local-stack/otel-collector.yaml").read_text(encoding="utf-8")
+    prometheus = Path("examples/local-stack/prometheus.yaml").read_text(encoding="utf-8")
 
     assert "otel-collector" in compose
     assert "jaeger" in compose
@@ -202,6 +208,25 @@ def test_container_smoke_retains_stopped_container_for_logs() -> None:
     assert "docker run --rm --user 12345:0 --entrypoint sh" in workflow
     assert "test -w /app/.uv-cache" in workflow
     assert "TIKTOKEN_CACHE_DIR" not in workflow
+
+
+def test_compose_example_smoke_exercises_default_and_oauth_configs() -> None:
+    workflow = Path(".github/workflows/pipeline.yml").read_text(encoding="utf-8")
+
+    assert "name: Compose Example Smoke" in workflow
+    assert "docker compose -f \"$COMPOSE_FILE\" config" in workflow
+    assert "Smoke default local stack" in workflow
+    assert "amber-vector" in workflow
+    assert "Smoke OAuth/Ollama local stack" in workflow
+    assert "config.oauth-ci.yaml" in workflow
+    assert 'example_dir="$(dirname "$COMPOSE_FILE")"' in workflow
+    assert "PUBLIC_BASE_URL:" in workflow
+    assert '"iss": "https://ci-token-issuer.example.test"' in workflow
+    assert "ollama/ollama:0.22.1@sha256:" in workflow
+    assert "docker exec ollama-compose-ci ollama pull nomic-embed-text" in workflow
+    assert "compose OAuth smoke phrase is blue-lantern" in workflow
+    assert "Authorization: Bearer $CI_OAUTH_TOKEN" in workflow
+    assert 'test "$unauth_status" = "401" -o "$unauth_status" = "403"' in workflow
 
 
 def test_supply_chain_workflow_blocks_high_and_critical_vulnerabilities() -> None:
