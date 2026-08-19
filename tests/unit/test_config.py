@@ -543,7 +543,6 @@ def test_oauth_resource_server_config_derives_valid_defaults() -> None:
     assert config.api.oauth.scopes_supported == [
         "memory:read",
         "memory:write",
-        "memory:admin",
     ]
 
 

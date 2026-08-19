@@ -40,6 +40,7 @@ oauth = [
     { name = "cryptography" },
     { name = "httpx" },
     { name = "joserfc" },
+    { name = "python-multipart" },
 ]
 observability = [
     { name = "opentelemetry-api" },
@@ -121,6 +122,7 @@ requires-dist = [
     { name = "pymilvus", marker = "extra == 'milvus'", specifier = ">=2.5.0" },
     { name = "pymongo", marker = "extra == 'mongodb'", specifier = ">=4.10.1" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
+    { name = "python-multipart", marker = "extra == 'oauth'", specifier = ">=0.0.31" },
     { name = "pyvespa", marker = "extra == 'vespa'", specifier = ">=0.50.0" },
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "qdrant-client", marker = "extra == 'qdrant'", specifier = ">=1.19.0" },
@@ -2578,8 +2580,8 @@ name = "secretstorage"
 version = "3.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cryptography" },
-    { name = "jeepney" },
+    { name = "cryptography", marker = "sys_platform != 'emscripten' and sys_platform != 'win32'" },
+    { name = "jeepney", marker = "sys_platform != 'emscripten' and sys_platform != 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/1c/03/e834bcd866f2f8a49a85eaff47340affa3bfa391ee9912a952a1faa68c7b/secretstorage-3.5.0.tar.gz", hash = "sha256:f04b8e4689cbce351744d5537bf6b1329c6fc68f91fa666f60a380edddcd11be", size = 19884, upload-time = "2025-11-23T19:02:53.191Z" }
 wheels = [

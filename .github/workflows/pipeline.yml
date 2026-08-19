@@ -25,7 +25,7 @@ jobs:
           python-version: '3.14'
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
 
@@ -80,7 +80,7 @@ jobs:
           python-version: '3.14'
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
 
@@ -179,7 +179,7 @@ jobs:
           python-version: '3.14'
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
 
@@ -262,7 +262,7 @@ jobs:
           python-version: '3.14'
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
 
@@ -407,3 +407,228 @@ jobs:
       - name: Stop container
         if: always()
         run: docker rm -f ai-memory-hub-ci || true
+
+  compose-examples:
+    name: Compose Example Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      COMPOSE_FILE: examples/local-stack/compose.yaml
+      OLLAMA_IMAGE: >-
+        ollama/ollama:0.22.1@sha256:3ca37ec2b9cb6341b62554074205c616778fe98abcf9e4fc50361b79a07407ae
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate compose file
+        run: docker compose -f "$COMPOSE_FILE" config
+
+      - name: Smoke default local stack
+        run: |
+          set -euo pipefail
+          cleanup() {
+            docker compose -f "$COMPOSE_FILE" logs ai-memory-hub postgres > compose-default.log 2>&1 || true
+            docker compose -f "$COMPOSE_FILE" down -v || true
+          }
+          trap cleanup EXIT
+
+          docker compose -f "$COMPOSE_FILE" up -d --build
+          ready=false
+          for attempt in $(seq 1 40); do
+            if curl --max-time 5 -fsS http://127.0.0.1:8000/ready; then
+              ready=true
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = "true"
+
+          curl -fsS -X POST http://127.0.0.1:8000/memory/insert \
+            -H "Content-Type: application/json" \
+            -d '{
+              "source": "compose-default-smoke",
+              "timestamp": "2026-08-18T00:00:00Z",
+              "title": "Compose default smoke",
+              "messages": [
+                {
+                  "role": "user",
+                  "text": "Remember that the compose default smoke phrase is amber-vector."
+                }
+              ],
+              "metadata": {"tags": ["compose", "smoke"]}
+            }'
+
+          curl -fsS -X POST http://127.0.0.1:8000/memory/search \
+            -H "Content-Type: application/json" \
+            -d '{"query":"amber-vector","top_k":3}' \
+            | tee compose-default-search.json
+          grep -q "amber-vector" compose-default-search.json
+
+      - name: Start pinned Ollama container
+        run: |
+          docker run -d \
+            --name ollama-compose-ci \
+            -p 11434:11434 \
+            "$OLLAMA_IMAGE"
+          for attempt in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:11434/api/version; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs ollama-compose-ci
+          exit 1
+
+      - name: Pull embedding model
+        run: docker exec ollama-compose-ci ollama pull nomic-embed-text
+
+      - name: Smoke OAuth/Ollama local stack
+        env:
+          AMH_CONFIG_FILE: config.oauth-ci.yaml
+          GOOGLE_CLIENT_ID: ci-client.apps.googleusercontent.com
+          PUBLIC_BASE_URL: https://memory-ci.example.test
+        run: |
+          set -euo pipefail
+          export AMH_OAUTH_JWT_SECRET
+          AMH_OAUTH_JWT_SECRET="$(openssl rand -hex 32)"
+          export AMH_SESSION_SECRET
+          AMH_SESSION_SECRET="$(openssl rand -hex 32)"
+          export GOOGLE_CLIENT_SECRET
+          GOOGLE_CLIENT_SECRET="$(openssl rand -hex 32)"
+
+          cleanup() {
+            docker compose -f "$COMPOSE_FILE" logs ai-memory-hub postgres > compose-oauth.log 2>&1 || true
+            docker compose -f "$COMPOSE_FILE" down -v || true
+          }
+          trap cleanup EXIT
+
+          example_dir="$(dirname "$COMPOSE_FILE")"
+          sed "s#https://YOUR-NGROK-DOMAIN.ngrok-free.app#${PUBLIC_BASE_URL}#g" \
+            "$example_dir/config.oauth-ngrok.yaml" > "$example_dir/$AMH_CONFIG_FILE"
+
+          docker compose -f "$COMPOSE_FILE" config
+          docker compose -f "$COMPOSE_FILE" up -d --build
+          ready=false
+          for attempt in $(seq 1 50); do
+            if curl --max-time 5 -fsS http://127.0.0.1:8000/ready; then
+              ready=true
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = "true"
+          embeddings_ready=false
+          for attempt in $(seq 1 30); do
+            if docker compose -f "$COMPOSE_FILE" exec -T ai-memory-hub \
+              /app/.venv/bin/python - <<'PY'
+          import json
+          import urllib.request
+
+          request = urllib.request.Request(
+              "http://host.docker.internal:11434/v1/embeddings",
+              data=json.dumps(
+                  {"model": "nomic-embed-text", "input": "compose readiness"}
+              ).encode("utf-8"),
+              headers={"Content-Type": "application/json"},
+              method="POST",
+          )
+          with urllib.request.urlopen(request, timeout=10) as response:
+              if response.status >= 400:
+                  raise SystemExit(response.status)
+          PY
+            then
+              embeddings_ready=true
+              break
+            fi
+            sleep 2
+          done
+          test "$embeddings_ready" = "true"
+          curl --max-time 5 -fsS http://127.0.0.1:8000/connect > compose-connect.html
+          grep -q "ai-memory-hub" compose-connect.html
+
+          unauth_status="$(
+            curl -sS -o compose-unauth.json -w '%{http_code}' \
+              -X POST http://127.0.0.1:8000/memory/insert \
+              -H "Content-Type: application/json" \
+              -d '{"source":"compose-oauth-smoke","messages":[{"role":"user","text":"blocked"}]}'
+          )"
+          test "$unauth_status" = "401" -o "$unauth_status" = "403"
+
+          python <<'PY' > compose-token.txt
+          import base64
+          import hashlib
+          import hmac
+          import json
+          import os
+          import time
+
+          def b64url(payload: bytes) -> str:
+              return base64.urlsafe_b64encode(payload).decode("ascii").rstrip("=")
+
+          header = {"alg": "HS256", "typ": "JWT"}
+          base = os.environ["PUBLIC_BASE_URL"].rstrip("/")
+          now = int(time.time())
+          claims = {
+              "sub": "ci-owner",
+              "iss": "https://ci-token-issuer.example.test",
+              "aud": f"{base}/mcp",
+              "resource": f"{base}/mcp",
+              "scope": "memory:read memory:write",
+              "iat": now,
+              "exp": now + 600,
+              "jti": "compose-ci-token",
+          }
+          signing_input = ".".join(
+              b64url(json.dumps(part, separators=(",", ":")).encode("utf-8"))
+              for part in (header, claims)
+          )
+          signature = hmac.new(
+              os.environ["AMH_OAUTH_JWT_SECRET"].encode("utf-8"),
+              signing_input.encode("ascii"),
+              hashlib.sha256,
+          ).digest()
+          print(f"{signing_input}.{b64url(signature)}")
+          PY
+          CI_OAUTH_TOKEN="$(cat compose-token.txt)"
+
+          curl -fsS -X POST http://127.0.0.1:8000/memory/insert \
+            -H "Authorization: Bearer $CI_OAUTH_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "source": "compose-oauth-smoke",
+              "timestamp": "2026-08-18T00:00:00Z",
+              "title": "Compose OAuth smoke",
+              "messages": [
+                {
+                  "role": "user",
+                  "text": "Remember that the compose OAuth smoke phrase is blue-lantern."
+                }
+              ],
+              "metadata": {"tags": ["compose", "oauth", "smoke"]}
+            }'
+
+          curl -fsS -X POST http://127.0.0.1:8000/memory/search \
+            -H "Authorization: Bearer $CI_OAUTH_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"query":"blue-lantern","top_k":3}' \
+            | tee compose-oauth-search.json
+          grep -q "blue-lantern" compose-oauth-search.json
+
+      - name: Upload compose smoke logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: compose-example-smoke-logs
+          path: |
+            compose-default.log
+            compose-oauth.log
+            compose-default-search.json
+            compose-oauth-search.json
+            compose-connect.html
+            compose-unauth.json
+          if-no-files-found: ignore
+
+      - name: Stop Ollama
+        if: always()
+        run: docker rm -f ollama-compose-ci || true
