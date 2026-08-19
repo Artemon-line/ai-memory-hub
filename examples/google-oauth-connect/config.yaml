@@ -24,7 +24,6 @@ api:
     scopes_supported:
       - memory:read
       - memory:write
-      - memory:admin
   connect:
     enabled: true
     session_secret_env: AMH_SESSION_SECRET

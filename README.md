@@ -239,22 +239,14 @@ MCP endpoint:
 http://127.0.0.1:8000/mcp/
 ```
 
-For user-facing MCP setup, start an OAuth-enabled configuration and open
-`/connect`. The Connect UI shows the active MCP URL, configured passport
-providers, sign-in status, short-lived hub token workflow, and copyable client
-snippets. Google is the current live provider; Meta and X config slots are
-disabled placeholders until their provider-specific flows are implemented. See
-the [Connect UI and OAuth setup guide](docs/connect_ui.md) for packages, Docker
-setup, provider status, and client verification notes.
-
-```bash
-cd examples/google-oauth-connect
-docker compose up --build
-```
-
-```text
-http://127.0.0.1:8000/connect
-```
+For user-facing MCP setup, use the local stack example with
+`api.auth: oauth_resource_server` and open `/connect`. The Connect UI shows the
+active MCP URL, configured passport providers, sign-in status, short-lived hub
+token workflow, and copyable client snippets. Google is the current live
+provider; Meta and X config slots are disabled placeholders until their
+provider-specific flows are implemented. See the
+[Connect UI and OAuth setup guide](docs/connect_ui.md) for packages, provider
+status, and client verification notes.
 
 ## Common Workflows
 
@@ -273,56 +265,36 @@ docker build -t ai-memory-hub:local -f Containerfile .
 docker run --rm -p 127.0.0.1:8000:8000 ai-memory-hub:local
 ```
 
-Run with Postgres and PGVector:
+Run the full local stack with Postgres, PGVector, Ollama embeddings, and
+Google OAuth:
 
 ```bash
-cd examples/storage_providers/postgres-pgvector
+cd examples/local-stack
 docker compose up --build
 ```
 
-That Compose stack uses Postgres for metadata and PGVector for vectors. The
-default checked-in config keeps embeddings deterministic and credential-free for
-local smoke testing. For real memory quality, switch the embedding provider to
-`http`, point `embedding_endpoint.base_url` at a local or hosted embedding
-endpoint, and set the matching embedding dimension. For multilingual memory,
-choose an embedding model that supports your languages. Reindex or use a
-separate vector namespace/index if you change embedding model/provider/options
-on persistent data.
-
-The default and provider Compose examples are for local smoke testing only.
-Before exposing
-it beyond loopback, use `api.auth: oauth_resource_server` with TLS or a trusted
-private network. User-facing MCP setups should start from
-`examples/google-oauth-connect` and open `/connect`; the external OAuth resource
-server example remains available for deployments that already have their own
-issuer.
-
-Other checked-in provider examples live under `examples/storage_providers`:
-Qdrant, MongoDB, MongoDB Atlas, Milvus, Weaviate, Elasticsearch,
-OpenSearch, Redis/RediSearch, Vespa, Typesense, Pinecone, Turbopuffer,
-SQLite/LanceDB, and in-memory vectors.
-
-The local MongoDB and Redis examples include their own Compose stack and
-provider-local hub `Containerfile`, so they avoid adding unrelated provider
-SDKs to the quickstart image:
+That Compose stack is the main non-quickstart example. It can run
+credential-free with deterministic embeddings, or use
+`config.oauth-ngrok.yaml` for the local-server path:
 
 ```bash
-cd examples/storage_providers/mongodb
-docker compose up --build
-
-cd examples/storage_providers/redis
-docker compose up --build
+AMH_CONFIG_FILE=config.oauth-ngrok.yaml docker compose up --build
 ```
 
-Example:
-
-```bash
-cd examples/storage_providers/qdrant
-docker compose up --build
-```
+Replace the placeholder ngrok URL in `config.oauth-ngrok.yaml` with your public
+HTTPS base URL, export the Google/OAuth environment variables required by
+Compose, and keep the hub port bound to `127.0.0.1:8000` when publishing through
+a tunnel or reverse proxy. Before exposing
+it beyond loopback, use `api.auth: oauth_resource_server` with TLS; ngrok is
+only the bundled local tunnel example. For real memory quality, keep
+`providers.embeddings: http`, point
+`embedding_endpoint.base_url` at Ollama or another OpenAI-compatible embeddings
+endpoint, and set the matching embedding dimension. Reindex or use a separate
+vector namespace/index if you change embedding model/provider/options on
+persistent data.
 
 See [Storage provider examples](docs/storage_provider_examples.md) for the
-provider matrix, smoke commands, CI coverage, and hosted-provider notes.
+provider fixture matrix, smoke commands, CI coverage, and hosted-provider notes.
 
 ## Documentation
 

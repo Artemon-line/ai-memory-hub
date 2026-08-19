@@ -1,9 +1,14 @@
-# Google OAuth Connect Example
+# Google OAuth Connect Fixture
 
-This example starts ai-memory-hub with `api.auth: oauth_resource_server` and the
-server-rendered `/connect` setup UI. The selected provider proves the user
-identity; the hub issues short-lived MCP bearer tokens for `memory:read` and
-`memory:write`.
+This fixture starts ai-memory-hub with `api.auth: oauth_resource_server` and the
+server-rendered `/connect` setup UI using SQLite + LanceDB. It is useful for
+isolated OAuth development.
+
+For the human-facing desktop setup, prefer
+`examples/local-stack` with
+`config.oauth-ngrok.yaml`. That stack combines Postgres metadata, PGVector
+vectors, Ollama embeddings, Google OAuth, observability, and public HTTPS access
+for remote agents.
 
 Google is the current live provider. The hub config also includes disabled
 `meta` and `x` provider slots, but those are placeholders until their

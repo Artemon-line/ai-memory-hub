@@ -1,11 +1,19 @@
-# Storage Provider Examples
+# Storage Provider Fixtures
 
-These examples show known-good local or hosted setups for every supported
-metadata and vector provider.
+These directories are maintainer fixtures for supported metadata and vector
+providers. The human-facing examples are:
 
-Use them from the repository root unless a provider README says otherwise.
-All examples use deterministic local embeddings so provider smoke tests do not
-need OpenAI, Ollama, or any external model service.
+- Quickstart: repository root config and root `Containerfile`.
+User-facing runnable examples live one level up:
+
+- Quickstart: repository root config and root `Containerfile`.
+- Local stack: `examples/local-stack`, combining Postgres, PGVector, Ollama
+  embeddings, Google OAuth, observability, and a public HTTPS URL for remote
+  agents.
+
+Use fixture directories from the repository root unless a provider README says
+otherwise. Most fixtures use deterministic local embeddings so provider smoke
+tests do not need OpenAI, Ollama, or any external model service.
 
 For real semantic or multilingual retrieval, switch to an embedding model that
 supports the languages you store and query, and set the matching dimension. If
@@ -13,13 +21,13 @@ you change embedding model/provider/options on persistent vector data, reindex
 or use a separate vector namespace/index; same-dimension model swaps can still
 break ranking.
 
-## Supported Providers
+## Supported Fixtures
 
 | Provider | Example | CI coverage |
 | --- | --- | --- |
 | SQLite metadata + LanceDB vectors | `sqlite-lancedb` | default unit/integration suite; local Compose smoke |
 | In-memory vectors | `memory` | default unit/integration suite |
-| Postgres metadata + PGVector vectors | `postgres-pgvector` | default CI service job; local Compose smoke |
+| Postgres metadata + PGVector vectors | `../local-stack` | compose smoke fixture |
 | Qdrant vectors | `qdrant` | provider workflow |
 | MongoDB metadata | `mongodb` | provider workflow; local Compose smoke |
 | MongoDB Atlas Vector Search | `mongodb-atlas` | optional hosted workflow inputs |
@@ -39,19 +47,10 @@ ChromaDB is temporarily unavailable in `v0.1.0` because the upstream
 `chromadb` package has an unresolved critical advisory with no patched release.
 The adapter remains in the repository for future re-enable.
 
-Free local Compose examples that do not need API keys:
+Main local Compose smoke:
 
 ```bash
-cd examples/storage_providers/sqlite-lancedb
-docker compose up --build
-
-cd examples/storage_providers/mongodb
-docker compose up --build
-
-cd examples/storage_providers/redis
-docker compose up --build
-
-cd examples/storage_providers/postgres-pgvector
+cd examples/local-stack
 docker compose up --build
 ```
 

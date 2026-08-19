@@ -45,6 +45,7 @@ oauth = [
     "cryptography>=50.0.0",
     "httpx>=0.28.1",
     "joserfc>=1.6.8",
+    "python-multipart>=0.0.31",
 ]
 postgres = [
     "psycopg[binary]>=3.2.4",
