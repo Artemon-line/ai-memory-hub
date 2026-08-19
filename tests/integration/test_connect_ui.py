@@ -259,12 +259,7 @@ def _mcp_oauth_token(client: TestClient, *, state: str = "test-state") -> str:
         f"/auth/google/callback?code=fake-code&state={google_state.group(1)}",
         follow_redirects=False,
     )
-    approve = browser.post(
-        "/oauth/authorize/approve",
-        data={"csrf_token": browser.cookies.get("amh_csrf")},
-        follow_redirects=False,
-    )
-    redirect = urlparse(approve.headers["location"])
+    redirect = urlparse(callback.headers["location"])
     params = parse_qs(redirect.query)
     token = client.post(
         "/oauth/token",
@@ -277,8 +272,7 @@ def _mcp_oauth_token(client: TestClient, *, state: str = "test-state") -> str:
         },
     )
     assert callback.status_code == 303
-    assert callback.headers["location"] == "/connect"
-    assert approve.status_code == 303
+    assert f"{redirect.scheme}://{redirect.netloc}{redirect.path}" == redirect_uri
     assert params["state"] == [state]
     assert token.status_code == 200
     return str(token.json()["access_token"])
@@ -658,13 +652,7 @@ def test_oauth_authorization_code_flow_issues_mcp_bearer_token(tmp_path, monkeyp
         f"/auth/google/callback?code=fake-code&state={google_state.group(1)}",
         follow_redirects=False,
     )
-    connect = browser.get(callback.headers["location"])
-    approve = browser.post(
-        "/oauth/authorize/approve",
-        data={"csrf_token": browser.cookies.get("amh_csrf")},
-        follow_redirects=False,
-    )
-    redirect = urlparse(approve.headers["location"])
+    redirect = urlparse(callback.headers["location"])
     params = parse_qs(redirect.query)
     token = client.post(
         "/oauth/token",
@@ -686,10 +674,6 @@ def test_oauth_authorization_code_flow_issues_mcp_bearer_token(tmp_path, monkeyp
         token_count = conn.execute("SELECT COUNT(*) FROM auth_tokens").fetchone()[0]
 
     assert callback.status_code == 303
-    assert callback.headers["location"] == "/connect"
-    assert connect.status_code == 200
-    assert "Authorize local client" in connect.text
-    assert approve.status_code == 303
     assert f"{redirect.scheme}://{redirect.netloc}{redirect.path}" == redirect_uri
     assert params["state"] == ["copilot-state"]
     assert token.status_code == 200
@@ -697,6 +681,57 @@ def test_oauth_authorization_code_flow_issues_mcp_bearer_token(tmp_path, monkeyp
     assert token.json()["scope"] == "memory:read memory:write"
     assert token_count == 1
     assert search.status_code == 200
+
+
+def test_oauth_token_rejects_unconfigured_admin_scope(tmp_path, monkeypatch) -> None:
+    client = _client(tmp_path, monkeypatch, allowed_domains=["example.com"])
+    redirect_uri = "http://127.0.0.1:49152/oauth/callback"
+    verifier = "admin-scope-pkce-verifier-abcdefghijklmnopqrstuvwxyz0123456789"
+    register = client.post(
+        "/oauth/register",
+        json={
+            "client_name": "Admin scope client",
+            "redirect_uris": [redirect_uri],
+            "token_endpoint_auth_method": "none",
+            "grant_types": ["authorization_code"],
+            "response_types": ["code"],
+        },
+    )
+    authorize = client.get(
+        "/oauth/authorize",
+        params={
+            "response_type": "code",
+            "client_id": register.json()["client_id"],
+            "redirect_uri": redirect_uri,
+            "code_challenge": _pkce_challenge(verifier),
+            "code_challenge_method": "S256",
+            "scope": "memory:read memory:write memory:admin",
+            "resource": "https://memory.example.com/mcp",
+        },
+        follow_redirects=False,
+    )
+    google_state = re.search(r"[?&]state=([^&]+)", authorize.headers["location"])
+    assert google_state is not None
+
+    browser = TestClient(client.app, base_url="https://memory.example.com")
+    callback = browser.get(
+        f"/auth/google/callback?code=fake-code&state={google_state.group(1)}",
+        follow_redirects=False,
+    )
+    code = parse_qs(urlparse(callback.headers["location"]).query)["code"][0]
+    token = client.post(
+        "/oauth/token",
+        data={
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": redirect_uri,
+            "client_id": register.json()["client_id"],
+            "code_verifier": verifier,
+        },
+    )
+
+    assert token.status_code == 400
+    assert token.json()["detail"]["error"] == "invalid_scope"
 
 
 def test_oauth_register_rejects_malformed_json(tmp_path, monkeypatch) -> None:
@@ -1147,14 +1182,7 @@ def test_oauth_authorization_code_is_single_use(tmp_path, monkeypatch) -> None:
         follow_redirects=False,
     )
     assert callback.status_code == 303
-    assert callback.headers["location"] == "/connect"
-    assert getattr(client.app.state, "oauth_authorization_codes", {}) == {}
-    approve = browser.post(
-        "/oauth/authorize/approve",
-        data={"csrf_token": browser.cookies.get("amh_csrf")},
-        follow_redirects=False,
-    )
-    code = parse_qs(urlparse(approve.headers["location"]).query)["code"][0]
+    code = parse_qs(urlparse(callback.headers["location"]).query)["code"][0]
     form = {
         "grant_type": "authorization_code",
         "code": code,
@@ -1165,7 +1193,6 @@ def test_oauth_authorization_code_is_single_use(tmp_path, monkeypatch) -> None:
     first = client.post("/oauth/token", data=form)
     second = client.post("/oauth/token", data=form)
 
-    assert approve.status_code == 303
     assert first.status_code == 200
     assert second.status_code == 400
     assert second.json()["detail"]["error"] == "invalid_grant"

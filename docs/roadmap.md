@@ -22,6 +22,7 @@ Each phase ends with a **milestone** you can demo or ship.
 |-------|--------|----------------------|
 | 1 | Core MVP: MCP/API capture, normalize, store, search, retrieve | MCP tools/resources + HTTP `/memory/*` over SQLite + LanceDB |
 | 1.5 | Storage abstraction | Unified metadata/vector provider interfaces with local, hosted, and existing-stack backends |
+| 1.7 | App-level encryption | Canonical memory payloads are encrypted before local/self-hosted storage |
 | 2 | Multi-source capture/import adapters | One hub across platforms, including those without official exports (e.g. Copilot) |
 | 3 | Intelligence: summaries, topics, timelines, consolidation | Knowledge engine, not just storage |
 | 4 | UI & DX | Dashboard + SDKs + packaging |
@@ -38,6 +39,10 @@ When planning or estimating work, treat phases as **ordered capability layers**:
 - **Phase 1** defines the minimum **pipeline**: **capture through MCP/API payloads** → **schema-first ingestion** → **unified schema** → **embeddings** → **vector search** → **HTTP** `/memory/search`, 
 `/memory/retrieve` + MCP `memory_*` tools/resources.
 - **Phase 1.5** promotes storage to a **first-class subsystem**: `VectorStore` interface → LanceDB/ChromaDB/Qdrant/Milvus/Weaviate/PGVector/MongoDB Atlas/Elasticsearch/OpenSearch/Redis/Pinecone/Turbopuffer/Vespa/Typesense/in-memory providers → deterministic startup checks → fallback behavior.
+- **Phase 1.7** adds app-level encryption for local and self-hosted deployments:
+canonical memory payloads are encrypted before metadata storage while auth,
+owner/project boundaries, search behavior, and storage-provider contracts remain
+stable.
 - **Phase 2** adds **platform-specific capture/import adapters** (Gemini Takeout, Copilot workarounds, Claude HTML, local LLM logs);
 **schema and storage stay stable** if normalization boundaries are respected.
 - Browser extension capture has a Phase 2-compatible hub contract:
@@ -141,6 +146,29 @@ search, and retrieval.
 - [x] Dry-run/startup validation tests
 
 **Milestone:** ai-memory-hub supports **LanceDB**, **PGVector**, and **in-memory** vector storage with identical search behavior at the API/MCP boundary.
+
+---
+
+## Phase 1.7 - App-level encryption
+
+**Goal:** Protect canonical memory payloads in local and self-hosted storage
+when an attacker gets a database dump, persistent volume, backup archive, or
+storage credentials without the encryption master key.
+
+Use [App-level memory encryption plan](improvements/app_level_encryption_plan.md)
+as the source of truth.
+
+- [ ] Add disabled-by-default encryption config and fail-closed key loading.
+- [ ] Encrypt canonical conversation payloads before SQLite/Postgres metadata
+      writes.
+- [ ] Preserve legacy plaintext reads until explicit migration.
+- [ ] Decrypt only after auth, owner, and project checks pass.
+- [ ] Add CLI keygen, status, encrypt-existing, and rotation commands.
+- [ ] Document K3s/Helm secret wiring and encrypted backup guidance.
+- [ ] Add follow-up search-index text hardening for stronger privacy mode.
+
+**Milestone:** Raw metadata database access is no longer enough to read
+canonical memory payloads.
 
 ---
 
@@ -340,12 +368,13 @@ Evolution path:
 
 1. **MVP** — capture, ingest, store, search, RAG
 2. **Storage abstraction** — supported metadata and vector providers behind stable interfaces
-3. **Multi-source capture/import adapters**
-4. **Intelligence layer**
-5. **UI and developer experience**
-6. **Agent integration**
-7. **Advanced memory features**
-8. **Optional sync**
+3. **App-level encryption**
+4. **Multi-source capture/import adapters**
+5. **Intelligence layer**
+6. **UI and developer experience**
+7. **Agent integration**
+8. **Advanced memory features**
+9. **Optional sync**
 
 Phases stack modularly so scope stays focused and components remain swappable (see [architecture.md](architecture.md)).
 

@@ -1,0 +1,266 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ai-memory-hub
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ai-memory-hub-secrets
+  namespace: ai-memory-hub
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: REPLACE_POSTGRES_PASSWORD
+  AMH_TOKEN_HASH_SECRET: REPLACE_TOKEN_HASH_SECRET
+  config.yaml: |
+    storage:
+      profile: production
+      dry_run: false
+      allow_trusted_appends: false
+      metadata_schema_versions: [1]
+      vector:
+        allow_fallback: false
+        distance: cosine
+      metadata_providers:
+        postgres:
+          url: postgresql://memory:REPLACE_POSTGRES_PASSWORD@postgres:5432/memory
+      vector_providers:
+        pgvector:
+          url: postgresql://memory:REPLACE_POSTGRES_PASSWORD@postgres:5432/memory
+          table_name: memory_vectors
+
+    tokenizer:
+      enabled: true
+      encoding: cl100k_base
+
+    ask:
+      max_context_tokens: 2000
+
+    retrieval:
+      vector_score_threshold: 7.5
+      keyword_enabled: true
+      keyword_candidate_limit: 50
+      keyword_weight: 0.25
+      metadata_weight: 0.15
+      candidate_multiplier: 3
+
+    memory:
+      insert_policy: permissive
+
+    chunking:
+      strategy: message
+      max_tokens: 800
+      overlap_tokens: 80
+
+    providers:
+      embeddings: local
+      embedding_model: local-hash
+      embedding_dimension: 32
+      metadata_db: postgres
+      vector_db: pgvector
+      agent: mvp
+
+    interfaces:
+      mcp: true
+      api: true
+
+    paths:
+      data_dir: /data
+      logs_dir: /logs
+
+    schema:
+      file: /app/memory/schema/conversation.schema.json
+
+    mcp:
+      host: 0.0.0.0
+      port: 8765
+
+    api:
+      host: 0.0.0.0
+      port: 8000
+      auth: bearer_token
+      token:
+        hash_secret_env: AMH_TOKEN_HASH_SECRET
+        default_expiry_days: 365
+
+    observability:
+      logging:
+        enabled: true
+        level: INFO
+        format: json
+        request_id_header: x-request-id
+        include_stack_traces: false
+        access_logs: true
+      tracing:
+        enabled: false
+        endpoint: http://otel-collector:4317
+        protocol: grpc
+        sample_ratio: 0.1
+        service_name: ai-memory-hub
+        environment: k3s-local
+      metrics:
+        enabled: false
+        endpoint: http://otel-collector:4317
+        protocol: grpc
+      debug_payloads: false
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data
+  namespace: ai-memory-hub
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hub-data
+  namespace: ai-memory-hub
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: ai-memory-hub
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: pgvector/pgvector:pg16
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5432
+              name: postgres
+          env:
+            - name: POSTGRES_DB
+              value: memory
+            - name: POSTGRES_USER
+              value: memory
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ai-memory-hub-secrets
+                  key: POSTGRES_PASSWORD
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "memory", "-d", "memory"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: postgres-data
+          persistentVolumeClaim:
+            claimName: postgres-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: ai-memory-hub
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-memory-hub
+  namespace: ai-memory-hub
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ai-memory-hub
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ai-memory-hub
+    spec:
+      securityContext:
+        fsGroup: 0
+      containers:
+        - name: ai-memory-hub
+          image: ai-memory-hub:k3s-local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+              name: http
+          env:
+            - name: AMH_TOKEN_HASH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ai-memory-hub-secrets
+                  key: AMH_TOKEN_HASH_SECRET
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+          volumeMounts:
+            - name: hub-config
+              mountPath: /app/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            - name: hub-data
+              mountPath: /data
+            - name: hub-logs
+              mountPath: /logs
+      volumes:
+        - name: hub-config
+          secret:
+            secretName: ai-memory-hub-secrets
+            items:
+              - key: config.yaml
+                path: config.yaml
+        - name: hub-data
+          persistentVolumeClaim:
+            claimName: hub-data
+        - name: hub-logs
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-memory-hub
+  namespace: ai-memory-hub
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: ai-memory-hub
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http

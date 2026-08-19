@@ -1,0 +1,96 @@
+# ai-memory-hub local Kubernetes/K3s config for Postgres metadata, PGVector
+# vectors, and bearer-token auth. In Kubernetes this file should be mounted from
+# a Secret because the Postgres DSN contains the database password.
+
+storage:
+  profile: production
+  dry_run: false
+  allow_trusted_appends: false
+  metadata_schema_versions: [1]
+  vector:
+    allow_fallback: false
+    distance: cosine
+  metadata_providers:
+    postgres:
+      url: postgresql://memory:REPLACE_POSTGRES_PASSWORD@postgres:5432/memory
+  vector_providers:
+    pgvector:
+      url: postgresql://memory:REPLACE_POSTGRES_PASSWORD@postgres:5432/memory
+      table_name: memory_vectors
+
+tokenizer:
+  enabled: true
+  encoding: cl100k_base
+
+ask:
+  max_context_tokens: 2000
+
+retrieval:
+  vector_score_threshold: 7.5
+  keyword_enabled: true
+  keyword_candidate_limit: 50
+  keyword_weight: 0.25
+  metadata_weight: 0.15
+  candidate_multiplier: 3
+
+memory:
+  insert_policy: permissive
+
+chunking:
+  strategy: message
+  max_tokens: 800
+  overlap_tokens: 80
+
+providers:
+  # Lightweight default for a Pi. Switch to providers.embeddings: http and set
+  # embedding_endpoint when pointing the hub at Ollama on another LAN machine.
+  embeddings: local
+  embedding_model: local-hash
+  embedding_dimension: 32
+  metadata_db: postgres
+  vector_db: pgvector
+  agent: mvp
+
+interfaces:
+  mcp: true
+  api: true
+
+paths:
+  data_dir: /data
+  logs_dir: /logs
+
+schema:
+  file: /app/memory/schema/conversation.schema.json
+
+mcp:
+  host: 0.0.0.0
+  port: 8765
+
+api:
+  host: 0.0.0.0
+  port: 8000
+  auth: bearer_token
+  token:
+    hash_secret_env: AMH_TOKEN_HASH_SECRET
+    default_expiry_days: 365
+
+observability:
+  logging:
+    enabled: true
+    level: INFO
+    format: json
+    request_id_header: x-request-id
+    include_stack_traces: false
+    access_logs: true
+  tracing:
+    enabled: false
+    endpoint: http://otel-collector:4317
+    protocol: grpc
+    sample_ratio: 0.1
+    service_name: ai-memory-hub
+    environment: k3s-local
+  metrics:
+    enabled: false
+    endpoint: http://otel-collector:4317
+    protocol: grpc
+  debug_payloads: false

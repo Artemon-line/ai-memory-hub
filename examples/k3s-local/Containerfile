@@ -1,0 +1,65 @@
+FROM ghcr.io/astral-sh/uv:0.11.32-python3.14-trixie-slim
+
+ARG VERSION=0.1.0
+ARG REVISION=unknown
+ARG SOURCE=https://github.com/Artemon-line/ai-memory-hub
+ARG OPTIONAL_EXTRAS=""
+
+LABEL org.opencontainers.image.title="ai-memory-hub-k3s-local" \
+      org.opencontainers.image.description="ai-memory-hub image for local K3s deployments with Postgres and PGVector support" \
+      org.opencontainers.image.source="${SOURCE}" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.licenses="MIT"
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    HOME=/tmp \
+    UV_CACHE_DIR=/app/.uv-cache \
+    TIKTOKEN_CACHE_DIR=/opt/tiktoken-cache
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      bsdutils=1:2.41.5-0+deb13u1 \
+      libblkid1=2.41.5-0+deb13u1 \
+      liblastlog2-2=2.41.5-0+deb13u1 \
+      libmount1=2.41.5-0+deb13u1 \
+      libsmartcols1=2.41.5-0+deb13u1 \
+      libuuid1=2.41.5-0+deb13u1 \
+      login=1:4.16.0-2+really2.41.5-0+deb13u1 \
+      mount=2.41.5-0+deb13u1 \
+      util-linux=2.41.5-0+deb13u1 && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY pyproject.toml uv.lock README.md ./
+
+RUN uv sync --frozen --no-dev --no-install-project \
+      --extra postgres \
+      --extra tokenizer \
+      ${OPTIONAL_EXTRAS}
+
+COPY memory ./memory
+COPY examples/k3s-local/config.bearer.yaml /app/config.yaml
+
+RUN uv sync --frozen --no-dev \
+      --extra postgres \
+      --extra tokenizer \
+      ${OPTIONAL_EXTRAS} && \
+    uv run python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')" && \
+    test -x /app/.venv/bin/aim && \
+    cd /tmp && /app/.venv/bin/python -c "import memory; from memory.cli import main; assert callable(main)" && \
+    mkdir -p /data /logs /app/.uv-cache /opt/tiktoken-cache && \
+    useradd --uid 1001 --gid 0 --home-dir /tmp --no-create-home \
+      --shell /usr/sbin/nologin ai-memory-hub && \
+    chgrp -R 0 /app /data /logs /opt/tiktoken-cache && \
+    chmod -R g=u /app /data /logs /opt/tiktoken-cache && \
+    chown -R 1001:0 /app/.uv-cache /opt/tiktoken-cache && \
+    chmod -R g=u /app/.uv-cache /opt/tiktoken-cache
+
+EXPOSE 8000
+
+USER 1001
+
+CMD ["/app/.venv/bin/aim", "serve", "--config", "/app/config.yaml", "--host", "0.0.0.0", "--port", "8000"]

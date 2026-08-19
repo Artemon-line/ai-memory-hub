@@ -139,20 +139,22 @@ def register_oauth_authorization_routes(
             raise _oauth_error("invalid_grant", "PKCE verification failed")
 
         owner_id = str(record["owner_id"])
-        issued_token = issue_hub_token(config=config, owner_id=owner_id)
+        scopes = _validated_requested_scopes(config, str(record.get("scope") or ""))
+        issued_token = issue_hub_token(config=config, owner_id=owner_id, scopes=scopes)
         await service.agent.create_auth_token(
             owner_id=owner_id,
             token=issued_token,
             token_display_name="MCP OAuth client",
             expires_at=utc_after(config.api.connect.token_ttl_seconds),
-            scopes=[READ_SCOPE, WRITE_SCOPE],
+            scopes=scopes,
         )
+        scope_value = " ".join(scopes)
         return JSONResponse(
             {
                 "access_token": issued_token,
                 "token_type": "Bearer",
                 "expires_in": config.api.connect.token_ttl_seconds,
-                "scope": f"{READ_SCOPE} {WRITE_SCOPE}",
+                "scope": scope_value,
                 "resource": record["resource"],
                 "jti": str(jwt_payload(issued_token).get("jti") or ""),
             }
@@ -160,19 +162,24 @@ def register_oauth_authorization_routes(
 
 
 def pending_authorization_approval_redirect(request: Request) -> RedirectResponse | None:
-    state_data = getattr(request.state, "oauth_provider_state_data", None)
-    pending = (
-        state_data.get("pending_oauth_authorization")
-        if isinstance(state_data, dict)
-        else None
-    )
+    pending = _pending_authorization_from_provider_state(request)
     if not isinstance(pending, dict):
-        pending = _session(request).pop("pending_oauth_authorization", None)
+        pending = _pop_pending_authorization_from_session(request)
     if not isinstance(pending, dict):
         return None
     auth_request = _validated_pending_authorization_request(request, pending)
     _session(request)["pending_oauth_authorization"] = auth_request
     return RedirectResponse("/connect", status_code=303)
+
+
+def pending_authorization_code_redirect(
+    request: Request, *, owner_id: str
+) -> RedirectResponse | None:
+    pending = _pending_authorization_from_provider_state(request)
+    if not isinstance(pending, dict):
+        return None
+    auth_request = _validated_pending_authorization_request(request, pending)
+    return _authorization_code_redirect(request, auth_request, owner_id=owner_id)
 
 
 def pending_authorization_model(request: Request) -> dict[str, str] | None:
@@ -239,6 +246,21 @@ def _validated_pending_authorization_request(
     return values
 
 
+def _validated_requested_scopes(config: HubConfig, value: str) -> list[str]:
+    requested = [scope for scope in value.split() if scope]
+    if not requested:
+        requested = [READ_SCOPE, WRITE_SCOPE]
+    supported = set(config.api.oauth.scopes_supported)
+    invalid = [scope for scope in requested if scope not in supported]
+    if invalid:
+        raise _oauth_error("invalid_scope", "Requested scope is not supported")
+    ordered: list[str] = []
+    for scope in requested:
+        if scope not in ordered:
+            ordered.append(scope)
+    return ordered
+
+
 def _authorization_code_redirect(
     request: Request, auth_request: dict[str, str], *, owner_id: str
 ) -> RedirectResponse:
@@ -262,6 +284,17 @@ def _authorization_code_redirect(
         f"{auth_request['redirect_uri']}{separator}{urlencode(query)}",
         status_code=303,
     )
+
+
+def _pending_authorization_from_provider_state(request: Request) -> object:
+    state_data = getattr(request.state, "oauth_provider_state_data", None)
+    if not isinstance(state_data, dict):
+        return None
+    return state_data.get("pending_oauth_authorization")
+
+
+def _pop_pending_authorization_from_session(request: Request) -> object:
+    return _session(request).pop("pending_oauth_authorization", None)
 
 
 def _redirect_uris_from_payload(payload: Any) -> list[str]:
