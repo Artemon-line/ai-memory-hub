@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import logging
 import time
 from typing import Any, cast
 from urllib.parse import urlencode, urlparse
@@ -22,6 +23,8 @@ OAUTH_STATE_TTL_SECONDS = 600
 OAUTH_STATE_MAX_RECORDS = 128
 OIDC_CACHE_TTL_SECONDS = 300
 OIDC_CLOCK_SKEW_SECONDS = 60
+
+logger = logging.getLogger(__name__)
 
 
 class ConnectOAuthRegistry:
@@ -174,6 +177,14 @@ class ConnectOAuthRegistry:
         except httpx.HTTPError as exc:
             raise HTTPException(status_code=502, detail="OAuth token exchange failed") from exc
         if response.status_code >= 400:
+            logger.info(
+                "oauth provider token exchange rejected",
+                extra={
+                    "event": "oauth_provider_token_exchange_rejected",
+                    "oauth_provider": provider,
+                    "provider_status_code": response.status_code,
+                },
+            )
             raise HTTPException(status_code=400, detail="OAuth token exchange was rejected")
         payload = response.json()
         if isinstance(payload, dict):

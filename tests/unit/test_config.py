@@ -525,6 +525,57 @@ def test_oauth_resource_server_config_requires_public_metadata() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("field_path", "override"),
+    [
+        (
+            ("api", "public_base_url"),
+            "https://YOUR-NGROK-DOMAIN.ngrok-free.app",
+        ),
+        (
+            ("api", "oauth", "authorization_servers"),
+            ["https://YOUR-NGROK-DOMAIN.ngrok-free.app"],
+        ),
+        (
+            ("api", "oauth", "resource"),
+            "https://YOUR-NGROK-DOMAIN.ngrok-free.app/mcp",
+        ),
+        (
+            ("api", "connect", "passport", "google", "callback_url"),
+            "https://YOUR-NGROK-DOMAIN.ngrok-free.app/auth/google/callback",
+        ),
+    ],
+)
+def test_oauth_resource_server_config_rejects_ngrok_placeholders(
+    field_path: tuple[str, ...], override: object
+) -> None:
+    config: dict[str, object] = {
+        "api": {
+            "auth": "oauth_resource_server",
+            "public_base_url": "https://memory.example.com",
+            "oauth": {
+                "authorization_servers": ["https://memory.example.com"],
+                "resource": "https://memory.example.com/mcp",
+                "jwt_secret": "secret",
+            },
+            "connect": {
+                "passport": {
+                    "google": {
+                        "callback_url": "https://memory.example.com/auth/google/callback"
+                    }
+                }
+            },
+        }
+    }
+    cursor = config
+    for key in field_path[:-1]:
+        cursor = cursor[key]  # type: ignore[index,assignment]
+    cursor[field_path[-1]] = override  # type: ignore[index]
+
+    with pytest.raises(ValueError, match="YOUR-NGROK-DOMAIN"):
+        parse_config(config)
+
+
 def test_oauth_resource_server_config_derives_valid_defaults() -> None:
     config = parse_config(
         {

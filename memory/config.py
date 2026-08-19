@@ -908,10 +908,28 @@ class APIConfig(BaseModel):
         if self.auth == "oauth_resource_server":
             if not self.public_base_url:
                 raise ValueError("api.public_base_url is required for oauth_resource_server")
+            _reject_placeholder_uri(self.public_base_url, field_name="api.public_base_url")
             if not self.oauth.authorization_servers:
                 raise ValueError(
                     "api.oauth.authorization_servers is required for oauth_resource_server"
                 )
+            for index, authorization_server in enumerate(self.oauth.authorization_servers):
+                _reject_placeholder_uri(
+                    authorization_server,
+                    field_name=f"api.oauth.authorization_servers[{index}]",
+                )
+            if self.oauth.resource:
+                _reject_placeholder_uri(self.oauth.resource, field_name="api.oauth.resource")
+            for provider in (
+                self.connect.passport.google,
+                self.connect.passport.meta,
+                self.connect.passport.x,
+            ):
+                if provider.callback_url:
+                    _reject_placeholder_uri(
+                        provider.callback_url,
+                        field_name="api.connect.passport.callback_url",
+                    )
             if not self.oauth.jwt_secret and not self.oauth.jwt_secret_env:
                 raise ValueError(
                     "api.oauth.jwt_secret or api.oauth.jwt_secret_env is required for "
@@ -1134,6 +1152,14 @@ def _validate_absolute_uri(value: str, *, field_name: str) -> None:
         raise ValueError(f"{field_name} must be an absolute URI")
     if parsed.fragment:
         raise ValueError(f"{field_name} must not include a fragment")
+
+
+def _reject_placeholder_uri(value: str, *, field_name: str) -> None:
+    hostname = urlparse(value).hostname or ""
+    if "your-ngrok-domain" in hostname.lower():
+        raise ValueError(
+            f"{field_name} still contains the YOUR-NGROK-DOMAIN placeholder"
+        )
 
 
 def _validate_cors_origin(value: str) -> None:
