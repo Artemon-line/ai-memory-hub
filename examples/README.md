@@ -1,6 +1,6 @@
 # Examples
 
-Use two human-facing examples:
+Use three human-facing examples:
 
 1. **Quickstart**: the repository root config and root `Containerfile`.
    This uses SQLite + LanceDB with deterministic local embeddings so it starts
@@ -11,6 +11,10 @@ Use two human-facing examples:
    The included OAuth template uses ngrok as a local-host-friendly tunnel
    example, but any stable HTTPS reverse proxy or tunnel can use the same
    pattern.
+3. **K3s local bearer stack**: `k3s-local`.
+   This is the private LAN/VPN-oriented Kubernetes setup for a Raspberry Pi or
+   other always-on local server. It uses Postgres, PGVector, bearer-token auth,
+   and optional observability.
 
 Provider-specific directories under `storage_providers` are still kept as
 maintainer fixtures for CI, contract testing, and advanced adapter work. New
@@ -47,3 +51,16 @@ placeholder ngrok URL in that config with your active public HTTPS base URL, and
 export the Google/OAuth secrets required by `compose.yaml`. If you use something
 other than ngrok, keep `public_base_url`, callback URLs, and the Google redirect
 URI pointed at that same HTTPS origin.
+
+## K3s Local Bearer Stack
+
+Use this when running the hub on a Raspberry Pi, mini PC, or home Kubernetes
+node without exposing it to the public internet:
+
+```bash
+cd examples/k3s-local
+```
+
+Follow `examples/k3s-local/README.md` to build the image, render local secrets,
+apply the manifests, create a bearer token, and expose only the hub service to
+your trusted LAN or VPN.

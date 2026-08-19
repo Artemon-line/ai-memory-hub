@@ -19,6 +19,7 @@ Source date: `28-05-2026`
 13. [Google OAuth Connect UI Plan](./improvements/google_oauth_connect_ui_plan.md)
 14. [OIDC And PKCE Hardening Plan](./improvements/oidc_pkce_hardening_plan.md)
 15. [Neo4j Aura Graph Memory Plan](./improvements/neo4j_aura_graph_memory_plan.md)
+16. [App-Level Memory Encryption Plan](./improvements/app_level_encryption_plan.md)
 
 ## Notes
 
