@@ -1,0 +1,113 @@
+# Replace https://YOUR-NGROK-DOMAIN.ngrok-free.app with your active ngrok HTTPS URL.
+storage:
+  dry_run: false
+  allow_trusted_appends: false
+  metadata_schema_versions: [1]
+  vector:
+    allow_fallback: false
+    distance: cosine
+  metadata_providers:
+    postgres:
+      url: postgresql://memory:memory@postgres:5432/memory
+  vector_providers:
+    pgvector:
+      url: postgresql://memory:memory@postgres:5432/memory
+      table_name: memory_vectors
+
+tokenizer:
+  enabled: true
+  encoding: cl100k_base
+
+ask:
+  max_context_tokens: 2000
+
+retrieval:
+  vector_score_threshold: 7.5
+  keyword_enabled: true
+  keyword_candidate_limit: 50
+  keyword_weight: 0.25
+  metadata_weight: 0.15
+  candidate_multiplier: 3
+
+memory:
+  insert_policy: permissive
+
+chunking:
+  strategy: message
+  max_tokens: 800
+  overlap_tokens: 80
+
+providers:
+  embeddings: http
+  embedding_model: nomic-embed-text
+  embedding_dimension: 768
+  metadata_db: postgres
+  vector_db: pgvector
+  agent: mvp
+
+interfaces:
+  mcp: true
+  api: true
+
+paths:
+  data_dir: /data
+  logs_dir: /logs
+
+schema:
+  file: /app/memory/schema/conversation.schema.json
+
+mcp:
+  host: 0.0.0.0
+  port: 8765
+
+api:
+  host: 0.0.0.0
+  port: 8000
+  auth: oauth_resource_server
+  public_base_url: https://YOUR-NGROK-DOMAIN.ngrok-free.app
+  oauth:
+    authorization_servers:
+      - https://YOUR-NGROK-DOMAIN.ngrok-free.app
+    resource: https://YOUR-NGROK-DOMAIN.ngrok-free.app/mcp
+    jwt_secret_env: AMH_OAUTH_JWT_SECRET
+    scopes_supported:
+      - memory:read
+      - memory:write
+  connect:
+    enabled: true
+    session_secret_env: AMH_SESSION_SECRET
+    session_ttl_seconds: 43200
+    token_ttl_seconds: 3600
+    passport:
+      providers: [google]
+      google:
+        enabled: true
+        client_id_env: GOOGLE_CLIENT_ID
+        client_secret_env: GOOGLE_CLIENT_SECRET
+        callback_url: https://YOUR-NGROK-DOMAIN.ngrok-free.app/auth/google/callback
+        allowed_domains: []
+        allowed_emails: []
+
+embedding_endpoint:
+  base_url: http://host.docker.internal:11434/v1
+  api_key: ollama
+
+observability:
+  logging:
+    enabled: true
+    level: INFO
+    format: json
+    request_id_header: x-request-id
+    include_stack_traces: true
+  tracing:
+    enabled: true
+    endpoint: http://otel-collector:4317
+    protocol: grpc
+    sample_ratio: 1.0
+    service_name: ai-memory-hub
+    environment: local-stack
+  metrics:
+    enabled: true
+    endpoint: http://otel-collector:4317
+    protocol: grpc
+  debug_payloads: false

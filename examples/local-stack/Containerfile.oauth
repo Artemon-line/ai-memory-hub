@@ -4,8 +4,8 @@ ARG VERSION=0.1.0
 ARG REVISION=unknown
 ARG SOURCE=https://github.com/Artemon-line/ai-memory-hub
 
-LABEL org.opencontainers.image.title="ai-memory-hub-pgvector-example" \
-      org.opencontainers.image.description="ai-memory-hub Postgres metadata and PGVector example image" \
+LABEL org.opencontainers.image.title="ai-memory-hub-local-stack-example" \
+      org.opencontainers.image.description="ai-memory-hub Postgres, PGVector, tokenizer, OAuth, and observability example image" \
       org.opencontainers.image.source="${SOURCE}" \
       org.opencontainers.image.revision="${REVISION}" \
       org.opencontainers.image.version="${VERSION}" \
@@ -24,16 +24,23 @@ COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --frozen --no-dev \
       --extra postgres \
       --extra tokenizer \
+      --extra oauth \
+      --extra observability \
       --no-install-project && \
     mkdir -p "$TIKTOKEN_CACHE_DIR" && \
     uv run python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"
 
 COPY memory ./memory
-COPY examples/container/config.yaml /app/config.yaml
+COPY examples/local-stack/config.oauth-ngrok.yaml /app/config.yaml
 
-RUN uv sync --frozen --no-dev \
+RUN test -d /app/memory && \
+    uv sync --frozen --no-dev \
       --extra postgres \
-      --extra tokenizer && \
+      --extra tokenizer \
+      --extra oauth \
+      --extra observability && \
+    uv pip install --python /app/.venv/bin/python --no-deps --reinstall . && \
+    cd /tmp && /app/.venv/bin/python -c "import memory; import memory.cli" && \
     test -x /app/.venv/bin/aim && \
     mkdir -p /app/data /app/logs /app/.uv-cache "$TIKTOKEN_CACHE_DIR" && \
     useradd --uid 1001 --gid 0 --home-dir /tmp --no-create-home \
@@ -47,4 +54,4 @@ EXPOSE 8000
 
 USER 1001
 
-CMD ["/app/.venv/bin/aim", "serve", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["/app/.venv/bin/aim", "serve", "--config", "/app/config.yaml", "--host", "0.0.0.0", "--port", "8000"]

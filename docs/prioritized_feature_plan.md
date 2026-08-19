@@ -19,6 +19,7 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P0 | Required real-client MCP smoke coverage | Implemented | `real_client_mcp_smoke_plan.md` |
 | P0 | Bruno black-box API/MCP integration test layer | Implemented | `bruno_integration_test_plan.md` |
 | P0 | Handoff memory for cross-agent and cross-environment task continuity | Planned | `improvements/handoff_memory_plan.md` |
+| P0 | App-level memory encryption for local and self-hosted deployments | Planned | `improvements/app_level_encryption_plan.md` |
 | P1 | CLI foundation and command contract | Implemented | `cli_implementation_plan.md` |
 | P1 | CLI `ingest`, `search`, `retrieve`, and `ask` commands | Implemented | `cli_implementation_plan.md` |
 | P1 | CLI `serve` command for container/runtime entrypoint | Implemented | `cli_implementation_plan.md`, `release_container_docs_plan.md` |
@@ -355,6 +356,40 @@ Implementation sequence:
       behavior is stable.
 - [ ] Link handoffs into graph memory later for agent/task/file/decision
       provenance.
+
+## P0: App-Level Memory Encryption
+
+Use `improvements/app_level_encryption_plan.md` as the source of truth.
+
+This is the next storage-security priority for Raspberry Pi, K3s, LAN, and
+other self-hosted deployments. API auth protects access through the hub, but
+direct access to Postgres, SQLite, persistent volumes, or backups can still
+expose canonical memory payloads unless the hub encrypts them before storage.
+
+Implementation sequence:
+
+- [ ] Add disabled-by-default `encryption` config with a required base64
+      32-byte master key when enabled.
+- [ ] Add an encryption service using authenticated encryption and row-bound
+      associated data.
+- [ ] Encrypt canonical conversation payloads in SQLite and Postgres metadata
+      stores while preserving legacy plaintext reads.
+- [ ] Decrypt only after auth, owner, and project checks pass.
+- [ ] Add CLI commands for key generation, status, explicit plaintext-row
+      migration, and key rotation.
+- [ ] Document K3s/Helm secret wiring, encrypted backups, and how app-level
+      encryption complements disk encryption.
+- [ ] Add follow-up search-index hardening for encrypted chunk text and snippet
+      reconstruction.
+
+Acceptance criteria:
+
+- Raw metadata database dumps do not expose encrypted canonical memory payloads.
+- Missing or wrong keys fail closed without returning corrupt plaintext.
+- Existing API and MCP response shapes remain stable after successful
+  decryption.
+- Logs, diagnostics, and config display never expose keys, decrypted payloads,
+  tokens, or database secrets.
 
 ## P1: CLI Foundation And Commands
 

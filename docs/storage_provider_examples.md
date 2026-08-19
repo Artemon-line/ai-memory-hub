@@ -1,7 +1,16 @@
-# Storage Provider Examples
+# Storage Provider Fixtures
 
-Checked-in examples live under `examples/storage_providers` and
-`examples/storage_providers/postgres-pgvector`.
+The human-facing examples are intentionally small:
+
+- **Quickstart**: repository root config and root `Containerfile`.
+- **Local stack**: `examples/local-stack`, combining
+  Postgres metadata, PGVector vectors, Ollama embeddings, Google OAuth, and
+  public HTTPS access for remote agents. The checked-in OAuth template uses
+  ngrok as the local tunnel example.
+
+The remaining checked-in provider directories under `examples/storage_providers`
+are maintainer fixtures. They keep adapter behavior testable without making new
+users choose from a long example catalog.
 
 These examples use `providers.embeddings: local` so storage smoke tests are
 credential-free and do not require OpenAI, Ollama, or another model service.
@@ -32,26 +41,13 @@ downloaded only when you install their extras, such as `uv sync --extra qdrant`
 or `uv sync --extra postgres`, or when using a provider-local container image
 that deliberately installs that provider's extra.
 
-The API-key-free local Compose examples for PostgreSQL/PGVector, MongoDB,
-Redis, and SQLite/LanceDB use provider-local Containerfiles. Those
-images install only the optional dependency extras needed by that example.
-For Redis and MongoDB specifically, the checked-in directories include all
-local-run assets:
-
-- `examples/storage_providers/redis/compose.yaml`
-- `examples/storage_providers/redis/Containerfile`
-- `examples/storage_providers/redis/config.yaml`
-- `examples/storage_providers/mongodb/compose.yaml`
-- `examples/storage_providers/mongodb/Containerfile`
-- `examples/storage_providers/mongodb/config.yaml`
-
-## Example Matrix
+## Fixture Matrix
 
 | Provider setup | Path | Notes |
 | --- | --- | --- |
 | SQLite + LanceDB | `examples/storage_providers/sqlite-lancedb` | Default local persistent setup |
 | SQLite + in-memory vectors | `examples/storage_providers/memory` | Disposable vector storage for tests |
-| Postgres + PGVector | `examples/storage_providers/postgres-pgvector` | Full runbook for Docker/Podman and MCP handoff |
+| Postgres + PGVector | `examples/local-stack` | Main local stack and compose smoke fixture |
 | SQLite + Qdrant | `examples/storage_providers/qdrant` | Local Qdrant service |
 | MongoDB metadata + LanceDB | `examples/storage_providers/mongodb` | MongoDB owns metadata only |
 | MongoDB metadata + Atlas vectors | `examples/storage_providers/mongodb-atlas` | Hosted Atlas Vector Search |
@@ -143,23 +139,14 @@ provider internals still differ:
 
 ## Common Smoke
 
-API-key-free local Compose examples:
+The main Compose smoke path:
 
 ```bash
-cd examples/storage_providers/sqlite-lancedb
-docker compose up --build
-
-cd examples/storage_providers/mongodb
-docker compose up --build
-
-cd examples/storage_providers/redis
-docker compose up --build
-
-cd examples/storage_providers/postgres-pgvector
+cd examples/local-stack
 docker compose up --build
 ```
 
-After starting any local Compose example:
+After starting the stack:
 
 ```bash
 curl -fsS http://127.0.0.1:8000/ready
@@ -185,7 +172,8 @@ curl -fsS http://127.0.0.1:8000/memory/search \
   -d '{"query":"amber-vector","top_k":3}'
 ```
 
-These examples are for provider smoke testing. User-facing MCP setups should use
-`api.auth: oauth_resource_server` with TLS, a reverse proxy, VPN, or another
-trusted private network. Keep `api.auth: none` only for CI/test fixtures and
-maintainer-only loopback smoke tests.
+Other provider fixture directories may include their own local Compose files,
+but they are primarily for adapter development and CI parity. User-facing MCP
+setups should use `api.auth: oauth_resource_server` with TLS, an HTTPS tunnel,
+VPN, or another trusted private network. Keep `api.auth: none` only for
+CI/test fixtures and maintainer-only loopback smoke tests.
