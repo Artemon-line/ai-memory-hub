@@ -188,7 +188,6 @@ api:
     scopes_supported:
       - memory:read
       - memory:write
-      - memory:admin
   connect:
     enabled: true
     session_secret_env: AMH_SESSION_SECRET
@@ -268,6 +267,11 @@ active HTTPS URL and register the matching Google redirect URI:
 ```text {.amh-copy-block}
 https://YOUR-NGROK-DOMAIN.ngrok-free.app/auth/google/callback
 ```
+
+After startup, `/connect` should display the active public MCP URL, not
+`YOUR-NGROK-DOMAIN`. If the placeholder is still visible, the hub will advertise
+the wrong OAuth metadata to clients and Google token exchange can fail because
+the callback URL no longer matches the OAuth client.
 
 Restart behavior:
 

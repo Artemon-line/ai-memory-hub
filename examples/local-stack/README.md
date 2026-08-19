@@ -54,6 +54,11 @@ ngrok http 8000
 https://YOUR-NGROK-DOMAIN.ngrok-free.app/auth/google/callback
 ```
 
+If the Connect page still shows `YOUR-NGROK-DOMAIN` after startup, stop and fix
+`config.oauth-ngrok.yaml` before starting client auth. MCP clients discover
+OAuth endpoints from the advertised public URL, so a stale placeholder sends
+registration and token flows to the wrong host.
+
 5. Export secrets and start Compose:
 
 ```bash

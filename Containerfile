@@ -16,6 +16,19 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     HOME=/tmp \
     UV_CACHE_DIR=/app/.uv-cache
 
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      bsdutils=1:2.41.5-0+deb13u1 \
+      libblkid1=2.41.5-0+deb13u1 \
+      liblastlog2-2=2.41.5-0+deb13u1 \
+      libmount1=2.41.5-0+deb13u1 \
+      libsmartcols1=2.41.5-0+deb13u1 \
+      libuuid1=2.41.5-0+deb13u1 \
+      login=1:4.16.0-2+really2.41.5-0+deb13u1 \
+      mount=2.41.5-0+deb13u1 \
+      util-linux=2.41.5-0+deb13u1 && \
+    rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 COPY pyproject.toml uv.lock README.md ./

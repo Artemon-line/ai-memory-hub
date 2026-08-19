@@ -21,6 +21,7 @@ from memory.api.connect_service import (
 )
 from memory.api.oauth_authorization import (
     pending_authorization_approval_redirect,
+    pending_authorization_code_redirect,
     pending_authorization_model,
     register_oauth_authorization_routes,
 )
@@ -98,7 +99,11 @@ def register_connect_routes(app: FastAPI, *, agent: BaseIngestionAgent, config: 
                 "owner_id": login["identity"]["user_id"],
             },
         )
-        authorization_redirect = pending_authorization_approval_redirect(request)
+        authorization_redirect = pending_authorization_code_redirect(
+            request, owner_id=str(login["identity"]["user_id"])
+        )
+        if authorization_redirect is None:
+            authorization_redirect = pending_authorization_approval_redirect(request)
         if authorization_redirect is not None:
             authorization_redirect.set_cookie(
                 config.api.connect.session_cookie_name,

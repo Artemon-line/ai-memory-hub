@@ -415,14 +415,17 @@ def validate_provider_claims(
         raise HTTPException(status_code=403, detail="OAuth email is not allowed")
 
 
-def issue_hub_token(*, config: HubConfig, owner_id: str) -> str:
+def issue_hub_token(
+    *, config: HubConfig, owner_id: str, scopes: list[str] | tuple[str, ...] | None = None
+) -> str:
     now = int(time.time())
+    scope_value = " ".join(scopes or [READ_SCOPE, WRITE_SCOPE])
     payload = {
         "sub": owner_id,
         "iss": config.api.public_base_url.rstrip("/"),
         "aud": mcp_url_for_config(config),
         "resource": mcp_url_for_config(config),
-        "scope": f"{READ_SCOPE} {WRITE_SCOPE}",
+        "scope": scope_value,
         "iat": now,
         "exp": now + config.api.connect.token_ttl_seconds,
         "jti": "tok_" + secrets.token_hex(16),
