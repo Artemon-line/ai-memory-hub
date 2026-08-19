@@ -29,35 +29,7 @@
   </dl>
   <p class="panel-note">{{ auth_mode.description|e }}</p>
 
-  {% if signed_in and csrf_token and pending_oauth_authorization %}
-  <div class="oauth-approval" role="status">
-    <h3>Authorize local client</h3>
-    <dl class="status-list">
-      <div>
-        <dt>Client</dt>
-        <dd>{{ pending_oauth_authorization.client_name|e }}</dd>
-      </div>
-      <div>
-        <dt>Redirect</dt>
-        <dd><code>{{ pending_oauth_authorization.redirect_uri|e }}</code></dd>
-      </div>
-      <div>
-        <dt>Scope</dt>
-        <dd>{{ pending_oauth_authorization.scope|e }}</dd>
-      </div>
-    </dl>
-    <div class="button-row">
-      <form method="post" action="/oauth/authorize/approve">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token|e }}">
-        <button type="submit" class="button button--primary">Authorize</button>
-      </form>
-      <form method="post" action="/oauth/authorize/deny">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token|e }}">
-        <button type="submit" class="button button--secondary">Cancel</button>
-      </form>
-    </div>
-  </div>
-  {% elif signed_in and csrf_token %}
+  {% if signed_in and csrf_token %}
   <form method="post" action="/auth/logout">
     <input type="hidden" name="csrf_token" value="{{ csrf_token|e }}">
     <button type="submit" class="button button--secondary">Sign out</button>
