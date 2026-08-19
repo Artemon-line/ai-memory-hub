@@ -44,7 +44,7 @@ observability = [
 oauth = [
     "cryptography>=50.0.0",
     "httpx>=0.28.1",
-    "joserfc>=1.6.8",
+    "joserfc>=1.7.4",
     "python-multipart>=0.0.31",
 ]
 postgres = [
