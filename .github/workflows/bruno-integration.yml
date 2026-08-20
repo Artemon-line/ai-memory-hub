@@ -153,7 +153,7 @@ jobs:
               http://127.0.0.1:8010/mcp
           )"
           test "$challenge_status" = "401"
-          grep -F 'resource_metadata="http://127.0.0.1:8010/.well-known/oauth-protected-resource"' \
+          grep -F 'resource_metadata="https://memory.example.test/.well-known/oauth-protected-resource/mcp"' \
             /tmp/oauth-challenge.headers
           metadata_status="$(
             curl --max-time 5 -sS -o /tmp/oauth-metadata.json -w "%{http_code}" \
