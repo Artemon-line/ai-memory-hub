@@ -17,7 +17,6 @@ from starlette.responses import JSONResponse, RedirectResponse, Response
 from memory.api.connect_oauth import ConnectOAuthRegistry
 from memory.api.connect_service import (
     ConnectService,
-    csrf_matches,
     issue_hub_token,
     jwt_payload,
     utc_after,
@@ -85,38 +84,13 @@ def register_oauth_authorization_routes(
         auth_request = _validated_authorization_request(request, params)
         session = await service.session_from_request(request)
         if session is None:
-            _session(request)["pending_oauth_authorization"] = auth_request
             provider = _first_enabled_provider(config)
             return await oauth.authorize_redirect(
                 request,
                 provider=provider,
                 state_data={"pending_oauth_authorization": auth_request},
             )
-        _session(request)["pending_oauth_authorization"] = auth_request
-        return RedirectResponse("/connect", status_code=303)
-
-    @app.post("/oauth/authorize/approve", include_in_schema=False)
-    async def oauth_authorize_approve(request: Request) -> Response:
-        form = dict((await request.form()).items())
-        session = await service.session_from_request(request)
-        if session is None:
-            raise HTTPException(status_code=403, detail="Connect session is required")
-        if not csrf_matches(session, str(form.get("csrf_token") or ""), config=config):
-            raise HTTPException(status_code=403, detail="Invalid CSRF token")
-        pending = _session(request).pop("pending_oauth_authorization", None)
-        auth_request = _validated_pending_authorization_request(request, pending)
         return _authorization_code_redirect(request, auth_request, owner_id=str(session["user_id"]))
-
-    @app.post("/oauth/authorize/deny", include_in_schema=False)
-    async def oauth_authorize_deny(request: Request) -> Response:
-        form = dict((await request.form()).items())
-        session = await service.session_from_request(request)
-        if session is None:
-            raise HTTPException(status_code=403, detail="Connect session is required")
-        if not csrf_matches(session, str(form.get("csrf_token") or ""), config=config):
-            raise HTTPException(status_code=403, detail="Invalid CSRF token")
-        _session(request).pop("pending_oauth_authorization", None)
-        return RedirectResponse("/connect", status_code=303)
 
     @app.post("/oauth/token", include_in_schema=False)
     async def oauth_token(request: Request) -> JSONResponse:
@@ -161,17 +135,6 @@ def register_oauth_authorization_routes(
         )
 
 
-def pending_authorization_approval_redirect(request: Request) -> RedirectResponse | None:
-    pending = _pending_authorization_from_provider_state(request)
-    if not isinstance(pending, dict):
-        pending = _pop_pending_authorization_from_session(request)
-    if not isinstance(pending, dict):
-        return None
-    auth_request = _validated_pending_authorization_request(request, pending)
-    _session(request)["pending_oauth_authorization"] = auth_request
-    return RedirectResponse("/connect", status_code=303)
-
-
 def pending_authorization_code_redirect(
     request: Request, *, owner_id: str
 ) -> RedirectResponse | None:
@@ -180,26 +143,6 @@ def pending_authorization_code_redirect(
         return None
     auth_request = _validated_pending_authorization_request(request, pending)
     return _authorization_code_redirect(request, auth_request, owner_id=owner_id)
-
-
-def pending_authorization_model(request: Request) -> dict[str, str] | None:
-    try:
-        pending = request.session.get("pending_oauth_authorization")
-    except AssertionError:
-        return None
-    if not isinstance(pending, dict):
-        return None
-    try:
-        auth_request = _validated_pending_authorization_request(request, pending)
-    except HTTPException:
-        return None
-    client = _registered_clients(request).get(auth_request["client_id"]) or {}
-    return {
-        "client_name": str(client.get("client_name") or "MCP client"),
-        "redirect_uri": auth_request["redirect_uri"],
-        "scope": auth_request["scope"] or f"{READ_SCOPE} {WRITE_SCOPE}",
-        "resource": auth_request["resource"],
-    }
 
 
 def _validated_authorization_request(request: Request, params: dict[str, str]) -> dict[str, str]:
@@ -291,10 +234,6 @@ def _pending_authorization_from_provider_state(request: Request) -> object:
     if not isinstance(state_data, dict):
         return None
     return state_data.get("pending_oauth_authorization")
-
-
-def _pop_pending_authorization_from_session(request: Request) -> object:
-    return _session(request).pop("pending_oauth_authorization", None)
 
 
 def _redirect_uris_from_payload(payload: Any) -> list[str]:

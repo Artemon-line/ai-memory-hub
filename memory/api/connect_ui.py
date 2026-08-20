@@ -20,9 +20,7 @@ from memory.api.connect_service import (
     connect_status as _connect_status,
 )
 from memory.api.oauth_authorization import (
-    pending_authorization_approval_redirect,
     pending_authorization_code_redirect,
-    pending_authorization_model,
     register_oauth_authorization_routes,
 )
 from memory.config import HubConfig
@@ -65,7 +63,6 @@ def register_connect_routes(app: FastAPI, *, agent: BaseIngestionAgent, config: 
     @app.get("/connect", include_in_schema=False)
     async def connect(request: Request) -> Response:
         model = await service.page_model(request)
-        model["pending_oauth_authorization"] = pending_authorization_model(request)
         return templates.TemplateResponse(
             request,
             "connect.html.j2",
@@ -102,8 +99,6 @@ def register_connect_routes(app: FastAPI, *, agent: BaseIngestionAgent, config: 
         authorization_redirect = pending_authorization_code_redirect(
             request, owner_id=str(login["identity"]["user_id"])
         )
-        if authorization_redirect is None:
-            authorization_redirect = pending_authorization_approval_redirect(request)
         if authorization_redirect is not None:
             authorization_redirect.set_cookie(
                 config.api.connect.session_cookie_name,
@@ -200,11 +195,6 @@ def _logout_form_text(body: bytes) -> str:
 
 def _has_pending_mcp_authorization(request: Request) -> bool:
     state_data = getattr(request.state, "oauth_provider_state_data", None)
-    if isinstance(state_data, dict) and isinstance(
+    return isinstance(state_data, dict) and isinstance(
         state_data.get("pending_oauth_authorization"), dict
-    ):
-        return True
-    try:
-        return isinstance(request.session.get("pending_oauth_authorization"), dict)
-    except AssertionError:
-        return False
+    )
