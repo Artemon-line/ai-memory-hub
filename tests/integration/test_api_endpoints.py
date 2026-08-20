@@ -392,6 +392,27 @@ def test_configured_request_id_header_is_echoed() -> None:
     assert "x-request-id" not in response.headers
 
 
+def test_public_base_url_normalizes_internal_mcp_slash_redirect() -> None:
+    runtime = _runtime()
+    agent = MVPIngestionAgent(
+        config={"providers": {"agent": "mvp"}, "interfaces": {"api": "true"}},
+        runtime=runtime,
+    )
+    app = create_app(
+        config={
+            "api": {"public_base_url": "https://memory.example.com"},
+            "providers": {"embeddings": "local", "vector_db": "in_memory"},
+        },
+        ingestion_agent=agent,
+    )
+    client = TestClient(app, base_url="http://memory.example.com")
+
+    response = client.get("/mcp", follow_redirects=False)
+
+    assert response.status_code == 307
+    assert response.headers["location"] == "https://memory.example.com/mcp/"
+
+
 def test_bearer_auth_rejects_missing_and_invalid_tokens() -> None:
     client, _ = _auth_client()
 

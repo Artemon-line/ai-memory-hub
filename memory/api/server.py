@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import time
 from typing import Any
+from urllib.parse import urlparse, urlunparse
 from uuid import uuid4
 
 import jsonschema
@@ -302,6 +303,7 @@ def _register_request_failure_logging(app: FastAPI, config: HubConfig) -> None:
                     "request_id": request_id,
                 },
             )
+        _normalize_public_redirect_location(request, response, config)
         return response
 
 
@@ -322,6 +324,43 @@ def _configure_cors(app: FastAPI, config: HubConfig) -> None:
             "WWW-Authenticate",
             config.observability.logging.request_id_header,
         ],
+    )
+
+
+def _normalize_public_redirect_location(
+    request: Request, response: Any, config: HubConfig
+) -> None:
+    if response.status_code < 300 or response.status_code >= 400:
+        return
+    public_base_url = config.api.public_base_url.rstrip("/")
+    if not public_base_url:
+        return
+    location = response.headers.get("location")
+    if not location:
+        return
+    public = urlparse(public_base_url)
+    target = urlparse(location)
+    if not target.scheme or not target.netloc:
+        return
+    if target.hostname != public.hostname:
+        return
+    request_port = request.url.port
+    public_port = public.port
+    target_port = target.port
+    same_request_port = target_port == request_port
+    same_public_port = target_port == public_port
+    default_public_port = target_port is None and public_port is None
+    if not (same_request_port or same_public_port or default_public_port):
+        return
+    response.headers["location"] = urlunparse(
+        (
+            public.scheme,
+            public.netloc,
+            target.path,
+            target.params,
+            target.query,
+            target.fragment,
+        )
     )
 
 
