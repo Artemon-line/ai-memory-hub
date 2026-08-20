@@ -284,8 +284,11 @@ def test_bruno_oauth_discovery_check_fails_with_diagnostics() -> None:
     assert "ready=false" in oauth_block
     assert "ready=true" in oauth_block
     assert 'if [ "$ready" != "true" ]; then' in oauth_block
+    assert "challenge_status" in oauth_block
+    assert 'test "$challenge_status" = "401"' in oauth_block
+    assert "resource_metadata=" in oauth_block
     assert "metadata_status" in oauth_block
-    assert 'test "$metadata_status" = "401"' in oauth_block
+    assert 'test "$metadata_status" = "200"' in oauth_block
     assert "cat bruno-oauth-server.log" in oauth_block
     assert "rm bruno-oauth-server.pid" in oauth_block
 

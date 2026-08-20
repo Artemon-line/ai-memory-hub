@@ -147,11 +147,19 @@ jobs:
             rm bruno-oauth-server.pid
             exit 1
           fi
+          challenge_status="$(
+            curl --max-time 5 -sS -D /tmp/oauth-challenge.headers \
+              -o /tmp/oauth-challenge-body.txt -w "%{http_code}" \
+              http://127.0.0.1:8010/mcp
+          )"
+          test "$challenge_status" = "401"
+          grep -F 'resource_metadata="http://127.0.0.1:8010/.well-known/oauth-protected-resource"' \
+            /tmp/oauth-challenge.headers
           metadata_status="$(
             curl --max-time 5 -sS -o /tmp/oauth-metadata.json -w "%{http_code}" \
               http://127.0.0.1:8010/.well-known/oauth-protected-resource/mcp
           )"
-          test "$metadata_status" = "401"
+          test "$metadata_status" = "200"
           kill "$(cat bruno-oauth-server.pid)" 2>/dev/null || true
           rm bruno-oauth-server.pid
 
