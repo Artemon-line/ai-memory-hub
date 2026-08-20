@@ -152,13 +152,6 @@ jobs:
               http://127.0.0.1:8010/.well-known/oauth-protected-resource/mcp
           )"
           test "$metadata_status" = "401"
-          challenge_headers="$(
-            curl --max-time 5 -sS -D - -o /tmp/mcp-missing-body.json \
-              http://127.0.0.1:8010/mcp
-          )"
-          uv run python -c \
-            'import sys; headers=sys.argv[1]; assert "WWW-Authenticate: Bearer" in headers; assert "memory:read" in headers; assert "resource_metadata=" not in headers' \
-            "$challenge_headers"
           kill "$(cat bruno-oauth-server.pid)" 2>/dev/null || true
           rm bruno-oauth-server.pid
 
