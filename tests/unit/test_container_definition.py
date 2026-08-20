@@ -275,15 +275,17 @@ def test_storage_provider_live_jobs_wait_for_services() -> None:
     assert ".admin.command('ping')" in workflow
 
 
-def test_bruno_oauth_metadata_readiness_fails_with_diagnostics() -> None:
+def test_bruno_oauth_discovery_check_fails_with_diagnostics() -> None:
     workflow = Path(".github/workflows/bruno-integration.yml").read_text(encoding="utf-8")
 
-    oauth_start = workflow.index("Verify OAuth resource-server metadata")
+    oauth_start = workflow.index("Verify OAuth resource-server challenge")
     auth_start = workflow.index("Seed bearer auth users and shared project")
     oauth_block = workflow[oauth_start:auth_start]
     assert "ready=false" in oauth_block
     assert "ready=true" in oauth_block
     assert 'if [ "$ready" != "true" ]; then' in oauth_block
+    assert "metadata_status" in oauth_block
+    assert 'test "$metadata_status" = "401"' in oauth_block
     assert "cat bruno-oauth-server.log" in oauth_block
     assert "rm bruno-oauth-server.pid" in oauth_block
 
