@@ -24,13 +24,12 @@ PUBLIC_PATHS = {
     "/auth/google/callback",
     "/auth/logout",
     "/health",
-    "/authorize",
     "/oauth/authorize",
     "/oauth/register",
     "/oauth/token",
     "/ready",
-    "/register",
-    "/token",
+    "/.well-known/oauth-authorization-server",
+    "/.well-known/oauth-protected-resource",
 }
 READ_SCOPE = "memory:read"
 WRITE_SCOPE = "memory:write"
@@ -77,6 +76,8 @@ def build_www_authenticate_challenge(
     if scopes:
         scope_value = " ".join(sorted(scopes))
         challenge += f', scope="{scope_value}"'
+    if config.api.auth == "oauth_resource_server":
+        challenge += f', resource_metadata="{_resource_metadata_url(config, request.url.path)}"'
     return challenge
 
 
@@ -141,21 +142,18 @@ class AuthMiddleware(BaseHTTPMiddleware):
         stored_context = await self._agent.authenticate_bearer_token_context(token)
         if _is_hub_issued_claim(claims, self._config) and stored_context is None:
             return None
-        if _is_hub_issued_claim(claims, self._config):
-            if stored_context is None:
-                return None
-            stored_owner_id = stored_context.get("owner_id")
-            if not isinstance(stored_owner_id, str) or stored_owner_id != claims.owner_id:
-                return None
-            scopes = _context_scopes(stored_context) & claims.scopes
+        if stored_context is not None:
+            scopes = stored_context.get("scopes", [])
+            if not isinstance(scopes, list | tuple | set | frozenset):
+                scopes = []
             return AuthContext(
-                owner_id=claims.owner_id,
+                owner_id=str(stored_context["owner_id"]),
                 token_id=(
                     str(stored_context["token_id"])
                     if stored_context.get("token_id") is not None
                     else claims.token_id
                 ),
-                scopes=frozenset(scopes),
+                scopes=frozenset(str(scope) for scope in scopes),
                 auth_mode="oauth_resource_server",
             )
         return AuthContext(
@@ -211,11 +209,42 @@ def validate_oauth_access_token(token: str, config: HubConfig) -> AccessTokenCla
     )
 
 
+def protected_resource_metadata(config: HubConfig, *, resource_path: str = "/mcp") -> dict[str, object]:
+    return {
+        "resource": _oauth_resource(config, resource_path=resource_path),
+        "authorization_servers": list(config.api.oauth.authorization_servers),
+        "scopes_supported": list(config.api.oauth.scopes_supported),
+        "bearer_methods_supported": ["header"],
+        "resource_documentation": f"{config.api.public_base_url.rstrip('/')}/docs",
+    }
+
+
+def authorization_server_metadata(config: HubConfig) -> dict[str, object]:
+    base = config.api.public_base_url.rstrip("/") or f"http://{config.api.host}:{config.api.port}"
+    resource = _oauth_resource(config, resource_path="/mcp")
+    metadata: dict[str, object] = {
+        "issuer": base,
+        "authorization_endpoint": f"{base}/oauth/authorize",
+        "token_endpoint": f"{base}/oauth/token",
+        "registration_endpoint": f"{base}/oauth/register",
+        "scopes_supported": list(config.api.oauth.scopes_supported),
+        "response_types_supported": ["code"],
+        "grant_types_supported": ["authorization_code"],
+        "token_endpoint_auth_methods_supported": ["none"],
+        "code_challenge_methods_supported": ["S256"],
+        "protected_resources": [resource],
+        "service_documentation": f"{base}/docs",
+    }
+    return metadata
+
+
 def _is_public_path(path: str) -> bool:
     return (
         path in PUBLIC_PATHS
         or path.startswith("/connect/static/")
+        or path.startswith("/.well-known/oauth-authorization-server/")
         or path.startswith("/auth/")
+        or path.startswith("/.well-known/oauth-protected-resource/")
     )
 
 
@@ -252,11 +281,10 @@ def _has_required_scopes(actual: frozenset[str], required: set[str]) -> bool:
     return not required or required.issubset(actual)
 
 
-def _context_scopes(context: dict[str, object]) -> frozenset[str]:
-    scopes = context.get("scopes", [])
-    if not isinstance(scopes, list | tuple | set | frozenset):
-        return frozenset()
-    return frozenset(str(scope) for scope in scopes if str(scope).strip())
+def _resource_metadata_url(config: HubConfig, path: str) -> str:
+    base = config.api.public_base_url.rstrip("/")
+    suffix = "/mcp" if path == "/mcp" or path.startswith("/mcp/") else ""
+    return f"{base}/.well-known/oauth-protected-resource{suffix}"
 
 
 def _oauth_resource(config: HubConfig, *, resource_path: str = "/mcp") -> str:

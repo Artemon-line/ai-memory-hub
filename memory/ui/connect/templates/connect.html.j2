@@ -4,45 +4,18 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ai-memory-hub Connect</title>
-  <link rel="icon" href="/connect/static/favicon.ico" sizes="any">
-  <link rel="icon" href="/connect/static/favicon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="/connect/static/apple-touch-icon.png">
   <link rel="stylesheet" href="/connect/static/connect.css">
 </head>
 <body>
-<main class="connect-shell">
-  <section class="hero" aria-labelledby="connect-title">
-    <div>
-      <img class="brand-mark" src="/connect/static/ai-memory-hub-mark.svg" alt="" width="64" height="64">
-      <p class="eyebrow">Local MCP setup</p>
-      <h1 id="connect-title">ai-memory-hub Connect</h1>
-      <p class="hero-copy">Connect your AI clients to one local memory endpoint, with sign-in and token refresh handled by the clients that support MCP OAuth.</p>
-    </div>
-    <div class="hero-panel" aria-label="Connection summary">
-      <span class="status-pill status-pill--ok">Service ok</span>
-      <code>{{ mcp_url|e }}</code>
-    </div>
-  </section>
-
-  <section class="overview-grid" aria-label="Connection status">
-    {% include "partials/status.html.j2" %}
-    {% include "partials/auth_panel.html.j2" %}
-    {% include "partials/diagnostics_panel.html.j2" %}
-  </section>
-
-  <section class="client-section" aria-labelledby="client-setup-title">
-    <div class="section-heading">
-      <div>
-        <p class="eyebrow">Client setup</p>
-        <h2 id="client-setup-title">Copy a snippet</h2>
-      </div>
-      <p>Use the MCP URL in your client. Authentication and reauthentication stay client-owned.</p>
-    </div>
-    <div class="client-grid">
-      {% for client in client_snippets %}
-        {% include "partials/client_snippet.html.j2" %}
-      {% endfor %}
-    </div>
+<main>
+  <h1>ai-memory-hub Connect</h1>
+  {% include "partials/status.html.j2" %}
+  <section>
+    <h2>Client Setup</h2>
+    <p class="muted">Use the MCP URL in your client. Authentication and reauthentication are handled by the client.</p>
+    {% for client in client_snippets %}
+      {% include "partials/client_snippet.html.j2" %}
+    {% endfor %}
   </section>
 </main>
 <script src="/connect/static/connect.js"></script>
