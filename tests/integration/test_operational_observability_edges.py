@@ -91,14 +91,24 @@ def test_oauth_protected_resource_metadata_is_public_and_secret_free(
     assert root.status_code == 200, root.text
     assert mcp.status_code == 200, mcp.text
     assert authorization.status_code == 200, authorization.text
-    body = json.dumps(
-        {"root": root.json(), "mcp": mcp.json(), "authorization": authorization.json()}
+    root_payload = root.json()
+    mcp_payload = mcp.json()
+    authorization_payload = authorization.json()
+    assert root_payload["resource"] == "https://memory.example.com/mcp"
+    assert mcp_payload["resource"] == "https://memory.example.com/mcp"
+    assert root_payload["authorization_servers"] == ["https://auth.example.com"]
+    assert mcp_payload["authorization_servers"] == ["https://auth.example.com"]
+    assert authorization_payload["issuer"] == "https://memory.example.com"
+    assert authorization_payload["authorization_endpoint"] == (
+        "https://memory.example.com/oauth/authorize"
     )
-    assert "https://memory.example.com/mcp" in body
-    assert "https://auth.example.com" in body
-    assert "https://memory.example.com/oauth/authorize" in body
-    assert "https://memory.example.com/oauth/token" in body
-    assert "https://memory.example.com/oauth/register" in body
+    assert authorization_payload["token_endpoint"] == "https://memory.example.com/oauth/token"
+    assert authorization_payload["registration_endpoint"] == (
+        "https://memory.example.com/oauth/register"
+    )
+    body = json.dumps(
+        {"root": root_payload, "mcp": mcp_payload, "authorization": authorization_payload}
+    )
     assert "code_challenge_methods_supported" in body
     assert "oauth-secret-value" not in body
 
