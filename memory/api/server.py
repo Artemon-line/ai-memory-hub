@@ -11,11 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
 
 from memory.api.connect_ui import connect_status, register_connect_routes
-from memory.auth import (
-    authorization_server_metadata,
-    install_auth_middleware,
-    protected_resource_metadata,
-)
+from memory.auth import install_auth_middleware
 from memory.backend.log_safety import install_secret_redaction_filter, redact_secrets
 from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig, ensure_token_hash_secret, normalize_config
@@ -243,24 +239,6 @@ def _metrics_status(app: FastAPI) -> MetricsStatus:
 
 def _telemetry_enabled(app: FastAPI) -> bool:
     return _tracing_status(app).enabled or _metrics_status(app).enabled
-
-
-def _register_protected_resource_metadata_routes(app: FastAPI, config: HubConfig) -> None:
-    async def root_metadata() -> dict[str, object]:
-        return protected_resource_metadata(config, resource_path="/mcp")
-
-    async def mcp_metadata() -> dict[str, object]:
-        return protected_resource_metadata(config, resource_path="/mcp")
-
-    app.get("/.well-known/oauth-protected-resource")(root_metadata)
-    app.get("/.well-known/oauth-protected-resource/mcp")(mcp_metadata)
-
-
-def _register_authorization_server_metadata_routes(app: FastAPI, config: HubConfig) -> None:
-    async def metadata() -> dict[str, object]:
-        return authorization_server_metadata(config)
-
-    app.get("/.well-known/oauth-authorization-server")(metadata)
 
 
 def _register_request_failure_logging(app: FastAPI, config: HubConfig) -> None:
@@ -722,8 +700,6 @@ def create_app(
         app.mount("/mcp", mcp_app)
 
     _register_health_routes(app, agent, cfg)
-    _register_protected_resource_metadata_routes(app, cfg)
-    _register_authorization_server_metadata_routes(app, cfg)
 
     # ⭐ Only enable API if config says so
     if cfg.interfaces.api:

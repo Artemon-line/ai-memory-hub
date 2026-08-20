@@ -2,8 +2,8 @@
 
 This example shows the built-in MCP OAuth resource-server mode behind a TLS
 reverse proxy. It is intentionally provider-neutral: ai-memory-hub validates
-Bearer tokens for the configured MCP resource and publishes protected resource
-metadata, while the authorization server remains external.
+Bearer tokens for the configured MCP resource, while the authorization server
+remains external.
 
 ## Files
 
@@ -18,11 +18,13 @@ uv run aim serve --config examples/oauth-resource-server/config.yaml --host 127.
 caddy run --config examples/oauth-resource-server/Caddyfile
 ```
 
-The metadata endpoints remain public:
+This example does not publish MCP OAuth discovery metadata. Configure clients
+with an access token or an external authorization server explicitly.
+
+Unauthenticated protected requests return a plain Bearer challenge:
 
 ```bash
-curl https://memory.example.com/.well-known/oauth-protected-resource
-curl https://memory.example.com/.well-known/oauth-protected-resource/mcp
+curl -i https://memory.example.com/mcp
 ```
 
 Protected requests must send a Bearer token whose audience or resource claim is

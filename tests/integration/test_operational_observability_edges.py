@@ -4,7 +4,6 @@ import json
 import logging
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 from uuid import UUID
 
 import pytest
@@ -85,7 +84,7 @@ def test_health_and_ready_are_public_and_secret_free_under_every_auth_mode(
         assert "oauth-secret-value" not in payload
 
 
-def test_oauth_protected_resource_metadata_is_public_and_secret_free(
+def test_oauth_discovery_metadata_is_not_advertised(
     tmp_path: Path,
 ) -> None:
     with _client(tmp_path, auth="oauth_resource_server") as client:
@@ -93,28 +92,13 @@ def test_oauth_protected_resource_metadata_is_public_and_secret_free(
         mcp = client.get("/.well-known/oauth-protected-resource/mcp")
         authorization = client.get("/.well-known/oauth-authorization-server")
 
-    assert root.status_code == 200, root.text
-    assert mcp.status_code == 200, mcp.text
-    assert authorization.status_code == 200, authorization.text
-    root_json = root.json()
-    mcp_json = mcp.json()
-    authorization_json = authorization.json()
-    body = json.dumps(
-        {"root": root_json, "mcp": mcp_json, "authorization": authorization_json}
-    )
-    assert root_json["resource"] == "https://memory.example.com/mcp"
-    assert mcp_json["resource"] == "https://memory.example.com/mcp"
-    authorization_servers = root_json["authorization_servers"]
-    assert {urlparse(url).hostname for url in authorization_servers} == {"auth.example.com"}
-    assert authorization_json["issuer"] == "https://memory.example.com"
-    assert authorization_json["authorization_endpoint"] == (
-        "https://memory.example.com/oauth/authorize"
-    )
-    assert authorization_json["token_endpoint"] == "https://memory.example.com/oauth/token"
-    assert authorization_json["registration_endpoint"] == (
-        "https://memory.example.com/oauth/register"
-    )
-    assert authorization_json["code_challenge_methods_supported"] == ["S256"]
+    assert root.status_code == 401, root.text
+    assert mcp.status_code == 401, mcp.text
+    assert authorization.status_code == 401, authorization.text
+    body = json.dumps({"root": root.json(), "mcp": mcp.json(), "authorization": authorization.json()})
+    assert "resource_metadata=" not in root.headers["www-authenticate"]
+    assert "resource_metadata=" not in mcp.headers["www-authenticate"]
+    assert "resource_metadata=" not in authorization.headers["www-authenticate"]
     assert "oauth-secret-value" not in body
 
 
