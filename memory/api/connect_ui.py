@@ -20,7 +20,7 @@ from memory.api.connect_service import (
     connect_status as _connect_status,
 )
 from memory.api.oauth_authorization import (
-    pending_authorization_code_redirect,
+    pending_authorization_redirect,
     register_oauth_authorization_routes,
 )
 from memory.config import HubConfig
@@ -29,7 +29,6 @@ from memory.ingestion.base_agent import BaseIngestionAgent
 logger = logging.getLogger(__name__)
 
 CONNECT_UI_ROOT = Path(__file__).resolve().parents[1] / "ui" / "connect"
-LOGOUT_FORM_MAX_BYTES = 4096
 templates = Jinja2Templates(directory=str(CONNECT_UI_ROOT / "templates"))
 
 
@@ -62,11 +61,10 @@ def register_connect_routes(app: FastAPI, *, agent: BaseIngestionAgent, config: 
 
     @app.get("/connect", include_in_schema=False)
     async def connect(request: Request) -> Response:
-        model = await service.page_model(request)
         return templates.TemplateResponse(
             request,
             "connect.html.j2",
-            model,
+            await service.page_model(request),
         )
 
     @app.get("/auth/{provider}", include_in_schema=False)
@@ -96,7 +94,7 @@ def register_connect_routes(app: FastAPI, *, agent: BaseIngestionAgent, config: 
                 "owner_id": login["identity"]["user_id"],
             },
         )
-        authorization_redirect = pending_authorization_code_redirect(
+        authorization_redirect = pending_authorization_redirect(
             request, owner_id=str(login["identity"]["user_id"])
         )
         if authorization_redirect is not None:
@@ -104,14 +102,6 @@ def register_connect_routes(app: FastAPI, *, agent: BaseIngestionAgent, config: 
                 config.api.connect.session_cookie_name,
                 str(login["session_id"]),
                 httponly=True,
-                secure=secure_cookie(config),
-                samesite="lax",
-                max_age=config.api.connect.session_ttl_seconds,
-            )
-            authorization_redirect.set_cookie(
-                "amh_csrf",
-                str(login["csrf_token"]),
-                httponly=False,
                 secure=secure_cookie(config),
                 samesite="lax",
                 max_age=config.api.connect.session_ttl_seconds,
@@ -157,7 +147,7 @@ def register_connect_routes(app: FastAPI, *, agent: BaseIngestionAgent, config: 
 
     @app.post("/auth/logout", include_in_schema=False)
     async def auth_logout(request: Request) -> Response:
-        form = parse_qs(_logout_form_text(await _bounded_logout_body(request)))
+        form = parse_qs((await request.body()).decode("utf-8"))
         csrf_token = str((form.get("csrf_token") or [""])[0])
         await service.logout(request, csrf_token=csrf_token)
         response = RedirectResponse("/connect", status_code=303)
@@ -168,33 +158,13 @@ def register_connect_routes(app: FastAPI, *, agent: BaseIngestionAgent, config: 
         return response
 
 
-async def _bounded_logout_body(request: Request) -> bytes:
-    length = request.headers.get("content-length")
-    if length is not None:
-        try:
-            declared_length = int(length)
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail="Invalid logout form length") from exc
-        if declared_length > LOGOUT_FORM_MAX_BYTES:
-            raise HTTPException(status_code=413, detail="Logout form is too large")
-
-    chunks = bytearray()
-    async for chunk in request.stream():
-        chunks.extend(chunk)
-        if len(chunks) > LOGOUT_FORM_MAX_BYTES:
-            raise HTTPException(status_code=413, detail="Logout form is too large")
-    return bytes(chunks)
-
-
-def _logout_form_text(body: bytes) -> str:
-    try:
-        return body.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise HTTPException(status_code=400, detail="Invalid logout form encoding") from exc
-
-
 def _has_pending_mcp_authorization(request: Request) -> bool:
     state_data = getattr(request.state, "oauth_provider_state_data", None)
-    return isinstance(state_data, dict) and isinstance(
+    if isinstance(state_data, dict) and isinstance(
         state_data.get("pending_oauth_authorization"), dict
-    )
+    ):
+        return True
+    try:
+        return isinstance(request.session.get("pending_oauth_authorization"), dict)
+    except AssertionError:
+        return False

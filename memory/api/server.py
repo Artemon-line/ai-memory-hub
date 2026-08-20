@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import time
 from typing import Any
-from urllib.parse import urlparse, urlunparse
 from uuid import uuid4
 
 import jsonschema
@@ -12,7 +11,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
 
 from memory.api.connect_ui import connect_status, register_connect_routes
-from memory.auth import install_auth_middleware
+from memory.auth import (
+    authorization_server_metadata,
+    install_auth_middleware,
+    protected_resource_metadata,
+)
 from memory.backend.log_safety import install_secret_redaction_filter, redact_secrets
 from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig, ensure_token_hash_secret, normalize_config
@@ -242,6 +245,24 @@ def _telemetry_enabled(app: FastAPI) -> bool:
     return _tracing_status(app).enabled or _metrics_status(app).enabled
 
 
+def _register_protected_resource_metadata_routes(app: FastAPI, config: HubConfig) -> None:
+    async def root_metadata() -> dict[str, object]:
+        return protected_resource_metadata(config, resource_path="/mcp")
+
+    async def mcp_metadata() -> dict[str, object]:
+        return protected_resource_metadata(config, resource_path="/mcp")
+
+    app.get("/.well-known/oauth-protected-resource")(root_metadata)
+    app.get("/.well-known/oauth-protected-resource/mcp")(mcp_metadata)
+
+
+def _register_authorization_server_metadata_routes(app: FastAPI, config: HubConfig) -> None:
+    async def metadata() -> dict[str, object]:
+        return authorization_server_metadata(config)
+
+    app.get("/.well-known/oauth-authorization-server")(metadata)
+
+
 def _register_request_failure_logging(app: FastAPI, config: HubConfig) -> None:
     request_id_header = config.observability.logging.request_id_header
 
@@ -303,7 +324,6 @@ def _register_request_failure_logging(app: FastAPI, config: HubConfig) -> None:
                     "request_id": request_id,
                 },
             )
-        _normalize_public_redirect_location(request, response, config)
         return response
 
 
@@ -324,43 +344,6 @@ def _configure_cors(app: FastAPI, config: HubConfig) -> None:
             "WWW-Authenticate",
             config.observability.logging.request_id_header,
         ],
-    )
-
-
-def _normalize_public_redirect_location(
-    request: Request, response: Any, config: HubConfig
-) -> None:
-    if response.status_code < 300 or response.status_code >= 400:
-        return
-    public_base_url = config.api.public_base_url.rstrip("/")
-    if not public_base_url:
-        return
-    location = response.headers.get("location")
-    if not location:
-        return
-    public = urlparse(public_base_url)
-    target = urlparse(location)
-    if not target.scheme or not target.netloc:
-        return
-    if target.hostname != public.hostname:
-        return
-    request_port = request.url.port
-    public_port = public.port
-    target_port = target.port
-    same_request_port = target_port == request_port
-    same_public_port = target_port == public_port
-    default_public_port = target_port is None and public_port is None
-    if not (same_request_port or same_public_port or default_public_port):
-        return
-    response.headers["location"] = urlunparse(
-        (
-            public.scheme,
-            public.netloc,
-            target.path,
-            target.params,
-            target.query,
-            target.fragment,
-        )
     )
 
 
@@ -739,6 +722,8 @@ def create_app(
         app.mount("/mcp", mcp_app)
 
     _register_health_routes(app, agent, cfg)
+    _register_protected_resource_metadata_routes(app, cfg)
+    _register_authorization_server_metadata_routes(app, cfg)
 
     # ⭐ Only enable API if config says so
     if cfg.interfaces.api:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -50,14 +51,10 @@ def _base_config(tmp_path: Path, *, auth: str) -> dict[str, Any]:
     return config
 
 
-def _client(
-    tmp_path: Path, *, auth: str, monkeypatch: pytest.MonkeyPatch | None = None
-) -> TestClient:
+def _client(tmp_path: Path, *, auth: str) -> TestClient:
     config = _base_config(tmp_path, auth=auth)
     if auth == "bearer_token":
-        if monkeypatch is None:
-            raise ValueError("monkeypatch is required for bearer_token test clients")
-        monkeypatch.setenv("AMH_TOKEN_HASH_SECRET", "operational-observability-secret")
+        os.environ["AMH_TOKEN_HASH_SECRET"] = "operational-observability-secret"
         parsed = parse_config(config)
         ensure_token_hash_secret(parsed)
         SQLiteMetadataStore(Path(parsed.paths.data_dir) / "metadata.sqlite3").create_auth_token(
@@ -69,10 +66,9 @@ def _client(
 
 def test_health_and_ready_are_public_and_secret_free_under_every_auth_mode(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     for auth in ("none", "bearer_token", "oauth_resource_server"):
-        with _client(tmp_path / auth, auth=auth, monkeypatch=monkeypatch) as client:
+        with _client(tmp_path / auth, auth=auth) as client:
             health = client.get("/health")
             ready = client.get("/ready")
 
@@ -84,7 +80,7 @@ def test_health_and_ready_are_public_and_secret_free_under_every_auth_mode(
         assert "oauth-secret-value" not in payload
 
 
-def test_oauth_discovery_metadata_is_not_advertised(
+def test_oauth_protected_resource_metadata_is_public_and_secret_free(
     tmp_path: Path,
 ) -> None:
     with _client(tmp_path, auth="oauth_resource_server") as client:
@@ -92,24 +88,38 @@ def test_oauth_discovery_metadata_is_not_advertised(
         mcp = client.get("/.well-known/oauth-protected-resource/mcp")
         authorization = client.get("/.well-known/oauth-authorization-server")
 
-    assert root.status_code == 401, root.text
-    assert mcp.status_code == 401, mcp.text
-    assert authorization.status_code == 401, authorization.text
-    body = json.dumps({"root": root.json(), "mcp": mcp.json(), "authorization": authorization.json()})
-    assert "resource_metadata=" not in root.headers["www-authenticate"]
-    assert "resource_metadata=" not in mcp.headers["www-authenticate"]
-    assert "resource_metadata=" not in authorization.headers["www-authenticate"]
+    assert root.status_code == 200, root.text
+    assert mcp.status_code == 200, mcp.text
+    assert authorization.status_code == 200, authorization.text
+    root_payload = root.json()
+    mcp_payload = mcp.json()
+    authorization_payload = authorization.json()
+    assert root_payload["resource"] == "https://memory.example.com/mcp"
+    assert mcp_payload["resource"] == "https://memory.example.com/mcp"
+    assert root_payload["authorization_servers"] == ["https://auth.example.com"]
+    assert mcp_payload["authorization_servers"] == ["https://auth.example.com"]
+    assert authorization_payload["issuer"] == "https://memory.example.com"
+    assert authorization_payload["authorization_endpoint"] == (
+        "https://memory.example.com/oauth/authorize"
+    )
+    assert authorization_payload["token_endpoint"] == "https://memory.example.com/oauth/token"
+    assert authorization_payload["registration_endpoint"] == (
+        "https://memory.example.com/oauth/register"
+    )
+    body = json.dumps(
+        {"root": root_payload, "mcp": mcp_payload, "authorization": authorization_payload}
+    )
+    assert "code_challenge_methods_supported" in body
     assert "oauth-secret-value" not in body
 
 
 def test_request_failure_logs_are_structured_and_do_not_include_payload_or_query_secrets(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     secret_query = "query-token-secret"
     secret_payload = "payload-secret-phrase"
-    with _client(tmp_path, auth="bearer_token", monkeypatch=monkeypatch) as client:
+    with _client(tmp_path, auth="bearer_token") as client:
         with caplog.at_level(logging.INFO, logger="memory.api.server"):
             response = client.post(
                 f"/memory/search?access_token={secret_query}",
@@ -133,10 +143,9 @@ def test_request_failure_logs_are_structured_and_do_not_include_payload_or_query
 def test_http_request_id_is_propagated_to_response_and_error_logs(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     request_id = "pytest-request-id-123"
-    with _client(tmp_path, auth="bearer_token", monkeypatch=monkeypatch) as client:
+    with _client(tmp_path, auth="bearer_token") as client:
         with caplog.at_level(logging.INFO, logger="memory.api.server"):
             response = client.post(
                 "/memory/search",
