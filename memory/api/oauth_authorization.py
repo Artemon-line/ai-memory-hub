@@ -43,6 +43,7 @@ def register_oauth_authorization_routes(
 ) -> None:
     _assert_process_local_oauth_state_allowed(config)
 
+    @app.post("/register", include_in_schema=False)
     @app.post("/oauth/register", include_in_schema=False)
     async def oauth_register(request: Request) -> JSONResponse:
         try:
@@ -78,6 +79,7 @@ def register_oauth_authorization_routes(
             status_code=201,
         )
 
+    @app.get("/authorize", include_in_schema=False)
     @app.get("/oauth/authorize", include_in_schema=False)
     async def oauth_authorize(request: Request) -> Response:
         params = dict(request.query_params)
@@ -92,6 +94,7 @@ def register_oauth_authorization_routes(
             )
         return _authorization_code_redirect(request, auth_request, owner_id=str(session["user_id"]))
 
+    @app.post("/token", include_in_schema=False)
     @app.post("/oauth/token", include_in_schema=False)
     async def oauth_token(request: Request) -> JSONResponse:
         form = dict((await request.form()).items())

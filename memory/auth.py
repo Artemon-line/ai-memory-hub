@@ -24,10 +24,13 @@ PUBLIC_PATHS = {
     "/auth/google/callback",
     "/auth/logout",
     "/health",
+    "/authorize",
     "/oauth/authorize",
     "/oauth/register",
     "/oauth/token",
     "/ready",
+    "/register",
+    "/token",
 }
 READ_SCOPE = "memory:read"
 WRITE_SCOPE = "memory:write"
