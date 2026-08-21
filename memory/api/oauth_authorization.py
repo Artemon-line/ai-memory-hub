@@ -4,7 +4,6 @@ import base64
 import hashlib
 import hmac
 import ipaddress
-import os
 import re
 import secrets
 import time
@@ -17,6 +16,7 @@ from starlette.responses import JSONResponse, RedirectResponse, Response
 from memory.api.connect_oauth import ConnectOAuthRegistry
 from memory.api.connect_service import (
     ConnectService,
+    csrf_matches,
     issue_hub_token,
     jwt_payload,
     utc_after,
@@ -31,7 +31,6 @@ OAUTH_CLIENT_MAX_RECORDS = 128
 PKCE_VERIFIER_PATTERN = re.compile(r"^[A-Za-z0-9._~-]{43,128}$")
 LOCALHOST_NAMES = {"localhost"}
 REDIRECT_URI_SCHEMES = {"http", "https"}
-MULTI_WORKER_ENV_VARS = ("WEB_CONCURRENCY", "UVICORN_WORKERS", "GUNICORN_WORKERS")
 
 
 def register_oauth_authorization_routes(
@@ -41,9 +40,6 @@ def register_oauth_authorization_routes(
     oauth: ConnectOAuthRegistry,
     config: HubConfig,
 ) -> None:
-    _assert_process_local_oauth_state_allowed(config)
-
-    @app.post("/register", include_in_schema=False)
     @app.post("/oauth/register", include_in_schema=False)
     async def oauth_register(request: Request) -> JSONResponse:
         try:
@@ -79,13 +75,13 @@ def register_oauth_authorization_routes(
             status_code=201,
         )
 
-    @app.get("/authorize", include_in_schema=False)
     @app.get("/oauth/authorize", include_in_schema=False)
     async def oauth_authorize(request: Request) -> Response:
         params = dict(request.query_params)
         auth_request = _validated_authorization_request(request, params)
         session = await service.session_from_request(request)
         if session is None:
+            _session(request)["pending_oauth_authorization"] = auth_request
             provider = _first_enabled_provider(config)
             return await oauth.authorize_redirect(
                 request,
@@ -94,7 +90,29 @@ def register_oauth_authorization_routes(
             )
         return _authorization_code_redirect(request, auth_request, owner_id=str(session["user_id"]))
 
-    @app.post("/token", include_in_schema=False)
+    @app.post("/oauth/authorize/approve", include_in_schema=False)
+    async def oauth_authorize_approve(request: Request) -> Response:
+        form = dict((await request.form()).items())
+        session = await service.session_from_request(request)
+        if session is None:
+            raise HTTPException(status_code=403, detail="Connect session is required")
+        if not csrf_matches(session, str(form.get("csrf_token") or ""), config=config):
+            raise HTTPException(status_code=403, detail="Invalid CSRF token")
+        pending = _session(request).pop("pending_oauth_authorization", None)
+        auth_request = _validated_pending_authorization_request(request, pending)
+        return _authorization_code_redirect(request, auth_request, owner_id=str(session["user_id"]))
+
+    @app.post("/oauth/authorize/deny", include_in_schema=False)
+    async def oauth_authorize_deny(request: Request) -> Response:
+        form = dict((await request.form()).items())
+        session = await service.session_from_request(request)
+        if session is None:
+            raise HTTPException(status_code=403, detail="Connect session is required")
+        if not csrf_matches(session, str(form.get("csrf_token") or ""), config=config):
+            raise HTTPException(status_code=403, detail="Invalid CSRF token")
+        _session(request).pop("pending_oauth_authorization", None)
+        return RedirectResponse("/connect", status_code=303)
+
     @app.post("/oauth/token", include_in_schema=False)
     async def oauth_token(request: Request) -> JSONResponse:
         form = dict((await request.form()).items())
@@ -116,36 +134,58 @@ def register_oauth_authorization_routes(
             raise _oauth_error("invalid_grant", "PKCE verification failed")
 
         owner_id = str(record["owner_id"])
-        scopes = _validated_requested_scopes(config, str(record.get("scope") or ""))
-        issued_token = issue_hub_token(config=config, owner_id=owner_id, scopes=scopes)
+        issued_token = issue_hub_token(config=config, owner_id=owner_id)
         await service.agent.create_auth_token(
             owner_id=owner_id,
             token=issued_token,
             token_display_name="MCP OAuth client",
             expires_at=utc_after(config.api.connect.token_ttl_seconds),
-            scopes=scopes,
+            scopes=[READ_SCOPE, WRITE_SCOPE],
         )
-        scope_value = " ".join(scopes)
         return JSONResponse(
             {
                 "access_token": issued_token,
                 "token_type": "Bearer",
                 "expires_in": config.api.connect.token_ttl_seconds,
-                "scope": scope_value,
+                "scope": f"{READ_SCOPE} {WRITE_SCOPE}",
                 "resource": record["resource"],
                 "jti": str(jwt_payload(issued_token).get("jti") or ""),
             }
         )
 
 
-def pending_authorization_code_redirect(
-    request: Request, *, owner_id: str
-) -> RedirectResponse | None:
-    pending = _pending_authorization_from_provider_state(request)
+def pending_authorization_redirect(request: Request, *, owner_id: str) -> RedirectResponse | None:
+    state_data = getattr(request.state, "oauth_provider_state_data", None)
+    pending = (
+        state_data.get("pending_oauth_authorization")
+        if isinstance(state_data, dict)
+        else None
+    )
+    if not isinstance(pending, dict):
+        pending = _session(request).pop("pending_oauth_authorization", None)
     if not isinstance(pending, dict):
         return None
-    auth_request = _validated_pending_authorization_request(request, pending)
-    return _authorization_code_redirect(request, auth_request, owner_id=owner_id)
+    return _authorization_code_redirect(request, pending, owner_id=owner_id)
+
+
+def pending_authorization_model(request: Request) -> dict[str, str] | None:
+    try:
+        pending = request.session.get("pending_oauth_authorization")
+    except AssertionError:
+        return None
+    if not isinstance(pending, dict):
+        return None
+    try:
+        auth_request = _validated_pending_authorization_request(request, pending)
+    except HTTPException:
+        return None
+    client = _registered_clients(request).get(auth_request["client_id"]) or {}
+    return {
+        "client_name": str(client.get("client_name") or "MCP client"),
+        "redirect_uri": auth_request["redirect_uri"],
+        "scope": auth_request["scope"] or f"{READ_SCOPE} {WRITE_SCOPE}",
+        "resource": auth_request["resource"],
+    }
 
 
 def _validated_authorization_request(request: Request, params: dict[str, str]) -> dict[str, str]:
@@ -192,21 +232,6 @@ def _validated_pending_authorization_request(
     return values
 
 
-def _validated_requested_scopes(config: HubConfig, value: str) -> list[str]:
-    requested = [scope for scope in value.split() if scope]
-    if not requested:
-        requested = [READ_SCOPE, WRITE_SCOPE]
-    supported = set(config.api.oauth.scopes_supported)
-    invalid = [scope for scope in requested if scope not in supported]
-    if invalid:
-        raise _oauth_error("invalid_scope", "Requested scope is not supported")
-    ordered: list[str] = []
-    for scope in requested:
-        if scope not in ordered:
-            ordered.append(scope)
-    return ordered
-
-
 def _authorization_code_redirect(
     request: Request, auth_request: dict[str, str], *, owner_id: str
 ) -> RedirectResponse:
@@ -230,13 +255,6 @@ def _authorization_code_redirect(
         f"{auth_request['redirect_uri']}{separator}{urlencode(query)}",
         status_code=303,
     )
-
-
-def _pending_authorization_from_provider_state(request: Request) -> object:
-    state_data = getattr(request.state, "oauth_provider_state_data", None)
-    if not isinstance(state_data, dict):
-        return None
-    return state_data.get("pending_oauth_authorization")
 
 
 def _redirect_uris_from_payload(payload: Any) -> list[str]:
@@ -305,33 +323,6 @@ def _authorization_codes(request: Request) -> dict[str, dict[str, object]]:
     if not hasattr(request.app.state, "oauth_authorization_codes"):
         request.app.state.oauth_authorization_codes = {}
     return request.app.state.oauth_authorization_codes
-
-
-def _assert_process_local_oauth_state_allowed(config: HubConfig) -> None:
-    if config.api.auth != "oauth_resource_server":
-        return
-    if _configured_worker_count() <= 1:
-        return
-    raise RuntimeError(
-        "Connect OAuth dynamic client registration uses process-local state. "
-        "Run ai-memory-hub as a single worker, or place a shared authorization "
-        "component in front of the hub before enabling multiple workers."
-    )
-
-
-def _configured_worker_count() -> int:
-    counts = [_worker_count_from_env(name) for name in MULTI_WORKER_ENV_VARS]
-    return max(counts, default=1)
-
-
-def _worker_count_from_env(name: str) -> int:
-    raw_value = os.environ.get(name)
-    if raw_value is None:
-        return 1
-    try:
-        return int(raw_value)
-    except ValueError:
-        return 1
 
 
 def _sweep_expired_authorization_codes(request: Request) -> None:

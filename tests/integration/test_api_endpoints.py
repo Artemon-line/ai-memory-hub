@@ -432,26 +432,30 @@ def test_bearer_auth_rejects_missing_and_invalid_tokens() -> None:
     assert missing.headers["www-authenticate"].startswith("Bearer")
 
 
-def test_oauth_discovery_metadata_is_not_advertised() -> None:
+def test_oauth_protected_resource_metadata_is_public_and_secret_free() -> None:
     client = _oauth_client()
 
     root_response = client.get("/.well-known/oauth-protected-resource")
     response = client.get("/.well-known/oauth-protected-resource/mcp")
     authorization_server = client.get("/.well-known/oauth-authorization-server")
 
-    assert root_response.status_code == 401
-    assert response.status_code == 401
-    assert authorization_server.status_code == 401
-    body = str(
-        {
-            "root": root_response.json(),
-            "mcp": response.json(),
-            "authorization": authorization_server.json(),
-        }
-    )
-    assert "oauth-protected-resource" not in root_response.headers["www-authenticate"]
-    assert "oauth-authorization-server" not in authorization_server.headers["www-authenticate"]
-    assert "test-secret" not in body
+    assert root_response.status_code == 200
+    assert root_response.json()["resource"] == "https://memory.example.com/mcp"
+    assert response.status_code == 200
+    body = response.json()
+    assert body["resource"] == "https://memory.example.com/mcp"
+    assert body["authorization_servers"] == ["https://auth.example.com"]
+    assert "memory:read" in body["scopes_supported"]
+    assert authorization_server.status_code == 200
+    authorization_body = authorization_server.json()
+    assert authorization_body["issuer"] == "https://memory.example.com"
+    assert authorization_body["authorization_endpoint"] == "https://memory.example.com/oauth/authorize"
+    assert authorization_body["token_endpoint"] == "https://memory.example.com/oauth/token"
+    assert authorization_body["registration_endpoint"] == "https://memory.example.com/oauth/register"
+    assert authorization_body["code_challenge_methods_supported"] == ["S256"]
+    assert authorization_body["protected_resources"] == ["https://memory.example.com/mcp"]
+    assert "memory:read" in authorization_body["scopes_supported"]
+    assert "test-secret" not in str({"resource": body, "authorization": authorization_body})
 
 
 def test_oauth_auth_rejects_missing_wrong_audience_and_query_tokens(
@@ -482,7 +486,7 @@ def test_oauth_auth_rejects_missing_wrong_audience_and_query_tokens(
     for response in (missing, wrong, query_token, expired_response):
         assert response.status_code == 401
         challenge = response.headers["www-authenticate"]
-        assert "resource_metadata=" not in challenge
+        assert 'resource_metadata="https://memory.example.com/.well-known/oauth-protected-resource"' in challenge
         assert "memory:read" in challenge
     assert wrong_audience not in str(wrong.json())
     assert query_token_value not in caplog.text
@@ -599,7 +603,10 @@ def test_oauth_auth_protects_mcp_initialize() -> None:
         )
 
     assert missing.status_code == 401
-    assert "resource_metadata=" not in missing.headers["www-authenticate"]
+    assert (
+        'resource_metadata="https://memory.example.com/.well-known/oauth-protected-resource/mcp"'
+        in missing.headers["www-authenticate"]
+    )
     assert valid.status_code == 200
     assert valid.headers.get("mcp-session-id")
 
