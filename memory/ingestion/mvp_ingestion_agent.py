@@ -303,3 +303,58 @@ class MVPIngestionAgent(BaseIngestionAgent):
 
     async def revoke_auth_token(self, token_id: str) -> dict[str, object] | None:
         return self._service.revoke_auth_token(token_id)
+
+    async def create_oauth_client(
+        self,
+        *,
+        client_id: str,
+        client_name: str,
+        redirect_uris: list[str],
+        expires_at: str,
+    ) -> dict[str, object]:
+        return self._service.create_oauth_client(
+            client_id=client_id,
+            client_name=client_name,
+            redirect_uris=redirect_uris,
+            expires_at=expires_at,
+        )
+
+    async def oauth_client(self, client_id: str) -> dict[str, object] | None:
+        return self._service.oauth_client(client_id)
+
+    async def create_oauth_refresh_token(
+        self,
+        *,
+        refresh_token: str,
+        token_family_id: str,
+        client_id: str,
+        owner_id: str,
+        scopes: list[str],
+        resource: str,
+        access_token_id: str | None,
+        expires_at: str,
+    ) -> dict[str, object]:
+        return self._service.create_oauth_refresh_token(
+            refresh_token=refresh_token,
+            token_family_id=token_family_id,
+            client_id=client_id,
+            owner_id=owner_id,
+            scopes=scopes,
+            resource=resource,
+            access_token_id=access_token_id,
+            expires_at=expires_at,
+        )
+
+    async def oauth_refresh_token(self, refresh_token: str) -> dict[str, object] | None:
+        return self._service.oauth_refresh_token(refresh_token)
+
+    async def consume_oauth_refresh_token(
+        self, refresh_token: str
+    ) -> dict[str, object] | None:
+        return self._service.consume_oauth_refresh_token(refresh_token)
+
+    async def revoke_oauth_refresh_token(self, refresh_token: str) -> bool:
+        return self._service.revoke_oauth_refresh_token(refresh_token)
+
+    async def revoke_oauth_refresh_token_family(self, token_family_id: str) -> bool:
+        return self._service.revoke_oauth_refresh_token_family(token_family_id)

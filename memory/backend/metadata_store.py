@@ -163,6 +163,37 @@ class SQLiteMetadataStore:
                 )
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS oauth_clients (
+                    client_id TEXT PRIMARY KEY,
+                    client_name TEXT NOT NULL,
+                    redirect_uris TEXT NOT NULL,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TEXT NOT NULL,
+                    revoked_at TEXT
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS oauth_refresh_tokens (
+                    refresh_token_hash TEXT PRIMARY KEY,
+                    token_family_id TEXT NOT NULL,
+                    client_id TEXT NOT NULL,
+                    owner_id TEXT NOT NULL,
+                    scopes TEXT NOT NULL,
+                    resource TEXT NOT NULL,
+                    access_token_id TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TEXT NOT NULL,
+                    consumed_at TEXT,
+                    revoked_at TEXT,
+                    FOREIGN KEY(client_id) REFERENCES oauth_clients(client_id),
+                    FOREIGN KEY(owner_id) REFERENCES users(id)
+                )
+                """
+            )
             self._ensure_column(conn, "auth_tokens", "token_id", "TEXT")
             self._ensure_column(conn, "auth_tokens", "token_prefix", "TEXT")
             self._ensure_column(conn, "auth_tokens", "display_name", "TEXT")
@@ -236,6 +267,19 @@ class SQLiteMetadataStore:
                 CREATE INDEX IF NOT EXISTS idx_web_sessions_user
                 ON web_sessions(user_id)
                 WHERE revoked_at IS NULL
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_oauth_clients_live
+                ON oauth_clients(expires_at)
+                WHERE revoked_at IS NULL
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_family
+                ON oauth_refresh_tokens(token_family_id)
                 """
             )
             conn.execute(
@@ -721,6 +765,187 @@ class SQLiteMetadataStore:
                 (token_hash,),
             ).fetchone()
         return self._token_from_row(row) if row is not None else None
+
+    def create_oauth_client(
+        self,
+        *,
+        client_id: str,
+        client_name: str,
+        redirect_uris: list[str],
+        expires_at: str,
+    ) -> dict[str, Any]:
+        handle = _validate_token_lookup(client_id)
+        uris_json = json.dumps([str(uri) for uri in redirect_uris], separators=(",", ":"))
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO oauth_clients
+                    (client_id, client_name, redirect_uris, expires_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(client_id) DO UPDATE SET
+                    client_name = excluded.client_name,
+                    redirect_uris = excluded.redirect_uris,
+                    expires_at = excluded.expires_at,
+                    revoked_at = NULL
+                """,
+                (handle, str(client_name or "MCP client"), uris_json, expires_at),
+            )
+            row = conn.execute(
+                """
+                SELECT client_id, client_name, redirect_uris, created_at, expires_at, revoked_at
+                FROM oauth_clients
+                WHERE client_id = ?
+                """,
+                (handle,),
+            ).fetchone()
+        if row is None:
+            raise RuntimeError("oauth client could not be created")
+        return self._oauth_client_from_row(row)
+
+    def oauth_client(self, client_id: str) -> dict[str, Any] | None:
+        handle = _validate_token_lookup(client_id)
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT client_id, client_name, redirect_uris, created_at, expires_at, revoked_at
+                FROM oauth_clients
+                WHERE client_id = ?
+                  AND revoked_at IS NULL
+                  AND expires_at > CURRENT_TIMESTAMP
+                """,
+                (handle,),
+            ).fetchone()
+        return self._oauth_client_from_row(row) if row is not None else None
+
+    def create_oauth_refresh_token(
+        self,
+        *,
+        refresh_token: str,
+        token_family_id: str,
+        client_id: str,
+        owner_id: str,
+        scopes: list[str],
+        resource: str,
+        access_token_id: str | None,
+        expires_at: str,
+    ) -> dict[str, Any]:
+        token_hash = _hash_bearer_token(refresh_token)
+        family_id = _validate_token_lookup(token_family_id)
+        client = _validate_token_lookup(client_id)
+        owner = _validate_owner_id(owner_id)
+        scopes_json = json.dumps(_normalize_token_scopes(scopes), separators=(",", ":"))
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO users (id, display_name)
+                VALUES (?, ?)
+                ON CONFLICT(id) DO NOTHING
+                """,
+                (owner, owner),
+            )
+            self._ensure_default_project(conn, owner)
+            conn.execute(
+                """
+                INSERT INTO oauth_refresh_tokens
+                    (refresh_token_hash, token_family_id, client_id, owner_id, scopes,
+                     resource, access_token_id, expires_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    token_hash,
+                    family_id,
+                    client,
+                    owner,
+                    scopes_json,
+                    str(resource),
+                    access_token_id,
+                    expires_at,
+                ),
+            )
+            row = conn.execute(
+                """
+                SELECT refresh_token_hash, token_family_id, client_id, owner_id, scopes,
+                       resource, access_token_id, created_at, expires_at, consumed_at, revoked_at
+                FROM oauth_refresh_tokens
+                WHERE refresh_token_hash = ?
+                """,
+                (token_hash,),
+            ).fetchone()
+        if row is None:
+            raise RuntimeError("oauth refresh token could not be created")
+        return self._oauth_refresh_token_from_row(row)
+
+    def oauth_refresh_token(self, refresh_token: str) -> dict[str, Any] | None:
+        token_hash = _hash_bearer_token(refresh_token)
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT refresh_token_hash, token_family_id, client_id, owner_id, scopes,
+                       resource, access_token_id, created_at, expires_at, consumed_at, revoked_at
+                FROM oauth_refresh_tokens
+                WHERE refresh_token_hash = ?
+                """,
+                (token_hash,),
+            ).fetchone()
+        return self._oauth_refresh_token_from_row(row) if row is not None else None
+
+    def consume_oauth_refresh_token(self, refresh_token: str) -> dict[str, Any] | None:
+        token_hash = _hash_bearer_token(refresh_token)
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE oauth_refresh_tokens
+                SET consumed_at = CURRENT_TIMESTAMP
+                WHERE refresh_token_hash = ?
+                  AND consumed_at IS NULL
+                  AND revoked_at IS NULL
+                  AND expires_at > CURRENT_TIMESTAMP
+                """,
+                (token_hash,),
+            )
+            row = conn.execute(
+                """
+                SELECT refresh_token_hash, token_family_id, client_id, owner_id, scopes,
+                       resource, access_token_id, created_at, expires_at, consumed_at, revoked_at
+                FROM oauth_refresh_tokens
+                WHERE refresh_token_hash = ?
+                """,
+                (token_hash,),
+            ).fetchone()
+        return self._oauth_refresh_token_from_row(row) if row is not None else None
+
+    def revoke_oauth_refresh_token_family(self, token_family_id: str) -> bool:
+        family_id = _validate_token_lookup(token_family_id)
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE auth_tokens
+                SET revoked_at = CURRENT_TIMESTAMP
+                WHERE token_id IN (
+                    SELECT access_token_id
+                    FROM oauth_refresh_tokens
+                    WHERE token_family_id = ?
+                      AND access_token_id IS NOT NULL
+                )
+                """,
+                (family_id,),
+            )
+            cursor = conn.execute(
+                """
+                UPDATE oauth_refresh_tokens
+                SET revoked_at = CURRENT_TIMESTAMP
+                WHERE token_family_id = ?
+                  AND revoked_at IS NULL
+                """,
+                (family_id,),
+            )
+        return cursor.rowcount > 0
+
+    def revoke_oauth_refresh_token(self, refresh_token: str) -> bool:
+        record = self.oauth_refresh_token(refresh_token)
+        if record is None:
+            return False
+        return self.revoke_oauth_refresh_token_family(str(record["token_family_id"]))
 
     def ensure_default_project(self, owner_id: str | None) -> dict[str, Any]:
         owner = _validate_owner_id(owner_id) if owner_id is not None else None
@@ -1790,6 +2015,31 @@ class SQLiteMetadataStore:
             "created_at": str(row["created_at"]),
             "last_seen_at": str(row["last_seen_at"]),
             "expires_at": str(row["expires_at"]),
+            "revoked_at": row["revoked_at"],
+        }
+
+    def _oauth_client_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "client_id": str(row["client_id"]),
+            "client_name": str(row["client_name"]),
+            "redirect_uris": json.loads(str(row["redirect_uris"])),
+            "created_at": str(row["created_at"]),
+            "expires_at": str(row["expires_at"]),
+            "revoked_at": row["revoked_at"],
+        }
+
+    def _oauth_refresh_token_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "refresh_token_hash": str(row["refresh_token_hash"]),
+            "token_family_id": str(row["token_family_id"]),
+            "client_id": str(row["client_id"]),
+            "owner_id": str(row["owner_id"]),
+            "scopes": _parse_token_scopes(row["scopes"]),
+            "resource": str(row["resource"]),
+            "access_token_id": row["access_token_id"],
+            "created_at": str(row["created_at"]),
+            "expires_at": str(row["expires_at"]),
+            "consumed_at": row["consumed_at"],
             "revoked_at": row["revoked_at"],
         }
 
