@@ -6,11 +6,14 @@ from pathlib import Path
 
 import yaml
 
+from memory.config import parse_config
+
 PINNED_UV_IMAGE = "FROM ghcr.io/astral-sh/uv:0.11.32-python3.14-trixie-slim"
 PINNED_PGVECTOR_IMAGE = (
     "pgvector/pgvector:pg16"
     "@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b"
 )
+LOCAL_STACK_NGROK_PLACEHOLDER = "https://YOUR-NGROK-DOMAIN.ngrok-free.app"
 
 
 def test_containerfile_installs_project_after_copying_package() -> None:
@@ -59,7 +62,10 @@ def test_local_stack_uses_oauth_containerfile() -> None:
 
     assert "dockerfile: examples/local-stack/Containerfile.oauth" in compose
     assert "GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}" in compose
+    assert "GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}" in compose
     assert "AMH_OAUTH_JWT_SECRET: ${AMH_OAUTH_JWT_SECRET:-}" in compose
+    assert "AMH_SESSION_SECRET: ${AMH_SESSION_SECRET:-}" in compose
+    assert "./${AMH_CONFIG_FILE:-config.yaml}:/app/config.yaml:ro,Z" in compose
     assert f"image: {PINNED_PGVECTOR_IMAGE}" in compose
     assert "image: pgvector/pgvector:pg16\n" not in compose
     assert "http://127.0.0.1:8000/ready" in compose
@@ -98,6 +104,39 @@ def test_local_stack_uses_oauth_containerfile() -> None:
     assert "auth: oauth_resource_server" in oauth_config
     assert "embedding_model: nomic-embed-text" in oauth_config
     assert "base_url: http://host.docker.internal:11434/v1" in oauth_config
+
+
+def test_local_stack_google_oauth_config_parses_after_public_url_substitution() -> None:
+    public_base_url = "https://memory-dev.example.test"
+    oauth_template = Path("examples/local-stack/config.oauth-ngrok.yaml").read_text(
+        encoding="utf-8"
+    )
+    oauth_config = yaml.safe_load(
+        oauth_template.replace(LOCAL_STACK_NGROK_PLACEHOLDER, public_base_url)
+    )
+
+    config = parse_config(oauth_config)
+
+    assert config.api.auth == "oauth_resource_server"
+    assert config.api.public_base_url == public_base_url
+    assert config.api.oauth.authorization_servers == [public_base_url]
+    assert config.api.oauth.resource == f"{public_base_url}/mcp"
+    assert config.api.oauth.jwt_secret_env == "AMH_OAUTH_JWT_SECRET"
+    assert config.api.connect.enabled is True
+    assert config.api.connect.session_secret_env == "AMH_SESSION_SECRET"
+    assert config.api.connect.passport.providers == ["google"]
+    assert config.api.connect.passport.google.enabled is True
+    assert config.api.connect.passport.google.callback_url == (
+        f"{public_base_url}/auth/google/callback"
+    )
+    assert config.api.connect.passport.google.client_id_env == "GOOGLE_CLIENT_ID"
+    assert (
+        config.api.connect.passport.google.client_secret_env == "GOOGLE_CLIENT_SECRET"
+    )
+    assert config.providers.embeddings == "http"
+    assert config.providers.metadata_db == "postgres"
+    assert config.providers.vector_db == "pgvector"
+    assert config.embedding_endpoint.base_url == "http://host.docker.internal:11434/v1"
 
 
 def test_postgres_service_images_are_digest_pinned() -> None:
