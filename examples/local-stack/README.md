@@ -45,14 +45,21 @@ ollama pull nomic-embed-text
 ngrok http 8000
 ```
 
-3. Replace every `https://YOUR-NGROK-DOMAIN.ngrok-free.app` placeholder in
-   `config.oauth-ngrok.yaml` with the active public HTTPS URL.
+3. Generate a local OAuth config from the checked-in template:
+
+```bash
+export PUBLIC_BASE_URL="https://YOUR-NGROK-DOMAIN.ngrok-free.app"
+sed "s#https://YOUR-NGROK-DOMAIN.ngrok-free.app#${PUBLIC_BASE_URL}#g" \
+  config.oauth-ngrok.yaml > config.oauth-local.yaml
+```
 
 4. In Google Cloud Console, register the matching redirect URI:
 
 ```text
 https://YOUR-NGROK-DOMAIN.ngrok-free.app/auth/google/callback
 ```
+
+The redirect URI must use the same public base URL as `config.oauth-local.yaml`.
 
 5. Export secrets and start Compose:
 
@@ -61,7 +68,7 @@ export GOOGLE_CLIENT_ID="your-google-client-id"
 export GOOGLE_CLIENT_SECRET="your-google-client-secret"
 export AMH_OAUTH_JWT_SECRET="$(openssl rand -base64 48)"
 export AMH_SESSION_SECRET="$(openssl rand -base64 48)"
-export AMH_CONFIG_FILE=config.oauth-ngrok.yaml
+export AMH_CONFIG_FILE=config.oauth-local.yaml
 docker compose up --build
 ```
 

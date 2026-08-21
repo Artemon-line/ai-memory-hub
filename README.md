@@ -278,13 +278,16 @@ credential-free with deterministic embeddings, or use
 `config.oauth-ngrok.yaml` for the local-server path:
 
 ```bash
-AMH_CONFIG_FILE=config.oauth-ngrok.yaml docker compose up --build
+PUBLIC_BASE_URL="https://YOUR-NGROK-DOMAIN.ngrok-free.app"
+sed "s#https://YOUR-NGROK-DOMAIN.ngrok-free.app#${PUBLIC_BASE_URL}#g" \
+  config.oauth-ngrok.yaml > config.oauth-local.yaml
+AMH_CONFIG_FILE=config.oauth-local.yaml docker compose up --build
 ```
 
-Replace the placeholder ngrok URL in `config.oauth-ngrok.yaml` with your public
-HTTPS base URL, export the Google/OAuth environment variables required by
-Compose, and keep the hub port bound to `127.0.0.1:8000` when publishing through
-a tunnel or reverse proxy. Before exposing
+Generate the local config with the same public HTTPS base URL you register as
+the Google callback origin, export the Google/OAuth environment variables
+required by Compose, and keep the hub port bound to `127.0.0.1:8000` when
+publishing through a tunnel or reverse proxy. Before exposing
 it beyond loopback, use `api.auth: oauth_resource_server` with TLS; ngrok is
 only the bundled local tunnel example. For real memory quality, keep
 `providers.embeddings: http`, point

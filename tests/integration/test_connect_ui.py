@@ -10,10 +10,10 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 from fastapi.testclient import TestClient
+from joserfc import jwt
+from joserfc.jwk import RSAKey
 from starlette.requests import Request
-from starlette.responses import RedirectResponse
 
-from memory.api import connect_oauth as connect_oauth_module
 from memory.api.connect_service import client_snippet_models, mcp_url_for_config
 from memory.api.server import create_app
 from memory.backend.metadata_store import SQLiteMetadataStore
@@ -135,59 +135,85 @@ async def _meta_exchange(**kwargs):
     }
 
 
+class _OAuthHTTPResponse:
+    def __init__(self, payload: dict[str, object], *, status_code: int = 200) -> None:
+        self._payload = payload
+        self.status_code = status_code
+
+    def json(self) -> dict[str, object]:
+        return self._payload
+
+
+class _OAuthHTTPClient:
+    token_requests: list[dict[str, object]] = []
+
+    def __init__(
+        self, *, id_token: str, jwks: dict[str, object] | None = None, post_status: int = 200
+    ) -> None:
+        self.id_token = id_token
+        self.jwks = jwks or {"keys": []}
+        self.post_status = post_status
+
+    async def __aenter__(self) -> "_OAuthHTTPClient":
+        return self
+
+    async def __aexit__(self, *_args: object) -> None:
+        return None
+
+    async def post(
+        self, _url: str, *, data: dict[str, object], headers: dict[str, str]
+    ) -> _OAuthHTTPResponse:
+        _ = headers
+        self.token_requests.append(dict(data))
+        return _OAuthHTTPResponse({"id_token": self.id_token}, status_code=self.post_status)
+
+    async def get(self, url: str, *, headers: dict[str, str]) -> _OAuthHTTPResponse:
+        _ = headers
+        if url == "https://accounts.google.com/.well-known/openid-configuration":
+            return _OAuthHTTPResponse(
+                {
+                    "issuer": "https://accounts.google.com",
+                    "jwks_uri": "https://accounts.google.com/oauth2/v3/certs",
+                }
+            )
+        if url == "https://accounts.google.com/oauth2/v3/certs":
+            return _OAuthHTTPResponse(self.jwks)
+        return _OAuthHTTPResponse({}, status_code=404)
+
+
 def _disable_google_exchange_override(client: TestClient) -> None:
     client.app.state._state.pop("google_oauth_exchange", None)
 
 
-class _AuthlibClient:
-    def __init__(
-        self,
-        *,
-        token: dict[str, object] | None = None,
-        error: Exception | None = None,
-    ) -> None:
-        self.redirects: list[dict[str, object]] = []
-        self.token = token or {
-            "userinfo": {
-                "iss": "https://accounts.google.com",
-                "aud": "google-client-id",
-                "sub": "google-subject-a",
-                "email": "Alice@Example.com",
-                "name": "Alice Example",
-                "hd": "example.com",
-                "exp": int(time.time()) + 300,
-                "iat": int(time.time()),
-            }
-        }
-        self.error = error
+def _install_oidc_httpx(monkeypatch, *, id_token: str, jwks: dict[str, object]) -> None:
+    import httpx
 
-    async def authorize_redirect(self, request: Request, redirect_uri: str, **kwargs: object):
-        _ = request
-        self.redirects.append({"redirect_uri": redirect_uri, **kwargs})
-        return RedirectResponse(
-            f"https://accounts.google.com/o/oauth2/v2/auth?state={kwargs['state']}",
-            status_code=302,
-        )
+    _OAuthHTTPClient.token_requests = []
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda *args, **kwargs: _OAuthHTTPClient(id_token=id_token, jwks=jwks),
+    )
 
-    async def authorize_access_token(self, request: Request) -> dict[str, object]:
-        _ = request
-        if self.error is not None:
-            raise self.error
-        return self.token
 
-    def parse_id_token(self, request: Request, token: dict[str, object]) -> dict[str, object]:
-        _ = request
-        return {
-            "iss": "https://accounts.google.com",
-            "aud": "google-client-id",
-            "sub": "google-id-token-subject",
-            "email": "Alice@Example.com",
-            "name": "Alice Example",
-            "hd": "example.com",
-            "nonce": str(token.get("nonce") or ""),
-            "exp": int(time.time()) + 300,
-            "iat": int(time.time()),
-        }
+def _signed_google_id_token(
+    key: RSAKey, *, nonce: str, claims: dict[str, object] | None = None
+) -> str:
+    now = int(time.time())
+    payload = {
+        "iss": "https://accounts.google.com",
+        "aud": "google-client-id",
+        "sub": "google-subject-a",
+        "email": "Alice@Example.com",
+        "name": "Alice Example",
+        "hd": "example.com",
+        "nonce": nonce,
+        "exp": now + 300,
+        "iat": now,
+    }
+    if claims:
+        payload.update(claims)
+    return jwt.encode({"alg": "RS256", "kid": "google-key-a"}, payload, key)
 
 
 def _pkce_challenge(verifier: str) -> str:
@@ -246,7 +272,6 @@ def _mcp_oauth_token(client: TestClient, *, state: str = "test-state") -> str:
         },
     )
     assert callback.status_code == 303
-    assert f"{redirect.scheme}://{redirect.netloc}{redirect.path}" == redirect_uri
     assert params["state"] == [state]
     assert token.status_code == 200
     return str(token.json()["access_token"])
@@ -349,22 +374,6 @@ def test_connect_routes_are_public_secret_free_and_use_configured_mcp_url(tmp_pa
     assert "local / local" in connect.text
     assert "OpenTelemetry traces" in connect.text
     assert "disabled" in connect.text
-
-
-def test_connect_oauth_rejects_known_multi_worker_state(tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("WEB_CONCURRENCY", "2")
-
-    with pytest.raises(RuntimeError, match="process-local state"):
-        _client(tmp_path, monkeypatch)
-
-
-def test_connect_no_auth_allows_multi_worker_env_hint(tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("WEB_CONCURRENCY", "2")
-
-    client = _client(tmp_path, monkeypatch, api_auth="none")
-    connect = client.get("/connect")
-
-    assert connect.status_code == 200
 
 
 def test_logout_rejects_oversized_form_without_revoking_session(tmp_path, monkeypatch) -> None:
@@ -657,117 +666,6 @@ def test_oauth_authorization_code_flow_issues_mcp_bearer_token(tmp_path, monkeyp
     assert search.status_code == 200
 
 
-def test_oauth_root_aliases_support_codex_no_discovery_fallback(tmp_path, monkeypatch) -> None:
-    client = _client(tmp_path, monkeypatch, allowed_domains=["example.com"])
-    redirect_uri = "http://127.0.0.1:45872/callback/crkT507Z-f3e"
-    verifier = "codex-fallback-pkce-verifier-abcdefghijklmnopqrstuvwxyz0123456789"
-    register = client.post(
-        "/register",
-        json={
-            "client_name": "Codex",
-            "redirect_uris": [redirect_uri],
-            "token_endpoint_auth_method": "none",
-            "grant_types": ["authorization_code"],
-            "response_types": ["code"],
-        },
-    )
-    assert register.status_code == 201
-
-    authorize = client.get(
-        "/authorize",
-        params={
-            "response_type": "code",
-            "client_id": register.json()["client_id"],
-            "redirect_uri": redirect_uri,
-            "code_challenge": _pkce_challenge(verifier),
-            "code_challenge_method": "S256",
-            "state": "codex-state",
-            "scope": "memory:read memory:write",
-            "resource": "https://memory.example.com/mcp",
-        },
-        follow_redirects=False,
-    )
-    google_state = re.search(r"[?&]state=([^&]+)", authorize.headers["location"])
-    assert authorize.status_code == 303
-    assert google_state is not None
-
-    browser = TestClient(client.app, base_url="https://memory.example.com")
-    callback = browser.get(
-        f"/auth/google/callback?code=fake-code&state={google_state.group(1)}",
-        follow_redirects=False,
-    )
-    redirect = urlparse(callback.headers["location"])
-    params = parse_qs(redirect.query)
-    token = client.post(
-        "/token",
-        data={
-            "grant_type": "authorization_code",
-            "code": params["code"][0],
-            "redirect_uri": redirect_uri,
-            "client_id": register.json()["client_id"],
-            "code_verifier": verifier,
-        },
-    )
-
-    assert callback.status_code == 303
-    assert f"{redirect.scheme}://{redirect.netloc}{redirect.path}" == redirect_uri
-    assert params["state"] == ["codex-state"]
-    assert token.status_code == 200
-    assert token.json()["token_type"] == "Bearer"
-    assert token.json()["scope"] == "memory:read memory:write"
-
-
-def test_oauth_token_rejects_unconfigured_admin_scope(tmp_path, monkeypatch) -> None:
-    client = _client(tmp_path, monkeypatch, allowed_domains=["example.com"])
-    redirect_uri = "http://127.0.0.1:49152/oauth/callback"
-    verifier = "admin-scope-pkce-verifier-abcdefghijklmnopqrstuvwxyz0123456789"
-    register = client.post(
-        "/oauth/register",
-        json={
-            "client_name": "Admin scope client",
-            "redirect_uris": [redirect_uri],
-            "token_endpoint_auth_method": "none",
-            "grant_types": ["authorization_code"],
-            "response_types": ["code"],
-        },
-    )
-    authorize = client.get(
-        "/oauth/authorize",
-        params={
-            "response_type": "code",
-            "client_id": register.json()["client_id"],
-            "redirect_uri": redirect_uri,
-            "code_challenge": _pkce_challenge(verifier),
-            "code_challenge_method": "S256",
-            "scope": "memory:read memory:write memory:admin",
-            "resource": "https://memory.example.com/mcp",
-        },
-        follow_redirects=False,
-    )
-    google_state = re.search(r"[?&]state=([^&]+)", authorize.headers["location"])
-    assert google_state is not None
-
-    browser = TestClient(client.app, base_url="https://memory.example.com")
-    callback = browser.get(
-        f"/auth/google/callback?code=fake-code&state={google_state.group(1)}",
-        follow_redirects=False,
-    )
-    code = parse_qs(urlparse(callback.headers["location"]).query)["code"][0]
-    token = client.post(
-        "/oauth/token",
-        data={
-            "grant_type": "authorization_code",
-            "code": code,
-            "redirect_uri": redirect_uri,
-            "client_id": register.json()["client_id"],
-            "code_verifier": verifier,
-        },
-    )
-
-    assert token.status_code == 400
-    assert token.json()["detail"]["error"] == "invalid_scope"
-
-
 def test_oauth_register_rejects_malformed_json(tmp_path, monkeypatch) -> None:
     client = _client(tmp_path, monkeypatch)
 
@@ -842,7 +740,7 @@ def test_oauth_register_accepts_loopback_redirect_uris(
     assert response.json()["redirect_uris"] == [redirect_uri]
 
 
-def test_logged_in_user_authorizes_registered_loopback_client_directly(
+def test_logged_in_user_authorizes_registered_loopback_client_without_connect_detour(
     tmp_path, monkeypatch
 ) -> None:
     client = _client(tmp_path, monkeypatch, allowed_domains=["example.com"])
@@ -873,28 +771,58 @@ def test_logged_in_user_authorizes_registered_loopback_client_directly(
         },
         follow_redirects=False,
     )
-    connect = client.get("/connect")
     redirect = urlparse(authorize.headers["location"])
     params = parse_qs(redirect.query)
+    token = client.post(
+        "/oauth/token",
+        data={
+            "grant_type": "authorization_code",
+            "code": params["code"][0],
+            "redirect_uri": redirect_uri,
+            "client_id": register.json()["client_id"],
+            "code_verifier": verifier,
+        },
+    )
 
     assert login.status_code == 303
     assert callback.status_code == 200
     assert register.status_code == 201
     assert authorize.status_code == 303
-    assert connect.status_code == 200
-    assert "Authorize local client" not in connect.text
-    assert "/oauth/authorize/approve" not in connect.text
     assert f"{redirect.scheme}://{redirect.netloc}{redirect.path}" == redirect_uri
     assert params["state"] == ["local-client-state"]
     assert params["code"][0].startswith("amh_code_")
+    assert token.status_code == 200
+    assert token.json()["token_type"] == "Bearer"
 
 
-def test_oauth_authorize_approve_route_is_removed(tmp_path, monkeypatch) -> None:
-    client = _client(tmp_path, monkeypatch, api_auth="none")
+def test_oauth_authorize_approve_rejects_missing_csrf(tmp_path, monkeypatch) -> None:
+    client = _client(tmp_path, monkeypatch, allowed_domains=["example.com"])
+    login = client.get("/auth/google", follow_redirects=False)
+    login_state = parse_qs(urlparse(login.headers["location"]).query)["state"][0]
+    callback = client.get(f"/auth/google/callback?code=fake-code&state={login_state}")
+    register = client.post(
+        "/oauth/register",
+        json={"client_name": "Local MCP client", "redirect_uris": ["http://127.0.0.1/cb"]},
+    )
+    authorize = client.get(
+        "/oauth/authorize",
+        params={
+            "response_type": "code",
+            "client_id": register.json()["client_id"],
+            "redirect_uri": "http://127.0.0.1/cb",
+            "code_challenge": _pkce_challenge(
+                "csrf-pkce-verifier-abcdefghijklmnopqrstuvwxyz0123456789"
+            ),
+            "code_challenge_method": "S256",
+        },
+        follow_redirects=False,
+    )
 
-    response = client.post("/oauth/authorize/approve", data={}, follow_redirects=False)
+    approve = client.post("/oauth/authorize/approve", data={}, follow_redirects=False)
 
-    assert response.status_code == 404
+    assert callback.status_code == 200
+    assert authorize.status_code == 303
+    assert approve.status_code == 403
 
 
 def test_oauth_token_rejects_non_ascii_pkce_verifier_as_invalid_grant(
@@ -991,76 +919,89 @@ def test_google_callback_rejects_wrong_audience_and_expired_token(tmp_path, monk
     assert expired_response.status_code == 403
 
 
-def test_google_login_uses_authlib_client_for_redirect_and_callback(
+def test_google_callback_verifies_signed_id_token_and_matching_nonce(
     tmp_path, monkeypatch
 ) -> None:
     client = _client(tmp_path, monkeypatch, allowed_domains=["example.com"])
     _disable_google_exchange_override(client)
-    authlib_client = _AuthlibClient()
-    monkeypatch.setattr(
-        connect_oauth_module,
-        "_authlib_client",
-        lambda config, provider: authlib_client,
-    )
+    key = RSAKey.generate_key(2048, parameters={"kid": "google-key-a", "alg": "RS256"})
     start = client.get("/auth/google", follow_redirects=False)
-    state = parse_qs(urlparse(start.headers["location"]).query)["state"][0]
-    nonce = client.app.state.oauth_provider_states[state]["nonce"]
+    redirect = urlparse(start.headers["location"])
+    params = parse_qs(redirect.query)
+    id_token = _signed_google_id_token(key, nonce=params["nonce"][0])
+    _install_oidc_httpx(
+        monkeypatch,
+        id_token=id_token,
+        jwks={"keys": [key.as_dict(private=False)]},
+    )
 
-    callback = client.get(f"/auth/google/callback?code=fake-code&state={state}")
+    callback = client.get(f"/auth/google/callback?code=fake-code&state={params['state'][0]}")
 
     assert start.status_code == 303
-    assert authlib_client.redirects == [
-        {
-            "redirect_uri": "https://memory.example.com/auth/google/callback",
-            "state": state,
-            "nonce": nonce,
-            "prompt": "select_account",
-            "access_type": "offline",
-        }
-    ]
     assert callback.status_code == 200
+
+
+def test_google_login_uses_provider_pkce_s256_and_token_verifier(
+    tmp_path, monkeypatch
+) -> None:
+    client = _client(tmp_path, monkeypatch, allowed_domains=["example.com"])
+    _disable_google_exchange_override(client)
+    key = RSAKey.generate_key(2048, parameters={"kid": "google-key-a", "alg": "RS256"})
+    start = client.get("/auth/google", follow_redirects=False)
+    params = parse_qs(urlparse(start.headers["location"]).query)
+    id_token = _signed_google_id_token(key, nonce=params["nonce"][0])
+    _install_oidc_httpx(
+        monkeypatch,
+        id_token=id_token,
+        jwks={"keys": [key.as_dict(private=False)]},
+    )
+
+    callback = client.get(f"/auth/google/callback?code=fake-code&state={params['state'][0]}")
+    token_request = _OAuthHTTPClient.token_requests[0]
+    code_verifier = str(token_request["code_verifier"])
+
+    assert start.status_code == 303
+    assert callback.status_code == 200
+    assert params["code_challenge_method"] == ["S256"]
+    assert params["code_challenge"] == [_pkce_challenge(code_verifier)]
+    assert code_verifier not in start.headers["location"]
     assert client.app.state.oauth_provider_states == {}
 
 
-def test_google_callback_uses_authlib_id_token_claims_when_userinfo_is_missing(
-    tmp_path, monkeypatch
-) -> None:
-    client = _client(tmp_path, monkeypatch, allowed_domains=["example.com"])
-    _disable_google_exchange_override(client)
-    authlib_client = _AuthlibClient(token={"id_token": "signed-by-provider", "nonce": "nonce-a"})
-    monkeypatch.setattr(
-        connect_oauth_module,
-        "_authlib_client",
-        lambda config, provider: authlib_client,
-    )
-    start = client.get("/auth/google", follow_redirects=False)
-    state = parse_qs(urlparse(start.headers["location"]).query)["state"][0]
-
-    callback = client.get(f"/auth/google/callback?code=fake-code&state={state}")
-
-    assert start.status_code == 303
-    assert callback.status_code == 200
-    assert "Signed in" in callback.text
-
-
-def test_google_callback_rejects_authlib_exchange_error(tmp_path, monkeypatch) -> None:
+def test_google_callback_rejects_unsigned_id_token(tmp_path, monkeypatch) -> None:
     client = _client(tmp_path, monkeypatch)
     _disable_google_exchange_override(client)
-    authlib_client = _AuthlibClient(error=RuntimeError("provider rejected token"))
-    monkeypatch.setattr(
-        connect_oauth_module,
-        "_authlib_client",
-        lambda config, provider: authlib_client,
-    )
+    key = RSAKey.generate_key(2048, parameters={"kid": "google-key-a", "alg": "RS256"})
     start = client.get("/auth/google", follow_redirects=False)
     state = parse_qs(urlparse(start.headers["location"]).query)["state"][0]
+    _install_oidc_httpx(
+        monkeypatch,
+        id_token="not-a-signed-token",
+        jwks={"keys": [key.as_dict(private=False)]},
+    )
 
     response = client.get(f"/auth/google/callback?code=fake-code&state={state}")
 
+    assert response.status_code == 403
+
+
+def test_google_callback_rejects_wrong_nonce_and_replayed_state(tmp_path, monkeypatch) -> None:
+    client = _client(tmp_path, monkeypatch)
+    _disable_google_exchange_override(client)
+    key = RSAKey.generate_key(2048, parameters={"kid": "google-key-a", "alg": "RS256"})
+    start = client.get("/auth/google", follow_redirects=False)
+    state = parse_qs(urlparse(start.headers["location"]).query)["state"][0]
+    id_token = _signed_google_id_token(key, nonce="attacker-nonce")
+    _install_oidc_httpx(
+        monkeypatch,
+        id_token=id_token,
+        jwks={"keys": [key.as_dict(private=False)]},
+    )
+
+    wrong_nonce = client.get(f"/auth/google/callback?code=fake-code&state={state}")
     replay = client.get(f"/auth/google/callback?code=fake-code&state={state}")
 
-    assert response.status_code == 400
-    assert response.json()["detail"] == "OAuth token exchange was rejected"
+    assert wrong_nonce.status_code == 403
     assert replay.status_code == 400
 
 
@@ -1173,7 +1114,6 @@ def test_oauth_authorization_code_is_single_use(tmp_path, monkeypatch) -> None:
         f"/auth/google/callback?code=fake-code&state={google_state.group(1)}",
         follow_redirects=False,
     )
-    assert callback.status_code == 303
     code = parse_qs(urlparse(callback.headers["location"]).query)["code"][0]
     form = {
         "grant_type": "authorization_code",

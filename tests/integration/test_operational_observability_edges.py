@@ -84,7 +84,7 @@ def test_health_and_ready_are_public_and_secret_free_under_every_auth_mode(
         assert "oauth-secret-value" not in payload
 
 
-def test_oauth_discovery_metadata_is_not_advertised(
+def test_oauth_protected_resource_metadata_is_public_and_secret_free(
     tmp_path: Path,
 ) -> None:
     with _client(tmp_path, auth="oauth_resource_server") as client:
@@ -92,13 +92,28 @@ def test_oauth_discovery_metadata_is_not_advertised(
         mcp = client.get("/.well-known/oauth-protected-resource/mcp")
         authorization = client.get("/.well-known/oauth-authorization-server")
 
-    assert root.status_code == 401, root.text
-    assert mcp.status_code == 401, mcp.text
-    assert authorization.status_code == 401, authorization.text
-    body = json.dumps({"root": root.json(), "mcp": mcp.json(), "authorization": authorization.json()})
-    assert "resource_metadata=" not in root.headers["www-authenticate"]
-    assert "resource_metadata=" not in mcp.headers["www-authenticate"]
-    assert "resource_metadata=" not in authorization.headers["www-authenticate"]
+    assert root.status_code == 200, root.text
+    assert mcp.status_code == 200, mcp.text
+    assert authorization.status_code == 200, authorization.text
+    root_payload = root.json()
+    mcp_payload = mcp.json()
+    authorization_payload = authorization.json()
+    assert root_payload["resource"] == "https://memory.example.com/mcp"
+    assert mcp_payload["resource"] == "https://memory.example.com/mcp"
+    assert root_payload["authorization_servers"] == ["https://auth.example.com"]
+    assert mcp_payload["authorization_servers"] == ["https://auth.example.com"]
+    assert authorization_payload["issuer"] == "https://memory.example.com"
+    assert authorization_payload["authorization_endpoint"] == (
+        "https://memory.example.com/oauth/authorize"
+    )
+    assert authorization_payload["token_endpoint"] == "https://memory.example.com/oauth/token"
+    assert authorization_payload["registration_endpoint"] == (
+        "https://memory.example.com/oauth/register"
+    )
+    body = json.dumps(
+        {"root": root_payload, "mcp": mcp_payload, "authorization": authorization_payload}
+    )
+    assert "code_challenge_methods_supported" in body
     assert "oauth-secret-value" not in body
 
 

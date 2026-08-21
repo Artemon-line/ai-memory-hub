@@ -247,7 +247,10 @@ export GOOGLE_CLIENT_SECRET="your-google-client-secret"
 export AMH_OAUTH_JWT_SECRET="$(openssl rand -base64 48)"
 export AMH_SESSION_SECRET="$(openssl rand -base64 48)"
 cd examples/local-stack
-export AMH_CONFIG_FILE=config.oauth-ngrok.yaml
+export PUBLIC_BASE_URL="https://YOUR-NGROK-DOMAIN.ngrok-free.app"
+sed "s#https://YOUR-NGROK-DOMAIN.ngrok-free.app#${PUBLIC_BASE_URL}#g" \
+  config.oauth-ngrok.yaml > config.oauth-local.yaml
+export AMH_CONFIG_FILE=config.oauth-local.yaml
 docker compose up --build
 ```
 
@@ -259,10 +262,9 @@ https://YOUR-NGROK-DOMAIN.ngrok-free.app/connect
 
 The included template uses ngrok because it is convenient for a local machine.
 Any stable HTTPS tunnel or reverse proxy works if the public base URL and Google
-redirect URI match. Before starting Compose, replace every
-`https://YOUR-NGROK-DOMAIN.ngrok-free.app` placeholder in
-`examples/local-stack/config.oauth-ngrok.yaml` with the
-active HTTPS URL and register the matching Google redirect URI:
+redirect URI match. Before starting Compose, generate a local config from
+`examples/local-stack/config.oauth-ngrok.yaml` with the active HTTPS URL and
+register the matching Google redirect URI:
 
 ```text {.amh-copy-block}
 https://YOUR-NGROK-DOMAIN.ngrok-free.app/auth/google/callback
