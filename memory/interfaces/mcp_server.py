@@ -692,7 +692,6 @@ def build_tool_handlers(
                 error_message=str(exc),
                 valid=False,
             )
-        await _emit_mcp_tool_log(ctx, tool_name="memory_validate", status="ok")
         return _envelope(status="ok", valid=True)
 
     async def memory_insert(
@@ -914,8 +913,6 @@ def build_tool_handlers(
                 error_message=redact_secrets(str(exc)),
             )
 
-        await _emit_mcp_tool_log(ctx, tool_name="memory_search", status="ok")
-        await _emit_mcp_tool_log(ctx, tool_name="memory_insert", status="ok")
         return _with_envelope_defaults(result)
 
     async def memory_retrieve(
@@ -957,7 +954,6 @@ def build_tool_handlers(
                 error_code="not_found",
                 error_message="memory not found",
             )
-        await _emit_mcp_tool_log(ctx, tool_name="memory_retrieve", status="ok")
         return _envelope(status="ok", id=id, memory=redact_content_hashes(memory))
 
     async def memory_ask(
@@ -1070,7 +1066,6 @@ def build_tool_handlers(
                 error_code="ask_failed",
                 error_message=redact_secrets(str(exc)),
             )
-        await _emit_mcp_tool_log(ctx, tool_name="memory_ask", status="ok")
         return _with_envelope_defaults(result)
 
     async def memory_fact_search(
@@ -1114,7 +1109,6 @@ def build_tool_handlers(
                 error_code="invalid_input",
                 error_message=str(exc),
             )
-        await _emit_mcp_tool_log(ctx, tool_name="memory_fact_search", status="ok")
         return _with_envelope_defaults(result)
 
     async def memory_profile_get(
@@ -1156,7 +1150,6 @@ def build_tool_handlers(
                 error_code="invalid_input",
                 error_message=str(exc),
             )
-        await _emit_mcp_tool_log(ctx, tool_name="memory_profile_get", status="ok")
         return _with_envelope_defaults(result)
 
     async def memory_fact_supersede(
@@ -1192,7 +1185,6 @@ def build_tool_handlers(
             owner_id=owner_id(),
             project_id=project_id,
         )
-        await _emit_mcp_tool_log(ctx, tool_name="memory_fact_supersede", status="ok")
         return _with_envelope_defaults(result)
 
     async def memory_pending_approve(
@@ -1216,7 +1208,6 @@ def build_tool_handlers(
         result = await agent.approve_pending_memory(
             id, owner_id=owner_id(), project_id=project_id
         )
-        await _emit_mcp_tool_log(ctx, tool_name="memory_pending_approve", status="ok")
         return _with_envelope_defaults(result)
 
     async def memory_pending_reject(
@@ -1240,21 +1231,16 @@ def build_tool_handlers(
         result = await agent.reject_pending_memory(
             id, owner_id=owner_id(), project_id=project_id
         )
-        await _emit_mcp_tool_log(ctx, tool_name="memory_pending_reject", status="ok")
         return _with_envelope_defaults(result)
 
     async def memory_project_list(ctx: FastMCPContext | None = None) -> dict[str, Any]:
         result = await agent.project_list(owner_id=owner_id())
-        await _emit_mcp_tool_log(ctx, tool_name="memory_project_list", status="ok")
         return _with_envelope_defaults(result)
 
     async def memory_project_default_get(
         ctx: FastMCPContext | None = None,
     ) -> dict[str, Any]:
         result = await agent.project_default_get(owner_id=owner_id())
-        await _emit_mcp_tool_log(
-            ctx, tool_name="memory_project_default_get", status="ok"
-        )
         return _with_envelope_defaults(result)
 
     async def memory_project_get(
@@ -1280,7 +1266,6 @@ def build_tool_handlers(
                 error_code="invalid_input",
                 error_message=str(exc),
             )
-        await _emit_mcp_tool_log(ctx, tool_name="memory_project_get", status="ok")
         return _with_envelope_defaults(result)
 
     handlers: dict[str, ToolFn] = {

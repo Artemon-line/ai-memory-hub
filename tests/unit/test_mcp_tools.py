@@ -213,19 +213,21 @@ async def test_mcp_tool_handlers_insert_search_retrieve() -> None:
         config={"providers": {"agent": "mvp"}}, runtime=_runtime()
     )
     handlers = build_tool_handlers(agent)
+    ctx = StubMCPContext()
 
-    validate_result = await handlers["memory_validate"](_conversation())
+    validate_result = await handlers["memory_validate"](_conversation(), ctx=ctx)
     assert validate_result["status"] == "ok"
     assert validate_result["valid"] is True
 
-    insert_result = await handlers["memory_insert"](_conversation())
+    insert_result = await handlers["memory_insert"](_conversation(), ctx=ctx)
     assert insert_result["status"] == "ok"
 
-    search_result = await handlers["memory_search"]("hello", 5)
+    search_result = await handlers["memory_search"]("hello", 5, ctx=ctx)
     assert search_result["status"] == "ok"
 
     retrieve_result = await handlers["memory_retrieve"](
-        "d9fd4c95-9cb3-4fd5-b967-3027f8863210"
+        "d9fd4c95-9cb3-4fd5-b967-3027f8863210",
+        ctx=ctx,
     )
     assert retrieve_result["status"] == "ok"
     assert retrieve_result["memory"]["id"] == "d9fd4c95-9cb3-4fd5-b967-3027f8863210"
@@ -237,7 +239,7 @@ async def test_mcp_tool_handlers_insert_search_retrieve() -> None:
     assert "error_code" in retrieve_result
     assert "error_message" in retrieve_result
 
-    ask_result = await handlers["memory_ask"]("what was stored?", 3)
+    ask_result = await handlers["memory_ask"]("what was stored?", 3, ctx=ctx)
     assert ask_result["status"] == "ok"
     assert "answer" in ask_result
     assert len(ask_result["results"]) == 1
@@ -249,11 +251,12 @@ async def test_mcp_tool_handlers_insert_search_retrieve() -> None:
     assert ask_result["citations"][0]["text"] == ask_result["results"][0]["text"]
 
     budgeted_ask_result = await handlers["memory_ask"](
-        "what was stored?", 3, max_context_tokens=100
+        "what was stored?", 3, max_context_tokens=100, ctx=ctx
     )
     assert budgeted_ask_result["status"] == "ok"
     assert budgeted_ask_result["context_tokens_used"] <= 100
     assert budgeted_ask_result["chunks_selected"] == 1
+    assert ctx.logs == []
 
 
 @pytest.mark.asyncio

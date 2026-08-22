@@ -156,11 +156,15 @@ an authorization code for a newly registered dynamic client. The request is
 parked in the browser session and `/connect` requires an explicit
 CSRF-protected approval before redirecting back to the local client.
 
-Registered dynamic clients and unredeemed authorization codes are process-local
-state. Restarting the hub requires clients to register again, and unredeemed
-codes expire after a short TTL. The in-memory stores are capped so repeated
-unauthenticated registrations or abandoned authorization attempts cannot grow
-without bound.
+Registered dynamic clients are stored in the configured metadata backend and
+expire after `api.oauth.client_registration_ttl_seconds`. Unredeemed
+authorization codes stay short-lived and process-local, so abandoned browser
+authorization attempts still disappear quickly.
+
+The token endpoint returns hub access tokens plus rotating refresh tokens.
+Refresh-token reuse revokes the whole refresh-token family and every linked hub
+access token. `/oauth/revoke` accepts either a refresh token, which revokes that
+family, or a hub access token, which revokes that token's stored `jti`.
 
 Run the built-in local authorization server as a single hub process. Startup
 fails when `api.auth: oauth_resource_server` is paired with common multi-worker
@@ -185,6 +189,8 @@ api:
       - http://127.0.0.1:8000
     resource: http://127.0.0.1:8000/mcp
     jwt_secret_env: AMH_OAUTH_JWT_SECRET
+    client_registration_ttl_seconds: 86400
+    refresh_token_ttl_seconds: 2592000
     scopes_supported:
       - memory:read
       - memory:write

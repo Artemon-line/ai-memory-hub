@@ -21,6 +21,8 @@ api:
       - http://127.0.0.1:8000
     resource: http://127.0.0.1:8000/mcp
     jwt_secret_env: AMH_OAUTH_JWT_SECRET
+    client_registration_ttl_seconds: 86400
+    refresh_token_ttl_seconds: 2592000
     scopes_supported:
       - memory:read
       - memory:write

@@ -221,8 +221,12 @@ def _pkce_challenge(verifier: str) -> str:
     return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
 
 
-def _mcp_oauth_token(client: TestClient, *, state: str = "test-state") -> str:
-    redirect_uri = "http://127.0.0.1:49152/oauth/callback"
+def _mcp_oauth_token_response(
+    client: TestClient,
+    *,
+    state: str = "test-state",
+    redirect_uri: str = "http://127.0.0.1:49152/oauth/callback",
+) -> dict[str, object]:
     verifier = f"{state}-pkce-verifier-abcdefghijklmnopqrstuvwxyz0123456789"
     register = client.post(
         "/oauth/register",
@@ -274,7 +278,19 @@ def _mcp_oauth_token(client: TestClient, *, state: str = "test-state") -> str:
     assert callback.status_code == 303
     assert params["state"] == [state]
     assert token.status_code == 200
-    return str(token.json()["access_token"])
+    return {
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "verifier": verifier,
+        "token": token.json(),
+    }
+
+
+def _mcp_oauth_token(client: TestClient, *, state: str = "test-state") -> str:
+    response = _mcp_oauth_token_response(client, state=state)
+    token = response["token"]
+    assert isinstance(token, dict)
+    return str(token["access_token"])
 
 
 def test_mcp_url_uses_request_host_when_no_public_base_url() -> None:
@@ -793,6 +809,145 @@ def test_logged_in_user_authorizes_registered_loopback_client_without_connect_de
     assert params["code"][0].startswith("amh_code_")
     assert token.status_code == 200
     assert token.json()["token_type"] == "Bearer"
+    assert token.json()["refresh_token"].startswith("amh_refresh_")
+
+
+def test_oauth_registered_client_survives_app_restart(tmp_path, monkeypatch) -> None:
+    first_client = _client(tmp_path, monkeypatch, allowed_domains=["example.com"])
+    redirect_uri = "http://127.0.0.1:49162/oauth/callback"
+    register = first_client.post(
+        "/oauth/register",
+        json={"client_name": "Durable MCP client", "redirect_uris": [redirect_uri]},
+    )
+    client_id = register.json()["client_id"]
+
+    restarted_client = _client(tmp_path, monkeypatch, allowed_domains=["example.com"])
+    login = restarted_client.get("/auth/google", follow_redirects=False)
+    login_state = parse_qs(urlparse(login.headers["location"]).query)["state"][0]
+    callback = restarted_client.get(f"/auth/google/callback?code=fake-code&state={login_state}")
+    verifier = "restart-pkce-verifier-abcdefghijklmnopqrstuvwxyz0123456789"
+    authorize = restarted_client.get(
+        "/oauth/authorize",
+        params={
+            "response_type": "code",
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "code_challenge": _pkce_challenge(verifier),
+            "code_challenge_method": "S256",
+            "state": "restart-state",
+            "scope": "memory:read memory:write",
+            "resource": "https://memory.example.com/mcp",
+        },
+        follow_redirects=False,
+    )
+    redirect = urlparse(authorize.headers["location"])
+    params = parse_qs(redirect.query)
+    token = restarted_client.post(
+        "/oauth/token",
+        data={
+            "grant_type": "authorization_code",
+            "code": params["code"][0],
+            "redirect_uri": redirect_uri,
+            "client_id": client_id,
+            "code_verifier": verifier,
+        },
+    )
+
+    assert register.status_code == 201
+    assert callback.status_code == 200
+    assert authorize.status_code == 303
+    assert params["state"] == ["restart-state"]
+    assert token.status_code == 200
+    assert token.json()["refresh_token"].startswith("amh_refresh_")
+
+
+def test_oauth_refresh_token_rotates_and_reuse_revokes_family(
+    tmp_path, monkeypatch
+) -> None:
+    client = _client(tmp_path, monkeypatch)
+    flow = _mcp_oauth_token_response(client, state="refresh-rotate")
+    client_id = str(flow["client_id"])
+    token = flow["token"]
+    assert isinstance(token, dict)
+    refresh_token = str(token["refresh_token"])
+    refresh = client.post(
+        "/oauth/token",
+        data={
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "client_id": client_id,
+        },
+    )
+    rotated = refresh.json()
+
+    replay = client.post(
+        "/oauth/token",
+        data={
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "client_id": client_id,
+        },
+    )
+    revoked_access = client.post(
+        "/memory/search",
+        headers={"Authorization": f"Bearer {rotated['access_token']}"},
+        json={"query": "anything"},
+    )
+
+    assert refresh.status_code == 200
+    assert rotated["refresh_token"].startswith("amh_refresh_")
+    assert rotated["refresh_token"] != refresh_token
+    assert rotated["access_token"] != token["access_token"]
+    assert replay.status_code == 400
+    assert replay.json()["detail"]["error"] == "invalid_grant"
+    assert revoked_access.status_code == 401
+
+
+def test_oauth_revoke_refresh_token_revokes_family_and_access_token(
+    tmp_path, monkeypatch
+) -> None:
+    client = _client(tmp_path, monkeypatch)
+    flow = _mcp_oauth_token_response(client, state="refresh-revoke")
+    client_id = str(flow["client_id"])
+    token = flow["token"]
+    assert isinstance(token, dict)
+    refresh_token = str(token["refresh_token"])
+    access_token = str(token["access_token"])
+
+    revoke = client.post("/oauth/revoke", data={"token": refresh_token})
+    refresh = client.post(
+        "/oauth/token",
+        data={
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "client_id": client_id,
+        },
+    )
+    access = client.post(
+        "/memory/search",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={"query": "anything"},
+    )
+
+    assert revoke.status_code == 200
+    assert refresh.status_code == 400
+    assert refresh.json()["detail"]["error"] == "invalid_grant"
+    assert access.status_code == 401
+
+
+def test_oauth_revoke_access_token_revokes_hub_token(tmp_path, monkeypatch) -> None:
+    client = _client(tmp_path, monkeypatch)
+    access_token = _mcp_oauth_token(client, state="access-revoke")
+
+    revoke = client.post("/oauth/revoke", data={"token": access_token})
+    access = client.post(
+        "/memory/search",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={"query": "anything"},
+    )
+
+    assert revoke.status_code == 200
+    assert access.status_code == 401
 
 
 def test_oauth_authorize_approve_rejects_missing_csrf(tmp_path, monkeypatch) -> None:

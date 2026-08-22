@@ -75,6 +75,28 @@ def test_legacy_openai_embedding_config_maps_to_http_endpoint() -> None:
     assert config.embedding_endpoint.base_url == "http://127.0.0.1:11434/v1"
     assert config.embedding_endpoint.api_key == "ollama"
 
+
+def test_oauth_refresh_and_client_registration_ttl_config() -> None:
+    config = parse_config({})
+
+    assert config.api.oauth.client_registration_ttl_seconds == 86_400
+    assert config.api.oauth.refresh_token_ttl_seconds == 60 * 60 * 24 * 30
+
+    overridden = parse_config(
+        {
+            "api": {
+                "oauth": {
+                    "client_registration_ttl_seconds": 3600,
+                    "refresh_token_ttl_seconds": 7200,
+                }
+            }
+        }
+    )
+
+    assert overridden.api.oauth.client_registration_ttl_seconds == 3600
+    assert overridden.api.oauth.refresh_token_ttl_seconds == 7200
+
+
 def test_load_config_non_existent():
     with pytest.raises(FileNotFoundError):
         load_config("non_existent_config.yaml")

@@ -507,6 +507,47 @@ def test_sqlite_admin_user_token_and_project_management(tmp_path: Path) -> None:
     assert store.owner_for_token("amh_secret_value") is None
 
 
+def test_sqlite_oauth_clients_and_refresh_token_family_revocation(tmp_path: Path) -> None:
+    store = SQLiteMetadataStore(tmp_path / "metadata.sqlite3")
+    client = store.create_oauth_client(
+        client_id="amh_client_storage",
+        client_name="Storage MCP client",
+        redirect_uris=["http://127.0.0.1:49152/callback"],
+        expires_at="2999-01-01T00:00:00+00:00",
+    )
+    access = store.create_auth_token(
+        owner_id="jane",
+        token="amh_access_secret",
+        token_display_name="MCP OAuth client",
+    )
+    refresh = store.create_oauth_refresh_token(
+        refresh_token="amh_refresh_secret",
+        token_family_id="amh_family_storage",
+        client_id="amh_client_storage",
+        owner_id="jane",
+        scopes=["memory:read"],
+        resource="https://memory.example.com/mcp",
+        access_token_id=access["token_id"],
+        expires_at="2999-01-01T00:00:00+00:00",
+    )
+
+    consumed = store.consume_oauth_refresh_token("amh_refresh_secret")
+    revoked = store.revoke_oauth_refresh_token_family("amh_family_storage")
+    fetched_refresh = store.oauth_refresh_token("amh_refresh_secret")
+
+    assert client["redirect_uris"] == ["http://127.0.0.1:49152/callback"]
+    stored_client = store.oauth_client("amh_client_storage")
+    assert stored_client is not None
+    assert stored_client["client_name"] == "Storage MCP client"
+    assert refresh["scopes"] == ["memory:read"]
+    assert consumed is not None
+    assert consumed["consumed_at"] is not None
+    assert revoked is True
+    assert fetched_refresh is not None
+    assert fetched_refresh["revoked_at"] is not None
+    assert store.owner_for_token("amh_access_secret") is None
+
+
 def test_sqlite_web_sessions_require_supported_secret_hashes(tmp_path: Path) -> None:
     store = SQLiteMetadataStore(tmp_path / "metadata.sqlite3")
     store.create_user(user_id="jane", display_name="Jane")
