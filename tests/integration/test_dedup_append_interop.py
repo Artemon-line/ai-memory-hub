@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import concurrent.futures
 import json
+import threading
+import time
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -10,7 +13,36 @@ from fastapi.testclient import TestClient
 
 from memory.api.server import create_app
 from memory.backend.metadata_store import SQLiteMetadataStore
+from memory.backend.vector_store import InMemoryVectorStore
 from memory.config import ensure_token_hash_secret, parse_config
+from memory.ingestion import mvp_ingestion
+from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
+
+
+class _StubEmbedder:
+    dimension: int = 32
+
+    def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        return [[float(len(text))] * self.dimension for text in texts]
+
+
+class _StubMetadataStore:
+    def __init__(self) -> None:
+        self.rows: dict[str, dict[str, object]] = {}
+
+    def insert(self, conversation_json: dict[str, object]) -> str:
+        memory_id = str(conversation_json["id"])
+        self.rows[memory_id] = conversation_json
+        return memory_id
+
+    def is_fully_indexed(self, conversation_id: str) -> bool:
+        return conversation_id in self.rows
+
+    def get(self, memory_id: str) -> dict[str, object] | None:
+        return self.rows.get(memory_id)
+
+    def get_many(self, ids: list[str]) -> dict[str, dict[str, object]]:
+        return {id_: self.rows[id_] for id_ in ids if id_ in self.rows}
 
 
 def _config(tmp_path: Path, *, auth: str = "none") -> dict[str, Any]:
@@ -29,6 +61,45 @@ def _config(tmp_path: Path, *, auth: str = "none") -> dict[str, Any]:
 
 def _client(tmp_path: Path) -> TestClient:
     return TestClient(create_app(config=_config(tmp_path)))
+
+
+def _sqlite_agent_client(tmp_path: Path) -> TestClient:
+    store = SQLiteMetadataStore(tmp_path / "metadata.sqlite3")
+    runtime = mvp_ingestion.RuntimeDependencies(
+        embedding_provider=mvp_ingestion.LocalEmbeddingProvider(),
+        metadata_store=store,
+        vector_store=InMemoryVectorStore(dimension=32),
+        health_state={
+            "mode": "ok",
+            "metadata_provider": "sqlite",
+            "vector_provider": "memory",
+            "vector_fallback_active": False,
+            "embedding": {
+                "provider": "local",
+                "model": "local-deterministic-hash",
+                "dimension": 32,
+            },
+            "embedding_health": {
+                "provider": "local",
+                "model": "local-deterministic-hash",
+                "dimension": 32,
+                "status": "ok",
+                "live_probe": False,
+                "mode": "configuration",
+            },
+        },
+        allow_trusted_appends=True,
+    )
+    agent = MVPIngestionAgent(config=_config(tmp_path), runtime=runtime)
+    return TestClient(create_app(config=_config(tmp_path), ingestion_agent=agent))
+
+
+def _mcp_transport_client(agent: MVPIngestionAgent) -> TestClient:
+    app = create_app(
+        config={"interfaces": {"api": False, "mcp": True}},
+        ingestion_agent=agent,
+    )
+    return TestClient(app)
 
 
 def _auth_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
@@ -126,6 +197,62 @@ def _call_tool(
     return _tool_payload(response)
 
 
+def test_mcp_transport_keeps_read_session_responsive_during_slow_insert(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime = mvp_ingestion.RuntimeDependencies(
+        embedding_provider=_StubEmbedder(),
+        metadata_store=_StubMetadataStore(),
+        vector_store=InMemoryVectorStore(dimension=32),
+        health_state={"mode": "ok", "vector_fallback_active": False},
+    )
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=runtime)
+    insert_started = threading.Event()
+
+    def slow_ingest_messages(*_args: object, **_kwargs: object) -> dict[str, object]:
+        insert_started.set()
+        time.sleep(0.3)
+        return {"status": "ok", "id": "d9fd4c95-9cb3-4fd5-b967-3027f8863210"}
+
+    def fast_search(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {"status": "ok", "results": [], "cursor": None}
+
+    monkeypatch.setattr(agent._service, "ingest_messages", slow_ingest_messages)
+    monkeypatch.setattr(agent._service, "search", fast_search)
+
+    with _mcp_transport_client(agent) as client:
+        insert_headers = _initialize_mcp(client)
+        read_headers = _initialize_mcp(client)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            insert_future = executor.submit(
+                _call_tool,
+                client,
+                insert_headers,
+                request_id=2,
+                name="memory_insert",
+                arguments={"conversation_json": _conversation(text="slow mcp insert")},
+            )
+            assert insert_started.wait(timeout=1.0)
+
+            started_at = time.perf_counter()
+            search_result = _call_tool(
+                client,
+                read_headers,
+                request_id=2,
+                name="memory_search",
+                arguments={"query": "anything", "top_k": 5},
+            )
+            elapsed = time.perf_counter() - started_at
+
+            insert_result = insert_future.result(timeout=1.0)
+
+    assert elapsed < 0.2
+    assert search_result["status"] == "ok"
+    assert search_result["results"] == []
+    assert insert_result["status"] == "ok"
+
+
 def test_api_insert_then_mcp_retry_same_conversation_deduplicates(tmp_path: Path) -> None:
     payload = _conversation(text="Dedup API then MCP phrase is amber clasp.")
 
@@ -212,6 +339,54 @@ def test_api_initial_thread_then_mcp_append_by_upstream_thread_metadata(
         first_message["text"],
         second_message["text"],
     ]
+
+
+def test_concurrent_api_continuations_preserve_both_same_thread_appends(
+    tmp_path: Path,
+) -> None:
+    first_message = {"role": "user", "text": "thread concurrent first message"}
+    second_message = {"role": "assistant", "text": "thread concurrent codex append"}
+    third_message = {"role": "assistant", "text": "thread concurrent copilot append"}
+    initial = _conversation(
+        text="unused",
+        source="codex",
+        upstream_thread_id="thread-concurrent-append",
+        messages=[first_message],
+    )
+    codex_continuation = _conversation(
+        text="unused",
+        source="codex",
+        upstream_thread_id="thread-concurrent-append",
+        messages=[first_message, second_message],
+    )
+    copilot_continuation = _conversation(
+        text="unused",
+        source="codex",
+        upstream_thread_id="thread-concurrent-append",
+        messages=[first_message, third_message],
+    )
+    codex_continuation.pop("id")
+    copilot_continuation.pop("id")
+
+    with _sqlite_agent_client(tmp_path) as client:
+        initial_response = client.post("/memory/insert", json=initial)
+        assert initial_response.status_code == 200, initial_response.text
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [
+                executor.submit(client.post, "/memory/insert", json=codex_continuation),
+                executor.submit(client.post, "/memory/insert", json=copilot_continuation),
+            ]
+            append_responses = [future.result(timeout=5.0) for future in futures]
+
+        retrieve = client.post("/memory/retrieve", json={"id": initial["id"]})
+
+    assert [response.status_code for response in append_responses] == [200, 200]
+    assert sorted(response.json()["appended_messages"] for response in append_responses) == [1, 1]
+    assert retrieve.status_code == 200, retrieve.text
+    texts = [message["text"] for message in retrieve.json()["memory"]["messages"]]
+    assert texts[0] == first_message["text"]
+    assert set(texts[1:]) == {second_message["text"], third_message["text"]}
 
 
 def test_mcp_initial_thread_then_api_append_by_upstream_thread_metadata(
