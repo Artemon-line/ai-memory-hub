@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import asyncio
+import threading
+import time
+
 import pytest
 
 from memory.ingestion import mvp_ingestion
@@ -257,6 +261,47 @@ async def test_mcp_tool_handlers_insert_search_retrieve() -> None:
     assert budgeted_ask_result["context_tokens_used"] <= 100
     assert budgeted_ask_result["chunks_selected"] == 1
     assert ctx.logs == []
+
+
+@pytest.mark.asyncio
+async def test_mcp_tool_handlers_keep_reads_responsive_during_slow_insert(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
+    handlers = build_tool_handlers(agent)
+    insert_started = threading.Event()
+
+    def slow_ingest_messages(*_args, **_kwargs) -> dict[str, object]:
+        insert_started.set()
+        time.sleep(0.25)
+        return {"status": "ok", "id": "d9fd4c95-9cb3-4fd5-b967-3027f8863210"}
+
+    def search(*_args, **_kwargs) -> dict[str, object]:
+        return {"status": "ok", "results": [], "cursor": None}
+
+    monkeypatch.setattr(agent._service, "ingest_messages", slow_ingest_messages)
+    monkeypatch.setattr(agent._service, "search", search)
+
+    started_at = time.perf_counter()
+    insert_task = asyncio.create_task(handlers["memory_insert"](_conversation()))
+    await asyncio.sleep(0)
+
+    assert insert_started.is_set()
+    assert time.perf_counter() - started_at < 0.1
+    search_result = await asyncio.wait_for(
+        handlers["memory_search"]("hello", top_k=5),
+        timeout=0.2,
+    )
+    assert search_result["status"] == "ok"
+    assert search_result["results"] == []
+    assert await insert_task == {
+        "status": "ok",
+        "id": "d9fd4c95-9cb3-4fd5-b967-3027f8863210",
+        "results": [],
+        "cursor": None,
+        "error_code": None,
+        "error_message": None,
+    }
 
 
 @pytest.mark.asyncio

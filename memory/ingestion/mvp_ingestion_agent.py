@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+import asyncio
+from collections.abc import Callable
+from threading import RLock
+from typing import Any, Dict, Optional, TypeVar
 
 import jsonschema
 
@@ -8,6 +11,8 @@ from memory.config import HubConfig
 from memory.ingestion import mvp_ingestion
 from memory.ingestion.base_agent import BaseIngestionAgent
 from memory.ingestion.thread_models import SearchResultMode
+
+_T = TypeVar("_T")
 
 
 class MVPIngestionAgent(BaseIngestionAgent):
@@ -22,6 +27,22 @@ class MVPIngestionAgent(BaseIngestionAgent):
         super().__init__(config)
         configured_runtime = mvp_ingestion.configure_runtime(runtime=runtime, config=config)
         self._service = mvp_ingestion.MVPIngestionService(configured_runtime)
+        self._memory_write_lock = RLock()
+
+    async def _call_service(
+        self,
+        operation: Callable[..., _T],
+        *args: Any,
+        memory_write: bool = False,
+        **kwargs: Any,
+    ) -> _T:
+        def call() -> _T:
+            if memory_write:
+                with self._memory_write_lock:
+                    return operation(*args, **kwargs)
+            return operation(*args, **kwargs)
+
+        return await asyncio.to_thread(call)
 
     async def ingest_messages(
         self,
@@ -32,8 +53,12 @@ class MVPIngestionAgent(BaseIngestionAgent):
     ) -> Dict[str, Any]:
         payload = self.preprocess_messages(conversation_json)
         try:
-            result = self._service.ingest_messages(
-                payload, owner_id=owner_id, project_id=project_id
+            result = await self._call_service(
+                self._service.ingest_messages,
+                payload,
+                owner_id=owner_id,
+                project_id=project_id,
+                memory_write=True,
             )
         except jsonschema.ValidationError:
             raise
@@ -47,8 +72,12 @@ class MVPIngestionAgent(BaseIngestionAgent):
         project_id: str | None = None,
     ) -> Dict[str, Any]:
         payload = self.preprocess_messages(conversation_json)
-        result = self._service.store_pending_review_memory(
-            payload, owner_id=owner_id, project_id=project_id
+        result = await self._call_service(
+            self._service.store_pending_review_memory,
+            payload,
+            owner_id=owner_id,
+            project_id=project_id,
+            memory_write=True,
         )
         return self.postprocess_result(result)
 
@@ -67,7 +96,8 @@ class MVPIngestionAgent(BaseIngestionAgent):
         tags: list[str] | tuple[str, ...] | None = None,
         thread_id: str | None = None,
     ) -> Dict[str, Any]:
-        return self._service.search(
+        return await self._call_service(
+            self._service.search,
             query=query,
             top_k=top_k,
             result_mode=result_mode,
@@ -89,7 +119,8 @@ class MVPIngestionAgent(BaseIngestionAgent):
         project_id: str | None = None,
         memory_status: str = "active",
     ) -> Optional[Dict[str, Any]]:
-        return self._service.retrieve(
+        return await self._call_service(
+            self._service.retrieve,
             memory_id,
             owner_id=owner_id,
             project_id=project_id,
@@ -112,7 +143,8 @@ class MVPIngestionAgent(BaseIngestionAgent):
         tags: list[str] | tuple[str, ...] | None = None,
         thread_id: str | None = None,
     ) -> Dict[str, Any]:
-        return self._service.ask(
+        return await self._call_service(
+            self._service.ask,
             question=question,
             top_k=top_k,
             max_context_tokens=max_context_tokens,
@@ -128,7 +160,7 @@ class MVPIngestionAgent(BaseIngestionAgent):
         )
 
     async def health(self) -> Dict[str, Any]:
-        return self._service.runtime_health()
+        return await self._call_service(self._service.runtime_health)
 
     async def fact_search(
         self,
@@ -149,7 +181,8 @@ class MVPIngestionAgent(BaseIngestionAgent):
         freshness_from: str | None = None,
         freshness_to: str | None = None,
     ) -> Dict[str, Any]:
-        return self._service.fact_search(
+        return await self._call_service(
+            self._service.fact_search,
             subject=subject,
             predicate=predicate,
             include_superseded=include_superseded,
@@ -185,7 +218,8 @@ class MVPIngestionAgent(BaseIngestionAgent):
         freshness_from: str | None = None,
         freshness_to: str | None = None,
     ) -> Dict[str, Any]:
-        return self._service.profile_get(
+        return await self._call_service(
+            self._service.profile_get,
             subject=subject,
             owner_id=owner_id,
             project_id=project_id,
@@ -210,37 +244,49 @@ class MVPIngestionAgent(BaseIngestionAgent):
         owner_id: str | None = None,
         project_id: str | None = None,
     ) -> Dict[str, Any]:
-        return self._service.fact_supersede(
+        return await self._call_service(
+            self._service.fact_supersede,
             fact_id,
             superseded_by,
             owner_id=owner_id,
             project_id=project_id,
+            memory_write=True,
         )
 
     async def approve_pending_memory(
         self, memory_id: str, *, owner_id: str | None = None, project_id: str | None = None
     ) -> Dict[str, Any]:
-        return self._service.approve_pending_memory(
-            memory_id, owner_id=owner_id, project_id=project_id
+        return await self._call_service(
+            self._service.approve_pending_memory,
+            memory_id,
+            owner_id=owner_id,
+            project_id=project_id,
+            memory_write=True,
         )
 
     async def reject_pending_memory(
         self, memory_id: str, *, owner_id: str | None = None, project_id: str | None = None
     ) -> Dict[str, Any]:
-        return self._service.reject_pending_memory(
-            memory_id, owner_id=owner_id, project_id=project_id
+        return await self._call_service(
+            self._service.reject_pending_memory,
+            memory_id,
+            owner_id=owner_id,
+            project_id=project_id,
+            memory_write=True,
         )
 
     async def project_list(self, *, owner_id: str | None = None) -> Dict[str, Any]:
-        return self._service.project_list(owner_id=owner_id)
+        return await self._call_service(self._service.project_list, owner_id=owner_id)
 
     async def project_default_get(self, *, owner_id: str | None = None) -> Dict[str, Any]:
-        return self._service.project_default_get(owner_id=owner_id)
+        return await self._call_service(self._service.project_default_get, owner_id=owner_id)
 
     async def project_get(
         self, project_id: str, *, owner_id: str | None = None
     ) -> Dict[str, Any]:
-        return self._service.project_get(project_id, owner_id=owner_id)
+        return await self._call_service(
+            self._service.project_get, project_id, owner_id=owner_id
+        )
 
     async def authenticate_bearer_token(self, token: str) -> str | None:
         return self._service.authenticate_bearer_token(token)
