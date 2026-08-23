@@ -39,6 +39,7 @@ The public docs are now split into three kinds of pages:
 | [Real-client MCP smoke plan](real_client_mcp_smoke_plan.md) | Real-client verification strategy. |
 | [OpenClaw native MCP setup](openclaw_native_mcp_setup.md) | OpenClaw-specific setup. |
 | [MCP utility compliance plan](mcp_utility_compliance_plan.md) | MCP utility behavior and compliance. |
+| [MCP response format plan](improvements/mcp_response_format_plan.md) | P0 pre-release enum-based concise and detailed MCP read responses. |
 | [MCP authorization compliance plan](bearer_api_key_auth_plan.md) | Bearer token and OAuth resource metadata work. |
 | [Google OAuth Connect UI plan](improvements/google_oauth_connect_ui_plan.md) | Google sign-in, web sessions, hub-issued MCP tokens, and client setup UI. |
 | [Bruno integration test plan](bruno_integration_test_plan.md) | Bruno API/MCP smoke coverage. |
@@ -63,7 +64,7 @@ The public docs are now split into three kinds of pages:
 ## Improvement Backlog
 
 The [improvement plans](improvements.md) collect focused follow-up work for
-client feedback, MCP result shapes, retrieval precision, context building,
+client feedback, MCP result shapes, response formats, retrieval precision, context building,
 conversation grouping, memory quality, edge-case coverage, explicit save intent,
 handoff memory, Google OAuth connect UX, vector database evaluation, and Neo4j
 Aura graph memory.

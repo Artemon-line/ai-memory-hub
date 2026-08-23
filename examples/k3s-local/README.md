@@ -1,6 +1,6 @@
-# K3s Local Bearer Stack
+# Kubernetes Local Bearer Stack
 
-This example runs ai-memory-hub on Kubernetes/K3s with:
+This example runs ai-memory-hub on Kubernetes with:
 
 - Postgres metadata storage
 - PGVector vector storage
@@ -9,9 +9,30 @@ This example runs ai-memory-hub on Kubernetes/K3s with:
 - no public tunnel
 - OpenTelemetry disabled by default
 
-K3s is Kubernetes, so these manifests use ordinary `kubectl` commands. On a K3s
-node, `sudo k3s kubectl ...` is equivalent to `kubectl ...` when you have not
-copied the kubeconfig to your user account.
+The manifest is ordinary Kubernetes YAML. It is written for a private LAN/VPN
+deployment on a single node or small cluster, and it also works on K3s with the
+minor command and image-loading adjustments below.
+
+## K3s Adjustments
+
+K3s is a lightweight Kubernetes distribution. Use the same `k8s.yaml` manifest,
+but replace `kubectl` with `sudo k3s kubectl` if you have not copied the K3s
+kubeconfig to your user account:
+
+```bash
+sudo k3s kubectl apply -f k8s.rendered.yaml
+sudo k3s kubectl -n ai-memory-hub rollout status deploy/ai-memory-hub
+```
+
+If you build the image directly on the K3s node, import it into K3s containerd:
+
+```bash
+docker build -t ai-memory-hub:k3s-local -f examples/k3s-local/Containerfile .
+docker save ai-memory-hub:k3s-local | sudo k3s ctr images import -
+```
+
+On a non-K3s Kubernetes cluster, push the image to a registry reachable by the
+cluster and update `image: ai-memory-hub:k3s-local` in `k8s.yaml`.
 
 ## Files
 
@@ -25,15 +46,15 @@ Postgres DSNs. Do not put rendered secrets in git.
 
 ## Build The Image
 
-Build the image on the K3s node, then import it into K3s containerd:
+Build the image for the cluster:
 
 ```bash
 docker build -t ai-memory-hub:k3s-local -f examples/k3s-local/Containerfile .
-docker save ai-memory-hub:k3s-local | sudo k3s ctr images import -
 ```
 
-If you build on another machine, push the image to a registry your Pi can pull
-from and change `image: ai-memory-hub:k3s-local` in `k8s.yaml`.
+For K3s, import the image as shown above. For other Kubernetes clusters, push
+the image to a registry your nodes can pull from and change
+`image: ai-memory-hub:k3s-local` in `k8s.yaml`.
 
 ## Render Secrets
 
@@ -54,17 +75,20 @@ secret, and mounted hub config.
 
 ## Deploy
 
+Use `kubectl` for a standard Kubernetes cluster, or `sudo k3s kubectl` on a K3s
+node when needed.
+
 ```bash
-sudo k3s kubectl apply -f k8s.rendered.yaml
-sudo k3s kubectl -n ai-memory-hub rollout status deploy/postgres
-sudo k3s kubectl -n ai-memory-hub rollout status deploy/ai-memory-hub
-sudo k3s kubectl -n ai-memory-hub get pods,svc,pvc
+kubectl apply -f k8s.rendered.yaml
+kubectl -n ai-memory-hub rollout status deploy/postgres
+kubectl -n ai-memory-hub rollout status deploy/ai-memory-hub
+kubectl -n ai-memory-hub get pods,svc,pvc
 ```
 
 Check readiness from the Pi:
 
 ```bash
-sudo k3s kubectl -n ai-memory-hub port-forward svc/ai-memory-hub 8000:8000
+kubectl -n ai-memory-hub port-forward svc/ai-memory-hub 8000:8000
 curl -fsS http://127.0.0.1:8000/ready
 ```
 
@@ -73,12 +97,12 @@ curl -fsS http://127.0.0.1:8000/ready
 Run the admin CLI inside the hub pod. The token is printed once.
 
 ```bash
-sudo k3s kubectl -n ai-memory-hub exec deploy/ai-memory-hub -- \
+kubectl -n ai-memory-hub exec deploy/ai-memory-hub -- \
   /app/.venv/bin/aim admin user create tyran \
   --config /app/config.yaml \
   --display-name "Tyran"
 
-sudo k3s kubectl -n ai-memory-hub exec deploy/ai-memory-hub -- \
+kubectl -n ai-memory-hub exec deploy/ai-memory-hub -- \
   /app/.venv/bin/aim admin token create \
   --config /app/config.yaml \
   --user tyran \
@@ -102,10 +126,10 @@ Start private. For one-off testing, SSH or `kubectl port-forward` is safest.
 For LAN/VPN access from laptop agents, expose only the hub service:
 
 ```bash
-sudo k3s kubectl -n ai-memory-hub patch svc ai-memory-hub \
+kubectl -n ai-memory-hub patch svc ai-memory-hub \
   -p '{"spec":{"type":"LoadBalancer"}}'
 
-sudo k3s kubectl -n ai-memory-hub get svc ai-memory-hub
+kubectl -n ai-memory-hub get svc ai-memory-hub
 ```
 
 Then point agents at:
@@ -154,8 +178,8 @@ table or run a planned reindex flow.
 
 ## Optional: Observability
 
-The default K3s config keeps tracing and metrics disabled. That is intentional
-for a Pi-sized always-on node. Start with:
+The default local Kubernetes config keeps tracing and metrics disabled. That is
+intentional for a Pi-sized or small always-on node. Start with:
 
 ```text
 GET /health
@@ -183,7 +207,7 @@ you know you need them.
 ## Cleanup
 
 ```bash
-sudo k3s kubectl delete namespace ai-memory-hub
+kubectl delete namespace ai-memory-hub
 ```
 
 This removes the namespace and its PVCs. Back up first if the data matters.

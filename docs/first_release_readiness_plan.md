@@ -210,6 +210,20 @@ release requirements:
   - browser extensions are future/separate repos;
   - UI and SDKs are future work.
 
+## P0: Agent-Facing MCP Response Formats
+
+Use `improvements/mcp_response_format_plan.md` as the source of truth.
+
+This is required before `v0.1.0` because MCP read tools are the main public
+agent contract. Agent recall should default to concise, high-signal payloads
+without forcing clients to parse full stored conversations and internal metadata.
+
+- [ ] Add `response_format` as an enum, not a boolean, to the MCP read tools.
+- [ ] Preserve the current detailed output as `response_format="detailed"`.
+- [ ] Provide concise output for search, ask, facts, and profile reads.
+- [ ] Update agent docs and real-client smoke coverage to exercise concise
+      output before stable release.
+
 ## P0: Release Candidate Drill
 
 Before publishing `v0.1.0`, run one release-candidate rehearsal:
@@ -290,6 +304,7 @@ Use this checklist for the release PR:
 - [x] Version/tag validation added.
 - [x] Release checklist added.
 - [x] README and docs reviewed.
+- [ ] P0 MCP response-format plan completed.
 - [ ] Branch protection enabled.
 - [ ] Required checks selected.
 - [ ] `main` is green.
