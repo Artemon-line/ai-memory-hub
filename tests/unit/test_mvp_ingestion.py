@@ -476,6 +476,47 @@ def test_trusted_append_continues_same_upstream_thread_with_new_id() -> None:
     assert [row["chunk_index"] for row in vectors.rows] == [0, 1]
 
 
+def test_trusted_append_accepts_sibling_same_thread_continuation() -> None:
+    metadata, vectors = _configure_stubs(allow_trusted_appends=True)
+    base = _valid_conversation()
+    base["source"] = "opencode"
+    base["metadata"]["upstream_thread_id"] = "thread-sibling"
+    base["messages"] = [{"role": "user", "text": "first thread note"}]
+    mvp_ingestion.ingest_messages(base)
+
+    first_continuation = _valid_conversation()
+    first_continuation["id"] = "22222222-2222-4222-8222-222222222222"
+    first_continuation["source"] = "opencode"
+    first_continuation["metadata"]["upstream_thread_id"] = "thread-sibling"
+    first_continuation["messages"] = [
+        {"role": "user", "text": "first thread note"},
+        {"role": "assistant", "text": "codex continuation"},
+    ]
+    second_continuation = _valid_conversation()
+    second_continuation["id"] = "33333333-3333-4333-8333-333333333333"
+    second_continuation["source"] = "opencode"
+    second_continuation["metadata"]["upstream_thread_id"] = "thread-sibling"
+    second_continuation["messages"] = [
+        {"role": "user", "text": "first thread note"},
+        {"role": "assistant", "text": "copilot continuation"},
+    ]
+
+    first_result = mvp_ingestion.ingest_messages(first_continuation)
+    second_result = mvp_ingestion.ingest_messages(second_continuation)
+
+    assert first_result["id"] == base["id"]
+    assert first_result["appended_messages"] == 1
+    assert second_result["id"] == base["id"]
+    assert second_result["appended_messages"] == 1
+    stored = metadata.by_id[base["id"]]
+    assert [message["text"] for message in stored["messages"]] == [
+        "first thread note",
+        "codex continuation",
+        "copilot continuation",
+    ]
+    assert [row["chunk_index"] for row in vectors.rows] == [0, 1, 2]
+
+
 def test_ingest_messages_rejects_same_id_append_without_trust() -> None:
     _configure_stubs()
     mvp_ingestion.ingest_messages(_valid_conversation())

@@ -1498,14 +1498,20 @@ def _detect_new_messages(
         raise ValueError("duplicate_conflict: stored or incoming messages are invalid")
     existing_hashes = [str(message.get("hash", "")) for message in existing_messages]
     incoming_hashes = [str(message.get("hash", "")) for message in incoming_messages]
+    shared_prefix_len = 0
+    for existing_hash, incoming_hash in zip(existing_hashes, incoming_hashes, strict=False):
+        if existing_hash != incoming_hash:
+            break
+        shared_prefix_len += 1
     common_prefix_len = min(len(existing_hashes), len(incoming_hashes))
-    if incoming_hashes[:common_prefix_len] != existing_hashes[:common_prefix_len]:
+    if shared_prefix_len == 0 and common_prefix_len > 0:
         raise ValueError("duplicate_conflict: same thread has conflicting message history")
-    if len(incoming_hashes) <= len(existing_hashes):
+    if shared_prefix_len == common_prefix_len and len(incoming_hashes) <= len(existing_hashes):
         return []
     seen = set(existing_hashes)
     new_messages: list[dict[str, Any]] = []
-    for message in incoming_messages[len(existing_hashes) :]:
+    suffix_start = len(existing_hashes) if shared_prefix_len == common_prefix_len else shared_prefix_len
+    for message in incoming_messages[suffix_start:]:
         message_hash = str(message["hash"])
         if message_hash not in seen:
             new_messages.append(message)
