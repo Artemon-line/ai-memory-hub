@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import asyncio
+import threading
+import time
+
 import jsonschema
 import pytest
 
@@ -83,6 +87,65 @@ async def test_mvp_ingestion_agent_ingest_messages() -> None:
 
     assert result["status"] == "ok"
     assert result["chunks"] == 1
+
+
+@pytest.mark.asyncio
+async def test_mvp_ingestion_agent_offloads_blocking_insert(monkeypatch: pytest.MonkeyPatch) -> None:
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
+    insert_started = threading.Event()
+
+    def slow_ingest_messages(*_args, **_kwargs) -> dict[str, object]:
+        insert_started.set()
+        time.sleep(0.25)
+        return {"status": "ok", "id": "slow-memory", "chunks": 1}
+
+    def search(*_args, **_kwargs) -> dict[str, object]:
+        return {"status": "ok", "results": []}
+
+    monkeypatch.setattr(agent._service, "ingest_messages", slow_ingest_messages)
+    monkeypatch.setattr(agent._service, "search", search)
+
+    started_at = time.perf_counter()
+    insert_task = asyncio.create_task(agent.ingest_messages(_valid_conversation()))
+    await asyncio.sleep(0)
+
+    assert insert_started.is_set()
+    assert time.perf_counter() - started_at < 0.1
+    assert await asyncio.wait_for(agent.search("hello"), timeout=0.2) == {
+        "status": "ok",
+        "results": [],
+    }
+    assert await insert_task == {"status": "ok", "id": "slow-memory", "chunks": 1}
+
+
+@pytest.mark.asyncio
+async def test_mvp_ingestion_agent_serializes_memory_writes(monkeypatch: pytest.MonkeyPatch) -> None:
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
+    state_lock = threading.Lock()
+    active_writes = 0
+    max_active_writes = 0
+
+    def slow_ingest_messages(conversation_json, **_kwargs) -> dict[str, object]:
+        nonlocal active_writes, max_active_writes
+        with state_lock:
+            active_writes += 1
+            max_active_writes = max(max_active_writes, active_writes)
+        time.sleep(0.05)
+        with state_lock:
+            active_writes -= 1
+        return {"status": "ok", "id": conversation_json["id"], "chunks": 1}
+
+    monkeypatch.setattr(agent._service, "ingest_messages", slow_ingest_messages)
+    first = _valid_conversation()
+    second = {**_valid_conversation(), "id": "2f39f5cc-6256-4ca9-a9b2-6211bc6e3702"}
+
+    results = await asyncio.gather(
+        agent.ingest_messages(first),
+        agent.ingest_messages(second),
+    )
+
+    assert [result["id"] for result in results] == [first["id"], second["id"]]
+    assert max_active_writes == 1
 
 
 @pytest.mark.asyncio
