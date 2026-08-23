@@ -849,6 +849,27 @@ class MVPIngestionService:
     def revoke_auth_token(self, token_id: str) -> dict[str, object] | None:
         return self._call(revoke_auth_token, token_id)
 
+    def create_oauth_client(self, **kwargs: Any) -> dict[str, object]:
+        return self._call(create_oauth_client, **kwargs)
+
+    def oauth_client(self, client_id: str) -> dict[str, object] | None:
+        return self._call(oauth_client, client_id)
+
+    def create_oauth_refresh_token(self, **kwargs: Any) -> dict[str, object]:
+        return self._call(create_oauth_refresh_token, **kwargs)
+
+    def oauth_refresh_token(self, refresh_token: str) -> dict[str, object] | None:
+        return self._call(oauth_refresh_token, refresh_token)
+
+    def consume_oauth_refresh_token(self, refresh_token: str) -> dict[str, object] | None:
+        return self._call(consume_oauth_refresh_token, refresh_token)
+
+    def revoke_oauth_refresh_token(self, refresh_token: str) -> bool:
+        return self._call(revoke_oauth_refresh_token, refresh_token)
+
+    def revoke_oauth_refresh_token_family(self, token_family_id: str) -> bool:
+        return self._call(revoke_oauth_refresh_token_family, token_family_id)
+
 
 def _runtime() -> RuntimeDependencies:
     global _RUNTIME
@@ -4059,6 +4080,85 @@ def revoke_auth_token(token_id: str) -> dict[str, object] | None:
     if not hasattr(store, "revoke_auth_token"):
         return None
     return store.revoke_auth_token(token_id)
+
+
+def create_oauth_client(
+    *,
+    client_id: str,
+    client_name: str,
+    redirect_uris: list[str],
+    expires_at: str,
+) -> dict[str, object]:
+    store = _runtime().metadata_store
+    if not hasattr(store, "create_oauth_client"):
+        raise NotImplementedError("metadata store does not support oauth clients")
+    return store.create_oauth_client(
+        client_id=client_id,
+        client_name=client_name,
+        redirect_uris=redirect_uris,
+        expires_at=expires_at,
+    )
+
+
+def oauth_client(client_id: str) -> dict[str, object] | None:
+    store = _runtime().metadata_store
+    if not hasattr(store, "oauth_client"):
+        return None
+    return store.oauth_client(client_id)
+
+
+def create_oauth_refresh_token(
+    *,
+    refresh_token: str,
+    token_family_id: str,
+    client_id: str,
+    owner_id: str,
+    scopes: list[str],
+    resource: str,
+    access_token_id: str | None,
+    expires_at: str,
+) -> dict[str, object]:
+    store = _runtime().metadata_store
+    if not hasattr(store, "create_oauth_refresh_token"):
+        raise NotImplementedError("metadata store does not support oauth refresh tokens")
+    return store.create_oauth_refresh_token(
+        refresh_token=refresh_token,
+        token_family_id=token_family_id,
+        client_id=client_id,
+        owner_id=owner_id,
+        scopes=scopes,
+        resource=resource,
+        access_token_id=access_token_id,
+        expires_at=expires_at,
+    )
+
+
+def oauth_refresh_token(refresh_token: str) -> dict[str, object] | None:
+    store = _runtime().metadata_store
+    if not hasattr(store, "oauth_refresh_token"):
+        return None
+    return store.oauth_refresh_token(refresh_token)
+
+
+def consume_oauth_refresh_token(refresh_token: str) -> dict[str, object] | None:
+    store = _runtime().metadata_store
+    if not hasattr(store, "consume_oauth_refresh_token"):
+        return None
+    return store.consume_oauth_refresh_token(refresh_token)
+
+
+def revoke_oauth_refresh_token(refresh_token: str) -> bool:
+    store = _runtime().metadata_store
+    if not hasattr(store, "revoke_oauth_refresh_token"):
+        return False
+    return bool(store.revoke_oauth_refresh_token(refresh_token))
+
+
+def revoke_oauth_refresh_token_family(token_family_id: str) -> bool:
+    store = _runtime().metadata_store
+    if not hasattr(store, "revoke_oauth_refresh_token_family"):
+        return False
+    return bool(store.revoke_oauth_refresh_token_family(token_family_id))
 
 
 def _fact_answer_text(

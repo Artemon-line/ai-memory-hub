@@ -146,6 +146,40 @@ CREATE INDEX IF NOT EXISTS idx_web_sessions_user
 ON web_sessions(user_id)
 WHERE revoked_at IS NULL
 """
+CREATE_OAUTH_CLIENTS_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS oauth_clients (
+    client_id TEXT PRIMARY KEY,
+    client_name TEXT NOT NULL,
+    redirect_uris JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL,
+    revoked_at TIMESTAMPTZ NULL
+)
+"""
+CREATE_OAUTH_CLIENTS_LIVE_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_oauth_clients_live
+ON oauth_clients(expires_at)
+WHERE revoked_at IS NULL
+"""
+CREATE_OAUTH_REFRESH_TOKENS_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS oauth_refresh_tokens (
+    refresh_token_hash TEXT PRIMARY KEY,
+    token_family_id TEXT NOT NULL,
+    client_id TEXT NOT NULL REFERENCES oauth_clients(client_id),
+    owner_id TEXT NOT NULL REFERENCES users(id),
+    scopes JSONB NOT NULL,
+    resource TEXT NOT NULL,
+    access_token_id TEXT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL,
+    consumed_at TIMESTAMPTZ NULL,
+    revoked_at TIMESTAMPTZ NULL
+)
+"""
+CREATE_OAUTH_REFRESH_TOKENS_FAMILY_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_family
+ON oauth_refresh_tokens(token_family_id)
+"""
 CREATE_PROJECTS_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS projects (
     id TEXT PRIMARY KEY,
@@ -346,6 +380,10 @@ class PostgresMetadataStore:
                 cur.execute(CREATE_OAUTH_IDENTITIES_USER_INDEX_SQL)
                 cur.execute(CREATE_WEB_SESSIONS_TABLE_SQL)
                 cur.execute(CREATE_WEB_SESSIONS_USER_INDEX_SQL)
+                cur.execute(CREATE_OAUTH_CLIENTS_TABLE_SQL)
+                cur.execute(CREATE_OAUTH_CLIENTS_LIVE_INDEX_SQL)
+                cur.execute(CREATE_OAUTH_REFRESH_TOKENS_TABLE_SQL)
+                cur.execute(CREATE_OAUTH_REFRESH_TOKENS_FAMILY_INDEX_SQL)
                 cur.execute(CREATE_PROJECTS_TABLE_SQL)
                 cur.execute(CREATE_PROJECT_MEMBERSHIPS_TABLE_SQL)
                 cur.execute(CREATE_DEFAULT_PROJECT_OWNER_INDEX_SQL)
@@ -724,6 +762,203 @@ class PostgresMetadataStore:
                 )
                 row = cur.fetchone()
         return self._token_from_row(row) if row is not None else None
+
+    def create_oauth_client(
+        self,
+        *,
+        client_id: str,
+        client_name: str,
+        redirect_uris: list[str],
+        expires_at: str,
+    ) -> dict[str, Any]:
+        handle = _validate_token_lookup(client_id)
+        uris_json = json.dumps([str(uri) for uri in redirect_uris], separators=(",", ":"))
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO oauth_clients
+                        (client_id, client_name, redirect_uris, expires_at)
+                    VALUES (%s, %s, %s::jsonb, %s)
+                    ON CONFLICT (client_id) DO UPDATE SET
+                        client_name = EXCLUDED.client_name,
+                        redirect_uris = EXCLUDED.redirect_uris,
+                        expires_at = EXCLUDED.expires_at,
+                        revoked_at = NULL
+                    """,
+                    (handle, str(client_name or "MCP client"), uris_json, expires_at),
+                )
+                cur.execute(
+                    """
+                    SELECT client_id, client_name, redirect_uris::text,
+                           created_at::text, expires_at::text, revoked_at::text
+                    FROM oauth_clients
+                    WHERE client_id = %s
+                    """,
+                    (handle,),
+                )
+                row = cur.fetchone()
+        if row is None:
+            raise RuntimeError("oauth client could not be created")
+        return self._oauth_client_from_row(row)
+
+    def oauth_client(self, client_id: str) -> dict[str, Any] | None:
+        handle = _validate_token_lookup(client_id)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT client_id, client_name, redirect_uris::text,
+                           created_at::text, expires_at::text, revoked_at::text
+                    FROM oauth_clients
+                    WHERE client_id = %s
+                      AND revoked_at IS NULL
+                      AND expires_at > NOW()
+                    """,
+                    (handle,),
+                )
+                row = cur.fetchone()
+        return self._oauth_client_from_row(row) if row is not None else None
+
+    def create_oauth_refresh_token(
+        self,
+        *,
+        refresh_token: str,
+        token_family_id: str,
+        client_id: str,
+        owner_id: str,
+        scopes: list[str],
+        resource: str,
+        access_token_id: str | None,
+        expires_at: str,
+    ) -> dict[str, Any]:
+        token_hash = _hash_bearer_token(refresh_token)
+        family_id = _validate_token_lookup(token_family_id)
+        client = _validate_token_lookup(client_id)
+        owner = _validate_owner_id(owner_id)
+        scopes_json = json.dumps(_normalize_token_scopes(scopes), separators=(",", ":"))
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO users (id, display_name)
+                    VALUES (%s, %s)
+                    ON CONFLICT (id) DO NOTHING
+                    """,
+                    (owner, owner),
+                )
+                self._ensure_default_project(cur, owner)
+                cur.execute(
+                    """
+                    INSERT INTO oauth_refresh_tokens
+                        (refresh_token_hash, token_family_id, client_id, owner_id, scopes,
+                         resource, access_token_id, expires_at)
+                    VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s, %s)
+                    """,
+                    (
+                        token_hash,
+                        family_id,
+                        client,
+                        owner,
+                        scopes_json,
+                        str(resource),
+                        access_token_id,
+                        expires_at,
+                    ),
+                )
+                cur.execute(
+                    """
+                    SELECT refresh_token_hash, token_family_id, client_id, owner_id,
+                           scopes::text, resource, access_token_id, created_at::text,
+                           expires_at::text, consumed_at::text, revoked_at::text
+                    FROM oauth_refresh_tokens
+                    WHERE refresh_token_hash = %s
+                    """,
+                    (token_hash,),
+                )
+                row = cur.fetchone()
+        if row is None:
+            raise RuntimeError("oauth refresh token could not be created")
+        return self._oauth_refresh_token_from_row(row)
+
+    def oauth_refresh_token(self, refresh_token: str) -> dict[str, Any] | None:
+        token_hash = _hash_bearer_token(refresh_token)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT refresh_token_hash, token_family_id, client_id, owner_id,
+                           scopes::text, resource, access_token_id, created_at::text,
+                           expires_at::text, consumed_at::text, revoked_at::text
+                    FROM oauth_refresh_tokens
+                    WHERE refresh_token_hash = %s
+                    """,
+                    (token_hash,),
+                )
+                row = cur.fetchone()
+        return self._oauth_refresh_token_from_row(row) if row is not None else None
+
+    def consume_oauth_refresh_token(self, refresh_token: str) -> dict[str, Any] | None:
+        token_hash = _hash_bearer_token(refresh_token)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE oauth_refresh_tokens
+                    SET consumed_at = NOW()
+                    WHERE refresh_token_hash = %s
+                      AND consumed_at IS NULL
+                      AND revoked_at IS NULL
+                      AND expires_at > NOW()
+                    """,
+                    (token_hash,),
+                )
+                cur.execute(
+                    """
+                    SELECT refresh_token_hash, token_family_id, client_id, owner_id,
+                           scopes::text, resource, access_token_id, created_at::text,
+                           expires_at::text, consumed_at::text, revoked_at::text
+                    FROM oauth_refresh_tokens
+                    WHERE refresh_token_hash = %s
+                    """,
+                    (token_hash,),
+                )
+                row = cur.fetchone()
+        return self._oauth_refresh_token_from_row(row) if row is not None else None
+
+    def revoke_oauth_refresh_token_family(self, token_family_id: str) -> bool:
+        family_id = _validate_token_lookup(token_family_id)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE auth_tokens
+                    SET revoked_at = NOW()
+                    WHERE token_id IN (
+                        SELECT access_token_id
+                        FROM oauth_refresh_tokens
+                        WHERE token_family_id = %s
+                          AND access_token_id IS NOT NULL
+                    )
+                    """,
+                    (family_id,),
+                )
+                cur.execute(
+                    """
+                    UPDATE oauth_refresh_tokens
+                    SET revoked_at = NOW()
+                    WHERE token_family_id = %s
+                      AND revoked_at IS NULL
+                    """,
+                    (family_id,),
+                )
+                return bool(cur.rowcount)
+
+    def revoke_oauth_refresh_token(self, refresh_token: str) -> bool:
+        record = self.oauth_refresh_token(refresh_token)
+        if record is None:
+            return False
+        return self.revoke_oauth_refresh_token_family(str(record["token_family_id"]))
 
     def ensure_default_project(self, owner_id: str | None) -> dict[str, Any]:
         owner = _validate_owner_id(owner_id) if owner_id is not None else None
@@ -1749,6 +1984,31 @@ class PostgresMetadataStore:
             "last_seen_at": str(row[4]),
             "expires_at": str(row[5]),
             "revoked_at": row[6],
+        }
+
+    def _oauth_client_from_row(self, row: Any) -> dict[str, Any]:
+        return {
+            "client_id": str(row[0]),
+            "client_name": str(row[1]),
+            "redirect_uris": json.loads(str(row[2])),
+            "created_at": str(row[3]),
+            "expires_at": str(row[4]),
+            "revoked_at": row[5],
+        }
+
+    def _oauth_refresh_token_from_row(self, row: Any) -> dict[str, Any]:
+        return {
+            "refresh_token_hash": str(row[0]),
+            "token_family_id": str(row[1]),
+            "client_id": str(row[2]),
+            "owner_id": str(row[3]),
+            "scopes": _parse_token_scopes(row[4]),
+            "resource": str(row[5]),
+            "access_token_id": row[6],
+            "created_at": str(row[7]),
+            "expires_at": str(row[8]),
+            "consumed_at": row[9],
+            "revoked_at": row[10],
         }
 
     def _project_member_from_row(self, row: Any) -> dict[str, Any]:

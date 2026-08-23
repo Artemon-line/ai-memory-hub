@@ -70,6 +70,8 @@ api:
       - https://YOUR-NGROK-DOMAIN.ngrok-free.app
     resource: https://YOUR-NGROK-DOMAIN.ngrok-free.app/mcp
     jwt_secret_env: AMH_OAUTH_JWT_SECRET
+    client_registration_ttl_seconds: 86400
+    refresh_token_ttl_seconds: 2592000
     scopes_supported:
       - memory:read
       - memory:write

@@ -105,6 +105,8 @@ Containerfiles so they install only the extras needed by that example.
 - Supports multilingual memory when the configured embedding model supports the
   languages involved
 - Serves both FastAPI endpoints and an MCP server
+- Supports MCP OAuth setup through the Connect UI with durable dynamic clients,
+  rotating refresh tokens, and revocation
 - Runs locally, in containers, or against your selected storage backend
 
 ## Runtime Choices

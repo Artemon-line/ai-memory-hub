@@ -647,6 +647,8 @@ class OAuthConfig(BaseModel):
     audience: str = ""
     jwt_secret: str = ""
     jwt_secret_env: str = "AMH_OAUTH_JWT_SECRET"
+    client_registration_ttl_seconds: int = Field(default=86_400, ge=300)
+    refresh_token_ttl_seconds: int = Field(default=60 * 60 * 24 * 30, ge=300)
     scopes_supported: list[str] = Field(default_factory=lambda: ["memory:read", "memory:write"])
 
     @field_validator("authorization_servers")
