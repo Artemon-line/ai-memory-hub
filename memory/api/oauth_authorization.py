@@ -40,6 +40,7 @@ def register_oauth_authorization_routes(
     oauth: ConnectOAuthRegistry,
     config: HubConfig,
 ) -> None:
+    @app.post("/register", include_in_schema=False)
     @app.post("/oauth/register", include_in_schema=False)
     async def oauth_register(request: Request) -> JSONResponse:
         try:
@@ -82,6 +83,7 @@ def register_oauth_authorization_routes(
             status_code=201,
         )
 
+    @app.get("/authorize", include_in_schema=False)
     @app.get("/oauth/authorize", include_in_schema=False)
     async def oauth_authorize(request: Request) -> Response:
         params = dict(request.query_params)
@@ -124,6 +126,7 @@ def register_oauth_authorization_routes(
         _session(request).pop("pending_oauth_authorization", None)
         return RedirectResponse("/connect", status_code=303)
 
+    @app.post("/token", include_in_schema=False)
     @app.post("/oauth/token", include_in_schema=False)
     async def oauth_token(request: Request) -> JSONResponse:
         form = dict((await request.form()).items())

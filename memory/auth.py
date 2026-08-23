@@ -24,6 +24,7 @@ PUBLIC_PATHS = {
     "/auth/google/callback",
     "/auth/logout",
     "/health",
+    "/authorize",
     "/oauth/authorize",
     "/oauth/authorize/approve",
     "/oauth/authorize/deny",
@@ -31,6 +32,8 @@ PUBLIC_PATHS = {
     "/oauth/token",
     "/oauth/revoke",
     "/ready",
+    "/register",
+    "/token",
     "/.well-known/oauth-authorization-server",
     "/.well-known/oauth-protected-resource",
 }
