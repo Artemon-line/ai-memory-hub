@@ -18,6 +18,19 @@ services:
       timeout: 3s
       retries: 20
 
+  postgres-exporter:
+    image: ghcr.io/prometheus-community/postgres-exporter:v0.20.1@sha256:ac5ec343104fae0e2d84a27bb8d69b38430a11910c5382cad85d478d2bab713e
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: postgresql://memory:memory@postgres:5432/memory?sslmode=disable
+    ports:
+      # Optional raw exporter endpoint for local debugging; Prometheus scrapes it
+      # over the Compose network.
+      - "127.0.0.1:9187:9187"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   ai-memory-hub:
     build:
       context: ../..
@@ -91,6 +104,27 @@ services:
       - "127.0.0.1:9090:9090"
     depends_on:
       otel-collector:
+        condition: service_started
+
+  grafana:
+    image: grafana/grafana-oss:12.4.3
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      prometheus:
+        condition: service_started
+      jaeger:
         condition: service_started
 
 volumes:

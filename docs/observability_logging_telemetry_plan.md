@@ -46,15 +46,15 @@ Keep the default runtime lightweight:
 - Optional OpenTelemetry SDK exports traces and metrics over OTLP.
 - OpenTelemetry Collector receives app telemetry.
 - Jaeger all-in-one stores and displays traces for local development.
-- Prometheus scrapes metrics from the collector or app.
-- Grafana is optional for metrics dashboards once metric names stabilize.
+- Prometheus scrapes metrics from the collector and local database exporters.
+- Grafana displays provisioned local dashboards for stabilized hub and database metrics.
 
 Why this shape:
 
 - OTLP keeps the application vendor-neutral.
 - The Collector isolates exporter and backend choices from application code.
 - Jaeger all-in-one is enough for local trace debugging.
-- Prometheus/Grafana can be added without changing application spans.
+- Prometheus/Grafana can be extended without changing application spans.
 
 References:
 
@@ -295,6 +295,7 @@ Add observability files to `examples/local-stack/`:
 examples/local-stack/
   compose.yaml
   config.yaml
+  grafana/
   otel-collector.yaml
   prometheus.yaml
   README.md
@@ -305,7 +306,8 @@ Recommended local stack:
 - `otel-collector`
 - `jaeger`
 - `prometheus`
-- optional `grafana`
+- `postgres-exporter`
+- `grafana`
 
 Ports:
 
@@ -313,7 +315,8 @@ Ports:
 - OTel HTTP: `4318`
 - Jaeger UI: `16686`
 - Prometheus: `9090`
-- Grafana: `3000` if enabled
+- Postgres exporter: `9187`
+- Grafana: `3000`
 
 The Jaeger all-in-one image exposes OTLP ports `4317` and `4318`, and the UI on
 `16686`, according to Jaeger 2.19 docs. For this project, prefer app -> Collector
