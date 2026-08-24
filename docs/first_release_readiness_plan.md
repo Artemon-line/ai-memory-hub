@@ -224,6 +224,23 @@ without forcing clients to parse full stored conversations and internal metadata
 - [ ] Update agent docs and real-client smoke coverage to exercise concise
       output before stable release.
 
+## P0: Agent And Model Footprint Provenance
+
+Use `improvements/agent_model_footprint_plan.md` as the source of truth.
+
+This is required before `v0.1.0` because saved memory should preserve which
+agent runtime and model produced or captured the conversation. Agents should not
+have to infer that a record came from Hermes using `gemini-3.6-flash` from raw
+message text.
+
+- [ ] Treat `source` as the canonical agent/client runtime for saved
+      conversations.
+- [ ] Preserve conversation-level agent, model, provider, platform, capture
+      client, and ingestion method metadata.
+- [ ] Add message-level agent/model overrides for subagents and mixed-model
+      turns.
+- [ ] Carry agent/model footprint into facts, summaries, and read provenance.
+
 ## P0: Release Candidate Drill
 
 Before publishing `v0.1.0`, run one release-candidate rehearsal:
@@ -305,6 +322,7 @@ Use this checklist for the release PR:
 - [x] Release checklist added.
 - [x] README and docs reviewed.
 - [ ] P0 MCP response-format plan completed.
+- [ ] P0 agent/model footprint plan completed.
 - [ ] Branch protection enabled.
 - [ ] Required checks selected.
 - [ ] `main` is green.
