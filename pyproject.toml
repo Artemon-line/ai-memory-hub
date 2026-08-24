@@ -73,7 +73,7 @@ typesense = [
     "typesense>=0.21.0",
 ]
 weaviate = [
-    "weaviate-client>=4.9.0",
+    "weaviate-client>=4.23.0",
 ]
 
 [project.scripts]
