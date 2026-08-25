@@ -100,7 +100,8 @@ Containerfiles so they install only the extras needed by that example.
 
 - Stores structured conversations with validation and deduplication
 - Searches semantic memory with conversation-aware grouping
-- Answers questions with citations, confidence, and provenance
+- Answers questions with concise MCP defaults or detailed citations,
+  confidence, and provenance on request
 - Extracts useful profile/project facts for direct answers
 - Supports multilingual memory when the configured embedding model supports the
   languages involved

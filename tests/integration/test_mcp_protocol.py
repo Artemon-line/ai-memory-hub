@@ -110,6 +110,22 @@ def test_mcp_initialize_and_tools_list_with_session() -> None:
             assert any("metadata.summary" in item for item in guidance["instructions"])
             assert "id" not in guidance["minimal_example"]
             assert "summary" in guidance["minimal_example"]["metadata"]
+        for tool_name in (
+            "memory_search",
+            "memory_ask",
+            "memory_fact_search",
+            "memory_profile_get",
+        ):
+            schema = tools_by_name[tool_name]["inputSchema"]
+            response_format_schema = schema["properties"]["response_format"]
+            assert response_format_schema["enum"] == ["concise", "detailed"]
+            assert response_format_schema["default"] == "concise"
+        for tool_name in ("memory_fact_search", "memory_profile_get"):
+            schema = tools_by_name[tool_name]["inputSchema"]
+            limit_schema = schema["properties"]["limit"]
+            assert limit_schema["minimum"] == 1
+            assert limit_schema["maximum"] == 100
+            assert "concise" in limit_schema["description"]
 
 
 def test_mcp_tools_list_cursor_pagination_is_stable() -> None:
