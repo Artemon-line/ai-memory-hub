@@ -31,6 +31,11 @@ class SearchResultMode(StrEnum):
     THREADS = "threads"
 
 
+class MCPResponseFormat(StrEnum):
+    CONCISE = "concise"
+    DETAILED = "detailed"
+
+
 class ThreadMetadata(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -115,6 +120,15 @@ def result_mode_values() -> set[str]:
 def result_mode_error_message() -> str:
     values = ", ".join(mode.value for mode in SearchResultMode)
     return f"result_mode must be one of: {values}"
+
+
+def response_format_values() -> set[str]:
+    return {response_format.value for response_format in MCPResponseFormat}
+
+
+def response_format_error_message() -> str:
+    values = ", ".join(response_format.value for response_format in MCPResponseFormat)
+    return f"response_format must be one of: {values}"
 
 
 def _validate_uuid(value: str) -> None:

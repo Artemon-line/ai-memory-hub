@@ -45,7 +45,9 @@ results in the current Codex task is context injection.
 
 Implemented:
 
-- MCP tools: `memory_validate`, `memory_insert`, `memory_search`, `memory_retrieve`, `memory_ask`.
+- MCP tools: `memory_validate`, `memory_insert`, `memory_search`,
+  `memory_retrieve`, `memory_ask`, `memory_fact_search`,
+  `memory_profile_get`, and review/project helpers.
 - MCP resources: `memory://conversation/example`, `memory://conversation/{id}`,
   `memory://search/{query}`, `memory://timeline/{day}`, `memory://health`.
 - MCP prompts: `save_conversation`, `search_memory`, `ask_memory`, `summarize_conversation`.
@@ -181,6 +183,7 @@ Search stored memory by semantic query.
   "top_k": 5,
   "limit": 5,
   "cursor": "0",
+  "response_format": "concise",
   "source": "codex",
   "date_from": "2026-01-01T00:00:00Z",
   "date_to": "2026-12-31T23:59:59Z",
@@ -194,6 +197,10 @@ Notes:
 - `top_k` controls retrieval breadth.
 - `limit` and `cursor` support paginated MCP output.
 - `source`, `date_from`, `date_to`, `tags`, and `thread_id` are optional filters.
+- `response_format` defaults to `concise`, which returns matched text, compact
+  citations, and generated summary text without embedding the full conversation.
+  Use `detailed` only when an agent or admin needs the audit-friendly stored
+  conversation payload.
 - Do not pass `null` for optional fields; omit them instead.
 
 ### `memory_retrieve`
@@ -216,6 +223,7 @@ Ask a question over retrieved memory.
 {
   "question": "What tool preference did the user mention?",
   "top_k": 5,
+  "response_format": "concise",
   "max_context_tokens": 1200
 }
 ```
@@ -229,6 +237,12 @@ Expected success includes:
 - optional `chunks_selected`
 - optional `chunks_dropped`
 - optional `tokenizer_used`
+
+`memory_fact_search` and `memory_profile_get` also accept
+`response_format: "concise"` or `"detailed"`. Concise fact/profile reads keep
+the subject, predicate, object, normalized object, confidence, source quality,
+freshness, and supersession status. Detailed reads preserve full fact
+provenance such as qualifiers and summary provenance.
 
 ## MCP Resources And Prompts
 
@@ -277,7 +291,7 @@ Search memory:
 
 ```text
 user asks for remembered context
--> memory_search(query, top_k=5, limit=5)
+-> memory_search(query, top_k=5, limit=5, response_format="concise")
 -> inspect results
 -> answer with cited memory ids when useful
 ```
@@ -286,7 +300,7 @@ Ask over memory:
 
 ```text
 user asks a question over prior memory
--> memory_ask(question, top_k=5)
+-> memory_ask(question, top_k=5, response_format="concise")
 -> return answer and citations
 ```
 
@@ -303,12 +317,13 @@ Invalid explicit IDs still fail fast. If an agent supplies `id`, it must be a va
 `metadata.summary` must be a string of 2000 characters or fewer. It improves
 search recall and metadata reranking, but answers still need support from raw
 messages or normalized facts. The hub also generates deterministic
-conversation, topic, and project summaries from stored message text. Search and
-retrieve responses expose the conversation summary as
-`metadata.generated_summary`; treat it as metadata, not as citation evidence by
-itself. The hub may also return server-owned `metadata.auto_tags` and
-`metadata.tag_sources`; clients should keep user/manual tags in `metadata.tags`
-and let the server refresh auto-tags during insert or trusted append.
+conversation, topic, and project summaries from stored message text. Detailed
+search and retrieve responses expose the conversation summary as
+`metadata.generated_summary`; concise MCP search rows move the summary text into
+the row's compact `citation`. The hub may also return server-owned
+`metadata.auto_tags` and `metadata.tag_sources` in detailed payloads; clients
+should keep user/manual tags in `metadata.tags` and let the server refresh
+auto-tags during insert or trusted append.
 `metadata.save_intent` is optional under the default `permissive` policy,
 required under `memory.insert_policy: require_save_intent`, and controls whether
 `memory.insert_policy: review_pending` inserts are active immediately or held

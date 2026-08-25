@@ -292,6 +292,57 @@ def test_api_and_mcp_reject_unknown_result_modes(tmp_path: Path) -> None:
         assert "payload-secret" not in json.dumps(payload)
 
 
+def test_mcp_rejects_unknown_response_format_values(tmp_path: Path) -> None:
+    with _client(tmp_path) as client:
+        headers = _initialize_mcp(client)
+        mcp_search = _call_tool(
+            client,
+            headers,
+            request_id=2,
+            name="memory_search",
+            arguments={
+                "query": "payload-secret-query",
+                "response_format": "verbose",
+            },
+        )
+        mcp_ask = _call_tool(
+            client,
+            headers,
+            request_id=3,
+            name="memory_ask",
+            arguments={
+                "question": "payload-secret-question",
+                "response_format": "verbose",
+            },
+        )
+        mcp_facts = _call_tool(
+            client,
+            headers,
+            request_id=4,
+            name="memory_fact_search",
+            arguments={
+                "subject": "payload-secret-subject",
+                "response_format": "verbose",
+            },
+        )
+        mcp_profile = _call_tool(
+            client,
+            headers,
+            request_id=5,
+            name="memory_profile_get",
+            arguments={
+                "subject": "payload-secret-subject",
+                "response_format": "verbose",
+            },
+        )
+
+    for payload in (mcp_search, mcp_ask, mcp_facts, mcp_profile):
+        assert payload["status"] == "error"
+        assert payload["error_code"] == "invalid_input"
+        assert "response_format must be one of" in payload["error_message"]
+        assert "payload-secret" not in json.dumps(payload)
+
+
 def test_api_and_mcp_reject_extreme_numeric_request_values(tmp_path: Path) -> None:
     with _client(tmp_path) as client:
         api_search = client.post("/memory/search", json={"query": "x", "top_k": 101})

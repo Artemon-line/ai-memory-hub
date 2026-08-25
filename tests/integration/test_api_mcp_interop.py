@@ -555,3 +555,68 @@ def test_api_and_mcp_response_shapes_share_public_fields(tmp_path: Path) -> None
             {"status", "results", "answer", "citations", "confidence", "answer_basis"}
         )
         assert result["results"][0]["id"] == payload["id"]
+
+
+def test_mcp_concise_response_format_strips_heavy_search_and_ask_payloads(
+    tmp_path: Path,
+) -> None:
+    payload = _conversation(
+        text="The concise MCP response phrase is teal lantern.",
+        source="codex",
+    )
+    payload["metadata"]["summary"] = "Concise MCP response evidence."
+    payload["metadata"]["thread_id"] = "thread-concise-response"
+
+    with _client(tmp_path=tmp_path) as client:
+        insert = client.post("/memory/insert", json=payload)
+        headers = _initialize_mcp(client)
+        concise_search = _call_tool(
+            client,
+            headers,
+            request_id=2,
+            name="memory_search",
+            arguments={"query": "teal lantern", "top_k": 5},
+        )
+        detailed_search = _call_tool(
+            client,
+            headers,
+            request_id=3,
+            name="memory_search",
+            arguments={
+                "query": "teal lantern",
+                "top_k": 5,
+                "response_format": "detailed",
+            },
+        )
+        concise_ask = _call_tool(
+            client,
+            headers,
+            request_id=4,
+            name="memory_ask",
+            arguments={
+                "question": "What is the concise MCP response phrase?",
+                "top_k": 5,
+            },
+        )
+
+    assert insert.status_code == 200
+    concise_row = concise_search["results"][0]
+    assert "conversation" not in concise_row
+    assert concise_row["citation"]["id"] == payload["id"]
+    assert concise_row["citation"]["source"] == "codex"
+    assert concise_row["citation"]["thread_id"] == "thread-concise-response"
+    assert "teal lantern" in concise_row["citation"]["summary"]
+    assert "index_chunks" not in json.dumps(concise_search)
+    assert "tag_sources" not in json.dumps(concise_search)
+
+    detailed_row = detailed_search["results"][0]
+    assert detailed_row["conversation"]["id"] == payload["id"]
+    assert "index_chunks" in detailed_row["conversation"]["metadata"]
+    assert "tag_sources" in detailed_row["conversation"]["metadata"]
+
+    assert concise_ask["status"] == "ok"
+    assert concise_ask["results"][0]["id"] == payload["id"]
+    assert "conversation" not in concise_ask["results"][0]
+    assert "conversation" not in concise_ask["structured_evidence"]["results"][0]
+    assert "index_chunks" not in json.dumps(concise_ask)
+    assert "tag_sources" not in json.dumps(concise_ask)
