@@ -251,13 +251,18 @@ async def test_mcp_tool_handlers_insert_search_retrieve() -> None:
     ask_result = await handlers["memory_ask"]("what was stored?", 3, ctx=ctx)
     assert ask_result["status"] == "ok"
     assert "answer" in ask_result
-    assert len(ask_result["results"]) == 1
-    assert ask_result["results"][0]["id"] == "d9fd4c95-9cb3-4fd5-b967-3027f8863210"
-    assert ask_result["results"][0]["text"] == "hello mcp"
-    assert "conversation" not in ask_result["results"][0]
-    assert isinstance(ask_result["citations"], list)
-    assert ask_result["citations"][0]["id"] == ask_result["results"][0]["id"]
-    assert ask_result["citations"][0]["text"] == ask_result["results"][0]["text"]
+    assert ask_result["results"] == []
+    assert ask_result["memory_result_count"] == 1
+    assert ask_result["citation_count"] == 1
+    for verbose_key in (
+        "citations",
+        "evidence",
+        "structured_evidence",
+        "provenance",
+        "context_tokens_used",
+        "chunks_selected",
+    ):
+        assert verbose_key not in ask_result
 
     detailed_ask_result = await handlers["memory_ask"](
         "what was stored?", 3, response_format="detailed", ctx=ctx
@@ -267,7 +272,11 @@ async def test_mcp_tool_handlers_insert_search_retrieve() -> None:
     assert "hash" not in detailed_ask_result["results"][0]["conversation"]["messages"][0]
 
     budgeted_ask_result = await handlers["memory_ask"](
-        "what was stored?", 3, max_context_tokens=100, ctx=ctx
+        "what was stored?",
+        3,
+        max_context_tokens=100,
+        response_format="detailed",
+        ctx=ctx,
     )
     assert budgeted_ask_result["status"] == "ok"
     assert budgeted_ask_result["context_tokens_used"] <= 100
@@ -411,7 +420,9 @@ async def test_mcp_fact_tools_return_profile_facts() -> None:
     profile = await handlers["memory_profile_get"](
         subject="user", save_intent_source="codex", response_format="detailed"
     )
-    ask = await handlers["memory_ask"]("What guitar do I own?", 5)
+    ask = await handlers["memory_ask"](
+        "What guitar do I own?", 5, response_format="detailed"
+    )
 
     assert facts["status"] == "ok"
     assert facts["results"][0]["predicate"] == "owns_guitar"
@@ -463,6 +474,81 @@ async def test_mcp_fact_and_profile_concise_format_reduces_fact_payloads() -> No
     }
     assert "qualifiers" not in profile["facts"][0]
     assert profile["facts"][0]["predicate"] == "owns_guitar"
+
+
+@pytest.mark.asyncio
+async def test_mcp_fact_and_profile_concise_deduplicates_and_limits_rows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
+    handlers = build_tool_handlers(agent)
+    facts = [
+        {
+            "id": "fact-a",
+            "subject": "user",
+            "predicate": "owns_guitar",
+            "object": "a cherry Gibson guitar",
+            "object_normalized": "a cherry Gibson guitar",
+            "confidence": "high",
+            "qualifiers": {"source_role": "user"},
+        },
+        {
+            "id": "fact-b",
+            "subject": "user",
+            "predicate": "owns_guitar",
+            "object": "a cherry Gibson guitar",
+            "object_normalized": "a cherry Gibson guitar",
+            "confidence": "high",
+            "qualifiers": {"source_role": "user"},
+        },
+        {
+            "id": "fact-c",
+            "subject": "user",
+            "predicate": "owns_guitar",
+            "object": "a blue Jazzmaster guitar",
+            "object_normalized": "a blue Jazzmaster guitar",
+            "confidence": "medium",
+            "qualifiers": {"source_role": "user"},
+        },
+    ]
+
+    async def fake_fact_search(**_kwargs):
+        return {"status": "ok", "results": facts}
+
+    async def fake_profile_get(**_kwargs):
+        return {
+            "status": "ok",
+            "subject": "user",
+            "summary": {"text": "User has guitar facts.", "active_fact_count": 3},
+            "facts": facts,
+        }
+
+    monkeypatch.setattr(agent, "fact_search", fake_fact_search)
+    monkeypatch.setattr(agent, "profile_get", fake_profile_get)
+
+    concise_facts = await handlers["memory_fact_search"](subject="user", limit=1)
+    detailed_facts = await handlers["memory_fact_search"](
+        subject="user", response_format="detailed", limit=1
+    )
+    concise_profile = await handlers["memory_profile_get"](subject="user", limit=1)
+
+    assert [row["id"] for row in concise_facts["results"]] == ["fact-a"]
+    assert concise_facts["total_results"] == 3
+    assert concise_facts["unique_results"] == 2
+    assert concise_facts["returned_results"] == 1
+    assert concise_facts["omitted_results"] == 1
+    assert concise_facts["result_limit"] == 1
+    assert "qualifiers" not in concise_facts["results"][0]
+
+    assert len(detailed_facts["results"]) == 3
+    assert "qualifiers" in detailed_facts["results"][0]
+
+    assert [row["id"] for row in concise_profile["facts"]] == ["fact-a"]
+    assert concise_profile["total_facts"] == 3
+    assert concise_profile["unique_facts"] == 2
+    assert concise_profile["returned_facts"] == 1
+    assert concise_profile["omitted_facts"] == 1
+    assert concise_profile["fact_limit"] == 1
 
 
 def test_mcp_does_not_expose_agent_facing_forget_or_delete_tools() -> None:
@@ -688,7 +774,12 @@ async def test_mcp_tool_handlers_search_pagination_and_filters() -> None:
     assert "thread_id" in grouped_threads["results"][0]
 
     filtered_ask = await handlers["memory_ask"](
-        "hello", top_k=10, source="chatgpt", tags=["beta"], thread_id="thread-beta"
+        "hello",
+        top_k=10,
+        source="chatgpt",
+        tags=["beta"],
+        thread_id="thread-beta",
+        response_format="detailed",
     )
     assert filtered_ask["status"] == "ok"
     assert [row["id"] for row in filtered_ask["results"]] == [

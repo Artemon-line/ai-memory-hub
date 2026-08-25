@@ -162,14 +162,21 @@ def test_api_inserted_facts_are_readable_through_mcp_same_owner_and_project(
 def test_mcp_fact_and_profile_concise_response_format_reduces_fact_payloads(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    payload = _conversation(text="My name is Blake Ember. I own a green Gibson guitar.")
+    payloads = [
+        _conversation(text="I own a green Gibson guitar."),
+        _conversation(text="Also, I own a green Gibson guitar."),
+        _conversation(text="I own a blue Jazzmaster guitar."),
+    ]
 
     with _auth_client(tmp_path, monkeypatch) as client:
-        insert = client.post(
-            "/memory/insert",
-            json={**payload, "project_id": "fact-shared"},
-            headers={"Authorization": "Bearer token-a"},
-        )
+        inserts = [
+            client.post(
+                "/memory/insert",
+                json={**payload, "project_id": "fact-shared"},
+                headers={"Authorization": "Bearer token-a"},
+            )
+            for payload in payloads
+        ]
         mcp_headers = _initialize_mcp(client, token="token-a")
         concise_facts = _call_tool(
             client,
@@ -180,6 +187,7 @@ def test_mcp_fact_and_profile_concise_response_format_reduces_fact_payloads(
                 "subject": "user",
                 "predicate": "owns_guitar",
                 "project_id": "fact-shared",
+                "limit": 1,
             },
         )
         detailed_facts = _call_tool(
@@ -199,16 +207,30 @@ def test_mcp_fact_and_profile_concise_response_format_reduces_fact_payloads(
             mcp_headers,
             request_id=4,
             name="memory_profile_get",
-            arguments={"subject": "user", "project_id": "fact-shared"},
+            arguments={
+                "subject": "user",
+                "predicate": "owns_guitar",
+                "project_id": "fact-shared",
+                "limit": 1,
+            },
         )
 
-    assert insert.status_code == 200, insert.text
+    assert all(insert.status_code == 200 for insert in inserts)
     concise_fact = concise_facts["results"][0]
-    assert concise_fact["object_normalized"] == "a green Gibson guitar"
+    assert concise_fact["object_normalized"] in {
+        "a green Gibson guitar",
+        "a blue Jazzmaster guitar",
+    }
     assert concise_fact["superseded"] is False
     assert "qualifiers" not in concise_fact
     assert "source_message_indexes" not in concise_fact
+    assert concise_facts["total_results"] == 3
+    assert concise_facts["unique_results"] == 2
+    assert concise_facts["returned_results"] == 1
+    assert concise_facts["omitted_results"] == 1
+    assert concise_facts["result_limit"] == 1
     assert "qualifiers" in detailed_facts["results"][0]
+    assert len(detailed_facts["results"]) == 3
 
     assert set(concise_profile["summary"]) == {
         "text",
@@ -219,6 +241,11 @@ def test_mcp_fact_and_profile_concise_response_format_reduces_fact_payloads(
     }
     assert "provenance" not in concise_profile["summary"]
     assert "qualifiers" not in concise_profile["facts"][0]
+    assert concise_profile["total_facts"] == 3
+    assert concise_profile["unique_facts"] == 2
+    assert concise_profile["returned_facts"] == 1
+    assert concise_profile["omitted_facts"] == 1
+    assert concise_profile["fact_limit"] == 1
 
 
 def test_mcp_inserted_facts_are_readable_through_api_same_owner_and_project(

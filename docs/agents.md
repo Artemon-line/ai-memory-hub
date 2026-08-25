@@ -107,8 +107,9 @@ MCP tool responses use a stable envelope:
 - `error_code`
 - `error_message`
 
-Tool-specific fields can also appear, such as `answer`, `citations`, `memory`, `valid`,
-`deduplicated`, `appended_messages`, `embedded_chunks`, and token-budget diagnostics.
+Tool-specific fields can also appear, such as `answer`, `memory`, `valid`,
+`deduplicated`, `appended_messages`, `embedded_chunks`, and detailed-mode
+citations or token-budget diagnostics.
 
 ### `memory_validate`
 
@@ -231,18 +232,23 @@ Ask a question over retrieved memory.
 Expected success includes:
 
 - `answer`
-- `results`
-- `citations`
-- optional `context_tokens_used`
-- optional `chunks_selected`
-- optional `chunks_dropped`
-- optional `tokenizer_used`
+- `confidence`
+- `confidence_reason`
+- `answer_basis`
+- `memory_result_count`
+- `fact_count`
+- `citation_count`
+
+Use `response_format: "detailed"` when a client needs the full `results`,
+`citations`, `evidence`, `structured_evidence`, `provenance`, or token-budget
+diagnostics.
 
 `memory_fact_search` and `memory_profile_get` also accept
-`response_format: "concise"` or `"detailed"`. Concise fact/profile reads keep
-the subject, predicate, object, normalized object, confidence, source quality,
-freshness, and supersession status. Detailed reads preserve full fact
-provenance such as qualifiers and summary provenance.
+`response_format: "concise"` or `"detailed"`, plus an optional `limit`.
+Concise fact/profile reads deduplicate and limit fact rows to 10 by default
+while keeping the subject, predicate, object, normalized object, confidence,
+source quality, freshness, and supersession status. Detailed reads preserve full
+fact provenance such as qualifiers and summary provenance.
 
 ## MCP Resources And Prompts
 
@@ -301,7 +307,7 @@ Ask over memory:
 ```text
 user asks a question over prior memory
 -> memory_ask(question, top_k=5, response_format="concise")
--> return answer and citations
+-> return the compact answer
 ```
 
 ## Client Payload Notes

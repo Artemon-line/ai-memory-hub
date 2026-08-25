@@ -383,11 +383,32 @@ def test_api_and_mcp_reject_extreme_numeric_request_values(tmp_path: Path) -> No
             name="memory_ask",
             arguments={"question": "x?", "max_context_tokens": 0},
         )
+        mcp_fact_limit = _call_tool(
+            client,
+            headers,
+            request_id=6,
+            name="memory_fact_search",
+            arguments={"limit": 101},
+        )
+        mcp_profile_limit = _call_tool(
+            client,
+            headers,
+            request_id=7,
+            name="memory_profile_get",
+            arguments={"limit": 0},
+        )
 
     assert api_search.status_code == 422
     assert api_ask_top_k.status_code == 422
     assert api_ask_context.status_code == 422
-    for payload in (mcp_search_top_k, mcp_search_limit, mcp_ask_top_k, mcp_ask_context):
+    for payload in (
+        mcp_search_top_k,
+        mcp_search_limit,
+        mcp_ask_top_k,
+        mcp_ask_context,
+        mcp_fact_limit,
+        mcp_profile_limit,
+    ):
         assert payload["status"] == "error"
         assert payload["error_code"] == "invalid_input"
 
@@ -790,7 +811,11 @@ def test_review_pending_mcp_read_filters_expose_pending_for_ask_and_retrieve(
             headers,
             request_id=5,
             name="memory_ask",
-            arguments={"question": phrase, "memory_status": "pending_review"},
+            arguments={
+                "question": phrase,
+                "memory_status": "pending_review",
+                "response_format": "detailed",
+            },
         )
 
     assert default_retrieve["status"] == "not_found"

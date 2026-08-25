@@ -60,6 +60,16 @@ ResponseFormatArg = Annotated[
         json_schema_extra={"enum": [mode.value for mode in MCPResponseFormat]},
     ),
 ]
+FactLimitArg = Annotated[
+    int | None,
+    Field(
+        description=(
+            "Maximum fact rows returned by concise fact/profile reads. Omit for "
+            "the concise default; detailed remains unbounded."
+        ),
+        json_schema_extra={"minimum": 1, "maximum": 100},
+    ),
+]
 
 SERVER_INSTRUCTIONS = (
     "Use ai-memory-hub tools directly. For memory_validate and memory_insert, "
@@ -109,14 +119,15 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
     "memory_fact_search": (
         "Search normalized extracted memory facts. Optional filters: source, subject, predicate, "
         "date_from, date_to, confidence, status, source_quality, save_intent, save_intent_source, "
-        "freshness_from, freshness_to, and project_id. Use response_format=concise for reduced facts "
-        "or detailed for full fact provenance."
+        "freshness_from, freshness_to, limit, and project_id. Use response_format=concise for "
+        "deduplicated, limited facts or detailed for full fact provenance."
     ),
     "memory_profile_get": (
         "Return normalized facts plus a compact fact-based summary for a subject. Optional filters: "
         "source, predicate, date_from, date_to, confidence, status, source_quality, freshness_from, "
-        "freshness_to, save_intent, save_intent_source, and project_id. Use response_format=concise "
-        "for reduced facts and summary counts or detailed for full fact provenance."
+        "freshness_to, save_intent, save_intent_source, limit, and project_id. Use "
+        "response_format=concise for deduplicated, limited facts and summary counts or detailed "
+        "for full fact provenance."
     ),
     "memory_fact_supersede": "Mark one normalized fact as superseded by another fact within a project_id.",
     "memory_pending_approve": "Approve a pending memory insert so it becomes searchable and can create facts.",
@@ -470,6 +481,20 @@ def _validate_response_format(response_format: Any) -> str:
     if normalized not in response_format_values():
         raise ValueError(response_format_error_message())
     return normalized
+
+
+def _validate_optional_limit(limit: Any, *, field_name: str = "limit") -> int | None:
+    value = unwrap_array(limit)
+    if value is None:
+        return None
+    if isinstance(value, str):
+        try:
+            value = int(value)
+        except ValueError as exc:
+            raise ValueError(f"{field_name} must be an integer") from exc
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1 or value > 100:
+        raise ValueError(f"{field_name} must be an integer between 1 and 100")
+    return value
 
 
 def _ingest_value_error_code(message: str) -> str:
@@ -1121,12 +1146,14 @@ def build_tool_handlers(
         save_intent_source: str | None = None,
         freshness_from: str | None = None,
         freshness_to: str | None = None,
+        limit: FactLimitArg = None,
         project_id: str | None = None,
         response_format: ResponseFormatArg = MCPResponseFormat.CONCISE.value,
         ctx: FastMCPContext | None = None,
     ) -> dict[str, Any]:
         try:
             response_format = _validate_response_format(response_format)
+            limit = _validate_optional_limit(limit)
         except ValueError as exc:
             return _envelope(
                 status="error",
@@ -1157,7 +1184,9 @@ def build_tool_handlers(
                 error_code="invalid_input",
                 error_message=str(exc),
             )
-        return _with_envelope_defaults(format_fact_search_response(result, response_format))
+        return _with_envelope_defaults(
+            format_fact_search_response(result, response_format, limit=limit)
+        )
 
     async def memory_profile_get(
         subject: str = "user",
@@ -1172,12 +1201,14 @@ def build_tool_handlers(
         save_intent_source: str | None = None,
         freshness_from: str | None = None,
         freshness_to: str | None = None,
+        limit: FactLimitArg = None,
         project_id: str | None = None,
         response_format: ResponseFormatArg = MCPResponseFormat.CONCISE.value,
         ctx: FastMCPContext | None = None,
     ) -> dict[str, Any]:
         try:
             response_format = _validate_response_format(response_format)
+            limit = _validate_optional_limit(limit)
         except ValueError as exc:
             return _envelope(
                 status="error",
@@ -1207,7 +1238,9 @@ def build_tool_handlers(
                 error_code="invalid_input",
                 error_message=str(exc),
             )
-        return _with_envelope_defaults(format_profile_response(result, response_format))
+        return _with_envelope_defaults(
+            format_profile_response(result, response_format, limit=limit)
+        )
 
     async def memory_fact_supersede(
         fact_id: str,

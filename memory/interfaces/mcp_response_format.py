@@ -60,6 +60,14 @@ _CITATION_KEYS = (
     "save_intent",
     "save_intent_source",
 )
+DEFAULT_CONCISE_FACT_LIMIT = 10
+_CONCISE_ASK_KEYS = (
+    "status",
+    "answer",
+    "confidence",
+    "confidence_reason",
+    "answer_basis",
+)
 
 
 def format_search_response(
@@ -78,56 +86,36 @@ def format_search_response(
 def format_ask_response(payload: dict[str, Any], response_format: str) -> dict[str, Any]:
     if response_format == MCPResponseFormat.DETAILED.value:
         return payload
-    formatted = dict(payload)
-    results = payload.get("results", [])
-    formatted["results"] = [
-        _concise_search_row(row) for row in results if isinstance(row, dict)
-    ] if isinstance(results, list) else []
-
-    facts = payload.get("facts")
-    if isinstance(facts, list):
-        formatted["facts"] = [
-            _concise_fact(fact) for fact in facts if isinstance(fact, dict)
-        ]
-
-    citations = payload.get("citations")
-    if isinstance(citations, list):
-        formatted["citations"] = [
-            _compact_mapping(citation, _CITATION_KEYS)
-            for citation in citations
-            if isinstance(citation, dict)
-        ]
-
-    evidence = payload.get("evidence")
-    if isinstance(evidence, list):
-        formatted["evidence"] = [
-            _concise_evidence(item) for item in evidence if isinstance(item, dict)
-        ]
-
-    structured_evidence = payload.get("structured_evidence")
-    if isinstance(structured_evidence, dict):
-        formatted["structured_evidence"] = _concise_structured_evidence(
-            structured_evidence
-        )
-
+    formatted = _compact_mapping(payload, _CONCISE_ASK_KEYS)
+    formatted.setdefault("status", payload.get("status", "ok"))
+    formatted["memory_result_count"] = _list_count(payload.get("results"))
+    formatted["fact_count"] = _list_count(payload.get("facts"))
+    formatted["citation_count"] = _list_count(payload.get("citations"))
     return formatted
 
 
 def format_fact_search_response(
-    payload: dict[str, Any], response_format: str
+    payload: dict[str, Any], response_format: str, *, limit: int | None = None
 ) -> dict[str, Any]:
     if response_format == MCPResponseFormat.DETAILED.value:
         return payload
-    formatted = dict(payload)
-    results = payload.get("results", [])
-    formatted["results"] = [
-        _concise_fact(fact) for fact in results if isinstance(fact, dict)
-    ] if isinstance(results, list) else []
+    formatted = {"status": payload.get("status", "ok")}
+    results, counts = _limited_concise_facts(payload.get("results"), limit=limit)
+    formatted["results"] = results
+    formatted.update(
+        {
+            "total_results": counts["total"],
+            "unique_results": counts["unique"],
+            "returned_results": counts["returned"],
+            "omitted_results": counts["omitted"],
+            "result_limit": counts["limit"],
+        }
+    )
     return formatted
 
 
 def format_profile_response(
-    payload: dict[str, Any], response_format: str
+    payload: dict[str, Any], response_format: str, *, limit: int | None = None
 ) -> dict[str, Any]:
     if response_format == MCPResponseFormat.DETAILED.value:
         return payload
@@ -138,10 +126,17 @@ def format_profile_response(
     summary = payload.get("summary")
     if isinstance(summary, dict):
         formatted["summary"] = _compact_mapping(summary, _PROFILE_SUMMARY_KEYS)
-    facts = payload.get("facts", [])
-    formatted["facts"] = [
-        _concise_fact(fact) for fact in facts if isinstance(fact, dict)
-    ] if isinstance(facts, list) else []
+    facts, counts = _limited_concise_facts(payload.get("facts"), limit=limit)
+    formatted["facts"] = facts
+    formatted.update(
+        {
+            "total_facts": counts["total"],
+            "unique_facts": counts["unique"],
+            "returned_facts": counts["returned"],
+            "omitted_facts": counts["omitted"],
+            "fact_limit": counts["limit"],
+        }
+    )
     return formatted
 
 
@@ -253,3 +248,41 @@ def _compact_mapping(keys_source: dict[str, Any], keys: tuple[str, ...]) -> dict
 
 def _drop_empty_values(payload: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in payload.items() if value is not None}
+
+
+def _limited_concise_facts(
+    facts: Any, *, limit: int | None
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    compact = [
+        _concise_fact(fact) for fact in facts if isinstance(fact, dict)
+    ] if isinstance(facts, list) else []
+    deduped = _dedupe_concise_facts(compact)
+    effective_limit = limit if limit is not None else DEFAULT_CONCISE_FACT_LIMIT
+    limited = deduped[:effective_limit]
+    return limited, {
+        "total": len(compact),
+        "unique": len(deduped),
+        "returned": len(limited),
+        "omitted": max(len(deduped) - len(limited), 0),
+        "limit": effective_limit,
+    }
+
+
+def _dedupe_concise_facts(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: set[tuple[str, str, str]] = set()
+    deduped: list[dict[str, Any]] = []
+    for fact in facts:
+        key = (
+            str(fact.get("subject", "")),
+            str(fact.get("predicate", "")),
+            str(fact.get("object_normalized") or fact.get("object", "")),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(fact)
+    return deduped
+
+
+def _list_count(value: Any) -> int:
+    return len(value) if isinstance(value, list) else 0

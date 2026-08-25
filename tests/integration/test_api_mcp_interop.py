@@ -204,6 +204,27 @@ def _assert_ask_shape(result: dict[str, Any], expected_id: str) -> None:
     assert result["answer_basis"] in {"direct_memory", "mixed", "fact_layer", "conflict"}
 
 
+def _assert_mcp_concise_ask_shape(result: dict[str, Any]) -> None:
+    assert result["status"] == "ok"
+    assert result["answer"]
+    assert result["confidence"] in {"high", "medium", "low"}
+    assert result["answer_basis"] in {"direct_memory", "mixed", "fact_layer", "conflict"}
+    assert result["results"] == []
+    assert result["memory_result_count"] >= 1
+    assert result["citation_count"] >= 1
+    for verbose_key in (
+        "citations",
+        "evidence",
+        "structured_evidence",
+        "provenance",
+        "context_tokens_used",
+        "chunks_selected",
+        "chunks_dropped",
+        "tokenizer_used",
+    ):
+        assert verbose_key not in result
+
+
 def test_degraded_vector_health_is_consistent_across_api_and_mcp(
     tmp_path: Path,
 ) -> None:
@@ -279,7 +300,7 @@ def test_api_insert_can_be_read_through_mcp(tmp_path: Path) -> None:
     _assert_search_shape(search, payload["id"], expect_cursor=True)
     assert retrieve["status"] == "ok"
     _assert_public_memory(retrieve["memory"], payload)
-    _assert_ask_shape(ask, payload["id"])
+    _assert_mcp_concise_ask_shape(ask)
 
 
 def test_mcp_insert_can_be_read_through_api(tmp_path: Path) -> None:
@@ -358,7 +379,7 @@ def test_api_project_insert_can_be_read_through_mcp_with_same_project(
     _assert_search_shape(search, payload["id"], expect_cursor=True)
     assert retrieve["status"] == "ok"
     _assert_public_memory(retrieve["memory"], payload)
-    _assert_ask_shape(ask, payload["id"])
+    _assert_mcp_concise_ask_shape(ask)
 
 
 def test_mcp_project_insert_can_be_read_through_api_with_same_project(
@@ -453,7 +474,7 @@ def test_api_bearer_insert_is_readable_by_mcp_same_owner_and_hidden_from_other_o
     assert insert.status_code == 200
     _assert_search_shape(search_a, payload["id"], expect_cursor=True)
     assert retrieve_a["status"] == "ok"
-    _assert_ask_shape(ask_a, payload["id"])
+    _assert_mcp_concise_ask_shape(ask_a)
     assert search_b["status"] == "ok"
     assert payload["id"] not in {row["id"] for row in search_b["results"]}
     assert retrieve_b["status"] == "not_found"
@@ -550,11 +571,15 @@ def test_api_and_mcp_response_shapes_share_public_fields(tmp_path: Path) -> None
     assert set(api_retrieve).issuperset({"status", "memory"})
     assert set(mcp_retrieve).issuperset({"status", "id", "memory"})
     assert api_retrieve["memory"]["id"] == mcp_retrieve["memory"]["id"] == payload["id"]
-    for result in (api_ask, mcp_ask):
-        assert set(result).issuperset(
-            {"status", "results", "answer", "citations", "confidence", "answer_basis"}
-        )
-        assert result["results"][0]["id"] == payload["id"]
+    assert set(api_ask).issuperset(
+        {"status", "results", "answer", "citations", "confidence", "answer_basis"}
+    )
+    assert api_ask["results"][0]["id"] == payload["id"]
+    assert set(mcp_ask).issuperset(
+        {"status", "results", "answer", "confidence", "answer_basis"}
+    )
+    assert mcp_ask["results"] == []
+    assert "citations" not in mcp_ask
 
 
 def test_mcp_concise_response_format_strips_heavy_search_and_ask_payloads(
@@ -615,8 +640,12 @@ def test_mcp_concise_response_format_strips_heavy_search_and_ask_payloads(
     assert "tag_sources" in detailed_row["conversation"]["metadata"]
 
     assert concise_ask["status"] == "ok"
-    assert concise_ask["results"][0]["id"] == payload["id"]
-    assert "conversation" not in concise_ask["results"][0]
-    assert "conversation" not in concise_ask["structured_evidence"]["results"][0]
+    assert concise_ask["results"] == []
+    assert concise_ask["memory_result_count"] == 1
+    assert concise_ask["citation_count"] == 1
+    assert "citations" not in concise_ask
+    assert "evidence" not in concise_ask
+    assert "structured_evidence" not in concise_ask
+    assert "provenance" not in concise_ask
     assert "index_chunks" not in json.dumps(concise_ask)
     assert "tag_sources" not in json.dumps(concise_ask)

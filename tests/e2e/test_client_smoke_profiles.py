@@ -423,12 +423,16 @@ def test_mcp_client_profile_smoke_with_ollama_embeddings(
             arguments={"question": profile["query"], "top_k": 5},
         )
         assert ask["status"] == "ok"
-        assert ask["citations"]
-        assert ask["citations"][0]["id"] == insert["id"]
         assert ask["error_code"] is None
         assert ask["error_message"] is None
-        assert ask["results"][0]["id"] == insert["id"]
-        assert "conversation" not in ask["results"][0]
+        assert ask["answer"]
+        assert ask["results"] == []
+        assert ask["memory_result_count"] >= 1
+        assert ask["citation_count"] >= 1
+        assert "citations" not in ask
+        assert "evidence" not in ask
+        assert "structured_evidence" not in ask
+        assert "provenance" not in ask
         assert "hash" not in json.dumps(ask)
 
 
