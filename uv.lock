@@ -121,7 +121,7 @@ requires-dist = [
     { name = "pinecone", marker = "extra == 'pinecone'", specifier = ">=7.0.0" },
     { name = "psycopg", extras = ["binary"], marker = "extra == 'postgres'", specifier = ">=3.3.4" },
     { name = "pydantic", specifier = ">=2.13.4" },
-    { name = "pymilvus", marker = "extra == 'milvus'", specifier = ">=2.5.0" },
+    { name = "pymilvus", marker = "extra == 'milvus'", specifier = ">=3.0.1" },
     { name = "pymongo", marker = "extra == 'mongodb'", specifier = ">=4.10.1" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "python-multipart", marker = "extra == 'oauth'", specifier = ">=0.0.32" },
@@ -2173,7 +2173,7 @@ wheels = [
 
 [[package]]
 name = "pymilvus"
-version = "3.0.0"
+version = "3.0.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cachetools" },
@@ -2183,10 +2183,10 @@ dependencies = [
     { name = "protobuf" },
     { name = "python-dotenv" },
     { name = "requests" },
-    { name = "setuptools" },
 ]
+sdist = { url = "https://files.pythonhosted.org/packages/c0/78/6bd0dba340706bc63346af96f0ebe36ff17f75404f5de935fda94d476c98/pymilvus-3.0.1.tar.gz", hash = "sha256:c02389059088b18d6e598cd175541e445c772fab4926c5e527c4913be34887f1", size = 347593, upload-time = "2026-07-29T14:55:43.061Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ac/c1/01647e61f3a82fd881382746b6dde3401d65b88cd4f75bd059901fb2392b/pymilvus-3.0.0-1-py3-none-any.whl", hash = "sha256:57c8e7c87fbbf579f122b4df893949bc78e50bca2988527864891bd544817b05", size = 344817, upload-time = "2026-05-07T14:57:45.235Z" },
+    { url = "https://files.pythonhosted.org/packages/60/9d/7011887b29f452905745e8bd321f404068d5bfe78fe84e42c0b7cd81a065/pymilvus-3.0.1-py3-none-any.whl", hash = "sha256:c5a8d5c1fa1de7b416e3529d383d8cc2e7da2170433ffa4a2d9087e14f70171a", size = 386820, upload-time = "2026-07-29T14:55:44.279Z" },
 ]
 
 [[package]]
