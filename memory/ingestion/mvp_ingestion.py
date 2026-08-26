@@ -870,6 +870,9 @@ class MVPIngestionService:
     def revoke_oauth_refresh_token_family(self, token_family_id: str) -> bool:
         return self._call(revoke_oauth_refresh_token_family, token_family_id)
 
+    def revoke_oauth_authorization_for_access_token(self, access_token: str) -> bool:
+        return self._call(revoke_oauth_authorization_for_access_token, access_token)
+
 
 def _runtime() -> RuntimeDependencies:
     global _RUNTIME
@@ -4165,6 +4168,13 @@ def revoke_oauth_refresh_token_family(token_family_id: str) -> bool:
     if not hasattr(store, "revoke_oauth_refresh_token_family"):
         return False
     return bool(store.revoke_oauth_refresh_token_family(token_family_id))
+
+
+def revoke_oauth_authorization_for_access_token(access_token: str) -> bool:
+    store = _runtime().metadata_store
+    if not hasattr(store, "revoke_oauth_authorization_for_access_token"):
+        return False
+    return bool(store.revoke_oauth_authorization_for_access_token(access_token))
 
 
 def _fact_answer_text(
