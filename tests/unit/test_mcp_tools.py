@@ -558,6 +558,14 @@ def test_mcp_does_not_expose_agent_facing_forget_or_delete_tools() -> None:
     assert all("forget" not in name and "delete" not in name and "purge" not in name for name in handlers)
 
 
+def test_mcp_tool_policies_cover_registered_handlers() -> None:
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
+    handlers = build_tool_handlers(agent)
+
+    assert set(handlers) == set(mcp_server.TOOL_DESCRIPTIONS)
+    assert set(handlers) == set(mcp_server.MCP_TOOL_POLICIES)
+
+
 @pytest.mark.asyncio
 async def test_mcp_tool_handlers_accept_codex_style_payload() -> None:
     runtime = _runtime()

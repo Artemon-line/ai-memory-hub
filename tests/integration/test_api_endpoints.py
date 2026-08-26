@@ -237,6 +237,18 @@ def _mcp_result_payload(response_text: str) -> dict[str, object]:
     raise AssertionError(f"No MCP result payload found in response: {response_text}")
 
 
+def _mcp_event_result(response_text: str) -> dict[str, object]:
+    for line in response_text.splitlines():
+        if not line.startswith("data: "):
+            continue
+        payload = json.loads(line.removeprefix("data: "))
+        if "result" in payload:
+            result = payload["result"]
+            assert isinstance(result, dict)
+            return result
+    raise AssertionError(f"No MCP event result found in response: {response_text}")
+
+
 def _base64url_json(payload: dict[str, object]) -> str:
     raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
     return _base64url(raw)
@@ -641,6 +653,26 @@ def test_oauth_auth_accepts_mcp_tools_list_with_session() -> None:
     assert session_id
     assert tools_list.status_code == 200
     assert "memory_search" in tools_list.text
+    tools = _mcp_event_result(tools_list.text)["tools"]
+    assert isinstance(tools, list)
+    tools_by_name = {
+        tool["name"]: tool for tool in tools if isinstance(tool, dict) and "name" in tool
+    }
+    insert = tools_by_name["memory_insert"]
+    insert_annotations = insert["annotations"]
+    assert insert_annotations["readOnlyHint"] is False
+    assert insert_annotations["destructiveHint"] is False
+    assert insert_annotations["idempotentHint"] is False
+    insert_auth = insert["_meta"]["ai-memory-hub/auth"]
+    assert insert_auth["auth_mode"] == "oauth_resource_server"
+    assert insert_auth["required_scopes"] == ["memory:read", "memory:write"]
+    assert insert_auth["write_scope"] == "memory:write"
+    assert "deduplicated" in insert_auth["retry_behavior"]
+    search = tools_by_name["memory_search"]
+    assert search["annotations"]["readOnlyHint"] is True
+    search_auth = search["_meta"]["ai-memory-hub/auth"]
+    assert search_auth["required_scopes"] == ["memory:read"]
+    assert "write_scope" not in search_auth
 
 
 def test_oauth_mcp_write_tool_requires_write_scope() -> None:
@@ -697,6 +729,16 @@ def test_oauth_mcp_write_tool_requires_write_scope() -> None:
     assert insert_payload["status"] == "error"
     assert insert_payload["error_code"] == "insufficient_scope"
     assert insert_payload["required_scope"] == "memory:write"
+    assert insert_payload["required_scopes"] == ["memory:write"]
+    assert insert_payload["granted_scopes"] == ["memory:read"]
+    assert insert_payload["auth_mode"] == "oauth_resource_server"
+    assert "Client tool approval" in insert_payload["error_message"]
+    assert "MCP auth token" in insert_payload["error_message"]
+    assert (
+        insert_payload["auth_config_path"]
+        == "api.auth / api.oauth.scopes_supported / MCP client Authorization bearer token"
+    )
+    assert "MCP client/server auth configuration" in insert_payload["auth_config_hint"]
     assert read_search.status_code == 200
     assert _mcp_result_payload(read_search.text)["status"] == "ok"
 

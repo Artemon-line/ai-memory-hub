@@ -110,6 +110,43 @@ def test_mcp_initialize_and_tools_list_with_session() -> None:
             assert any("metadata.summary" in item for item in guidance["instructions"])
             assert "id" not in guidance["minimal_example"]
             assert "summary" in guidance["minimal_example"]["metadata"]
+        insert_annotations = tools_by_name["memory_insert"]["annotations"]
+        assert insert_annotations["readOnlyHint"] is False
+        assert insert_annotations["destructiveHint"] is False
+        assert insert_annotations["idempotentHint"] is False
+        assert insert_annotations["openWorldHint"] is False
+        insert_auth = tools_by_name["memory_insert"]["_meta"]["ai-memory-hub/auth"]
+        assert insert_auth["auth_mode"] == "none"
+        assert insert_auth["required_scopes"] == []
+        assert insert_auth["scopes_when_authenticated"] == ["memory:read", "memory:write"]
+        assert insert_auth["memory_effect"] == "writes local conversation memory"
+        assert "write_scope" not in insert_auth
+        assert "deduplicated" in insert_auth["retry_behavior"]
+        assert "MCP client/server auth configuration" in insert_auth["configuration_hint"]
+        assert "tool approval" in insert_auth["approval_hint"]
+        for tool_name in (
+            "memory_validate",
+            "memory_search",
+            "memory_retrieve",
+            "memory_ask",
+            "memory_fact_search",
+            "memory_profile_get",
+            "memory_project_list",
+            "memory_project_default_get",
+            "memory_project_get",
+        ):
+            annotations = tools_by_name[tool_name]["annotations"]
+            assert annotations["readOnlyHint"] is True
+            assert annotations["destructiveHint"] is False
+            assert annotations["idempotentHint"] is True
+            assert annotations["openWorldHint"] is False
+            auth = tools_by_name[tool_name]["_meta"]["ai-memory-hub/auth"]
+            assert auth["auth_mode"] == "none"
+            assert auth["required_scopes"] == []
+            assert auth["scopes_when_authenticated"] == ["memory:read"]
+            assert "write_scope" not in auth
+        profile_auth = tools_by_name["memory_profile_get"]["_meta"]["ai-memory-hub/auth"]
+        assert "does not store user conversation memory" in profile_auth["internal_side_effects"]
         for tool_name in (
             "memory_search",
             "memory_ask",

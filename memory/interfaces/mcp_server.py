@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+from dataclasses import dataclass
 from datetime import datetime
 from functools import wraps
 from typing import Annotated, Any, Awaitable, Callable
@@ -12,7 +13,7 @@ import jsonschema
 from fastmcp import Context as FastMCPContext
 from pydantic import Field
 
-from memory.auth import WRITE_SCOPE, current_auth_context, current_owner_id
+from memory.auth import READ_SCOPE, WRITE_SCOPE, current_auth_context, current_owner_id
 from memory.backend.log_safety import redact_secrets
 from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig
@@ -92,12 +93,13 @@ SERVER_INSTRUCTIONS = (
 
 TOOL_DESCRIPTIONS: dict[str, str] = {
     "memory_validate": (
-        "Validate a conversation payload against the conversation schema. "
+        "Read-only validation for a conversation payload against the conversation schema. "
         "Pass `conversation_json` as a nested JSON object, omit `id` unless it is a valid UUID, "
         "and use message `text` or `content` fields."
     ),
     "memory_insert": (
-        "Insert a conversation into memory. Pass `conversation_json` as a nested JSON object, "
+        "Write a conversation into local memory. Requires the `memory:write` auth scope when MCP auth is enabled. "
+        "Pass `conversation_json` as a nested JSON object, "
         "omit `id` unless it is a valid UUID, use message `text` or `content` fields, "
         "include the whole conversation in one object rather than splitting it into batches, "
         "optionally include a short factual `metadata.summary` retrieval hint, "
@@ -105,36 +107,127 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "and optionally pass `project_id` for a shared workspace."
     ),
     "memory_search": (
-        "Search existing memory by text query. Optional filters: source, date_from, date_to, tags, "
+        "Read-only search of existing memory by text query. Optional filters: source, date_from, date_to, tags, "
         "and thread_id. Use project_id for a shared workspace. Use limit and cursor for paged "
         "results. Use result_mode=threads for thread-grouped results. Use response_format=concise "
         "for normal recall or detailed for full conversation payloads. Use memory_status to inspect active, pending_review, rejected, or all memories."
     ),
-    "memory_retrieve": "Retrieve a stored memory item by ID, optionally within a project_id and memory_status filter.",
+    "memory_retrieve": "Read-only retrieval of a stored memory item by ID, optionally within a project_id and memory_status filter.",
     "memory_ask": (
-        "Answer a question using stored memory and facts. Optional filters: source, date_from, "
+        "Read-only question answering using stored memory and facts. Optional filters: source, date_from, "
         "date_to, tags, thread_id, project_id, and memory_status. Use response_format=concise "
         "for normal recall or detailed for full search rows."
     ),
     "memory_fact_search": (
-        "Search normalized extracted memory facts. Optional filters: source, subject, predicate, "
+        "Read-only search of normalized extracted memory facts. Optional filters: source, subject, predicate, "
         "date_from, date_to, confidence, status, source_quality, save_intent, save_intent_source, "
         "freshness_from, freshness_to, limit, and project_id. Use response_format=concise for "
         "deduplicated, limited facts or detailed for full fact provenance."
     ),
     "memory_profile_get": (
-        "Return normalized facts plus a compact fact-based summary for a subject. Optional filters: "
+        "Read-only profile retrieval with normalized facts plus a compact fact-based summary for a subject. Optional filters: "
         "source, predicate, date_from, date_to, confidence, status, source_quality, freshness_from, "
         "freshness_to, save_intent, save_intent_source, limit, and project_id. Use "
         "response_format=concise for deduplicated, limited facts and summary counts or detailed "
         "for full fact provenance."
     ),
-    "memory_fact_supersede": "Mark one normalized fact as superseded by another fact within a project_id.",
-    "memory_pending_approve": "Approve a pending memory insert so it becomes searchable and can create facts.",
-    "memory_pending_reject": "Reject a pending memory insert so it remains excluded from default reads.",
-    "memory_project_list": "List project workspaces visible to the authenticated user.",
-    "memory_project_default_get": "Return the authenticated user's default private project workspace.",
-    "memory_project_get": "Return one visible project workspace by project_id.",
+    "memory_fact_supersede": "Write fact state by marking one normalized fact as superseded by another fact within a project_id. Requires the `memory:write` auth scope when MCP auth is enabled.",
+    "memory_pending_approve": "Write pending memory state by approving a pending insert so it becomes searchable and can create facts. Requires the `memory:write` auth scope when MCP auth is enabled.",
+    "memory_pending_reject": "Write pending memory state by rejecting a pending insert so it remains excluded from default reads. Requires the `memory:write` auth scope when MCP auth is enabled.",
+    "memory_project_list": "Read-only list of project workspaces visible to the authenticated user.",
+    "memory_project_default_get": "Read-only retrieval of the authenticated user's default private project workspace.",
+    "memory_project_get": "Read-only retrieval of one visible project workspace by project_id.",
+}
+
+MCP_AUTH_CONFIG_HINT = (
+    "Grant the ai-memory-hub MCP auth token the missing scope by reconnecting "
+    "through the MCP OAuth/Connect flow or updating the bearer-token scopes in "
+    "the MCP client/server auth configuration."
+)
+MCP_APPROVAL_HINT = (
+    "Client tool approval only allows this call to run; it does not add bearer "
+    "or OAuth scopes."
+)
+MCP_AUTH_CONFIG_PATH = (
+    "api.auth / api.oauth.scopes_supported / MCP client Authorization bearer token"
+)
+
+@dataclass(frozen=True, slots=True)
+class MCPToolPolicy:
+    read_only: bool
+    required_scopes: tuple[str, ...] = (READ_SCOPE,)
+    destructive: bool = False
+    idempotent: bool = True
+    open_world: bool = False
+    memory_effect: str = "reads local memory state"
+    internal_side_effects: str | None = None
+    retry_behavior: str | None = None
+
+    def annotations(self) -> dict[str, bool]:
+        return {
+            "readOnlyHint": self.read_only,
+            "destructiveHint": self.destructive,
+            "idempotentHint": self.idempotent,
+            "openWorldHint": self.open_world,
+        }
+
+    def auth_meta(self, *, auth_mode: str | None) -> dict[str, Any]:
+        authenticated = auth_mode is not None and auth_mode != "none"
+        meta: dict[str, Any] = {
+            "auth_mode": auth_mode or "unknown",
+            "required_scopes": list(self.required_scopes) if authenticated else [],
+            "scopes_when_authenticated": list(self.required_scopes),
+            "memory_effect": self.memory_effect,
+            "config_path": MCP_AUTH_CONFIG_PATH,
+            "configuration_hint": MCP_AUTH_CONFIG_HINT,
+            "approval_hint": MCP_APPROVAL_HINT,
+        }
+        if authenticated and WRITE_SCOPE in self.required_scopes:
+            meta["write_scope"] = WRITE_SCOPE
+        if self.internal_side_effects:
+            meta["internal_side_effects"] = self.internal_side_effects
+        if self.retry_behavior:
+            meta["retry_behavior"] = self.retry_behavior
+        return meta
+
+
+READ_ONLY_TOOL_POLICY = MCPToolPolicy(read_only=True)
+READ_ONLY_WITH_INTERNAL_WRITES_POLICY = MCPToolPolicy(
+    read_only=True,
+    internal_side_effects=(
+        "May refresh server-owned derived summaries or initialize default project metadata; "
+        "does not store user conversation memory."
+    ),
+)
+MEMORY_INSERT_POLICY = MCPToolPolicy(
+    read_only=False,
+    required_scopes=(READ_SCOPE, WRITE_SCOPE),
+    idempotent=False,
+    memory_effect="writes local conversation memory",
+    retry_behavior=(
+        "Exact repeated inserts are deduplicated; changed same-thread payloads may append or create memory."
+    ),
+)
+NON_DESTRUCTIVE_WRITE_POLICY = MCPToolPolicy(
+    read_only=False,
+    required_scopes=(READ_SCOPE, WRITE_SCOPE),
+    idempotent=False,
+    memory_effect="writes local memory state",
+)
+MCP_TOOL_POLICIES: dict[str, MCPToolPolicy] = {
+    "memory_validate": READ_ONLY_TOOL_POLICY,
+    "memory_insert": MEMORY_INSERT_POLICY,
+    "memory_search": READ_ONLY_TOOL_POLICY,
+    "memory_retrieve": READ_ONLY_WITH_INTERNAL_WRITES_POLICY,
+    "memory_ask": READ_ONLY_TOOL_POLICY,
+    "memory_fact_search": READ_ONLY_TOOL_POLICY,
+    "memory_profile_get": READ_ONLY_WITH_INTERNAL_WRITES_POLICY,
+    "memory_fact_supersede": NON_DESTRUCTIVE_WRITE_POLICY,
+    "memory_pending_approve": NON_DESTRUCTIVE_WRITE_POLICY,
+    "memory_pending_reject": NON_DESTRUCTIVE_WRITE_POLICY,
+    "memory_project_list": READ_ONLY_WITH_INTERNAL_WRITES_POLICY,
+    "memory_project_default_get": READ_ONLY_WITH_INTERNAL_WRITES_POLICY,
+    "memory_project_get": READ_ONLY_WITH_INTERNAL_WRITES_POLICY,
 }
 
 CONVERSATION_JSON_TOOL_META: dict[str, Any] = {
@@ -164,6 +257,35 @@ CONVERSATION_JSON_TOOL_META: dict[str, Any] = {
         }
     }
 }
+
+
+def _tool_policy(tool_name: str) -> MCPToolPolicy:
+    try:
+        return MCP_TOOL_POLICIES[tool_name]
+    except KeyError as exc:
+        raise ValueError(f"MCP tool policy missing for {tool_name}") from exc
+
+
+def _tool_meta(tool_name: str, *, config: HubConfig | None = None) -> dict[str, Any]:
+    meta: dict[str, Any] = {}
+    if tool_name in {"memory_validate", "memory_insert"}:
+        meta.update(CONVERSATION_JSON_TOOL_META)
+    auth_mode = str(config.api.auth) if config is not None else None
+    meta["ai-memory-hub/auth"] = _tool_policy(tool_name).auth_meta(auth_mode=auth_mode)
+    return meta
+
+
+def _validate_tool_registration(handlers: dict[str, ToolFn]) -> None:
+    handler_names = set(handlers)
+    missing_descriptions = handler_names - set(TOOL_DESCRIPTIONS)
+    missing_policies = handler_names - set(MCP_TOOL_POLICIES)
+    if missing_descriptions or missing_policies:
+        problems: list[str] = []
+        if missing_descriptions:
+            problems.append(f"descriptions missing for {sorted(missing_descriptions)}")
+        if missing_policies:
+            problems.append(f"policies missing for {sorted(missing_policies)}")
+        raise ValueError("MCP tool registration is incomplete: " + "; ".join(problems))
 
 
 def _envelope(
@@ -207,6 +329,26 @@ def _with_envelope_defaults(data: dict[str, Any]) -> dict[str, Any]:
         payload["results"] = redact_content_hashes(payload["results"])
 
     return payload
+
+
+def _insufficient_scope_error(
+    scope: str, *, auth_mode: str = "unknown", granted_scopes: tuple[str, ...] = ()
+) -> dict[str, Any]:
+    return _envelope(
+        status="error",
+        error_code="insufficient_scope",
+        error_message=(
+            f"{scope} scope is required for this MCP tool. "
+            f"{MCP_APPROVAL_HINT} {MCP_AUTH_CONFIG_HINT}"
+        ),
+        required_scope=scope,
+        required_scopes=[scope],
+        granted_scopes=sorted(granted_scopes),
+        auth_mode=auth_mode,
+        auth_config_path=MCP_AUTH_CONFIG_PATH,
+        auth_config_hint=MCP_AUTH_CONFIG_HINT,
+        approval_hint=MCP_APPROVAL_HINT,
+    )
 
 
 async def _emit_mcp_tool_log(
@@ -692,11 +834,10 @@ def build_tool_handlers(
         auth = current_auth_context()
         if auth is None or scope in auth.scopes:
             return None
-        return _envelope(
-            status="error",
-            error_code="insufficient_scope",
-            error_message=f"{scope} scope is required for this MCP tool",
-            required_scope=scope,
+        return _insufficient_scope_error(
+            scope,
+            auth_mode=auth.auth_mode,
+            granted_scopes=tuple(auth.scopes),
         )
 
     async def memory_validate(
@@ -1391,16 +1532,16 @@ def create_mcp_server(*, config: HubConfig, agent: BaseIngestionAgent):
         list_page_size=config.mcp.list_page_size,
     )
     handlers = build_tool_handlers(agent, config=config)
+    _validate_tool_registration(handlers)
 
     for tool_name, tool_fn in handlers.items():
-        meta = (
-            CONVERSATION_JSON_TOOL_META
-            if tool_name in {"memory_validate", "memory_insert"}
-            else None
-        )
-        mcp.tool(name=tool_name, description=TOOL_DESCRIPTIONS[tool_name], meta=meta)(
-            tool_fn
-        )
+        tool_policy = _tool_policy(tool_name)
+        mcp.tool(
+            name=tool_name,
+            description=TOOL_DESCRIPTIONS[tool_name],
+            annotations=tool_policy.annotations(),
+            meta=_tool_meta(tool_name, config=config),
+        )(tool_fn)
     _register_resources(mcp, agent)
     _register_prompts(mcp)
 
