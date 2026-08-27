@@ -23,6 +23,9 @@ Check readiness:
 http://127.0.0.1:8000/ready
 ```
 
+The default smoke mode publishes the hub API/MCP port to loopback. Postgres
+stays inside the Compose network and is not exposed on the host.
+
 Observability endpoints are also bound to loopback:
 
 ```text
@@ -85,7 +88,8 @@ https://YOUR-NGROK-DOMAIN.ngrok-free.app/connect
 ```
 
 Keep the Compose port binding at `127.0.0.1:8000:8000`; your tunnel or reverse
-proxy should publish only the hub port, and Postgres stays local.
+proxy should publish only the hub port, and Postgres should stay inside the
+Compose network.
 
 Jaeger and Prometheus are for local diagnostics only. Do not expose their ports
 through the public tunnel.

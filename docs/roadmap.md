@@ -108,7 +108,8 @@ search, and retrieval.
 - [x] Define `VectorStore` interface:
   - `insert(chunks)`
   - `search(query_embedding, top_k)`
-  - `delete(ids)`
+  - `delete(ids)` for provider-level vector maintenance, not user-facing
+    destructive memory deletion in `v0.1.0-beta`
   - `get_stats()`
 - [x] Move LanceDB implementation behind the interface
 - [x] Formalize in-memory implementation as a supported provider

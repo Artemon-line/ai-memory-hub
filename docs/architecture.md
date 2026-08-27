@@ -18,7 +18,8 @@ Related docs:
 Implemented and verified in the codebase:
 
 - Schema-first ingestion through HTTP `POST /memory/insert` and MCP `memory_insert`.
-- MCP validation/search/retrieve/ask tools, plus conversation, search, timeline, health resources and prompts.
+- MCP validation/search/retrieve/ask tools, fact/profile/review/project helper
+  tools, plus conversation, search, timeline, health resources and prompts.
 - MCP client smoke profiles for Codex, Gemini, VS Code Copilot, and opencode over the streamable HTTP transport.
 - Omitted-ID insertion: normalization assigns a UUID when clients omit `id`.
 - Deterministic ingestion with message hashes, conversation hashes, duplicate detection, same-thread append handling, append-only chunking, and indexing state updates.
@@ -135,6 +136,21 @@ HTTP API:
 - `POST /memory/search`
 - `POST /memory/retrieve`
 - `POST /memory/ask`
+- `POST /memory/facts/search`
+- `POST /memory/profile/get`
+- `POST /memory/facts/supersede`
+- `POST /memory/pending/approve`
+- `POST /memory/pending/reject`
+- `GET /memory/projects`
+- `GET /memory/projects/default`
+- `GET /memory/projects/{project_id}`
+- `GET /health`
+- `GET /ready`
+- `GET /observability`
+- `GET /.well-known/oauth-protected-resource`
+- `GET /.well-known/oauth-protected-resource/mcp`
+- `GET /.well-known/oauth-authorization-server`
+- Connect UI and local OAuth routes under `/connect`, `/auth/*`, and `/oauth/*`
 
 MCP tools:
 
@@ -143,6 +159,14 @@ MCP tools:
 - `memory_search`
 - `memory_retrieve`
 - `memory_ask`
+- `memory_fact_search`
+- `memory_profile_get`
+- `memory_fact_supersede`
+- `memory_pending_approve`
+- `memory_pending_reject`
+- `memory_project_list`
+- `memory_project_default_get`
+- `memory_project_get`
 
 MCP resources:
 

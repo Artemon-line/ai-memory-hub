@@ -2,7 +2,7 @@
 
 Source date: `27-08-2026`
 
-Status: planned
+Status: implemented
 
 Priority: P0 before `v0.1.0-beta`
 
@@ -108,34 +108,75 @@ governance events over immutable stored history.
 
 ### Clean Install And Compose Verification
 
-- [ ] Run a clean checkout setup with `uv sync --dev --group docs`.
-- [ ] Run `uv run python -m ruff check memory tests tools`.
-- [ ] Run `uv run python -m pyright`.
-- [ ] Run the focused tests added for audit, quarantine, auth, project, and
+- [x] Run a clean checkout setup with `uv sync --dev --group docs`.
+- [x] Run `uv run python -m ruff check memory tests tools`.
+- [x] Run `uv run python -m pyright`.
+- [x] Run the focused tests added for audit, quarantine, auth, project, and
       archive behavior.
-- [ ] Run `uv run pytest tests/unit tests/integration -q`.
-- [ ] Run `uv run python tools/prepare_mkdocs.py`.
-- [ ] Run `uv run python -m mkdocs build --strict`.
-- [ ] Run the README source quick start from a clean checkout.
-- [ ] Run the Docker quick start from a clean checkout.
-- [ ] Run `examples/local-stack` Compose verification with deterministic
+- [x] Run `uv run pytest tests/unit tests/integration -q`.
+- [x] Run `uv run python tools/prepare_mkdocs.py`.
+- [x] Run `uv run python -m mkdocs build --strict`.
+- [x] Run the README source quick start from a clean checkout.
+- [x] Run the Docker quick start from a clean checkout.
+- [x] Run `examples/local-stack` Compose verification with deterministic
       embeddings.
-- [ ] Verify `/health`, `/ready`, insert, search, retrieve, ask, and MCP smoke
+- [x] Verify `/health`, `/ready`, insert, search, retrieve, ask, and MCP smoke
       paths against the clean stack.
 
 ### Docs Match What Ships
 
-- [ ] Update README status and known-limits text for immutable memory history.
-- [ ] Update architecture docs to describe archive/quarantine as visibility
+- [x] Update README status and known-limits text for immutable memory history.
+- [x] Update architecture docs to describe archive/quarantine as visibility
       states rather than destructive mutation.
-- [ ] Update feature docs with the exact shipped HTTP endpoints.
-- [ ] Update agent docs with the exact shipped MCP tools.
-- [ ] Update auth docs with the exact shipped auth modes and provider status.
-- [ ] Update planned-features docs so future dashboard, SDK, hosted service,
+- [x] Update feature docs with the exact shipped HTTP endpoints.
+- [x] Update agent docs with the exact shipped MCP tools.
+- [x] Update auth docs with the exact shipped auth modes and provider status.
+- [x] Update planned-features docs so future dashboard, SDK, hosted service,
       destructive deletion, and enterprise governance work is clearly separate
       from beta.
-- [ ] Update release notes or release checklist with beta limitations.
-- [ ] Run strict docs build after every docs wording change.
+- [x] Update release notes or release checklist with beta limitations.
+- [x] Run strict docs build after every docs wording change.
+
+## Verification Evidence
+
+Clean checkout path:
+`C:/Users/tyran/.codex/visualizations/2026/08/27/01a041f5-840a-7c63-b3dd-1c982ce3ed7c/amh-phase4-clean-4f7c9a`.
+
+Phase 4 verification on `2026-08-27`:
+
+- `uv sync --dev --group docs` passed from the clean checkout.
+- `uv run python -m ruff check memory tests tools` passed.
+- `uv run python -m pyright` passed with 0 errors.
+- Focused P0 governance slice passed with 20 tests:
+  audit events, sensitive-content quarantine, auth/project negative paths, and
+  the no-destructive beta HTTP/MCP surface guard.
+- `uv run pytest tests/unit tests/integration -q` passed with 605 passed,
+  17 skipped, and 14 warnings.
+- `uv run python tools/prepare_mkdocs.py` passed.
+- `uv run pytest tests/unit/test_docs_build.py -q` passed with 2 tests.
+- `uv run python -m mkdocs build --strict` passed.
+- README source quick start passed by serving on `127.0.0.1:8010`, then
+  verifying `/ready`, `/health`, insert, search, retrieve, ask, and MCP
+  initialize.
+- Docker quick start passed with `docker build -t ai-memory-hub:phase4-docker-smoke
+  -f Containerfile .`, then serving on `127.0.0.1:8012` and verifying
+  `/ready`, `/health`, insert, search, ask, and MCP initialize.
+- `docker compose -f examples/local-stack/compose.yaml config` passed against
+  the checked-in local-stack Compose file.
+- `examples/local-stack` deterministic Compose smoke passed with Postgres,
+  PGVector, local deterministic embeddings, and the hub on `127.0.0.1:8000`.
+  The smoke verified `/ready`, `/health`, insert, search, retrieve, ask, MCP
+  initialize, and MCP `tools/list`.
+
+Local runtime note: Docker Desktop could not pull Docker Hub images because the
+daemon returned `authentication required - incorrect username or password`,
+including for `hello-world`. The Compose runtime smoke therefore used a
+temporary clean-checkout override for the Postgres image only, after importing
+the exact pinned `pgvector/pgvector@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b`
+image through WSL Podman. The checked-in Compose file itself was not changed for
+that registry-auth workaround. A separate portability issue found during the
+smoke was fixed by keeping Postgres inside the Compose network instead of
+publishing host port `5432`.
 
 ## Acceptance Criteria
 
@@ -150,7 +191,7 @@ governance events over immutable stored history.
 - [x] Project and auth negative tests cover both HTTP and MCP surfaces.
 - [x] Archive/restore does not ship in beta; archived content exclusion tests
       remain P1 with archive support.
-- [ ] Clean source and Docker/Compose verification can be repeated from a clean
+- [x] Clean source and Docker/Compose verification can be repeated from a clean
       checkout.
-- [ ] README, architecture, feature, agent, auth, and release docs precisely
+- [x] README, architecture, feature, agent, auth, and release docs precisely
       match shipped beta behavior.
