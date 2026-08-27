@@ -94,6 +94,7 @@ nav:
       - Explicit Memory Save Intent Plan: docs/improvements/explicit_memory_save_intent_plan.md
       - Google OAuth Connect UI Plan: docs/improvements/google_oauth_connect_ui_plan.md
       - P0 Beta Governance Checklist: docs/improvements/p0_beta_governance_checklist.md
+      - P1 SQL Hardening Plan: docs/improvements/p1_sql_hardening_plan.md
       - Vector Database Options: docs/improvements/vector_dbs.md
       - Neo4j Aura Graph Memory Plan: docs/improvements/neo4j_aura_graph_memory_plan.md
       - App-Level Memory Encryption Plan: docs/improvements/app_level_encryption_plan.md
