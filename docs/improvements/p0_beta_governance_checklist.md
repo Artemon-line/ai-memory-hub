@@ -1,0 +1,153 @@
+# P0 Beta Governance Checklist
+
+Source date: `27-08-2026`
+
+Status: planned
+
+Priority: P0 before `v0.1.0-beta`
+
+## Goal
+
+Ship the beta with a clear governed-memory contract: ai-memory-hub keeps
+append-only memory history, protects sensitive captures before they enter normal
+retrieval, enforces project/auth boundaries consistently, and documents only
+the behavior that actually ships.
+
+This plan intentionally does not add destructive memory update or delete
+workflows. History is the product record. Corrections, supersession,
+quarantine, approval, rejection, archive, and restore are visibility or
+governance events over immutable stored history.
+
+## Lifecycle Decision
+
+- [x] Treat accepted memory payloads as immutable history.
+- [x] Avoid general-purpose memory update and delete tools for
+      `v0.1.0-beta`.
+- [ ] Document that corrections are represented as new memories, superseding
+      facts, or explicit governance events.
+- [ ] Document that archive removes memories from default retrieval and ask
+      flows without erasing history.
+- [ ] Document that quarantine prevents memories from entering default
+      retrieval until approval.
+- [ ] Ensure public docs do not describe destructive delete/update as a shipped
+      beta capability.
+
+## P0 Workstreams
+
+### Audit Events
+
+- [ ] Add a durable append-only audit event model for security- and
+      governance-relevant actions.
+- [ ] Record `memory.inserted` events.
+- [ ] Record `memory.archived` and `memory.restored` events if archive support
+      is added for beta.
+- [ ] Record `memory.quarantined`, `memory.approved`, and `memory.rejected`
+      events.
+- [ ] Record `memory.searched`, `memory.retrieved`, and `memory.asked` events
+      without storing raw search queries or full memory payloads.
+- [ ] Record `fact.superseded` events.
+- [ ] Record `project.access_denied` events for failed project authorization.
+- [ ] Record auth lifecycle events such as token revocation where supported.
+- [ ] Include actor, project, memory id or fact id, request id, source surface,
+      timestamp, outcome, and non-sensitive reason codes.
+- [ ] Add metadata and storage-provider tests for audit event persistence.
+- [ ] Add API/MCP tests proving audit events are emitted for representative
+      write, read, denial, and review paths.
+
+### Secrets And PII Quarantine
+
+- [ ] Add an insert-time sensitive-content scanner before normal persistence.
+- [ ] Detect and quarantine likely API keys, bearer tokens, private keys,
+      passwords, credential URLs, and connection strings.
+- [ ] Detect and quarantine high-confidence sensitive PII patterns such as
+      credit cards, SSNs, passport-like identifiers, and private key material.
+- [ ] Keep normal names, ordinary email addresses, and project references out of
+      the default quarantine path unless stricter rules are configured.
+- [ ] Return safe reason codes for quarantine decisions.
+- [ ] Store quarantined content outside default search, retrieve, ask, fact, and
+      profile flows.
+- [ ] Expose quarantine review through the existing pending-review/admin flow or
+      a small beta-specific review surface.
+- [ ] Emit audit events for quarantine, approval, and rejection.
+- [ ] Add tests for secret detection, false-positive tolerance, approval,
+      rejection, and retrieval exclusion.
+
+### Auth And Project Negative Tests
+
+- [ ] Add HTTP tests showing protected memory routes fail without credentials
+      when auth is enabled.
+- [ ] Add HTTP tests for invalid, expired, or revoked tokens.
+- [ ] Add HTTP tests showing a user cannot read, ask, retrieve, or write another
+      project without the required role.
+- [ ] Add HTTP tests showing reader, writer, owner, and admin roles cannot
+      perform actions outside their permissions.
+- [ ] Add MCP tests proving the same auth and project checks apply through MCP
+      tools.
+- [ ] Add tests showing access-denied paths do not reveal private memory text,
+      fact text, project metadata, or existence details beyond the chosen error
+      contract.
+- [ ] Add tests showing quarantined and archived memories are excluded from
+      normal search and ask.
+
+### Archive Visibility
+
+- [ ] Decide whether archive/restore ships in `v0.1.0-beta` or remains a P1
+      optimization.
+- [ ] If archive ships, add an explicit archived state to metadata.
+- [ ] If archive ships, exclude archived memories from default search, retrieve,
+      ask, fact extraction, profile, and graph paths.
+- [ ] If archive ships, allow explicit administrative/history reads to include
+      archived memories.
+- [ ] If archive ships, add audit events for archive and restore.
+- [ ] If archive does not ship, document it as a near-term optimization and keep
+      destructive delete/update out of beta docs.
+
+### Clean Install And Compose Verification
+
+- [ ] Run a clean checkout setup with `uv sync --dev --group docs`.
+- [ ] Run `uv run python -m ruff check memory tests tools`.
+- [ ] Run `uv run python -m pyright`.
+- [ ] Run the focused tests added for audit, quarantine, auth, project, and
+      archive behavior.
+- [ ] Run `uv run pytest tests/unit tests/integration -q`.
+- [ ] Run `uv run python tools/prepare_mkdocs.py`.
+- [ ] Run `uv run python -m mkdocs build --strict`.
+- [ ] Run the README source quick start from a clean checkout.
+- [ ] Run the Docker quick start from a clean checkout.
+- [ ] Run `examples/local-stack` Compose verification with deterministic
+      embeddings.
+- [ ] Verify `/health`, `/ready`, insert, search, retrieve, ask, and MCP smoke
+      paths against the clean stack.
+
+### Docs Match What Ships
+
+- [ ] Update README status and known-limits text for immutable memory history.
+- [ ] Update architecture docs to describe archive/quarantine as visibility
+      states rather than destructive mutation.
+- [ ] Update feature docs with the exact shipped HTTP endpoints.
+- [ ] Update agent docs with the exact shipped MCP tools.
+- [ ] Update auth docs with the exact shipped auth modes and provider status.
+- [ ] Update planned-features docs so future dashboard, SDK, hosted service,
+      destructive deletion, and enterprise governance work is clearly separate
+      from beta.
+- [ ] Update release notes or release checklist with beta limitations.
+- [ ] Run strict docs build after every docs wording change.
+
+## Acceptance Criteria
+
+- [ ] The beta contract says memory is append-only history.
+- [ ] No public beta docs promise destructive update or delete.
+- [ ] Audit events exist for critical write, read, denial, review, and auth
+      lifecycle actions.
+- [ ] Secrets and high-confidence sensitive PII are blocked or quarantined
+      before normal retrieval.
+- [ ] Quarantined content is excluded from default search, retrieve, ask, fact,
+      profile, and graph paths.
+- [ ] Project and auth negative tests cover both HTTP and MCP surfaces.
+- [ ] Archived content, if shipped, is excluded from default retrieval and
+      covered by tests.
+- [ ] Clean source and Docker/Compose verification can be repeated from a clean
+      checkout.
+- [ ] README, architecture, feature, agent, auth, and release docs precisely
+      match shipped beta behavior.
+
