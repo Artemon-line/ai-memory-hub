@@ -859,6 +859,63 @@ def test_bearer_auth_allows_shared_project_collaboration(tmp_path) -> None:
     assert reader_write.status_code == 403
 
 
+def test_api_memory_operations_record_audit_events_with_request_id(tmp_path) -> None:
+    client, store = _sqlite_auth_client(tmp_path)
+    headers = {"Authorization": "Bearer token-a", "x-request-id": "req-audit-http"}
+    payload = _conversation()
+    payload["messages"] = [
+        {"role": "user", "text": "Audit trail remembers the Europa mission."}
+    ]
+
+    insert = client.post("/memory/insert", json=payload, headers=headers)
+    memory_id = insert.json()["id"]
+    search = client.post(
+        "/memory/search",
+        json={"query": "Europa mission"},
+        headers=headers,
+    )
+    retrieve = client.post(
+        "/memory/retrieve",
+        json={"id": memory_id},
+        headers=headers,
+    )
+
+    assert insert.status_code == 200
+    assert search.status_code == 200
+    assert retrieve.status_code == 200
+    events = store.list_audit_events(actor_id="owner-a", limit=20)
+    event_types = [event["event_type"] for event in events]
+    assert "memory.inserted" in event_types
+    assert "memory.searched" in event_types
+    assert "memory.retrieved" in event_types
+    searched = next(event for event in events if event["event_type"] == "memory.searched")
+    assert searched["request_id"] == "req-audit-http"
+    assert searched["source_surface"] == "http"
+    assert searched["metadata"]["query_hash"].startswith("sha256:")
+    assert "Europa" not in json.dumps(searched["metadata"])
+
+
+def test_api_project_access_denied_records_audit_event(tmp_path) -> None:
+    client, store = _sqlite_auth_client(tmp_path)
+
+    response = client.post(
+        "/memory/search",
+        json={"query": "Velvet Lantern", "project_id": "shared-321"},
+        headers={"Authorization": "Bearer token-c", "x-request-id": "req-denied"},
+    )
+
+    assert response.status_code == 403
+    events = store.list_audit_events(
+        event_type="project.access_denied",
+        actor_id="owner-c",
+    )
+    assert len(events) == 1
+    assert events[0]["project_id"] == "shared-321"
+    assert events[0]["request_id"] == "req-denied"
+    assert events[0]["reason_code"] == "missing_project_role"
+    assert events[0]["metadata"] == {"required_role": PROJECT_ROLE_READER}
+
+
 def test_memory_insert_400_on_invalid_schema() -> None:
     client = _client()
     bad_payload = _conversation()

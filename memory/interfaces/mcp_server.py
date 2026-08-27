@@ -18,7 +18,12 @@ from memory.backend.log_safety import redact_secrets
 from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig
 from memory.ingestion.base_agent import BaseIngestionAgent
-from memory.ingestion.mvp_ingestion import normalize_conversation_json, validate_json
+from memory.ingestion.mvp_ingestion import (
+    normalize_conversation_json,
+    reset_audit_context,
+    set_audit_context,
+    validate_json,
+)
 from memory.ingestion.save_intent import (
     InsertDisposition,
     SaveIntentError,
@@ -444,6 +449,11 @@ def _instrument_mcp_tool(tool_name: str, tool_fn: ToolFn) -> ToolFn:
         started = time.perf_counter()
         status = "error"
         error_code = "unhandled_exception"
+        ctx = kwargs.get("ctx")
+        audit_token = set_audit_context(
+            source_surface="mcp",
+            request_id=_mcp_tool_call_id(ctx) if ctx is not None else None,
+        )
         with start_observability_span(
             f"mcp.{tool_name}",
             attributes={
@@ -479,6 +489,7 @@ def _instrument_mcp_tool(tool_name: str, tool_fn: ToolFn) -> ToolFn:
                     tool=tool_name,
                     status=status,
                 )
+                reset_audit_context(audit_token)
 
     return wrapped
 

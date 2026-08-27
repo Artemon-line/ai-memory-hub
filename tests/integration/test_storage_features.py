@@ -1831,6 +1831,33 @@ def _apply_update(doc: dict[str, Any], update: dict[str, Any]) -> None:
             current.append(value)
 
 
+def test_mongodb_audit_events_append_and_filter() -> None:
+    store = MongoDBMetadataStore(uri="mongodb://example", client=FakeMongoClient())
+    memory_id = "11111111-1111-4111-8111-111111111111"
+
+    event = store.append_audit_event(
+        {
+            "event_type": "memory.retrieved",
+            "actor_id": "owner-a",
+            "project_id": "project-a",
+            "memory_id": memory_id,
+            "request_id": "req-mongo-audit",
+            "source_surface": "mcp",
+            "metadata": {"memory_status": "active"},
+            "created_at": "2026-08-27T00:00:00Z",
+        }
+    )
+
+    rows = store.list_audit_events(
+        event_type="memory.retrieved",
+        project_id="project-a",
+        memory_id=memory_id,
+    )
+
+    assert rows == [event]
+    assert rows[0]["request_id"] == "req-mongo-audit"
+
+
 @pytest.mark.parametrize(
     ("provider", "factory"),
     [
@@ -3028,6 +3055,47 @@ def test_sqlite_insert_new_rejects_same_id_different_hash(tmp_path: Path) -> Non
     assert store.get(first["id"]) == first
 
 
+def test_sqlite_audit_events_append_and_filter(tmp_path: Path) -> None:
+    store = SQLiteMetadataStore(tmp_path / "metadata.sqlite3")
+    memory_id = "11111111-1111-4111-8111-111111111111"
+
+    event = store.append_audit_event(
+        {
+            "event_type": "memory.searched",
+            "actor_id": "owner-a",
+            "project_id": "project-a",
+            "memory_id": memory_id,
+            "request_id": "req-audit-1",
+            "source_surface": "http",
+            "outcome": "ok",
+            "metadata": {"query_hash": "sha256:" + ("a" * 64), "result_count": 2},
+            "created_at": "2026-08-27T00:00:00Z",
+        }
+    )
+
+    rows = store.list_audit_events(
+        event_type="memory.searched",
+        actor_id="owner-a",
+        project_id="project-a",
+        memory_id=memory_id,
+    )
+
+    assert rows == [event]
+    assert rows[0]["metadata"]["query_hash"] == "sha256:" + ("a" * 64)
+
+
+def test_sqlite_audit_event_rejects_raw_metadata_shape(tmp_path: Path) -> None:
+    store = SQLiteMetadataStore(tmp_path / "metadata.sqlite3")
+
+    with pytest.raises(ValueError, match="metadata must be an object"):
+        store.append_audit_event(
+            {
+                "event_type": "memory.searched",
+                "metadata": "raw query text",
+            }
+        )
+
+
 def test_runtime_health_reports_degraded_on_fallback(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -3395,6 +3463,37 @@ def _recording_postgres_metadata_store(state: dict[str, Any]) -> PostgresMetadat
     store = PostgresMetadataStore.__new__(PostgresMetadataStore)
     store._connect = lambda: _PostgresMetadataRecordingConnection(state)
     return store
+
+
+def test_postgres_append_audit_event_records_jsonb_metadata() -> None:
+    state: dict[str, Any] = {"queries": [], "params": []}
+    store = _recording_postgres_metadata_store(state)
+
+    result = store.append_audit_event(
+        {
+            "event_type": "memory.asked",
+            "actor_id": "owner-a",
+            "project_id": "project-a",
+            "request_id": "req-pg-audit",
+            "source_surface": "http",
+            "metadata": {
+                "question_hash": "sha256:" + ("b" * 64),
+                "result_count": 1,
+            },
+            "created_at": "2026-08-27T00:00:00Z",
+        }
+    )
+
+    insert_params = next(
+        params
+        for query, params in zip(state["queries"], state["params"])
+        if query.startswith("INSERT INTO audit_events")
+    )
+
+    assert result["event_type"] == "memory.asked"
+    assert insert_params[1] == "memory.asked"
+    assert insert_params[7] == "http"
+    assert json.loads(str(insert_params[10])) == result["metadata"]
 
 
 def test_postgres_insert_stamps_missing_default_project() -> None:

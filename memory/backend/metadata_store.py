@@ -8,6 +8,7 @@ import re
 import secrets
 import sqlite3
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -24,7 +25,9 @@ PROJECT_ROLE_ORDER = {
     PROJECT_ROLE_ADMIN: 3,
 }
 _PROJECT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+_AUDIT_EVENT_RE = re.compile(r"^[a-z][a-z0-9_.:-]{0,127}$")
 _PBKDF2_SHA256_ITERATIONS = 210_000
+_MAX_AUDIT_METADATA_BYTES = 8192
 
 
 class SQLiteMetadataStore:
@@ -361,6 +364,48 @@ class SQLiteMetadataStore:
                     value TEXT NOT NULL,
                     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
                 )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS audit_events (
+                    id TEXT PRIMARY KEY,
+                    event_type TEXT NOT NULL,
+                    actor_id TEXT,
+                    project_id TEXT,
+                    memory_id TEXT,
+                    fact_id TEXT,
+                    request_id TEXT,
+                    source_surface TEXT NOT NULL,
+                    outcome TEXT NOT NULL,
+                    reason_code TEXT,
+                    metadata TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_audit_events_type_created
+                ON audit_events(event_type, created_at)
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_audit_events_project_created
+                ON audit_events(project_id, created_at)
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_audit_events_actor_created
+                ON audit_events(actor_id, created_at)
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_audit_events_memory_created
+                ON audit_events(memory_id, created_at)
                 """
             )
             for column, declaration in (
@@ -1566,6 +1611,7 @@ class SQLiteMetadataStore:
             supports_decay_fields=True,
             supports_shared_scopes=True,
             supports_plugin_metadata=True,
+            supports_audit_events=True,
         )
 
     def health(self) -> dict[str, Any]:
@@ -1598,6 +1644,74 @@ class SQLiteMetadataStore:
                 """,
                 (str(key), payload),
             )
+
+    def append_audit_event(self, event: dict[str, Any]) -> dict[str, Any]:
+        normalized = _prepare_audit_event(event)
+        metadata = json.dumps(
+            normalized["metadata"], separators=(",", ":"), ensure_ascii=False
+        )
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO audit_events (
+                    id, event_type, actor_id, project_id, memory_id, fact_id,
+                    request_id, source_surface, outcome, reason_code, metadata,
+                    created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    normalized["id"],
+                    normalized["event_type"],
+                    normalized.get("actor_id"),
+                    normalized.get("project_id"),
+                    normalized.get("memory_id"),
+                    normalized.get("fact_id"),
+                    normalized.get("request_id"),
+                    normalized["source_surface"],
+                    normalized["outcome"],
+                    normalized.get("reason_code"),
+                    metadata,
+                    normalized["created_at"],
+                ),
+            )
+        return normalized
+
+    def list_audit_events(
+        self,
+        *,
+        event_type: str | None = None,
+        actor_id: str | None = None,
+        project_id: str | None = None,
+        memory_id: str | None = None,
+        fact_id: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if event_type is not None:
+            clauses.append("event_type = ?")
+            params.append(_validate_audit_token(event_type, field_name="event_type"))
+        if actor_id is not None:
+            clauses.append("actor_id = ?")
+            params.append(_validate_owner_id(actor_id))
+        if project_id is not None:
+            clauses.append("project_id = ?")
+            params.append(_validate_project_id(project_id))
+        if memory_id is not None:
+            clauses.append("memory_id = ?")
+            params.append(self._validate_memory_id(memory_id))
+        if fact_id is not None:
+            clauses.append("fact_id = ?")
+            params.append(_validate_optional_audit_field(fact_id, field_name="fact_id"))
+        params.append(_validate_audit_limit(limit))
+        sql = "SELECT * FROM audit_events"
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
+        sql += " ORDER BY created_at DESC, id ASC LIMIT ?"
+        with self._connect() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        return [_audit_event_from_row(row) for row in rows]
 
     def batch_insert(self, conversations: list[dict[str, Any]]) -> list[str]:
         # SQLite adapter supports transactional batch writes.
@@ -2297,6 +2411,119 @@ def _validate_project_role(role: str) -> str:
     value = str(role).strip().lower()
     if value not in PROJECT_ROLE_ORDER:
         raise ValueError("project role must be one of: admin, writer, reader")
+    return value
+
+
+def _prepare_audit_event(event: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(event, dict):
+        raise ValueError("audit event must be an object")
+    metadata = event.get("metadata")
+    if metadata is None:
+        metadata = {}
+    if not isinstance(metadata, dict):
+        raise ValueError("audit event metadata must be an object")
+    metadata_payload = json.dumps(metadata, separators=(",", ":"), ensure_ascii=False)
+    if len(metadata_payload.encode("utf-8")) > _MAX_AUDIT_METADATA_BYTES:
+        raise ValueError("audit event metadata exceeds max length")
+
+    actor_id = event.get("actor_id")
+    project_id = event.get("project_id")
+    memory_id = event.get("memory_id")
+    return {
+        "id": _validate_uuid_field(
+            event.get("id") or str(uuid.uuid4()), field_name="audit_event_id"
+        ),
+        "event_type": _validate_audit_token(event.get("event_type"), field_name="event_type"),
+        "actor_id": _validate_owner_id(str(actor_id)) if actor_id is not None else None,
+        "project_id": _validate_project_id(str(project_id)) if project_id is not None else None,
+        "memory_id": _validate_uuid_field(memory_id, field_name="memory_id")
+        if memory_id is not None
+        else None,
+        "fact_id": _validate_optional_audit_field(event.get("fact_id"), field_name="fact_id"),
+        "request_id": _validate_optional_audit_field(
+            event.get("request_id"), field_name="request_id"
+        ),
+        "source_surface": _validate_audit_token(
+            event.get("source_surface") or "service", field_name="source_surface"
+        ),
+        "outcome": _validate_audit_token(event.get("outcome") or "ok", field_name="outcome"),
+        "reason_code": _validate_optional_audit_field(
+            event.get("reason_code"), field_name="reason_code"
+        ),
+        "metadata": dict(metadata),
+        "created_at": _validate_audit_timestamp(event.get("created_at")),
+    }
+
+
+def _audit_event_from_row(row: Any) -> dict[str, Any]:
+    metadata = json.loads(str(row["metadata"]))
+    return {
+        "id": str(row["id"]),
+        "event_type": str(row["event_type"]),
+        "actor_id": row["actor_id"],
+        "project_id": row["project_id"],
+        "memory_id": row["memory_id"],
+        "fact_id": row["fact_id"],
+        "request_id": row["request_id"],
+        "source_surface": str(row["source_surface"]),
+        "outcome": str(row["outcome"]),
+        "reason_code": row["reason_code"],
+        "metadata": metadata if isinstance(metadata, dict) else {},
+        "created_at": str(row["created_at"]),
+    }
+
+
+def _validate_uuid_field(value: Any, *, field_name: str) -> str:
+    text = str(value).strip()
+    try:
+        uuid.UUID(text)
+    except (ValueError, TypeError) as exc:
+        raise ValueError(f"{field_name} must be a valid UUID") from exc
+    return text
+
+
+def _validate_audit_token(value: Any, *, field_name: str) -> str:
+    text = str(value).strip()
+    if not text:
+        raise ValueError(f"{field_name} must be non-empty")
+    if not _AUDIT_EVENT_RE.fullmatch(text):
+        raise ValueError(
+            f"{field_name} must start with a lowercase letter and contain only "
+            "lowercase letters, digits, dots, underscores, colons, or hyphens"
+        )
+    return text
+
+
+def _validate_optional_audit_field(value: Any, *, field_name: str) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    if len(text) > 128:
+        raise ValueError(f"{field_name} exceeds max length 128")
+    if "\r" in text or "\n" in text:
+        raise ValueError(f"{field_name} must not contain newlines")
+    return text
+
+
+def _validate_audit_timestamp(value: Any) -> str:
+    if value is None:
+        return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    text = str(value).strip()
+    if len(text) > 128:
+        raise ValueError("created_at exceeds max length 128")
+    try:
+        datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("created_at must be an ISO-8601 datetime") from exc
+    return text
+
+
+def _validate_audit_limit(limit: int) -> int:
+    value = int(limit)
+    if value < 1 or value > 1000:
+        raise ValueError("audit event limit must be between 1 and 1000")
     return value
 
 

@@ -10,6 +10,10 @@ from memory.backend.errors import NotSupportedError
 from memory.backend.metadata_store import (
     LOCAL_DEFAULT_PROJECT_ID,
     _default_project_id,
+    _prepare_audit_event,
+    _validate_audit_limit,
+    _validate_audit_token,
+    _validate_optional_audit_field,
     _validate_owner_id,
     _validate_project_id,
 )
@@ -46,6 +50,7 @@ class MongoDBMetadataStore:
         self._summaries = db[self.generated_summaries_collection]
         self._schema_versions = db[self.schema_collection]
         self._runtime_metadata = db["runtime_metadata"]
+        self._audit_events = db["audit_events"]
         self._ensure_indexes()
         self._ensure_schema_version()
 
@@ -251,6 +256,7 @@ class MongoDBMetadataStore:
             supports_decay_fields=False,
             supports_shared_scopes=True,
             supports_plugin_metadata=False,
+            supports_audit_events=True,
         )
 
     def health(self) -> dict[str, Any]:
@@ -275,6 +281,41 @@ class MongoDBMetadataStore:
             {"key": str(key), "value": dict(value), "updated_at": _utc_now()},
             upsert=True,
         )
+
+    def append_audit_event(self, event: dict[str, Any]) -> dict[str, Any]:
+        normalized = _prepare_audit_event(event)
+        self._audit_events.insert_one(normalized)
+        return normalized
+
+    def list_audit_events(
+        self,
+        *,
+        event_type: str | None = None,
+        actor_id: str | None = None,
+        project_id: str | None = None,
+        memory_id: str | None = None,
+        fact_id: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        query: dict[str, Any] = {}
+        if event_type is not None:
+            query["event_type"] = _validate_audit_token(event_type, field_name="event_type")
+        if actor_id is not None:
+            query["actor_id"] = _validate_owner_id(actor_id)
+        if project_id is not None:
+            query["project_id"] = _validate_project_id(project_id)
+        if memory_id is not None:
+            query["memory_id"] = self._validate_memory_id(memory_id)
+        if fact_id is not None:
+            query["fact_id"] = _validate_optional_audit_field(fact_id, field_name="fact_id")
+        max_rows = _validate_audit_limit(limit)
+        rows = self._audit_events.find(query).sort("created_at", -1)
+        output: list[dict[str, Any]] = []
+        for row in rows:
+            output.append(_clean_mongo_doc(row))
+            if len(output) >= max_rows:
+                break
+        return output
 
     def begin_transaction(self) -> None:
         raise NotSupportedError("Metadata transactions are not exposed by this adapter API")
@@ -308,6 +349,11 @@ class MongoDBMetadataStore:
         self._summaries.create_index("id", unique=True)
         self._schema_versions.create_index("id", unique=True)
         self._runtime_metadata.create_index("key", unique=True)
+        self._audit_events.create_index("id", unique=True)
+        self._audit_events.create_index([("event_type", 1), ("created_at", -1)])
+        self._audit_events.create_index([("project_id", 1), ("created_at", -1)])
+        self._audit_events.create_index([("actor_id", 1), ("created_at", -1)])
+        self._audit_events.create_index([("memory_id", 1), ("created_at", -1)])
 
     def _ensure_schema_version(self) -> None:
         row_count = self._schema_versions.count_documents({})

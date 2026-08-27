@@ -36,22 +36,25 @@ governance events over immutable stored history.
 
 ### Audit Events
 
-- [ ] Add a durable append-only audit event model for security- and
+- [x] Add a durable append-only audit event model for security- and
       governance-relevant actions.
-- [ ] Record `memory.inserted` events.
+- [x] Record `memory.inserted` events.
 - [ ] Record `memory.archived` and `memory.restored` events if archive support
       is added for beta.
-- [ ] Record `memory.quarantined`, `memory.approved`, and `memory.rejected`
+- [ ] Record `memory.quarantined` events when sensitive-content quarantine
+      ships.
+- [x] Record `memory.approved` and `memory.rejected`
       events.
-- [ ] Record `memory.searched`, `memory.retrieved`, and `memory.asked` events
+- [x] Record `memory.searched`, `memory.retrieved`, and `memory.asked` events
       without storing raw search queries or full memory payloads.
-- [ ] Record `fact.superseded` events.
-- [ ] Record `project.access_denied` events for failed project authorization.
-- [ ] Record auth lifecycle events such as token revocation where supported.
-- [ ] Include actor, project, memory id or fact id, request id, source surface,
+- [x] Record `fact.superseded` events.
+- [x] Record `project.access_denied` events for failed project authorization.
+- [x] Record auth lifecycle events such as token creation and revocation where
+      supported.
+- [x] Include actor, project, memory id or fact id, request id, source surface,
       timestamp, outcome, and non-sensitive reason codes.
-- [ ] Add metadata and storage-provider tests for audit event persistence.
-- [ ] Add API/MCP tests proving audit events are emitted for representative
+- [x] Add metadata and storage-provider tests for audit event persistence.
+- [x] Add API/MCP tests proving audit events are emitted for representative
       write, read, denial, and review paths.
 
 ### Secrets And PII Quarantine
@@ -137,7 +140,7 @@ governance events over immutable stored history.
 
 - [ ] The beta contract says memory is append-only history.
 - [ ] No public beta docs promise destructive update or delete.
-- [ ] Audit events exist for critical write, read, denial, review, and auth
+- [x] Audit events exist for critical write, read, denial, review, and auth
       lifecycle actions.
 - [ ] Secrets and high-confidence sensitive PII are blocked or quarantined
       before normal retrieval.
@@ -150,4 +153,3 @@ governance events over immutable stored history.
       checkout.
 - [ ] README, architecture, feature, agent, auth, and release docs precisely
       match shipped beta behavior.
-

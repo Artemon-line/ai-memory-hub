@@ -9,7 +9,7 @@ import time
 import urllib.error
 import urllib.request
 from contextlib import contextmanager
-from contextvars import ContextVar
+from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -210,6 +210,12 @@ class RuntimeDependencies:
     retrieval_access_weight: float = 0.05
 
 
+@dataclass(frozen=True)
+class AuditContext:
+    source_surface: str = "service"
+    request_id: str | None = None
+
+
 _VECTOR_COMPATIBILITY_METADATA_PREFIX = "vector_index_compatibility:"
 _FALLBACK_POLICY_WARNED: set[str] = set()
 _PRODUCTION_FALLBACK_POLICY_WARNED: set[str] = set()
@@ -311,6 +317,23 @@ _RUNTIME: RuntimeDependencies | None = None
 _RUNTIME_OVERRIDE: ContextVar[RuntimeDependencies | None] = ContextVar(
     "amh_mvp_runtime_override", default=None
 )
+_AUDIT_CONTEXT: ContextVar[AuditContext] = ContextVar(
+    "amh_audit_context", default=AuditContext()
+)
+
+
+def set_audit_context(
+    *, source_surface: str = "service", request_id: str | None = None
+) -> Token[AuditContext]:
+    return _AUDIT_CONTEXT.set(
+        AuditContext(source_surface=source_surface, request_id=request_id)
+    )
+
+
+def reset_audit_context(token: Token[AuditContext]) -> None:
+    _AUDIT_CONTEXT.reset(token)
+
+
 _SEARCH_CANDIDATE_MULTIPLIER = 3
 _CONVERSATION_GROUP_SCORE_WINDOW = 0.25
 _MAX_MESSAGES = 10_000
@@ -1481,10 +1504,26 @@ def _resolve_project(
     project = _validate_project_id(project_id)
     if owner_id is None:
         if project != LOCAL_DEFAULT_PROJECT_ID:
+            _record_audit_event(
+                "project.access_denied",
+                owner_id=None,
+                project_id=project,
+                outcome="denied",
+                reason_code="anonymous_non_default_project",
+                metadata={"required_role": required_role},
+            )
             raise PermissionError("project access denied")
         return project
     if hasattr(store, "project_has_role"):
         if not store.project_has_role(project_id=project, user_id=owner_id, role=required_role):
+            _record_audit_event(
+                "project.access_denied",
+                owner_id=owner_id,
+                project_id=project,
+                outcome="denied",
+                reason_code="missing_project_role",
+                metadata={"required_role": required_role},
+            )
             raise PermissionError("project access denied")
     return project
 
@@ -1776,6 +1815,59 @@ def json_dumps(value: Any) -> str:
     return json.dumps(value, separators=(",", ":"), ensure_ascii=False)
 
 
+def _record_audit_event(
+    event_type: str,
+    *,
+    owner_id: str | None = None,
+    project_id: str | None = None,
+    memory_id: str | None = None,
+    fact_id: str | None = None,
+    outcome: str = "ok",
+    reason_code: str | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    store = _runtime().metadata_store
+    context = _AUDIT_CONTEXT.get()
+    event = {
+        "id": str(uuid4()),
+        "event_type": event_type,
+        "actor_id": owner_id,
+        "project_id": project_id,
+        "memory_id": memory_id,
+        "fact_id": fact_id,
+        "request_id": context.request_id,
+        "source_surface": context.source_surface,
+        "outcome": outcome,
+        "reason_code": reason_code,
+        "metadata": dict(metadata or {}),
+        "created_at": _utc_now_iso(),
+    }
+    try:
+        if hasattr(store, "append_audit_event"):
+            store.append_audit_event(event)
+            return
+        events = getattr(store, "_audit_events", None)
+        if not isinstance(events, list):
+            events = []
+            setattr(store, "_audit_events", events)
+        events.append(event)
+    except Exception:
+        logger.warning(
+            "Audit event persistence failed",
+            extra={
+                "event": "audit_event_persistence_failed",
+                "audit_event_type": event_type,
+                "outcome": outcome,
+            },
+            exc_info=True,
+        )
+
+
+def _audit_hash(value: str) -> str:
+    digest = hashlib.sha256(value.encode("utf-8")).hexdigest()
+    return f"sha256:{digest}"
+
+
 def ingest_messages(
     conversation_json: Any,
     *,
@@ -1917,6 +2009,18 @@ def ingest_messages(
             "embedded_chunks": len(chunks),
             "chunks": len(chunks),
         }
+        _record_audit_event(
+            "memory.inserted",
+            owner_id=owner_id,
+            project_id=effective_project_id,
+            memory_id=str(updated["id"]),
+            metadata={
+                "deduplicated": not bool(new_messages),
+                "appended_messages": len(new_messages),
+                "embedded_chunks": len(chunks),
+                "memory_status": _memory_status(updated),
+            },
+        )
         return _with_graph_counts(result, graph_counts)
 
     # 3. Chunk messages
@@ -1967,6 +2071,18 @@ def ingest_messages(
         "embedded_chunks": len(chunks),
         "chunks": len(chunks),
     }
+    _record_audit_event(
+        "memory.inserted",
+        owner_id=owner_id,
+        project_id=effective_project_id,
+        memory_id=metadata_id,
+        metadata={
+            "deduplicated": not inserted,
+            "appended_messages": 0,
+            "embedded_chunks": len(chunks),
+            "memory_status": _memory_status(conversation_json),
+        },
+    )
     return _with_graph_counts(result, graph_counts)
 
 
@@ -2003,6 +2119,18 @@ def store_pending_review_memory(
         raise ValueError("unauthorized_update: conversation id already exists")
 
     memory_id, inserted = _insert_new_conversation(conversation_json)
+    _record_audit_event(
+        "memory.inserted",
+        owner_id=owner_id,
+        project_id=effective_project_id,
+        memory_id=memory_id,
+        outcome="pending_review",
+        metadata={
+            "memory_status": _MEMORY_STATUS_PENDING_REVIEW,
+            "inserted": inserted,
+            "embedded_chunks": 0,
+        },
+    )
     return {
         "status": "pending_review",
         "id": memory_id,
@@ -2020,8 +2148,25 @@ def approve_pending_memory(
     )
     conversation = _runtime().metadata_store.get(memory_id)
     if not _conversation_authorized(conversation, owner_id, effective_project_id):
+        _record_audit_event(
+            "memory.approved",
+            owner_id=owner_id,
+            project_id=effective_project_id,
+            memory_id=memory_id,
+            outcome="not_found",
+            reason_code="not_visible",
+        )
         return {"status": "not_found", "id": memory_id}
     if _memory_status(conversation) != _MEMORY_STATUS_PENDING_REVIEW:
+        _record_audit_event(
+            "memory.approved",
+            owner_id=owner_id,
+            project_id=effective_project_id,
+            memory_id=memory_id,
+            outcome="error",
+            reason_code="memory_not_pending_review",
+            metadata={"memory_status": _memory_status(conversation)},
+        )
         return {
             "status": "error",
             "error_code": "memory_not_pending_review",
@@ -2039,6 +2184,13 @@ def approve_pending_memory(
     _store_facts_for_conversation(conversation)
     _store_graph_for_conversation(conversation)
     result["memory_status"] = _MEMORY_STATUS_ACTIVE
+    _record_audit_event(
+        "memory.approved",
+        owner_id=owner_id,
+        project_id=effective_project_id,
+        memory_id=memory_id,
+        metadata={"memory_status": _MEMORY_STATUS_ACTIVE},
+    )
     return result
 
 
@@ -2050,8 +2202,25 @@ def reject_pending_memory(
     )
     conversation = _runtime().metadata_store.get(memory_id)
     if not _conversation_authorized(conversation, owner_id, effective_project_id):
+        _record_audit_event(
+            "memory.rejected",
+            owner_id=owner_id,
+            project_id=effective_project_id,
+            memory_id=memory_id,
+            outcome="not_found",
+            reason_code="not_visible",
+        )
         return {"status": "not_found", "id": memory_id}
     if _memory_status(conversation) != _MEMORY_STATUS_PENDING_REVIEW:
+        _record_audit_event(
+            "memory.rejected",
+            owner_id=owner_id,
+            project_id=effective_project_id,
+            memory_id=memory_id,
+            outcome="error",
+            reason_code="memory_not_pending_review",
+            metadata={"memory_status": _memory_status(conversation)},
+        )
         return {
             "status": "error",
             "error_code": "memory_not_pending_review",
@@ -2064,6 +2233,13 @@ def reject_pending_memory(
     metadata["memory_status"] = _MEMORY_STATUS_REJECTED
     metadata["rejected_at"] = _utc_now_iso()
     _runtime().metadata_store.insert(conversation)
+    _record_audit_event(
+        "memory.rejected",
+        owner_id=owner_id,
+        project_id=effective_project_id,
+        memory_id=memory_id,
+        metadata={"memory_status": _MEMORY_STATUS_REJECTED},
+    )
     return {"status": "ok", "id": memory_id, "memory_status": _MEMORY_STATUS_REJECTED}
 
 
@@ -2286,6 +2462,25 @@ def search(
     payload: dict[str, Any] = {"status": "ok", "results": _apply_result_mode(grouped, result_mode)[:top_k]}
     if graph_diagnostics["enabled"] and graph_diagnostics["candidate_count"]:
         payload["diagnostics"] = {"graph": graph_diagnostics}
+    _record_audit_event(
+        "memory.searched",
+        owner_id=owner_id,
+        project_id=effective_project_id,
+        metadata={
+            "query_hash": _audit_hash(query),
+            "top_k": top_k,
+            "result_count": len(payload["results"]),
+            "result_mode": result_mode,
+            "memory_status": status_filter,
+            "filters": {
+                "source": bool(filters.source),
+                "date_from": bool(filters.date_from),
+                "date_to": bool(filters.date_to),
+                "tags": len(filters.tags),
+                "thread_id": bool(filters.thread_id),
+            },
+        },
+    )
     return payload
 
 
@@ -2743,8 +2938,25 @@ def retrieve(
     status_filter = _validate_memory_status_filter(memory_status)
     conversation = runtime.metadata_store.get(memory_id)
     if not _conversation_visible(conversation, owner_id, effective_project_id, status_filter):
+        _record_audit_event(
+            "memory.retrieved",
+            owner_id=owner_id,
+            project_id=effective_project_id,
+            memory_id=memory_id,
+            outcome="not_found",
+            reason_code="not_visible",
+            metadata={"memory_status": status_filter},
+        )
         return None
-    return _with_generated_summary_metadata(conversation)
+    result = _with_generated_summary_metadata(conversation)
+    _record_audit_event(
+        "memory.retrieved",
+        owner_id=owner_id,
+        project_id=effective_project_id,
+        memory_id=memory_id,
+        metadata={"memory_status": status_filter},
+    )
+    return result
 
 
 def ask(
@@ -2782,6 +2994,18 @@ def ask(
         filters=filters,
     )
     if fact_answer is not None and status_filter == _MEMORY_STATUS_ACTIVE:
+        _record_audit_event(
+            "memory.asked",
+            owner_id=owner_id,
+            project_id=effective_project_id,
+            metadata={
+                "question_hash": _audit_hash(question),
+                "top_k": top_k,
+                "result_count": len(fact_answer.get("results", [])),
+                "answer_basis": fact_answer.get("answer_basis"),
+                "memory_status": status_filter,
+            },
+        )
         return fact_answer
 
     search_result = _search_for_ask(
@@ -2795,6 +3019,19 @@ def ask(
     )
     matches = search_result.get("results", [])
     if not matches:
+        _record_audit_event(
+            "memory.asked",
+            owner_id=owner_id,
+            project_id=effective_project_id,
+            outcome="not_found",
+            metadata={
+                "question_hash": _audit_hash(question),
+                "top_k": top_k,
+                "result_count": 0,
+                "answer_basis": "not_found",
+                "memory_status": status_filter,
+            },
+        )
         return {
             "status": "ok",
             "results": [],
@@ -2811,7 +3048,20 @@ def ask(
     runtime = _runtime()
     budget_enabled = runtime.tokenizer_enabled or max_context_tokens is not None
     if not budget_enabled:
-        return _ask_from_matches(matches, top_k=top_k)
+        result = _ask_from_matches(matches, top_k=top_k)
+        _record_audit_event(
+            "memory.asked",
+            owner_id=owner_id,
+            project_id=effective_project_id,
+            metadata={
+                "question_hash": _audit_hash(question),
+                "top_k": top_k,
+                "result_count": len(result.get("results", [])),
+                "answer_basis": result.get("answer_basis"),
+                "memory_status": status_filter,
+            },
+        )
+        return result
 
     token_budget = (
         max_context_tokens
@@ -2830,7 +3080,7 @@ def ask(
         if context_lines
         else "I could not fit relevant memory within the context budget."
     )
-    return {
+    result = {
         "status": "ok",
         "results": selected_matches,
         "answer": answer,
@@ -2849,6 +3099,21 @@ def ask(
         "chunks_dropped": chunks_dropped,
         "tokenizer_used": tokenizer_used(runtime.tokenizer_encoding),
     }
+    _record_audit_event(
+        "memory.asked",
+        owner_id=owner_id,
+        project_id=effective_project_id,
+        metadata={
+            "question_hash": _audit_hash(question),
+            "top_k": top_k,
+            "result_count": len(selected_matches),
+            "answer_basis": result.get("answer_basis"),
+            "memory_status": status_filter,
+            "context_tokens_used": tokens_used,
+            "chunks_dropped": chunks_dropped,
+        },
+    )
+    return result
 
 
 def _search_for_ask(
@@ -3917,6 +4182,15 @@ def fact_supersede(
                 fact["superseded_at"] = now
                 fact["updated_at"] = now
                 updated = True
+    _record_audit_event(
+        "fact.superseded",
+        owner_id=owner_id,
+        project_id=effective_project_id,
+        fact_id=fact_id,
+        outcome="ok" if updated else "not_found",
+        reason_code=None if updated else "fact_not_found",
+        metadata={"superseded_by": superseded_by},
+    )
     return {"status": "ok" if updated else "not_found", "id": fact_id, "superseded_by": superseded_by}
 
 
@@ -4072,20 +4346,44 @@ def create_auth_token(
     store = _runtime().metadata_store
     if not hasattr(store, "create_auth_token"):
         raise NotImplementedError("metadata store does not support auth tokens")
-    return store.create_auth_token(
+    result = store.create_auth_token(
         owner_id=owner_id,
         token=token,
         token_display_name=token_display_name,
         expires_at=expires_at,
         scopes=scopes,
     )
+    result_scopes = result.get("scopes") if isinstance(result, dict) else []
+    _record_audit_event(
+        "auth.token_created",
+        owner_id=owner_id,
+        outcome="ok",
+        metadata={
+            "token_id": result.get("token_id") if isinstance(result, dict) else None,
+            "scope_count": len(result_scopes) if isinstance(result_scopes, list) else 0,
+            "expires": result.get("expires_at") is not None
+            if isinstance(result, dict)
+            else False,
+        },
+    )
+    return result
 
 
 def revoke_auth_token(token_id: str) -> dict[str, object] | None:
     store = _runtime().metadata_store
     if not hasattr(store, "revoke_auth_token"):
         return None
-    return store.revoke_auth_token(token_id)
+    result = store.revoke_auth_token(token_id)
+    _record_audit_event(
+        "auth.token_revoked",
+        owner_id=str(result["owner_id"])
+        if isinstance(result, dict) and result.get("owner_id")
+        else None,
+        outcome="ok" if result is not None else "not_found",
+        reason_code=None if result is not None else "token_not_found",
+        metadata={"token_id": token_id},
+    )
+    return result
 
 
 def create_oauth_client(
