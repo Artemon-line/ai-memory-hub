@@ -338,8 +338,13 @@ Extracted facts retain `save_intent` and `save_intent_source` provenance from
 their source memory. Fact and profile reads can filter on those fields; facts
 derived from `client_auto_save` memories are exposed with reduced confidence.
 Conversation read tools default to `memory_status: active`; clients that are
-building review flows may pass `pending_review`, `rejected`, or `all` to
-search, retrieve, or ask calls.
+building review flows may pass `pending_review`, `quarantined`, `rejected`, or
+`all` to search, retrieve, or ask calls. Inserts containing likely secrets or
+high-confidence sensitive PII are stored with `memory_status: quarantined`,
+excluded from default reads, facts, profile, and vector indexing, and returned
+with safe quarantine reason codes. Approving a quarantined memory is an explicit
+review decision that makes it active; rejecting it keeps it out of default
+recall.
 For thread continuity, clients may send `metadata.upstream_thread_id` or
 `metadata.thread_id`. The hub preserves upstream IDs, derives `thread_id` from
 `source` plus `upstream_thread_id` when needed, and supports `thread_id` filters

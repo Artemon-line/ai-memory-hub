@@ -27,7 +27,7 @@ governance events over immutable stored history.
       facts, or explicit governance events.
 - [ ] Document that archive removes memories from default retrieval and ask
       flows without erasing history.
-- [ ] Document that quarantine prevents memories from entering default
+- [x] Document that quarantine prevents memories from entering default
       retrieval until approval.
 - [ ] Ensure public docs do not describe destructive delete/update as a shipped
       beta capability.
@@ -41,7 +41,7 @@ governance events over immutable stored history.
 - [x] Record `memory.inserted` events.
 - [ ] Record `memory.archived` and `memory.restored` events if archive support
       is added for beta.
-- [ ] Record `memory.quarantined` events when sensitive-content quarantine
+- [x] Record `memory.quarantined` events when sensitive-content quarantine
       ships.
 - [x] Record `memory.approved` and `memory.rejected`
       events.
@@ -59,20 +59,20 @@ governance events over immutable stored history.
 
 ### Secrets And PII Quarantine
 
-- [ ] Add an insert-time sensitive-content scanner before normal persistence.
-- [ ] Detect and quarantine likely API keys, bearer tokens, private keys,
+- [x] Add an insert-time sensitive-content scanner before normal persistence.
+- [x] Detect and quarantine likely API keys, bearer tokens, private keys,
       passwords, credential URLs, and connection strings.
-- [ ] Detect and quarantine high-confidence sensitive PII patterns such as
+- [x] Detect and quarantine high-confidence sensitive PII patterns such as
       credit cards, SSNs, passport-like identifiers, and private key material.
-- [ ] Keep normal names, ordinary email addresses, and project references out of
+- [x] Keep normal names, ordinary email addresses, and project references out of
       the default quarantine path unless stricter rules are configured.
-- [ ] Return safe reason codes for quarantine decisions.
-- [ ] Store quarantined content outside default search, retrieve, ask, fact, and
+- [x] Return safe reason codes for quarantine decisions.
+- [x] Store quarantined content outside default search, retrieve, ask, fact, and
       profile flows.
-- [ ] Expose quarantine review through the existing pending-review/admin flow or
+- [x] Expose quarantine review through the existing pending-review/admin flow or
       a small beta-specific review surface.
-- [ ] Emit audit events for quarantine, approval, and rejection.
-- [ ] Add tests for secret detection, false-positive tolerance, approval,
+- [x] Emit audit events for quarantine, approval, and rejection.
+- [x] Add tests for secret detection, false-positive tolerance, approval,
       rejection, and retrieval exclusion.
 
 ### Auth And Project Negative Tests
@@ -142,9 +142,9 @@ governance events over immutable stored history.
 - [ ] No public beta docs promise destructive update or delete.
 - [x] Audit events exist for critical write, read, denial, review, and auth
       lifecycle actions.
-- [ ] Secrets and high-confidence sensitive PII are blocked or quarantined
+- [x] Secrets and high-confidence sensitive PII are blocked or quarantined
       before normal retrieval.
-- [ ] Quarantined content is excluded from default search, retrieve, ask, fact,
+- [x] Quarantined content is excluded from default search, retrieve, ask, fact,
       profile, and graph paths.
 - [ ] Project and auth negative tests cover both HTTP and MCP surfaces.
 - [ ] Archived content, if shipped, is excluded from default retrieval and

@@ -22,6 +22,9 @@ Implemented and verified in the codebase:
 - MCP client smoke profiles for Codex, Gemini, VS Code Copilot, and opencode over the streamable HTTP transport.
 - Omitted-ID insertion: normalization assigns a UUID when clients omit `id`.
 - Deterministic ingestion with message hashes, conversation hashes, duplicate detection, same-thread append handling, append-only chunking, and indexing state updates.
+- Sensitive-content quarantine for likely secrets and high-confidence sensitive
+  PII, stored as `memory_status: quarantined` and excluded from default recall
+  until explicit review approval.
 - Message-level chunking by default, plus opt-in token-window chunking for long messages.
 - Embedding providers: HTTP endpoint and local deterministic embeddings.
 - Multilingual retrieval is supported when the configured embedding model
@@ -67,11 +70,13 @@ Steps:
 4. Generate message and conversation hashes.
 5. Validate against `memory/schema/conversation.schema.json`.
 6. Enrich metadata topics with deterministic keyword rules.
-7. Detect exact duplicates and trusted same-thread appends.
-8. Store metadata and child message/chunk records.
-9. Embed only the chunks that need indexing.
-10. Store vectors and mark chunk indexing state.
-11. Return deterministic outcome fields, including `deduplicated`, `appended_messages`, and `embedded_chunks`.
+7. Quarantine likely secrets and high-confidence sensitive PII before chunks,
+   vectors, facts, or graph records are written.
+8. Detect exact duplicates and trusted same-thread appends.
+9. Store metadata and child message/chunk records.
+10. Embed only the chunks that need indexing.
+11. Store vectors and mark chunk indexing state.
+12. Return deterministic outcome fields, including `deduplicated`, `appended_messages`, and `embedded_chunks`.
 
 ## Normalization Layer
 

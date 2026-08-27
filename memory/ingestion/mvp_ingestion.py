@@ -221,13 +221,19 @@ _FALLBACK_POLICY_WARNED: set[str] = set()
 _PRODUCTION_FALLBACK_POLICY_WARNED: set[str] = set()
 _MEMORY_STATUS_ACTIVE = "active"
 _MEMORY_STATUS_PENDING_REVIEW = "pending_review"
+_MEMORY_STATUS_QUARANTINED = "quarantined"
 _MEMORY_STATUS_REJECTED = "rejected"
 _MEMORY_STATUS_ALL = "all"
 _MEMORY_STATUS_VALUES = {
     _MEMORY_STATUS_ACTIVE,
     _MEMORY_STATUS_PENDING_REVIEW,
+    _MEMORY_STATUS_QUARANTINED,
     _MEMORY_STATUS_REJECTED,
     _MEMORY_STATUS_ALL,
+}
+_REVIEWABLE_MEMORY_STATUSES = {
+    _MEMORY_STATUS_PENDING_REVIEW,
+    _MEMORY_STATUS_QUARANTINED,
 }
 
 
@@ -343,6 +349,26 @@ _MAX_RAW_TRANSCRIPT_BYTES = 5_000_000
 _MAX_METADATA_BYTES = 1_000_000
 _MAX_METADATA_SUMMARY_CHARS = 2_000
 _MAX_AUTO_TAGS = 24
+_MAX_SENSITIVE_FINDINGS = 16
+_SENSITIVE_SCAN_EXCLUDED_KEYS = {
+    "id",
+    "conversation_id",
+    "chunk_id",
+    "created_at",
+    "embedding_index",
+    "hash",
+    "imported_at",
+    "index_chunks",
+    "message_hashes",
+    "message_index",
+    "owner_id",
+    "parent_conversation_id",
+    "project_id",
+    "related_conversation_ids",
+    "timestamp",
+    "updated_at",
+    "upstream_thread_id",
+}
 _ROLE_ALIASES = {
     "human": "user",
     "user_message": "user",
@@ -351,6 +377,66 @@ _ROLE_ALIASES = {
     "assistant_message": "assistant",
 }
 _TRANSCRIPT_LINE_RE = re.compile(r"^(User|Assistant):\s?(.*)$", re.IGNORECASE)
+_SENSITIVE_CONTENT_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    (
+        "secret.private_key",
+        re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----", re.IGNORECASE),
+    ),
+    (
+        "secret.openai_api_key",
+        re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{16,}\b"),
+    ),
+    (
+        "secret.github_token",
+        re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b"),
+    ),
+    (
+        "secret.slack_token",
+        re.compile(r"\bxox[abprs]-[A-Za-z0-9-]{20,}\b"),
+    ),
+    (
+        "secret.aws_access_key_id",
+        re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"),
+    ),
+    (
+        "secret.aws_secret_access_key",
+        re.compile(
+            r"\baws_secret_access_key\s*[:=]\s*['\"]?[A-Za-z0-9/+=]{40}\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "secret.bearer_token",
+        re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]{20,}\b", re.IGNORECASE),
+    ),
+    (
+        "secret.credential_url",
+        re.compile(
+            r"\b[A-Za-z][A-Za-z0-9+.-]{2,}://[^/\s:@]+:[^@\s/]{8,}@[^ \t\r\n]+",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "secret.named_credential",
+        re.compile(
+            r"\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret|token)"
+            r"\s*[:=]\s*['\"]?[A-Za-z0-9][A-Za-z0-9._~+/=-]{15,}\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "pii.ssn",
+        re.compile(r"\b(?!000|666|9\d\d)\d{3}-(?!00)\d{2}-(?!0000)\d{4}\b"),
+    ),
+    (
+        "pii.passport_number",
+        re.compile(
+            r"\bpassport(?:[_ -]?(?:number|no)|\s*#)?\s*[:=]\s*[A-Z0-9]{6,9}\b",
+            re.IGNORECASE,
+        ),
+    ),
+]
+_PAYMENT_CARD_RE = re.compile(r"\b(?:\d[ -]?){13,19}\b")
 _TOPIC_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("python", re.compile(r"\bpython\b", re.IGNORECASE)),
     (
@@ -1868,6 +1954,115 @@ def _audit_hash(value: str) -> str:
     return f"sha256:{digest}"
 
 
+def _detect_sensitive_content(conversation_json: dict[str, Any]) -> list[dict[str, str]]:
+    metadata = conversation_json.get("metadata")
+    if isinstance(metadata, dict) and metadata.get("sensitive_content_approved") is True:
+        return []
+
+    findings: list[dict[str, str]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for location, value in _sensitive_scan_strings(conversation_json):
+        _extend_sensitive_findings(findings, seen, location=location, value=value)
+        if len(findings) >= _MAX_SENSITIVE_FINDINGS:
+            break
+    return findings
+
+
+def _sensitive_scan_strings(value: Any, *, location: str = "conversation") -> Iterator[tuple[str, str]]:
+    if isinstance(value, str):
+        yield location, value
+        return
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            yield from _sensitive_scan_strings(item, location=f"{location}[{index}]")
+        return
+    if not isinstance(value, dict):
+        return
+    for key, item in value.items():
+        key_name = _safe_sensitive_location_key(str(key))
+        if key_name in _SENSITIVE_SCAN_EXCLUDED_KEYS:
+            continue
+        yield from _sensitive_scan_strings(item, location=f"{location}.{key_name}")
+
+
+def _safe_sensitive_location_key(value: str) -> str:
+    normalized = re.sub(r"[^A-Za-z0-9_-]+", "_", value.strip().lower()).strip("_")
+    return normalized[:48] or "field"
+
+
+def _extend_sensitive_findings(
+    findings: list[dict[str, str]],
+    seen: set[tuple[str, str, str]],
+    *,
+    location: str,
+    value: str,
+) -> None:
+    for reason_code, pattern in _SENSITIVE_CONTENT_PATTERNS:
+        for match in pattern.finditer(value):
+            _append_sensitive_finding(
+                findings,
+                seen,
+                reason_code=reason_code,
+                location=location,
+                match_text=match.group(0),
+            )
+            if len(findings) >= _MAX_SENSITIVE_FINDINGS:
+                return
+    for match in _PAYMENT_CARD_RE.finditer(value):
+        match_text = match.group(0)
+        if _is_luhn_payment_card(match_text):
+            _append_sensitive_finding(
+                findings,
+                seen,
+                reason_code="pii.payment_card",
+                location=location,
+                match_text=match_text,
+            )
+            if len(findings) >= _MAX_SENSITIVE_FINDINGS:
+                return
+
+
+def _append_sensitive_finding(
+    findings: list[dict[str, str]],
+    seen: set[tuple[str, str, str]],
+    *,
+    reason_code: str,
+    location: str,
+    match_text: str,
+) -> None:
+    match_hash = _audit_hash(match_text)
+    key = (reason_code, location, match_hash)
+    if key in seen:
+        return
+    seen.add(key)
+    findings.append(
+        {
+            "reason_code": reason_code,
+            "location": location,
+            "match_hash": match_hash,
+        }
+    )
+
+
+def _is_luhn_payment_card(value: str) -> bool:
+    digits = re.sub(r"\D", "", value)
+    if not 13 <= len(digits) <= 19:
+        return False
+    if len(set(digits)) <= 1:
+        return False
+    total = 0
+    double = False
+    for char in reversed(digits):
+        number = int(char)
+        if double:
+            number *= 2
+            if number > 9:
+                number -= 9
+        total += number
+        double = not double
+    return total % 10 == 0
+
+
 def ingest_messages(
     conversation_json: Any,
     *,
@@ -1895,6 +2090,15 @@ def ingest_messages(
     with _ingestion_stage("normalize", enrichment=True):
         enrich_topics(conversation_json)
         enrich_auto_tags(conversation_json)
+
+    sensitive_findings = _detect_sensitive_content(conversation_json)
+    if sensitive_findings:
+        return _store_quarantined_memory(
+            conversation_json,
+            owner_id=owner_id,
+            project_id=effective_project_id,
+            findings=sensitive_findings,
+        )
 
     with _ingestion_stage("dedupe_lookup"):
         conversation_hash = conversation_json["metadata"]["conversation_hash"]
@@ -2086,6 +2290,88 @@ def ingest_messages(
     return _with_graph_counts(result, graph_counts)
 
 
+def _store_review_memory(
+    conversation_json: dict[str, Any],
+    *,
+    owner_id: str | None,
+    project_id: str,
+    memory_status: str,
+    received_at_key: str,
+    return_status: str,
+    audit_event_type: str,
+    audit_outcome: str,
+    audit_reason_code: str | None = None,
+    audit_metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    metadata = _ensure_metadata(conversation_json)
+    metadata["memory_status"] = memory_status
+    metadata[received_at_key] = _utc_now_iso()
+
+    store = _runtime().metadata_store
+    existing_by_id = store.get(str(conversation_json.get("id", ""))) if hasattr(store, "get") else None
+    if existing_by_id is not None and not _conversation_authorized(
+        existing_by_id, owner_id, project_id
+    ):
+        raise ValueError("unauthorized_update: conversation id already exists")
+    if existing_by_id is not None and _conversation_hash(existing_by_id) != metadata["conversation_hash"]:
+        raise ValueError("unauthorized_update: conversation id already exists")
+
+    memory_id, inserted = _insert_new_conversation(conversation_json)
+    audit_payload = {
+        "memory_status": memory_status,
+        "inserted": inserted,
+        "embedded_chunks": 0,
+    }
+    if audit_metadata:
+        audit_payload.update(audit_metadata)
+    _record_audit_event(
+        audit_event_type,
+        owner_id=owner_id,
+        project_id=project_id,
+        memory_id=memory_id,
+        outcome=audit_outcome,
+        reason_code=audit_reason_code,
+        metadata=audit_payload,
+    )
+    return {
+        "status": return_status,
+        "id": memory_id,
+        "memory_status": memory_status,
+        "inserted": inserted,
+        "chunks": 0,
+    }
+
+
+def _store_quarantined_memory(
+    conversation_json: dict[str, Any],
+    *,
+    owner_id: str | None,
+    project_id: str,
+    findings: list[dict[str, str]],
+) -> dict[str, Any]:
+    reason_codes = _unique_strings([finding["reason_code"] for finding in findings])
+    metadata = _ensure_metadata(conversation_json)
+    metadata["quarantine_reason_codes"] = reason_codes
+    metadata["quarantine_findings"] = findings
+    result = _store_review_memory(
+        conversation_json,
+        owner_id=owner_id,
+        project_id=project_id,
+        memory_status=_MEMORY_STATUS_QUARANTINED,
+        received_at_key="quarantine_received_at",
+        return_status="quarantined",
+        audit_event_type="memory.quarantined",
+        audit_outcome="quarantined",
+        audit_reason_code="sensitive_content",
+        audit_metadata={
+            "reason_codes": reason_codes,
+            "finding_count": len(findings),
+        },
+    )
+    result["quarantine_reason_codes"] = reason_codes
+    return result
+
+
 def store_pending_review_memory(
     conversation_json: Any,
     *,
@@ -2105,39 +2391,24 @@ def store_pending_review_memory(
     validate_json(conversation_json)
     enrich_topics(conversation_json)
     enrich_auto_tags(conversation_json)
-    metadata = _ensure_metadata(conversation_json)
-    metadata["memory_status"] = _MEMORY_STATUS_PENDING_REVIEW
-    metadata["pending_review_received_at"] = _utc_now_iso()
-
-    store = _runtime().metadata_store
-    existing_by_id = store.get(str(conversation_json.get("id", ""))) if hasattr(store, "get") else None
-    if existing_by_id is not None and not _conversation_authorized(
-        existing_by_id, owner_id, effective_project_id
-    ):
-        raise ValueError("unauthorized_update: conversation id already exists")
-    if existing_by_id is not None and _conversation_hash(existing_by_id) != metadata["conversation_hash"]:
-        raise ValueError("unauthorized_update: conversation id already exists")
-
-    memory_id, inserted = _insert_new_conversation(conversation_json)
-    _record_audit_event(
-        "memory.inserted",
+    sensitive_findings = _detect_sensitive_content(conversation_json)
+    if sensitive_findings:
+        return _store_quarantined_memory(
+            conversation_json,
+            owner_id=owner_id,
+            project_id=effective_project_id,
+            findings=sensitive_findings,
+        )
+    return _store_review_memory(
+        conversation_json,
         owner_id=owner_id,
         project_id=effective_project_id,
-        memory_id=memory_id,
-        outcome="pending_review",
-        metadata={
-            "memory_status": _MEMORY_STATUS_PENDING_REVIEW,
-            "inserted": inserted,
-            "embedded_chunks": 0,
-        },
+        memory_status=_MEMORY_STATUS_PENDING_REVIEW,
+        received_at_key="pending_review_received_at",
+        return_status="pending_review",
+        audit_event_type="memory.inserted",
+        audit_outcome="pending_review",
     )
-    return {
-        "status": "pending_review",
-        "id": memory_id,
-        "memory_status": _MEMORY_STATUS_PENDING_REVIEW,
-        "inserted": inserted,
-        "chunks": 0,
-    }
 
 
 def approve_pending_memory(
@@ -2157,7 +2428,8 @@ def approve_pending_memory(
             reason_code="not_visible",
         )
         return {"status": "not_found", "id": memory_id}
-    if _memory_status(conversation) != _MEMORY_STATUS_PENDING_REVIEW:
+    review_status = _memory_status(conversation)
+    if review_status not in _REVIEWABLE_MEMORY_STATUSES:
         _record_audit_event(
             "memory.approved",
             owner_id=owner_id,
@@ -2178,6 +2450,11 @@ def approve_pending_memory(
     metadata = _ensure_metadata(conversation)
     metadata["memory_status"] = _MEMORY_STATUS_ACTIVE
     metadata["approved_at"] = _utc_now_iso()
+    metadata["review_status_before_approval"] = review_status
+    if metadata.get("quarantine_reason_codes"):
+        metadata["quarantine_reviewed_at"] = metadata["approved_at"]
+        metadata["quarantine_decision"] = "approved"
+        metadata["sensitive_content_approved"] = True
     metadata.setdefault("save_intent", "user_confirmed")
     _runtime().metadata_store.insert(conversation)
     result = ingest_messages(conversation, owner_id=owner_id, project_id=effective_project_id)
@@ -2189,7 +2466,10 @@ def approve_pending_memory(
         owner_id=owner_id,
         project_id=effective_project_id,
         memory_id=memory_id,
-        metadata={"memory_status": _MEMORY_STATUS_ACTIVE},
+        metadata={
+            "memory_status": _MEMORY_STATUS_ACTIVE,
+            "review_status_before_approval": review_status,
+        },
     )
     return result
 
@@ -2211,7 +2491,7 @@ def reject_pending_memory(
             reason_code="not_visible",
         )
         return {"status": "not_found", "id": memory_id}
-    if _memory_status(conversation) != _MEMORY_STATUS_PENDING_REVIEW:
+    if _memory_status(conversation) not in _REVIEWABLE_MEMORY_STATUSES:
         _record_audit_event(
             "memory.rejected",
             owner_id=owner_id,
@@ -2230,8 +2510,13 @@ def reject_pending_memory(
         }
     assert isinstance(conversation, dict)
     metadata = _ensure_metadata(conversation)
+    review_status = _memory_status(conversation)
     metadata["memory_status"] = _MEMORY_STATUS_REJECTED
     metadata["rejected_at"] = _utc_now_iso()
+    metadata["review_status_before_rejection"] = review_status
+    if metadata.get("quarantine_reason_codes"):
+        metadata["quarantine_reviewed_at"] = metadata["rejected_at"]
+        metadata["quarantine_decision"] = "rejected"
     _runtime().metadata_store.insert(conversation)
     _record_audit_event(
         "memory.rejected",

@@ -115,7 +115,7 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "Read-only search of existing memory by text query. Optional filters: source, date_from, date_to, tags, "
         "and thread_id. Use project_id for a shared workspace. Use limit and cursor for paged "
         "results. Use result_mode=threads for thread-grouped results. Use response_format=concise "
-        "for normal recall or detailed for full conversation payloads. Use memory_status to inspect active, pending_review, rejected, or all memories."
+        "for normal recall or detailed for full conversation payloads. Use memory_status to inspect active, pending_review, quarantined, rejected, or all memories."
     ),
     "memory_retrieve": "Read-only retrieval of a stored memory item by ID, optionally within a project_id and memory_status filter.",
     "memory_ask": (
@@ -137,8 +137,8 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "for full fact provenance."
     ),
     "memory_fact_supersede": "Write fact state by marking one normalized fact as superseded by another fact within a project_id. Requires the `memory:write` auth scope when MCP auth is enabled.",
-    "memory_pending_approve": "Write pending memory state by approving a pending insert so it becomes searchable and can create facts. Requires the `memory:write` auth scope when MCP auth is enabled.",
-    "memory_pending_reject": "Write pending memory state by rejecting a pending insert so it remains excluded from default reads. Requires the `memory:write` auth scope when MCP auth is enabled.",
+    "memory_pending_approve": "Write reviewable memory state by approving a pending or quarantined insert so it becomes searchable and can create facts. Requires the `memory:write` auth scope when MCP auth is enabled.",
+    "memory_pending_reject": "Write reviewable memory state by rejecting a pending or quarantined insert so it remains excluded from default reads. Requires the `memory:write` auth scope when MCP auth is enabled.",
     "memory_project_list": "Read-only list of project workspaces visible to the authenticated user.",
     "memory_project_default_get": "Read-only retrieval of the authenticated user's default private project workspace.",
     "memory_project_get": "Read-only retrieval of one visible project workspace by project_id.",
