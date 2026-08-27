@@ -322,6 +322,58 @@ def test_bearer_auth_enforces_stored_token_scopes(tmp_path) -> None:
     assert 'scope="memory:write"' in insert.headers["www-authenticate"]
 
 
+def test_bearer_auth_protects_memory_routes_without_credentials(tmp_path) -> None:
+    client, _ = _sqlite_auth_client(tmp_path)
+    requests = [
+        ("GET", "/memory/projects", None),
+        ("GET", "/memory/projects/default", None),
+        ("GET", "/memory/projects/shared-321", None),
+        ("POST", "/memory/insert", _conversation()),
+        ("POST", "/memory/search", {"query": "hello"}),
+        ("POST", "/memory/retrieve", {"id": "11111111-1111-4111-8111-111111111111"}),
+        ("POST", "/memory/ask", {"question": "hello?"}),
+        ("POST", "/memory/facts/search", {"subject": "user"}),
+        ("POST", "/memory/profile/get", {"subject": "user"}),
+        (
+            "POST",
+            "/memory/facts/supersede",
+            {
+                "fact_id": "11111111-1111-4111-8111-111111111111",
+                "superseded_by": "22222222-2222-4222-8222-222222222222",
+            },
+        ),
+        ("POST", "/memory/pending/approve", {"id": "11111111-1111-4111-8111-111111111111"}),
+        ("POST", "/memory/pending/reject", {"id": "11111111-1111-4111-8111-111111111111"}),
+    ]
+
+    for method, path, body in requests:
+        response = client.request(method, path, json=body) if body else client.request(method, path)
+        assert response.status_code == 401, (method, path, response.text)
+        assert 'error="invalid_request"' in response.headers["www-authenticate"]
+
+
+def test_bearer_auth_rejects_expired_and_revoked_tokens(tmp_path) -> None:
+    client, store = _sqlite_auth_client(tmp_path)
+    store.create_auth_token(
+        owner_id="owner-a",
+        token="token-expired",
+        expires_at="2000-01-01T00:00:00Z",
+    )
+    revoked = store.create_auth_token(owner_id="owner-a", token="token-revoked")
+    assert store.revoke_auth_token(str(revoked["token_id"])) is not None
+
+    for token in ("token-expired", "token-revoked"):
+        response = client.post(
+            "/memory/search",
+            json={"query": "hello"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 401
+        assert 'error="invalid_token"' in response.headers["www-authenticate"]
+        assert token not in response.text
+        assert token not in response.headers["www-authenticate"]
+
+
 def test_memory_insert_200() -> None:
     client = _client()
     response = client.post("/memory/insert", json=_conversation())
@@ -857,6 +909,161 @@ def test_bearer_auth_allows_shared_project_collaboration(tmp_path) -> None:
     assert owner_b_default_search.json()["results"] == []
     assert owner_c_shared_search.status_code == 403
     assert reader_write.status_code == 403
+
+
+def test_bearer_project_denials_cover_http_routes_without_leaking_text(tmp_path) -> None:
+    client, store = _sqlite_auth_client(tmp_path)
+    store.create_auth_token(owner_id="owner-e", token="token-e")
+    store.create_project(
+        project_id="other-999",
+        owner_id="owner-e",
+        name="Other Hidden Project",
+        description="classified project metadata",
+    )
+    phrase = "other project sapphire phrase"
+    hidden_payload = _conversation()
+    hidden_payload["id"] = "22222222-2222-4222-8222-222222222222"
+    hidden_payload["project_id"] = "other-999"
+    hidden_payload["messages"] = [
+        {"role": "user", "text": f"The sealed project phrase is {phrase}."}
+    ]
+    owner_e_headers = {"Authorization": "Bearer token-e"}
+    seed = client.post("/memory/insert", json=hidden_payload, headers=owner_e_headers)
+    assert seed.status_code == 200, seed.text
+    memory_id = seed.json()["id"]
+
+    forbidden = [phrase, "Other Hidden Project", "classified project metadata"]
+    for token in ("token-a", "token-b", "token-c", "token-d"):
+        headers = {"Authorization": f"Bearer {token}"}
+        denied = [
+            client.get("/memory/projects/other-999", headers=headers),
+            client.post(
+                "/memory/search",
+                json={"query": phrase, "project_id": "other-999"},
+                headers=headers,
+            ),
+            client.post(
+                "/memory/ask",
+                json={"question": phrase, "project_id": "other-999"},
+                headers=headers,
+            ),
+            client.post(
+                "/memory/retrieve",
+                json={"id": memory_id, "project_id": "other-999"},
+                headers=headers,
+            ),
+            client.post(
+                "/memory/insert",
+                json={**_conversation(), "project_id": "other-999"},
+                headers=headers,
+            ),
+            client.post(
+                "/memory/facts/search",
+                json={"subject": "user", "project_id": "other-999"},
+                headers=headers,
+            ),
+            client.post(
+                "/memory/profile/get",
+                json={"subject": "user", "project_id": "other-999"},
+                headers=headers,
+            ),
+            client.post(
+                "/memory/facts/supersede",
+                json={
+                    "fact_id": "11111111-1111-4111-8111-111111111111",
+                    "superseded_by": "22222222-2222-4222-8222-222222222222",
+                    "project_id": "other-999",
+                },
+                headers=headers,
+            ),
+        ]
+        for response in denied:
+            assert response.status_code == 403, (token, response.text)
+            for value in forbidden:
+                assert value not in response.text
+
+    owner_a_headers = {"Authorization": "Bearer token-a"}
+    hidden_retrieve = client.post(
+        "/memory/retrieve", json={"id": memory_id}, headers=owner_a_headers
+    )
+    hidden_search = client.post(
+        "/memory/search", json={"query": phrase}, headers=owner_a_headers
+    )
+    hidden_ask = client.post(
+        "/memory/ask", json={"question": phrase}, headers=owner_a_headers
+    )
+
+    assert hidden_retrieve.status_code == 404
+    assert hidden_search.status_code == 200
+    assert hidden_search.json()["results"] == []
+    assert hidden_ask.status_code == 200
+    assert hidden_ask.json()["answer_basis"] == "not_found"
+    for response in (hidden_retrieve, hidden_search, hidden_ask):
+        for value in forbidden:
+            assert value not in response.text
+
+
+def test_bearer_mcp_project_denial_matches_http_without_leaking_text(tmp_path) -> None:
+    client, _ = _sqlite_auth_client(tmp_path)
+    owner_a_headers = {"Authorization": "Bearer token-a"}
+    phrase = "shared project hidden mcp phrase"
+    shared_payload = _conversation()
+    shared_payload["messages"] = [{"role": "user", "text": phrase}]
+    shared_payload["project_id"] = "shared-321"
+    with client:
+        seed = client.post("/memory/insert", json=shared_payload, headers=owner_a_headers)
+        assert seed.status_code == 200, seed.text
+
+        initialize_payload = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": {"name": "pytest", "version": "0.1"},
+            },
+        }
+        base_headers = {
+            "Accept": "application/json, text/event-stream",
+            "Authorization": "Bearer token-c",
+        }
+        initialize = client.post("/mcp/", json=initialize_payload, headers=base_headers)
+        session_id = initialize.headers.get("mcp-session-id")
+        assert initialize.status_code == 200
+        assert session_id
+
+        for request_id, name, arguments in (
+            (
+                2,
+                "memory_search",
+                {"query": phrase, "project_id": "shared-321"},
+            ),
+            (
+                3,
+                "memory_insert",
+                {"conversation_json": _conversation(), "project_id": "shared-321"},
+            ),
+            (
+                4,
+                "memory_retrieve",
+                {"id": seed.json()["id"], "project_id": "shared-321"},
+            ),
+        ):
+            response = client.post(
+                "/mcp/",
+                json={
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "method": "tools/call",
+                    "params": {"name": name, "arguments": arguments},
+                },
+                headers={**base_headers, "Mcp-Session-Id": session_id},
+            )
+            payload = _mcp_result_payload(response.text)
+            assert payload["status"] == "error"
+            assert payload["error_code"] == "permission_denied"
+            assert phrase not in json.dumps(payload)
 
 
 def test_api_memory_operations_record_audit_events_with_request_id(tmp_path) -> None:

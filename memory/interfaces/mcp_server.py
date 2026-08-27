@@ -401,6 +401,26 @@ async def _emit_mcp_tool_log(
         logger.debug("MCP client log notification failed", exc_info=True)
 
 
+async def _mcp_permission_denied_response(
+    ctx: FastMCPContext | None, *, tool_name: str, exc: Exception
+) -> dict[str, Any]:
+    await _emit_mcp_tool_log(
+        ctx,
+        tool_name=tool_name,
+        status="error",
+        error_code="permission_denied",
+    )
+    return _envelope(
+        status="error",
+        error_code="permission_denied",
+        error_message=str(exc),
+    )
+
+
+def _is_permission_denied_exception(exc: Exception) -> bool:
+    return isinstance(exc, PermissionError) or str(exc) == "project access denied"
+
+
 def _log_mcp_tool_failure(
     *,
     operation: str,
@@ -997,7 +1017,15 @@ def build_tool_handlers(
                 error_code=error_code,
                 error_message=error_message,
             )
+        except PermissionError as exc:
+            return await _mcp_permission_denied_response(
+                ctx, tool_name="memory_insert", exc=exc
+            )
         except Exception as exc:
+            if _is_permission_denied_exception(exc):
+                return await _mcp_permission_denied_response(
+                    ctx, tool_name="memory_insert", exc=exc
+                )
             _log_mcp_tool_failure(
                 operation="memory_insert",
                 error_code="insert_failed",
@@ -1108,7 +1136,15 @@ def build_tool_handlers(
                 error_code="invalid_input",
                 error_message=str(exc),
             )
+        except PermissionError as exc:
+            return await _mcp_permission_denied_response(
+                ctx, tool_name="memory_search", exc=exc
+            )
         except Exception as exc:
+            if _is_permission_denied_exception(exc):
+                return await _mcp_permission_denied_response(
+                    ctx, tool_name="memory_search", exc=exc
+                )
             _log_mcp_tool_failure(
                 operation="memory_search",
                 error_code="search_failed",
@@ -1148,16 +1184,14 @@ def build_tool_handlers(
                 project_id=project_id,
                 memory_status=unwrap_array(memory_status) or "active",
             )
+        except PermissionError as exc:
+            return await _mcp_permission_denied_response(
+                ctx, tool_name="memory_retrieve", exc=exc
+            )
         except ValueError as exc:
             return _envelope(
                 status="error",
                 error_code="invalid_input",
-                error_message=str(exc),
-            )
-        except PermissionError as exc:
-            return _envelope(
-                status="error",
-                error_code="permission_denied",
                 error_message=str(exc),
             )
 
@@ -1264,7 +1298,15 @@ def build_tool_handlers(
                 error_code="invalid_input",
                 error_message=str(exc),
             )
+        except PermissionError as exc:
+            return await _mcp_permission_denied_response(
+                ctx, tool_name="memory_ask", exc=exc
+            )
         except Exception as exc:
+            if _is_permission_denied_exception(exc):
+                return await _mcp_permission_denied_response(
+                    ctx, tool_name="memory_ask", exc=exc
+                )
             _log_mcp_tool_failure(
                 operation="memory_ask",
                 error_code="ask_failed",
@@ -1330,12 +1372,22 @@ def build_tool_handlers(
                 freshness_from=unwrap_array(freshness_from),
                 freshness_to=unwrap_array(freshness_to),
             )
+        except PermissionError as exc:
+            return await _mcp_permission_denied_response(
+                ctx, tool_name="memory_fact_search", exc=exc
+            )
         except ValueError as exc:
             return _envelope(
                 status="error",
                 error_code="invalid_input",
                 error_message=str(exc),
             )
+        except Exception as exc:
+            if _is_permission_denied_exception(exc):
+                return await _mcp_permission_denied_response(
+                    ctx, tool_name="memory_fact_search", exc=exc
+                )
+            raise
         return _with_envelope_defaults(
             format_fact_search_response(result, response_format, limit=limit)
         )
@@ -1384,12 +1436,22 @@ def build_tool_handlers(
                 freshness_from=unwrap_array(freshness_from),
                 freshness_to=unwrap_array(freshness_to),
             )
+        except PermissionError as exc:
+            return await _mcp_permission_denied_response(
+                ctx, tool_name="memory_profile_get", exc=exc
+            )
         except ValueError as exc:
             return _envelope(
                 status="error",
                 error_code="invalid_input",
                 error_message=str(exc),
             )
+        except Exception as exc:
+            if _is_permission_denied_exception(exc):
+                return await _mcp_permission_denied_response(
+                    ctx, tool_name="memory_profile_get", exc=exc
+                )
+            raise
         return _with_envelope_defaults(
             format_profile_response(result, response_format, limit=limit)
         )
@@ -1421,12 +1483,29 @@ def build_tool_handlers(
                 error_code="invalid_input",
                 error_message="superseded_by must be a non-empty string",
             )
-        result = await agent.fact_supersede(
-            fact_id=fact_id,
-            superseded_by=superseded_by,
-            owner_id=owner_id(),
-            project_id=project_id,
-        )
+        try:
+            result = await agent.fact_supersede(
+                fact_id=fact_id,
+                superseded_by=superseded_by,
+                owner_id=owner_id(),
+                project_id=project_id,
+            )
+        except PermissionError as exc:
+            return await _mcp_permission_denied_response(
+                ctx, tool_name="memory_fact_supersede", exc=exc
+            )
+        except ValueError as exc:
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message=str(exc),
+            )
+        except Exception as exc:
+            if _is_permission_denied_exception(exc):
+                return await _mcp_permission_denied_response(
+                    ctx, tool_name="memory_fact_supersede", exc=exc
+                )
+            raise
         return _with_envelope_defaults(result)
 
     async def memory_pending_approve(
@@ -1447,9 +1526,26 @@ def build_tool_handlers(
                 error_code="invalid_input",
                 error_message="id must be a non-empty string",
             )
-        result = await agent.approve_pending_memory(
-            id, owner_id=owner_id(), project_id=project_id
-        )
+        try:
+            result = await agent.approve_pending_memory(
+                id, owner_id=owner_id(), project_id=project_id
+            )
+        except PermissionError as exc:
+            return await _mcp_permission_denied_response(
+                ctx, tool_name="memory_pending_approve", exc=exc
+            )
+        except ValueError as exc:
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message=str(exc),
+            )
+        except Exception as exc:
+            if _is_permission_denied_exception(exc):
+                return await _mcp_permission_denied_response(
+                    ctx, tool_name="memory_pending_approve", exc=exc
+                )
+            raise
         return _with_envelope_defaults(result)
 
     async def memory_pending_reject(
@@ -1470,9 +1566,26 @@ def build_tool_handlers(
                 error_code="invalid_input",
                 error_message="id must be a non-empty string",
             )
-        result = await agent.reject_pending_memory(
-            id, owner_id=owner_id(), project_id=project_id
-        )
+        try:
+            result = await agent.reject_pending_memory(
+                id, owner_id=owner_id(), project_id=project_id
+            )
+        except PermissionError as exc:
+            return await _mcp_permission_denied_response(
+                ctx, tool_name="memory_pending_reject", exc=exc
+            )
+        except ValueError as exc:
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message=str(exc),
+            )
+        except Exception as exc:
+            if _is_permission_denied_exception(exc):
+                return await _mcp_permission_denied_response(
+                    ctx, tool_name="memory_pending_reject", exc=exc
+                )
+            raise
         return _with_envelope_defaults(result)
 
     async def memory_project_list(ctx: FastMCPContext | None = None) -> dict[str, Any]:
@@ -1497,10 +1610,8 @@ def build_tool_handlers(
         try:
             result = await agent.project_get(project_id, owner_id=owner_id())
         except PermissionError as exc:
-            return _envelope(
-                status="error",
-                error_code="permission_denied",
-                error_message=str(exc),
+            return await _mcp_permission_denied_response(
+                ctx, tool_name="memory_project_get", exc=exc
             )
         except ValueError as exc:
             return _envelope(
@@ -1508,6 +1619,12 @@ def build_tool_handlers(
                 error_code="invalid_input",
                 error_message=str(exc),
             )
+        except Exception as exc:
+            if _is_permission_denied_exception(exc):
+                return await _mcp_permission_denied_response(
+                    ctx, tool_name="memory_project_get", exc=exc
+                )
+            raise
         return _with_envelope_defaults(result)
 
     handlers: dict[str, ToolFn] = {

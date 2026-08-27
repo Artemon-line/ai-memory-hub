@@ -23,13 +23,13 @@ governance events over immutable stored history.
 - [x] Treat accepted memory payloads as immutable history.
 - [x] Avoid general-purpose memory update and delete tools for
       `v0.1.0-beta`.
-- [ ] Document that corrections are represented as new memories, superseding
+- [x] Document that corrections are represented as new memories, superseding
       facts, or explicit governance events.
-- [ ] Document that archive removes memories from default retrieval and ask
-      flows without erasing history.
+- [x] Document that archive remains a post-beta visibility/storage optimization
+      and must not erase history when it ships.
 - [x] Document that quarantine prevents memories from entering default
       retrieval until approval.
-- [ ] Ensure public docs do not describe destructive delete/update as a shipped
+- [x] Ensure public docs do not describe destructive delete/update as a shipped
       beta capability.
 
 ## P0 Workstreams
@@ -77,32 +77,33 @@ governance events over immutable stored history.
 
 ### Auth And Project Negative Tests
 
-- [ ] Add HTTP tests showing protected memory routes fail without credentials
+- [x] Add HTTP tests showing protected memory routes fail without credentials
       when auth is enabled.
-- [ ] Add HTTP tests for invalid, expired, or revoked tokens.
-- [ ] Add HTTP tests showing a user cannot read, ask, retrieve, or write another
+- [x] Add HTTP tests for invalid, expired, or revoked tokens.
+- [x] Add HTTP tests showing a user cannot read, ask, retrieve, or write another
       project without the required role.
-- [ ] Add HTTP tests showing reader, writer, owner, and admin roles cannot
+- [x] Add HTTP tests showing reader, writer, owner, and admin roles cannot
       perform actions outside their permissions.
-- [ ] Add MCP tests proving the same auth and project checks apply through MCP
+- [x] Add MCP tests proving the same auth and project checks apply through MCP
       tools.
-- [ ] Add tests showing access-denied paths do not reveal private memory text,
+- [x] Add tests showing access-denied paths do not reveal private memory text,
       fact text, project metadata, or existence details beyond the chosen error
       contract.
-- [ ] Add tests showing quarantined and archived memories are excluded from
-      normal search and ask.
+- [x] Add tests showing quarantined memories are excluded from normal search and
+      ask; archived memory tests wait until archive support ships.
 
 ### Archive Visibility
 
-- [ ] Decide whether archive/restore ships in `v0.1.0-beta` or remains a P1
+- [x] Decide whether archive/restore ships in `v0.1.0-beta` or remains a P1
       optimization.
-- [ ] If archive ships, add an explicit archived state to metadata.
-- [ ] If archive ships, exclude archived memories from default search, retrieve,
-      ask, fact extraction, profile, and graph paths.
-- [ ] If archive ships, allow explicit administrative/history reads to include
-      archived memories.
-- [ ] If archive ships, add audit events for archive and restore.
-- [ ] If archive does not ship, document it as a near-term optimization and keep
+- [x] Keep archived memory state, archive/restore endpoints, and archive/restore
+      MCP tools out of `v0.1.0-beta`.
+- [x] Document future archive as a visibility state over preserved history, not
+      history deletion.
+- [x] Leave archive exclusion, administrative history reads, and
+      `memory.archived`/`memory.restored` audit events as P1 implementation
+      work with archive support.
+- [x] If archive does not ship, document it as a near-term optimization and keep
       destructive delete/update out of beta docs.
 
 ### Clean Install And Compose Verification
@@ -138,17 +139,17 @@ governance events over immutable stored history.
 
 ## Acceptance Criteria
 
-- [ ] The beta contract says memory is append-only history.
-- [ ] No public beta docs promise destructive update or delete.
+- [x] The beta contract says memory is append-only history.
+- [x] No public beta docs promise destructive update or delete.
 - [x] Audit events exist for critical write, read, denial, review, and auth
       lifecycle actions.
 - [x] Secrets and high-confidence sensitive PII are blocked or quarantined
       before normal retrieval.
 - [x] Quarantined content is excluded from default search, retrieve, ask, fact,
       profile, and graph paths.
-- [ ] Project and auth negative tests cover both HTTP and MCP surfaces.
-- [ ] Archived content, if shipped, is excluded from default retrieval and
-      covered by tests.
+- [x] Project and auth negative tests cover both HTTP and MCP surfaces.
+- [x] Archive/restore does not ship in beta; archived content exclusion tests
+      remain P1 with archive support.
 - [ ] Clean source and Docker/Compose verification can be repeated from a clean
       checkout.
 - [ ] README, architecture, feature, agent, auth, and release docs precisely

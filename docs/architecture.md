@@ -39,6 +39,13 @@ Implemented and verified in the codebase:
 - Token-budgeted `memory_ask` is available through config or per-request `max_context_tokens`, with optional diagnostics.
 - Basic deterministic topic enrichment from message text.
 
+Memory history is append-only for `v0.1.0-beta`. General destructive memory
+update/delete endpoints and MCP tools do not ship in the beta. Corrections are
+represented as new memories, fact supersession, or governance/review events.
+Archive/restore remains a near-term retention and storage-optimization feature;
+when it ships, it should be implemented as a visibility state over preserved
+history rather than as history deletion.
+
 Planned or partial:
 
 - Retrieval precision improvements, including similarity thresholds, hybrid keyword/vector search, and metadata-aware reranking, are partially implemented. Representative-data tuning remains planned in `improvements/retrieval_precision_plan.md`.
