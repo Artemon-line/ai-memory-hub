@@ -42,6 +42,10 @@ store.
 - [x] MCP insert with `project_id`, API read with the same `project_id`.
 - [x] API bearer-token insert, MCP bearer-token read under the same owner.
 - [x] MCP bearer-token insert, API bearer-token read under the same owner.
+- [x] Two MCP sessions shaped as Codex and opencode clients using the same
+  bearer token can each insert memory and read the other session's memory.
+- [x] The same Codex/opencode MCP sessions using different bearer tokens cannot
+  retrieve or search each other's private default-project memory.
 - [x] Cross-owner negative checks for both directions: API writes must not leak
   through MCP reads, and MCP writes must not leak through API reads.
 - [x] Response-shape equivalence checks for shared fields: `status`, `id`,
@@ -59,6 +63,36 @@ Preferred location:
 
 Use `TestClient` against `create_app(config={"interfaces": {"api": True, "mcp":
 True}})` so both surfaces share one agent/runtime.
+
+## P0: Two-Agent MCP Bearer Interop
+
+Expected policy:
+
+- MCP session identity and `clientInfo.name` must not define data ownership.
+- Bearer token ownership defines private default-project visibility.
+- Two agents that intentionally share one bearer token share the same owner
+  boundary and can read each other's memory.
+- Two agents using different bearer tokens stay isolated unless they use an
+  explicit shared project with allowed membership.
+
+Implemented deterministic coverage:
+
+- [x] A Codex-shaped MCP session and an opencode-shaped MCP session initialize
+  with the same bearer token, each call `memory_insert`, and both can retrieve
+  and search the inserted memories.
+- [x] The same client-shaped sessions initialize with different bearer tokens,
+  each can retrieve its own memory, and neither can retrieve or search the
+  other owner's private memory.
+
+This is intentionally a deterministic integration test instead of a required
+real Codex/opencode plus Ollama CI gate. Real client binaries, local model
+configuration, and headless CLI command syntax are operational smoke concerns;
+this P0 regression locks down the hub contract that auth scope and owner
+isolation follow tokens and projects, not agent names.
+
+Preferred location:
+
+- `tests/integration/test_api_mcp_interop.py`
 
 ## P0: Storage Outage And Fallback Policy
 
