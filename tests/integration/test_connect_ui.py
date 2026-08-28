@@ -682,6 +682,74 @@ def test_oauth_authorization_code_flow_issues_mcp_bearer_token(tmp_path, monkeyp
     assert search.status_code == 200
 
 
+def test_oauth_root_aliases_support_codex_no_discovery_fallback(tmp_path, monkeypatch) -> None:
+    client = _client(tmp_path, monkeypatch, allowed_domains=["example.com"])
+    redirect_uri = "http://127.0.0.1:45872/callback/crkT507Z-f3e"
+    verifier = "codex-fallback-pkce-verifier-abcdefghijklmnopqrstuvwxyz0123456789"
+    register = client.post(
+        "/register",
+        json={
+            "client_name": "Codex",
+            "redirect_uris": [redirect_uri],
+            "token_endpoint_auth_method": "none",
+            "grant_types": ["authorization_code"],
+            "response_types": ["code"],
+        },
+    )
+    client_id = register.json()["client_id"]
+
+    authorize = client.get(
+        "/authorize",
+        params={
+            "response_type": "code",
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "code_challenge": _pkce_challenge(verifier),
+            "code_challenge_method": "S256",
+            "state": "codex-state",
+            "scope": "memory:read memory:write",
+            "resource": "https://memory.example.com/mcp",
+        },
+        follow_redirects=False,
+    )
+    google_state = re.search(r"[?&]state=([^&]+)", authorize.headers["location"])
+    assert register.status_code == 201
+    assert authorize.status_code == 303
+    assert google_state is not None
+
+    browser = TestClient(client.app, base_url="https://memory.example.com")
+    callback = browser.get(
+        f"/auth/google/callback?code=fake-code&state={google_state.group(1)}",
+        follow_redirects=False,
+    )
+    redirect = urlparse(callback.headers["location"])
+    params = parse_qs(redirect.query)
+    token = client.post(
+        "/token",
+        data={
+            "grant_type": "authorization_code",
+            "code": params["code"][0],
+            "redirect_uri": redirect_uri,
+            "client_id": client_id,
+            "code_verifier": verifier,
+        },
+    )
+    access_token = token.json()["access_token"]
+    search = client.post(
+        "/memory/search",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={"query": "anything"},
+    )
+
+    assert callback.status_code == 303
+    assert f"{redirect.scheme}://{redirect.netloc}{redirect.path}" == redirect_uri
+    assert params["state"] == ["codex-state"]
+    assert token.status_code == 200
+    assert token.json()["token_type"] == "Bearer"
+    assert token.json()["scope"] == "memory:read memory:write"
+    assert search.status_code == 200
+
+
 def test_oauth_register_rejects_malformed_json(tmp_path, monkeypatch) -> None:
     client = _client(tmp_path, monkeypatch)
 

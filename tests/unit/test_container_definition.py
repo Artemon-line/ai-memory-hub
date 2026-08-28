@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import tomllib
 from pathlib import Path
@@ -217,18 +218,36 @@ def test_local_stack_observability_is_wired() -> None:
     config = Path("examples/local-stack/config.oauth-ngrok.yaml").read_text(encoding="utf-8")
     collector = Path("examples/local-stack/otel-collector.yaml").read_text(encoding="utf-8")
     prometheus = Path("examples/local-stack/prometheus.yaml").read_text(encoding="utf-8")
+    grafana_datasources = Path(
+        "examples/local-stack/grafana/provisioning/datasources/datasources.yaml"
+    ).read_text(encoding="utf-8")
+    grafana_dashboard = json.loads(
+        Path("examples/local-stack/grafana/dashboards/ai-memory-hub-overview.json").read_text(
+            encoding="utf-8"
+        )
+    )
 
     assert "otel-collector" in compose
     assert "jaeger" in compose
     assert "prometheus" in compose
+    assert "postgres-exporter" in compose
+    assert "grafana" in compose
     assert "127.0.0.1:16686:16686" in compose
     assert "127.0.0.1:9090:9090" in compose
+    assert "127.0.0.1:3000:3000" in compose
     assert "http://127.0.0.1:8000/ready" in compose
     assert "tracing:" in config
     assert "metrics:" in config
     assert "endpoint: http://otel-collector:4317" in config
     assert "otlp/jaeger" in collector
     assert "otel-collector:8889" in prometheus
+    assert "postgres-exporter:9187" in prometheus
+    assert "uid: prometheus" in grafana_datasources
+    assert "uid: jaeger" in grafana_datasources
+    assert grafana_dashboard["title"] == "ai-memory-hub Local Overview"
+    assert "sum(rate(memory_api_requests_total[5m]))" in json.dumps(grafana_dashboard)
+    assert "memory_mcp_tool_calls_total" in json.dumps(grafana_dashboard)
+    assert "pg_stat_database_tup_inserted" in json.dumps(grafana_dashboard)
 
 
 def test_project_declares_build_backend_for_console_script() -> None:

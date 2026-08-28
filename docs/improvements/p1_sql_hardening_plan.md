@@ -142,4 +142,3 @@ or future archive visibility state.
       contract.
 - [ ] The shipped HTTP and MCP surfaces still do not expose destructive memory
       update/delete/archive/restore behavior for `v0.1.0-beta`.
-

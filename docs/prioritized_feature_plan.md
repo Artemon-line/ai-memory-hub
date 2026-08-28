@@ -10,6 +10,8 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P0 | Storage abstraction baseline: capabilities, schema checks, dimensions, fallback, dry-run, Postgres/PGVector | Implemented | `storage_agnostic_byoa_plan.md` |
 | P0 | Retrieval precision: threshold, hybrid search, metadata rerank | Implemented | `improvements/retrieval_precision_plan.md` |
 | P0 | MCP protocol compliance: initialize instructions, schemas, pagination, logging, completion when client UX needs it | Partial | `mcp_utility_compliance_plan.md`, `mcp_plan.md` |
+| P0 | MCP response formats for token-efficient agent recall before release | Planned | `improvements/mcp_response_format_plan.md` |
+| P0 | Agent/model footprint provenance for saved conversations before release | Planned | `improvements/agent_model_footprint_plan.md` |
 | P0 | Bearer-token auth and per-user memory isolation | Partial | `bearer_api_key_auth_plan.md`, `improvements/google_oauth_connect_ui_plan.md` |
 | P0 | Project workspaces and shared collaboration boundaries | Partial | `project_workspace_collaboration_plan.md` |
 | P0 | MCP client feedback: response shape clarity, fact freshness, and source quality | Implemented | `improvements/client_feedback_improvement_plan.md` |
@@ -113,6 +115,56 @@ Current status:
       real clients expose new interpretation gaps.
 - [ ] Implement MCP completion only when a concrete client UX needs prompt or
       resource argument suggestions.
+
+## P0: MCP Response Formats Before Release
+
+Use `improvements/mcp_response_format_plan.md` as the source of truth.
+
+Real agent feedback showed that profile and search reads still return too much
+metadata for normal recall. Treat this as pre-release product-contract work:
+MCP tools should translate the API into agent-friendly response shapes rather
+than exposing every audit field by default.
+
+Implementation sequence:
+
+- [ ] Add an MCP `response_format` enum, initially `concise` and `detailed`,
+      instead of a `compact` boolean.
+- [ ] Keep `result_mode` for retrieval grouping and `response_format` for
+      payload size/field selection.
+- [ ] Make concise search and ask responses omit full conversations,
+      `metadata.index_chunks`, `metadata.tag_sources`, and duplicate summary
+      envelopes.
+- [ ] Make concise fact/profile reads return high-signal facts, summary text,
+      freshness, confidence, source quality, and compact citations.
+- [ ] Preserve the current detailed shape for audit/debug clients.
+- [ ] Update MCP docs, initialize guidance, smoke calls, and tests before
+      publishing `v0.1.0`.
+
+## P0: Agent/Model Footprint Before Release
+
+Use `improvements/agent_model_footprint_plan.md` as the source of truth.
+
+An AI memory hub should preserve the runtime footprint of saved memory. Agents
+should be able to tell that a conversation came from Hermes using
+`gemini-3.6-flash`, from Codex using its configured model, or from a specific
+subagent, without relying on raw text clues.
+
+Implementation sequence:
+
+- [ ] Treat `source` as the canonical saved conversation runtime/client, such
+      as `hermes`, `codex`, `gemini-cli`, `opencode`, `claude-code`, or
+      `manual`.
+- [ ] Preserve conversation-level `metadata.agent`, `metadata.model`,
+      `metadata.model_provider`, `metadata.platform`, `metadata.capture_client`,
+      and `metadata.ingestion_method`.
+- [ ] Add optional message-level `agent`, `model`, `model_provider`, and
+      `source_message_id` fields for subagents and mixed-model turns.
+- [ ] Keep the existing message hash based on `role` and `text` for backward
+      compatible dedupe.
+- [ ] Carry source agent/model footprint into fact and generated-summary
+      provenance.
+- [ ] Update MCP save guidance so agents provide exact runtime and model
+      footprint when saving conversations.
 
 ## P0: Bearer-Token Auth And Per-User Isolation
 
