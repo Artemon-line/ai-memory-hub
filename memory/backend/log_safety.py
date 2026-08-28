@@ -18,7 +18,7 @@ _AUTHORIZATION_BEARER = re.compile(
 )
 _QUERY_TOKENS = re.compile(r"(?i)([?&](?:access_token|token)=)([^&#\s]+)")
 _OPENAI_KEYS = re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{10,}\b")
-_FILTERED_LOGGERS = ("httpx", "memory", "uvicorn.access", "uvicorn.error")
+_FILTERED_LOGGERS = ("httpx", "httpx2", "memory", "uvicorn.access", "uvicorn.error")
 
 
 def redact_secrets(text: str) -> str:
