@@ -824,7 +824,7 @@ def test_oauth_register_accepts_loopback_redirect_uris(
     assert response.json()["redirect_uris"] == [redirect_uri]
 
 
-def test_logged_in_user_authorizes_registered_loopback_client_without_connect_detour(
+def test_logged_in_user_mcp_reauth_prompts_google_account_selection(
     tmp_path, monkeypatch
 ) -> None:
     client = _client(tmp_path, monkeypatch, allowed_domains=["example.com"])
@@ -856,12 +856,18 @@ def test_logged_in_user_authorizes_registered_loopback_client_without_connect_de
         follow_redirects=False,
     )
     redirect = urlparse(authorize.headers["location"])
-    params = parse_qs(redirect.query)
+    provider_params = parse_qs(redirect.query)
+    provider_callback = client.get(
+        f"/auth/google/callback?code=fake-code&state={provider_params['state'][0]}",
+        follow_redirects=False,
+    )
+    callback_redirect = urlparse(provider_callback.headers["location"])
+    callback_params = parse_qs(callback_redirect.query)
     token = client.post(
         "/oauth/token",
         data={
             "grant_type": "authorization_code",
-            "code": params["code"][0],
+            "code": callback_params["code"][0],
             "redirect_uri": redirect_uri,
             "client_id": register.json()["client_id"],
             "code_verifier": verifier,
@@ -872,9 +878,14 @@ def test_logged_in_user_authorizes_registered_loopback_client_without_connect_de
     assert callback.status_code == 200
     assert register.status_code == 201
     assert authorize.status_code == 303
-    assert f"{redirect.scheme}://{redirect.netloc}{redirect.path}" == redirect_uri
-    assert params["state"] == ["local-client-state"]
-    assert params["code"][0].startswith("amh_code_")
+    assert f"{redirect.scheme}://{redirect.netloc}{redirect.path}" == (
+        "https://accounts.google.com/o/oauth2/v2/auth"
+    )
+    assert provider_params["prompt"] == ["select_account"]
+    assert provider_callback.status_code == 303
+    assert f"{callback_redirect.scheme}://{callback_redirect.netloc}{callback_redirect.path}" == redirect_uri
+    assert callback_params["state"] == ["local-client-state"]
+    assert callback_params["code"][0].startswith("amh_code_")
     assert token.status_code == 200
     assert token.json()["token_type"] == "Bearer"
     assert token.json()["refresh_token"].startswith("amh_refresh_")
@@ -909,12 +920,18 @@ def test_oauth_registered_client_survives_app_restart(tmp_path, monkeypatch) -> 
         follow_redirects=False,
     )
     redirect = urlparse(authorize.headers["location"])
-    params = parse_qs(redirect.query)
+    provider_params = parse_qs(redirect.query)
+    provider_callback = restarted_client.get(
+        f"/auth/google/callback?code=fake-code&state={provider_params['state'][0]}",
+        follow_redirects=False,
+    )
+    callback_redirect = urlparse(provider_callback.headers["location"])
+    callback_params = parse_qs(callback_redirect.query)
     token = restarted_client.post(
         "/oauth/token",
         data={
             "grant_type": "authorization_code",
-            "code": params["code"][0],
+            "code": callback_params["code"][0],
             "redirect_uri": redirect_uri,
             "client_id": client_id,
             "code_verifier": verifier,
@@ -924,7 +941,13 @@ def test_oauth_registered_client_survives_app_restart(tmp_path, monkeypatch) -> 
     assert register.status_code == 201
     assert callback.status_code == 200
     assert authorize.status_code == 303
-    assert params["state"] == ["restart-state"]
+    assert f"{redirect.scheme}://{redirect.netloc}{redirect.path}" == (
+        "https://accounts.google.com/o/oauth2/v2/auth"
+    )
+    assert provider_params["prompt"] == ["select_account"]
+    assert provider_callback.status_code == 303
+    assert f"{callback_redirect.scheme}://{callback_redirect.netloc}{callback_redirect.path}" == redirect_uri
+    assert callback_params["state"] == ["restart-state"]
     assert token.status_code == 200
     assert token.json()["refresh_token"].startswith("amh_refresh_")
 

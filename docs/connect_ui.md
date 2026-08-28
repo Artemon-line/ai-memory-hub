@@ -151,10 +151,17 @@ Dynamic registration is intentionally limited to loopback redirect URIs such as
 `http://[::1]:<port>/callback`. Remote hosts, fragments, userinfo, relative
 paths, and non-HTTP schemes are rejected.
 
-When a browser is already signed in, `/oauth/authorize` does not silently issue
-an authorization code for a newly registered dynamic client. The request is
-parked in the browser session and `/connect` requires an explicit
-CSRF-protected approval before redirecting back to the local client.
+When a browser is already signed in, `/oauth/authorize` still starts the
+configured provider flow for a newly registered dynamic client instead of
+silently issuing an authorization code from the existing hub browser session.
+Google sign-in is launched with `prompt=select_account` so client logout and
+reauthentication can switch to a different Google account.
+
+Because the MCP endpoint exposes both read and write tools, its initial OAuth
+challenge advertises the configured `api.oauth.scopes_supported` values. Generic
+MCP clients such as OpenCode and Hermes can then request `memory:read` and
+`memory:write` during first auth instead of discovering the missing write scope
+only after a tool call.
 
 Registered dynamic clients are stored in the configured metadata backend and
 expire after `api.oauth.client_registration_ttl_seconds`. Unredeemed
