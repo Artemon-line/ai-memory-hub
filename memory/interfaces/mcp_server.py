@@ -13,7 +13,15 @@ import jsonschema
 from fastmcp import Context as FastMCPContext
 from pydantic import Field
 
-from memory.auth import READ_SCOPE, WRITE_SCOPE, current_auth_context, current_owner_id
+from memory.auth import (
+    AUTH_CONFIG_PATH,
+    AUTH_RECONNECT_HINT,
+    MCP_CLIENT_APPROVAL_HINT,
+    READ_SCOPE,
+    WRITE_SCOPE,
+    current_auth_context,
+    current_owner_id,
+)
 from memory.backend.log_safety import redact_secrets
 from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig
@@ -139,19 +147,6 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
     "memory_project_get": "Read-only retrieval of one visible project workspace by project_id.",
 }
 
-MCP_AUTH_CONFIG_HINT = (
-    "Grant the ai-memory-hub MCP auth token the missing scope by reconnecting "
-    "through the MCP OAuth/Connect flow or updating the bearer-token scopes in "
-    "the MCP client/server auth configuration."
-)
-MCP_APPROVAL_HINT = (
-    "Client tool approval only allows this call to run; it does not add bearer "
-    "or OAuth scopes."
-)
-MCP_AUTH_CONFIG_PATH = (
-    "api.auth / api.oauth.scopes_supported / MCP client Authorization bearer token"
-)
-
 @dataclass(frozen=True, slots=True)
 class MCPToolPolicy:
     read_only: bool
@@ -178,9 +173,9 @@ class MCPToolPolicy:
             "required_scopes": list(self.required_scopes) if authenticated else [],
             "scopes_when_authenticated": list(self.required_scopes),
             "memory_effect": self.memory_effect,
-            "config_path": MCP_AUTH_CONFIG_PATH,
-            "configuration_hint": MCP_AUTH_CONFIG_HINT,
-            "approval_hint": MCP_APPROVAL_HINT,
+            "config_path": AUTH_CONFIG_PATH,
+            "configuration_hint": AUTH_RECONNECT_HINT,
+            "approval_hint": MCP_CLIENT_APPROVAL_HINT,
         }
         if authenticated and WRITE_SCOPE in self.required_scopes:
             meta["write_scope"] = WRITE_SCOPE
@@ -339,15 +334,15 @@ def _insufficient_scope_error(
         error_code="insufficient_scope",
         error_message=(
             f"{scope} scope is required for this MCP tool. "
-            f"{MCP_APPROVAL_HINT} {MCP_AUTH_CONFIG_HINT}"
+            f"{MCP_CLIENT_APPROVAL_HINT} {AUTH_RECONNECT_HINT}"
         ),
         required_scope=scope,
         required_scopes=[scope],
         granted_scopes=sorted(granted_scopes),
         auth_mode=auth_mode,
-        auth_config_path=MCP_AUTH_CONFIG_PATH,
-        auth_config_hint=MCP_AUTH_CONFIG_HINT,
-        approval_hint=MCP_APPROVAL_HINT,
+        auth_config_path=AUTH_CONFIG_PATH,
+        auth_config_hint=AUTH_RECONNECT_HINT,
+        approval_hint=MCP_CLIENT_APPROVAL_HINT,
     )
 
 

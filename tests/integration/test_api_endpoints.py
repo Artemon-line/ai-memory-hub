@@ -10,6 +10,11 @@ import time
 from fastapi.testclient import TestClient
 
 from memory.api.server import create_app
+from memory.auth import (
+    AUTH_ERROR_CODE_HEADER,
+    AUTH_MISSING_SCOPES_HEADER,
+    AUTH_REQUIRED_SCOPES_HEADER,
+)
 from memory.backend.metadata_store import (
     PROJECT_ROLE_READER,
     PROJECT_ROLE_WRITER,
@@ -531,6 +536,17 @@ def test_oauth_auth_accepts_valid_token_and_enforces_scopes() -> None:
     challenge = write_response.headers["www-authenticate"]
     assert 'error="insufficient_scope"' in challenge
     assert 'scope="memory:write"' in challenge
+    assert write_response.headers[AUTH_ERROR_CODE_HEADER] == "insufficient_scope"
+    assert write_response.headers[AUTH_REQUIRED_SCOPES_HEADER] == "memory:write"
+    assert write_response.headers[AUTH_MISSING_SCOPES_HEADER] == "memory:write"
+    write_error = write_response.json()
+    assert write_error["detail"] == "Forbidden"
+    assert write_error["error_code"] == "insufficient_scope"
+    assert write_error["required_scopes"] == ["memory:write"]
+    assert write_error["granted_scopes"] == ["memory:read"]
+    assert write_error["missing_scopes"] == ["memory:write"]
+    assert "Client tool approval" in write_error["error_message"]
+    assert "MCP client/server auth configuration" in write_error["auth_config_hint"]
     assert full_response.status_code == 200
 
 
@@ -591,7 +607,7 @@ def test_hub_oauth_token_rejects_stored_owner_mismatch(tmp_path) -> None:
     assert 'error="invalid_token"' in response.headers["www-authenticate"]
 
 
-def test_oauth_auth_protects_mcp_initialize() -> None:
+def test_oauth_auth_protects_mcp_initialize(caplog) -> None:
     initialize_payload = {
         "jsonrpc": "2.0",
         "id": 1,
@@ -603,8 +619,16 @@ def test_oauth_auth_protects_mcp_initialize() -> None:
         },
     }
 
-    with _oauth_client() as client:
+    with _oauth_client() as client, caplog.at_level(logging.INFO):
         missing = client.post("/mcp/", json=initialize_payload)
+        wrong_scope = client.post(
+            "/mcp/",
+            json=initialize_payload,
+            headers={
+                "Accept": "application/json, text/event-stream",
+                "Authorization": f"Bearer {_oauth_token(scope='memory:write')}",
+            },
+        )
         valid = client.post(
             "/mcp/",
             json=initialize_payload,
@@ -618,6 +642,46 @@ def test_oauth_auth_protects_mcp_initialize() -> None:
     assert (
         'resource_metadata="https://memory.example.com/.well-known/oauth-protected-resource/mcp"'
         in missing.headers["www-authenticate"]
+    )
+    assert missing.headers[AUTH_ERROR_CODE_HEADER] == "invalid_request"
+    assert missing.headers[AUTH_REQUIRED_SCOPES_HEADER] == "memory:read"
+    missing_body = missing.json()
+    assert missing_body["detail"] == "Unauthorized"
+    assert missing_body["error_code"] == "invalid_request"
+    assert missing_body["required_scopes"] == ["memory:read"]
+    assert missing_body["auth_mode"] == "oauth_resource_server"
+    assert (
+        missing_body["resource_metadata"]
+        == "https://memory.example.com/.well-known/oauth-protected-resource/mcp"
+    )
+    assert "Authorization: Bearer" in missing_body["error_message"]
+    assert "MCP client/server auth configuration" in missing_body["auth_config_hint"]
+    assert wrong_scope.status_code == 403
+    assert wrong_scope.headers[AUTH_ERROR_CODE_HEADER] == "insufficient_scope"
+    assert wrong_scope.headers[AUTH_REQUIRED_SCOPES_HEADER] == "memory:read"
+    assert wrong_scope.headers[AUTH_MISSING_SCOPES_HEADER] == "memory:read"
+    wrong_scope_body = wrong_scope.json()
+    assert wrong_scope_body["detail"] == "Forbidden"
+    assert wrong_scope_body["error_code"] == "insufficient_scope"
+    assert wrong_scope_body["required_scopes"] == ["memory:read"]
+    assert wrong_scope_body["granted_scopes"] == ["memory:write"]
+    assert wrong_scope_body["missing_scopes"] == ["memory:read"]
+    assert "Client tool approval" in wrong_scope_body["error_message"]
+    auth_error_records = [
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "http_request_error"
+        and getattr(record, "path", None) == "/mcp/"
+    ]
+    assert any(
+        getattr(record, "error_code", None) == "invalid_request"
+        and getattr(record, "required_scopes", None) == "memory:read"
+        for record in auth_error_records
+    )
+    assert any(
+        getattr(record, "error_code", None) == "insufficient_scope"
+        and getattr(record, "missing_scopes", None) == "memory:read"
+        for record in auth_error_records
     )
     assert valid.status_code == 200
     assert valid.headers.get("mcp-session-id")
