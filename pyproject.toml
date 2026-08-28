@@ -88,6 +88,7 @@ packages = ["memory"]
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28.1",
     "mcp-pytest>=0.1.1",
     "pyright>=1.1.411",
     "pytest>=8.4.0",
