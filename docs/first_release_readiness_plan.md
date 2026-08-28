@@ -73,12 +73,15 @@ capabilities only:
 - SQLite/LanceDB local default.
 - Postgres/PGVector runtime option.
 - Deterministic ingestion, search, retrieve, ask, facts, and generated summaries.
+- Append-only memory history, fact supersession, audit events, and
+  sensitive-content quarantine.
 - CLI and container runtime.
 - Bearer-token auth and project workspace boundaries.
 - Local-first, bring-your-own embedding model/storage posture.
 
 Do not market unreleased browser extensions, hosted sync, UI dashboards, SDKs, or
-cloud service behavior as shipped release features.
+cloud service behavior as shipped release features. Do not market destructive
+memory update/delete or archive/restore as shipped beta behavior.
 
 ## P0: Repository Governance
 
@@ -208,7 +211,9 @@ release requirements:
   - no hosted memory service;
   - bring-your-own embedding model for production-quality retrieval;
   - browser extensions are future/separate repos;
-  - UI and SDKs are future work.
+  - UI and SDKs are future work;
+  - destructive memory update/delete and archive/restore are future work, not
+    shipped beta behavior.
 
 ## P0: Release Candidate Drill
 

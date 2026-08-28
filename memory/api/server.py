@@ -24,6 +24,7 @@ from memory.backend.log_safety import install_secret_redaction_filter, redact_se
 from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig, ensure_token_hash_secret, normalize_config
 from memory.ingestion.base_agent import BaseIngestionAgent
+from memory.ingestion.mvp_ingestion import reset_audit_context, set_audit_context
 from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
 from memory.ingestion.save_intent import (
     InsertDisposition,
@@ -274,6 +275,7 @@ def _register_request_failure_logging(app: FastAPI, config: HubConfig) -> None:
     async def log_request_failures(request: Request, call_next: Any) -> Any:
         request_id = _request_id(request, header_name=request_id_header)
         request.state.request_id = request_id
+        audit_token = set_audit_context(source_surface="http", request_id=request_id)
         started = time.perf_counter()
         route = request.url.path
         try:
@@ -303,6 +305,8 @@ def _register_request_failure_logging(app: FastAPI, config: HubConfig) -> None:
                 },
             )
             raise
+        finally:
+            reset_audit_context(audit_token)
         elapsed_ms = (time.perf_counter() - started) * 1000
         metrics.increment(
             "memory_api_requests_total",

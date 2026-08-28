@@ -39,6 +39,13 @@ class DryRunMetadataStore:
         _ = value
         _log_dry_run_skip("metadata_set_runtime_metadata", metadata_key=key)
 
+    def append_audit_event(self, event: dict[str, Any]) -> dict[str, Any]:
+        _log_dry_run_skip(
+            "metadata_append_audit_event",
+            event_type=str(event.get("event_type") or "unknown"),
+        )
+        return dict(event)
+
 
 class DryRunVectorStore:
     def __init__(self, store: Any):

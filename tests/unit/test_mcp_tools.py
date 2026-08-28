@@ -146,6 +146,26 @@ def test_mcp_search_sort_preserves_conversation_group_score() -> None:
 
 
 @pytest.mark.asyncio
+async def test_mcp_insert_records_audit_event_with_tool_request_id() -> None:
+    runtime = _runtime()
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=runtime)
+    handlers = build_tool_handlers(agent)
+    ctx = StubMCPContextWithRequestId()
+
+    result = await handlers["memory_insert"](
+        conversation_json=_conversation(),
+        ctx=ctx,
+    )
+
+    assert result["status"] == "ok"
+    events = getattr(runtime.metadata_store, "_audit_events")
+    inserted = next(event for event in events if event["event_type"] == "memory.inserted")
+    assert inserted["source_surface"] == "mcp"
+    assert inserted["request_id"] == "mcp-call-123"
+    assert inserted["memory_id"] == result["id"]
+
+
+@pytest.mark.asyncio
 async def test_mcp_tool_log_payload_is_sanitized() -> None:
     ctx = StubMCPContext()
 

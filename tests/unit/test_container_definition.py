@@ -74,6 +74,7 @@ def test_local_stack_uses_oauth_containerfile() -> None:
     assert "./${AMH_CONFIG_FILE:-config.yaml}:/app/config.yaml:ro,Z" in compose
     assert f"image: {PINNED_PGVECTOR_IMAGE}" in compose
     assert "image: pgvector/pgvector:pg16\n" not in compose
+    assert "127.0.0.1:5432:5432" not in compose
     assert "http://127.0.0.1:8000/ready" in compose
     assert PINNED_UV_IMAGE in containerfile
     assert "python -m pip install --no-cache-dir uv" not in containerfile

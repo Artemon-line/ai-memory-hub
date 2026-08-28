@@ -250,6 +250,141 @@ def test_ingest_messages_success() -> None:
     assert stored["metadata"]["updated_at"].startswith("2026-")
 
 
+def test_ingest_messages_quarantines_secret_and_excludes_default_reads() -> None:
+    metadata, vectors = _configure_stubs()
+    conversation = _valid_conversation()
+    secret = "sk-proj-quarantineSecretValue123456789"
+    phrase = "cobalt quarantine guitar"
+    conversation["messages"] = [
+        {"role": "user", "text": f"I own a {phrase}. API_KEY={secret}"}
+    ]
+
+    result = mvp_ingestion.ingest_messages(conversation, owner_id="owner-a")
+
+    assert result["status"] == "quarantined"
+    assert result["memory_status"] == "quarantined"
+    assert result["chunks"] == 0
+    assert vectors.rows == []
+    stored = metadata.by_id[result["id"]]
+    stored_metadata = stored["metadata"]
+    assert stored_metadata["memory_status"] == "quarantined"
+    assert "secret.openai_api_key" in stored_metadata["quarantine_reason_codes"]
+    assert secret not in json.dumps(stored_metadata)
+    assert all("match_hash" in finding for finding in stored_metadata["quarantine_findings"])
+    assert mvp_ingestion.retrieve(result["id"], owner_id="owner-a") is None
+    assert mvp_ingestion.search(query=phrase, owner_id="owner-a")["results"] == []
+    assert mvp_ingestion.ask(question=phrase, owner_id="owner-a")["answer_basis"] == "not_found"
+    quarantined = mvp_ingestion.retrieve(
+        result["id"], owner_id="owner-a", memory_status="quarantined"
+    )
+    assert quarantined is not None
+    assert quarantined["metadata"]["memory_status"] == "quarantined"
+    events = getattr(metadata, "_audit_events")
+    quarantine_event = next(
+        event for event in events if event["event_type"] == "memory.quarantined"
+    )
+    assert quarantine_event["outcome"] == "quarantined"
+    assert quarantine_event["reason_code"] == "sensitive_content"
+    assert secret not in json.dumps(quarantine_event["metadata"])
+
+
+def test_ingest_messages_allows_secret_topic_without_secret_value() -> None:
+    metadata, vectors = _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["messages"] = [
+        {
+            "role": "user",
+            "text": "We should rotate the API key label, but no credential value was shared.",
+        }
+    ]
+
+    result = mvp_ingestion.ingest_messages(conversation)
+
+    assert result["status"] == "ok"
+    assert metadata.by_id[result["id"]]["metadata"].get("memory_status") is None
+    assert len(vectors.rows) == 1
+
+
+@pytest.mark.parametrize(
+    ("text", "reason_code"),
+    [
+        (
+            "Connection string: postgresql://memory:supersecretvalue@db.local/app",
+            "secret.credential_url",
+        ),
+        ("Payment test value 4111 1111 1111 1111", "pii.payment_card"),
+        ("Passport number: X1234567", "pii.passport_number"),
+    ],
+)
+def test_ingest_messages_quarantines_sensitive_pattern_families(
+    text: str, reason_code: str
+) -> None:
+    metadata, vectors = _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["messages"] = [{"role": "user", "text": text}]
+
+    result = mvp_ingestion.ingest_messages(conversation)
+
+    assert result["status"] == "quarantined"
+    assert reason_code in result["quarantine_reason_codes"]
+    assert vectors.rows == []
+    assert metadata.by_id[result["id"]]["metadata"]["memory_status"] == "quarantined"
+
+
+def test_approve_quarantined_memory_indexes_after_review() -> None:
+    metadata, vectors = _configure_stubs()
+    conversation = _valid_conversation()
+    secret = "sk-proj-approveQuarantineValue123456789"
+    phrase = "approved quarantine guitar"
+    conversation["messages"] = [
+        {"role": "user", "text": f"I own an {phrase}. API_KEY={secret}"}
+    ]
+    insert = mvp_ingestion.ingest_messages(conversation, owner_id="owner-a")
+
+    approve = mvp_ingestion.approve_pending_memory(insert["id"], owner_id="owner-a")
+
+    assert approve["status"] == "ok"
+    assert approve["memory_status"] == "active"
+    assert len(vectors.rows) == 1
+    stored_metadata = metadata.by_id[insert["id"]]["metadata"]
+    assert stored_metadata["memory_status"] == "active"
+    assert stored_metadata["review_status_before_approval"] == "quarantined"
+    assert stored_metadata["quarantine_decision"] == "approved"
+    assert stored_metadata["sensitive_content_approved"] is True
+    search = mvp_ingestion.search(query=phrase, owner_id="owner-a")
+    assert [row["id"] for row in search["results"]] == [insert["id"]]
+    events = getattr(metadata, "_audit_events")
+    approved = next(event for event in events if event["event_type"] == "memory.approved")
+    assert approved["metadata"]["review_status_before_approval"] == "quarantined"
+
+
+def test_reject_quarantined_memory_keeps_it_hidden() -> None:
+    metadata, _ = _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["messages"] = [
+        {
+            "role": "user",
+            "text": "Remember cobalt quarantine notes and SSN 123-45-6789.",
+        }
+    ]
+    insert = mvp_ingestion.ingest_messages(conversation, owner_id="owner-a")
+
+    reject = mvp_ingestion.reject_pending_memory(insert["id"], owner_id="owner-a")
+
+    assert reject["status"] == "ok"
+    assert reject["memory_status"] == "rejected"
+    stored_metadata = metadata.by_id[insert["id"]]["metadata"]
+    assert stored_metadata["memory_status"] == "rejected"
+    assert stored_metadata["review_status_before_rejection"] == "quarantined"
+    assert stored_metadata["quarantine_decision"] == "rejected"
+    assert mvp_ingestion.retrieve(insert["id"], owner_id="owner-a") is None
+    rejected = mvp_ingestion.retrieve(
+        insert["id"], owner_id="owner-a", memory_status="rejected"
+    )
+    assert rejected is not None
+    assert rejected["metadata"]["memory_status"] == "rejected"
+
+
 def test_ingest_messages_stores_generated_conversation_topic_and_project_summaries() -> None:
     metadata, _ = _configure_stubs()
     conversation = _valid_conversation()

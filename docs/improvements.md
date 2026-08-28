@@ -20,6 +20,8 @@ Source date: `28-05-2026`
 14. [OIDC And PKCE Hardening Plan](./improvements/oidc_pkce_hardening_plan.md)
 15. [Neo4j Aura Graph Memory Plan](./improvements/neo4j_aura_graph_memory_plan.md)
 16. [App-Level Memory Encryption Plan](./improvements/app_level_encryption_plan.md)
+17. [P0 Beta Governance Checklist](./improvements/p0_beta_governance_checklist.md)
+18. [P1 SQL Hardening Plan](./improvements/p1_sql_hardening_plan.md)
 
 ## Notes
 

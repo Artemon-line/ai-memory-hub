@@ -6,9 +6,6 @@ services:
       POSTGRES_USER: memory
       POSTGRES_PASSWORD: memory
       POSTGRES_DB: memory
-    ports:
-      # Keep Postgres local to this host. Remote clients only need the hub API/MCP port.
-      - "127.0.0.1:5432:5432"
     volumes:
       - amh_pgvector_data:/var/lib/postgresql/data
     healthcheck:
