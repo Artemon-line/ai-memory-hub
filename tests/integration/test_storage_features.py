@@ -548,6 +548,87 @@ def test_sqlite_oauth_clients_and_refresh_token_family_revocation(tmp_path: Path
     assert store.owner_for_token("amh_access_secret") is None
 
 
+def test_sqlite_oauth_access_token_revocation_revokes_refresh_family(tmp_path: Path) -> None:
+    store = SQLiteMetadataStore(tmp_path / "metadata.sqlite3")
+    store.create_oauth_client(
+        client_id="amh_client_access_revoke",
+        client_name="Storage MCP client",
+        redirect_uris=["http://127.0.0.1:49152/callback"],
+        expires_at="2999-01-01T00:00:00+00:00",
+    )
+    first_access = store.create_auth_token(
+        owner_id="jane",
+        token="amh_access_secret_first",
+        token_display_name="MCP OAuth client",
+    )
+    rotated_access = store.create_auth_token(
+        owner_id="jane",
+        token="amh_access_secret_rotated",
+        token_display_name="MCP OAuth client",
+    )
+    unrelated_access = store.create_auth_token(
+        owner_id="carl",
+        token="amh_access_secret_other",
+        token_display_name="MCP OAuth client",
+    )
+    store.create_auth_token(
+        owner_id="jane",
+        token="amh_access_secret_personal",
+        token_display_name="Personal token",
+    )
+    store.create_oauth_refresh_token(
+        refresh_token="amh_refresh_secret_first",
+        token_family_id="amh_family_access_revoke",
+        client_id="amh_client_access_revoke",
+        owner_id="jane",
+        scopes=["memory:read"],
+        resource="https://memory.example.com/mcp",
+        access_token_id=first_access["token_id"],
+        expires_at="2999-01-01T00:00:00+00:00",
+    )
+    store.create_oauth_refresh_token(
+        refresh_token="amh_refresh_secret_rotated",
+        token_family_id="amh_family_access_revoke",
+        client_id="amh_client_access_revoke",
+        owner_id="jane",
+        scopes=["memory:read"],
+        resource="https://memory.example.com/mcp",
+        access_token_id=rotated_access["token_id"],
+        expires_at="2999-01-01T00:00:00+00:00",
+    )
+    store.create_oauth_refresh_token(
+        refresh_token="amh_refresh_secret_other",
+        token_family_id="amh_family_other",
+        client_id="amh_client_access_revoke",
+        owner_id="carl",
+        scopes=["memory:read"],
+        resource="https://memory.example.com/mcp",
+        access_token_id=unrelated_access["token_id"],
+        expires_at="2999-01-01T00:00:00+00:00",
+    )
+
+    revoked = store.revoke_oauth_authorization_for_access_token("amh_access_secret_first")
+    missing = store.revoke_oauth_authorization_for_access_token("amh_access_secret_missing")
+    personal = store.revoke_oauth_authorization_for_access_token("amh_access_secret_personal")
+    first_refresh = store.oauth_refresh_token("amh_refresh_secret_first")
+    rotated_refresh = store.oauth_refresh_token("amh_refresh_secret_rotated")
+    unrelated_refresh = store.oauth_refresh_token("amh_refresh_secret_other")
+
+    assert revoked is True
+    assert missing is False
+    assert personal is False
+    assert store.owner_for_token("amh_access_secret_first") is None
+    assert store.owner_for_token("amh_access_secret_rotated") is None
+    assert store.owner_for_token("amh_access_secret_other") == "carl"
+    assert store.owner_for_token("amh_access_secret_personal") == "jane"
+    assert first_refresh is not None
+    assert first_refresh["revoked_at"] is not None
+    assert rotated_refresh is not None
+    assert rotated_refresh["revoked_at"] is not None
+    assert unrelated_refresh is not None
+    assert unrelated_refresh["revoked_at"] is None
+
+
 def test_sqlite_web_sessions_require_supported_secret_hashes(tmp_path: Path) -> None:
     store = SQLiteMetadataStore(tmp_path / "metadata.sqlite3")
     store.create_user(user_id="jane", display_name="Jane")

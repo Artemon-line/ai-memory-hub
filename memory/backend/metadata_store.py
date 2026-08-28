@@ -986,6 +986,73 @@ class SQLiteMetadataStore:
             )
         return cursor.rowcount > 0
 
+    def revoke_oauth_authorization_for_access_token(self, access_token: str) -> bool:
+        token_hash = _hash_bearer_token(access_token)
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT token_id
+                FROM auth_tokens
+                WHERE token_hash = ?
+                """,
+                (token_hash,),
+            ).fetchone()
+            if row is None:
+                return False
+            token_id = str(row["token_id"])
+            family = conn.execute(
+                """
+                SELECT 1
+                FROM oauth_refresh_tokens
+                WHERE access_token_id = ?
+                LIMIT 1
+                """,
+                (token_id,),
+            ).fetchone()
+            if family is None:
+                return False
+            conn.execute(
+                """
+                UPDATE auth_tokens
+                SET revoked_at = CURRENT_TIMESTAMP
+                WHERE token_hash = ?
+                  AND revoked_at IS NULL
+                """,
+                (token_hash,),
+            )
+            conn.execute(
+                """
+                UPDATE auth_tokens
+                SET revoked_at = CURRENT_TIMESTAMP
+                WHERE token_id IN (
+                    SELECT access_token_id
+                    FROM oauth_refresh_tokens
+                    WHERE token_family_id IN (
+                        SELECT token_family_id
+                        FROM oauth_refresh_tokens
+                        WHERE access_token_id = ?
+                    )
+                      AND access_token_id IS NOT NULL
+                )
+                  AND revoked_at IS NULL
+                """,
+                (token_id,),
+            )
+            conn.execute(
+                """
+                UPDATE oauth_refresh_tokens
+                SET revoked_at = CURRENT_TIMESTAMP
+                WHERE token_family_id IN (
+                    SELECT token_family_id
+                    FROM oauth_refresh_tokens
+                    WHERE access_token_id = ?
+                )
+                  AND revoked_at IS NULL
+                """,
+                (token_id,),
+            )
+        return True
+
     def revoke_oauth_refresh_token(self, refresh_token: str) -> bool:
         record = self.oauth_refresh_token(refresh_token)
         if record is None:

@@ -995,6 +995,75 @@ class PostgresMetadataStore:
                 )
                 return bool(cur.rowcount)
 
+    def revoke_oauth_authorization_for_access_token(self, access_token: str) -> bool:
+        token_hash = _hash_bearer_token(access_token)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT token_id
+                    FROM auth_tokens
+                    WHERE token_hash = %s
+                    """,
+                    (token_hash,),
+                )
+                row = cur.fetchone()
+                if row is None:
+                    return False
+                token_id = str(row[0])
+                cur.execute(
+                    """
+                    SELECT 1
+                    FROM oauth_refresh_tokens
+                    WHERE access_token_id = %s
+                    LIMIT 1
+                    """,
+                    (token_id,),
+                )
+                if cur.fetchone() is None:
+                    return False
+                cur.execute(
+                    """
+                    UPDATE auth_tokens
+                    SET revoked_at = NOW()
+                    WHERE token_hash = %s
+                      AND revoked_at IS NULL
+                    """,
+                    (token_hash,),
+                )
+                cur.execute(
+                    """
+                    UPDATE auth_tokens
+                    SET revoked_at = NOW()
+                    WHERE token_id IN (
+                        SELECT access_token_id
+                        FROM oauth_refresh_tokens
+                        WHERE token_family_id IN (
+                            SELECT token_family_id
+                            FROM oauth_refresh_tokens
+                            WHERE access_token_id = %s
+                        )
+                          AND access_token_id IS NOT NULL
+                    )
+                      AND revoked_at IS NULL
+                    """,
+                    (token_id,),
+                )
+                cur.execute(
+                    """
+                    UPDATE oauth_refresh_tokens
+                    SET revoked_at = NOW()
+                    WHERE token_family_id IN (
+                        SELECT token_family_id
+                        FROM oauth_refresh_tokens
+                        WHERE access_token_id = %s
+                    )
+                      AND revoked_at IS NULL
+                    """,
+                    (token_id,),
+                )
+        return True
+
     def revoke_oauth_refresh_token(self, refresh_token: str) -> bool:
         record = self.oauth_refresh_token(refresh_token)
         if record is None:

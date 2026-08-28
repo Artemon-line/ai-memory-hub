@@ -80,7 +80,14 @@ def test_text_logging_includes_context_fields() -> None:
         configure_logging(LoggingConfig(format="text"), stream=stream, force=True)
         logging.getLogger("memory.tests.observability").warning(
             "fallback active",
-            extra={"request_id": "req-456", "operation": "startup", "provider": "lancedb"},
+            extra={
+                "request_id": "req-456",
+                "operation": "startup",
+                "provider": "lancedb",
+                "event": "http_request_error",
+                "error_code": "insufficient_scope",
+                "secret_url": "postgresql://user:secret@example.com/db",
+            },
         )
         text = stream.getvalue()
     finally:
@@ -93,6 +100,9 @@ def test_text_logging_includes_context_fields() -> None:
     assert "operation=startup" in text
     assert "provider=lancedb" in text
     assert "mcp_tool_call_id=-" in text
+    assert "event=http_request_error" in text
+    assert "error_code=insufficient_scope" in text
+    assert "secret_url=postgresql://user:***@example.com/db" in text
 
 
 def test_access_logs_can_be_disabled() -> None:

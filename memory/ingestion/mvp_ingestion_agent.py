@@ -404,3 +404,6 @@ class MVPIngestionAgent(BaseIngestionAgent):
 
     async def revoke_oauth_refresh_token_family(self, token_family_id: str) -> bool:
         return self._service.revoke_oauth_refresh_token_family(token_family_id)
+
+    async def revoke_oauth_authorization_for_access_token(self, access_token: str) -> bool:
+        return self._service.revoke_oauth_authorization_for_access_token(access_token)
