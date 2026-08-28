@@ -39,6 +39,21 @@ PUBLIC_PATHS = {
 }
 READ_SCOPE = "memory:read"
 WRITE_SCOPE = "memory:write"
+AUTH_CONFIG_PATH = (
+    "api.auth / api.oauth.scopes_supported / MCP client Authorization bearer token"
+)
+AUTH_RECONNECT_HINT = (
+    "Grant the ai-memory-hub MCP auth token the missing scope by reconnecting "
+    "through the MCP OAuth/Connect flow or updating the bearer-token scopes in the MCP "
+    "client/server auth configuration."
+)
+MCP_CLIENT_APPROVAL_HINT = (
+    "Client tool approval only approves the local MCP call; it does not add bearer-token "
+    "or OAuth scopes."
+)
+AUTH_ERROR_CODE_HEADER = "X-Ai-Memory-Hub-Error-Code"
+AUTH_REQUIRED_SCOPES_HEADER = "X-Ai-Memory-Hub-Required-Scopes"
+AUTH_MISSING_SCOPES_HEADER = "X-Ai-Memory-Hub-Missing-Scopes"
 _CURRENT_OWNER_ID: ContextVar[str | None] = ContextVar("amh_owner_id", default=None)
 _CURRENT_AUTH_CONTEXT: ContextVar["AuthContext | None"] = ContextVar(
     "amh_auth_context", default=None
@@ -118,7 +133,12 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if auth is None:
             return _unauthorized(request, self._config, "invalid_token")
         if not _has_required_scopes(auth.scopes, required_scopes):
-            return _forbidden(request, self._config, required_scopes)
+            return _forbidden(
+                request,
+                self._config,
+                required_scopes,
+                granted_scopes=auth.scopes,
+            )
         request.state.auth = auth
         owner_token = _CURRENT_OWNER_ID.set(auth.owner_id)
         auth_token = _CURRENT_AUTH_CONTEXT.set(auth)
@@ -259,27 +279,131 @@ def _is_public_path(path: str) -> bool:
 
 
 def _unauthorized(request: Request, config: HubConfig, error: str) -> JSONResponse:
+    required_scopes = required_scopes_for_request(request)
     return JSONResponse(
-        {"detail": "Unauthorized"},
+        _auth_error_body(
+            request,
+            config,
+            detail="Unauthorized",
+            error_code=error,
+            required_scopes=required_scopes,
+        ),
         status_code=401,
         headers={
             "WWW-Authenticate": build_www_authenticate_challenge(
-                request, config, error=error, scopes=required_scopes_for_request(request)
-            )
+                request, config, error=error, scopes=required_scopes
+            ),
+            **_auth_error_headers(error, required_scopes),
         },
     )
 
 
-def _forbidden(request: Request, config: HubConfig, required_scopes: set[str]) -> JSONResponse:
+def _forbidden(
+    request: Request,
+    config: HubConfig,
+    required_scopes: set[str],
+    *,
+    granted_scopes: frozenset[str] = frozenset(),
+) -> JSONResponse:
     return JSONResponse(
-        {"detail": "Forbidden"},
+        _auth_error_body(
+            request,
+            config,
+            detail="Forbidden",
+            error_code="insufficient_scope",
+            required_scopes=required_scopes,
+            granted_scopes=granted_scopes,
+        ),
         status_code=403,
         headers={
             "WWW-Authenticate": build_www_authenticate_challenge(
                 request, config, error="insufficient_scope", scopes=required_scopes
-            )
+            ),
+            **_auth_error_headers(
+                "insufficient_scope",
+                required_scopes,
+                granted_scopes=granted_scopes,
+            ),
         },
     )
+
+
+def _auth_error_body(
+    request: Request,
+    config: HubConfig,
+    *,
+    detail: str,
+    error_code: str,
+    required_scopes: set[str],
+    granted_scopes: frozenset[str] = frozenset(),
+) -> dict[str, object]:
+    body: dict[str, object] = {
+        "detail": detail,
+        "error_code": error_code,
+        "error_message": _auth_error_message(
+            request,
+            error_code=error_code,
+            required_scopes=required_scopes,
+            granted_scopes=granted_scopes,
+        ),
+        "auth_mode": config.api.auth,
+        "required_scopes": sorted(required_scopes),
+        "auth_config_path": AUTH_CONFIG_PATH,
+        "auth_config_hint": AUTH_RECONNECT_HINT,
+    }
+    if granted_scopes:
+        body["granted_scopes"] = sorted(granted_scopes)
+        body["missing_scopes"] = sorted(required_scopes - set(granted_scopes))
+    if config.api.auth == "oauth_resource_server":
+        body["resource_metadata"] = _resource_metadata_url(config, request.url.path)
+    return body
+
+
+def _auth_error_headers(
+    error_code: str,
+    required_scopes: set[str],
+    *,
+    granted_scopes: frozenset[str] = frozenset(),
+) -> dict[str, str]:
+    headers = {
+        AUTH_ERROR_CODE_HEADER: error_code,
+        AUTH_REQUIRED_SCOPES_HEADER: " ".join(sorted(required_scopes)),
+    }
+    missing_scopes = sorted(required_scopes - set(granted_scopes))
+    if missing_scopes:
+        headers[AUTH_MISSING_SCOPES_HEADER] = " ".join(missing_scopes)
+    return headers
+
+
+def _auth_error_message(
+    request: Request,
+    *,
+    error_code: str,
+    required_scopes: set[str],
+    granted_scopes: frozenset[str],
+) -> str:
+    surface = "MCP" if _is_mcp_path(request.url.path) else "HTTP API"
+    required = ", ".join(sorted(required_scopes)) or "no additional scopes"
+    if error_code == "insufficient_scope":
+        missing = ", ".join(sorted(required_scopes - set(granted_scopes))) or required
+        return (
+            f"{surface} request is authenticated but missing required scope(s): {missing}. "
+            f"{MCP_CLIENT_APPROVAL_HINT} {AUTH_RECONNECT_HINT}"
+        )
+    if error_code == "invalid_token":
+        return (
+            f"{surface} request used an invalid, expired, or unrecognized bearer token. "
+            f"Reconnect through the MCP OAuth/Connect flow or configure a valid bearer token "
+            f"with required scope(s): {required}."
+        )
+    return (
+        f"{surface} request requires an Authorization: Bearer token with required scope(s): "
+        f"{required}. Do not pass access tokens in query parameters. {AUTH_RECONNECT_HINT}"
+    )
+
+
+def _is_mcp_path(path: str) -> bool:
+    return path == "/mcp" or path.startswith("/mcp/")
 
 
 def _has_query_access_token(request: Request) -> bool:

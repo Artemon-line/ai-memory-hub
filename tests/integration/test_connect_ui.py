@@ -1005,9 +1005,22 @@ def test_oauth_revoke_refresh_token_revokes_family_and_access_token(
 
 def test_oauth_revoke_access_token_revokes_hub_token(tmp_path, monkeypatch) -> None:
     client = _client(tmp_path, monkeypatch)
-    access_token = _mcp_oauth_token(client, state="access-revoke")
+    flow = _mcp_oauth_token_response(client, state="access-revoke")
+    client_id = str(flow["client_id"])
+    token = flow["token"]
+    assert isinstance(token, dict)
+    access_token = str(token["access_token"])
+    refresh_token = str(token["refresh_token"])
 
     revoke = client.post("/oauth/revoke", data={"token": access_token})
+    refresh = client.post(
+        "/oauth/token",
+        data={
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "client_id": client_id,
+        },
+    )
     access = client.post(
         "/memory/search",
         headers={"Authorization": f"Bearer {access_token}"},
@@ -1015,6 +1028,8 @@ def test_oauth_revoke_access_token_revokes_hub_token(tmp_path, monkeypatch) -> N
     )
 
     assert revoke.status_code == 200
+    assert refresh.status_code == 400
+    assert refresh.json()["detail"]["error"] == "invalid_grant"
     assert access.status_code == 401
 
 

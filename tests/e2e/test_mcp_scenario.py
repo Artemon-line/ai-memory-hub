@@ -87,11 +87,24 @@ async def _run_memory_scenario(session: ClientSession) -> None:
 
     assert ask_res["status"] == "ok"
     assert "answer" in ask_res
-    assert "citations" in ask_res
+    assert ask_res["results"] == []
+    assert ask_res["memory_result_count"] >= 1
+    assert ask_res["citation_count"] >= 1
+    assert "citations" not in ask_res
+    assert "evidence" not in ask_res
+    assert "structured_evidence" not in ask_res
+    assert "provenance" not in ask_res
 
-    # Verify that the answer mentions GPUs or at least includes citations
-    # The exact answer depends on the prompt, but it should contain our GPU memory
-    citation_texts = [c["text"] for c in ask_res["citations"]]
+    # Detailed mode still exposes the full citation evidence for audit workflows.
+    detailed_result = await session.call_tool(
+        "memory_ask",
+        {**ask_payload, "response_format": "detailed"},
+    )
+    assert not detailed_result.isError, f"detailed memory_ask failed: {detailed_result}"
+    assert len(detailed_result.content) > 0
+    detailed_res = json.loads(_get_text_from_content(detailed_result.content))
+
+    citation_texts = [c["text"] for c in detailed_res["citations"]]
     assert any("GPU" in t for t in citation_texts), (
         f"GPU not found in citations: {citation_texts}"
     )

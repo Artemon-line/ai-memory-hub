@@ -292,6 +292,57 @@ def test_api_and_mcp_reject_unknown_result_modes(tmp_path: Path) -> None:
         assert "payload-secret" not in json.dumps(payload)
 
 
+def test_mcp_rejects_unknown_response_format_values(tmp_path: Path) -> None:
+    with _client(tmp_path) as client:
+        headers = _initialize_mcp(client)
+        mcp_search = _call_tool(
+            client,
+            headers,
+            request_id=2,
+            name="memory_search",
+            arguments={
+                "query": "payload-secret-query",
+                "response_format": "verbose",
+            },
+        )
+        mcp_ask = _call_tool(
+            client,
+            headers,
+            request_id=3,
+            name="memory_ask",
+            arguments={
+                "question": "payload-secret-question",
+                "response_format": "verbose",
+            },
+        )
+        mcp_facts = _call_tool(
+            client,
+            headers,
+            request_id=4,
+            name="memory_fact_search",
+            arguments={
+                "subject": "payload-secret-subject",
+                "response_format": "verbose",
+            },
+        )
+        mcp_profile = _call_tool(
+            client,
+            headers,
+            request_id=5,
+            name="memory_profile_get",
+            arguments={
+                "subject": "payload-secret-subject",
+                "response_format": "verbose",
+            },
+        )
+
+    for payload in (mcp_search, mcp_ask, mcp_facts, mcp_profile):
+        assert payload["status"] == "error"
+        assert payload["error_code"] == "invalid_input"
+        assert "response_format must be one of" in payload["error_message"]
+        assert "payload-secret" not in json.dumps(payload)
+
+
 def test_api_and_mcp_reject_extreme_numeric_request_values(tmp_path: Path) -> None:
     with _client(tmp_path) as client:
         api_search = client.post("/memory/search", json={"query": "x", "top_k": 101})
@@ -332,11 +383,32 @@ def test_api_and_mcp_reject_extreme_numeric_request_values(tmp_path: Path) -> No
             name="memory_ask",
             arguments={"question": "x?", "max_context_tokens": 0},
         )
+        mcp_fact_limit = _call_tool(
+            client,
+            headers,
+            request_id=6,
+            name="memory_fact_search",
+            arguments={"limit": 101},
+        )
+        mcp_profile_limit = _call_tool(
+            client,
+            headers,
+            request_id=7,
+            name="memory_profile_get",
+            arguments={"limit": 0},
+        )
 
     assert api_search.status_code == 422
     assert api_ask_top_k.status_code == 422
     assert api_ask_context.status_code == 422
-    for payload in (mcp_search_top_k, mcp_search_limit, mcp_ask_top_k, mcp_ask_context):
+    for payload in (
+        mcp_search_top_k,
+        mcp_search_limit,
+        mcp_ask_top_k,
+        mcp_ask_context,
+        mcp_fact_limit,
+        mcp_profile_limit,
+    ):
         assert payload["status"] == "error"
         assert payload["error_code"] == "invalid_input"
 
@@ -610,6 +682,52 @@ def test_review_pending_api_insert_is_hidden_until_approved(tmp_path: Path) -> N
     }
 
 
+def test_sensitive_content_api_insert_is_quarantined_and_hidden(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    data_dir = Path(config["paths"]["data_dir"])
+    phrase = "api quarantine titanium guitar"
+    secret = "sk-proj-apiQuarantineSecretValue123456789"
+    payload = _conversation(text=f"I own a {phrase}. API_KEY={secret}")
+
+    with TestClient(create_app(config=config)) as client:
+        insert = client.post("/memory/insert", json=payload)
+        memory_id = insert.json()["id"]
+        retrieve = client.post("/memory/retrieve", json={"id": memory_id})
+        search = client.post("/memory/search", json={"query": phrase})
+        ask = client.post("/memory/ask", json={"question": f"What do I own about {phrase}?"})
+        facts = client.post("/memory/facts/search", json={"subject": "user"})
+        profile = client.post("/memory/profile/get", json={"subject": "user"})
+        quarantined_retrieve = client.post(
+            "/memory/retrieve",
+            json={"id": memory_id, "memory_status": "quarantined"},
+        )
+        quarantined_search = client.post(
+            "/memory/search",
+            json={"query": phrase, "memory_status": "quarantined"},
+        )
+
+    assert insert.status_code == 200, insert.text
+    assert insert.json()["status"] == "quarantined"
+    assert insert.json()["memory_status"] == "quarantined"
+    assert "secret.openai_api_key" in insert.json()["quarantine_reason_codes"]
+    assert secret not in insert.text
+    assert retrieve.status_code == 404
+    assert search.json()["results"] == []
+    assert ask.json()["answer_basis"] == "not_found"
+    assert facts.json()["results"] == []
+    assert profile.json()["facts"] == []
+    assert quarantined_retrieve.status_code == 200
+    assert quarantined_retrieve.json()["memory"]["metadata"]["memory_status"] == "quarantined"
+    assert [row["id"] for row in quarantined_search.json()["results"]] == [memory_id]
+
+    store = SQLiteMetadataStore(data_dir / "metadata.sqlite3")
+    events = store.list_audit_events(event_type="memory.quarantined", limit=5)
+    assert len(events) == 1
+    assert events[0]["memory_id"] == memory_id
+    assert events[0]["reason_code"] == "sensitive_content"
+    assert secret not in json.dumps(events[0]["metadata"])
+
+
 def test_review_pending_mcp_insert_can_be_rejected(tmp_path: Path) -> None:
     phrase = "pending review mcp rejection phrase"
     payload = _conversation(text=f"I own a {phrase}.")
@@ -653,6 +771,54 @@ def test_review_pending_mcp_insert_can_be_rejected(tmp_path: Path) -> None:
     assert search["results"] == []
     assert approve_after_reject["status"] == "error"
     assert approve_after_reject["error_code"] == "memory_not_pending_review"
+
+
+def test_sensitive_content_mcp_insert_is_quarantined_and_rejectable(tmp_path: Path) -> None:
+    phrase = "mcp quarantine guitar"
+    secret = "sk-proj-mcpQuarantineSecretValue123456789"
+    payload = _conversation(text=f"I own a {phrase}. token={secret}")
+
+    with _client(tmp_path) as client:
+        headers = _initialize_mcp(client)
+        insert = _call_tool(
+            client,
+            headers,
+            request_id=2,
+            name="memory_insert",
+            arguments={"conversation_json": payload},
+        )
+        memory_id = insert["id"]
+        default_search = _call_tool(
+            client,
+            headers,
+            request_id=3,
+            name="memory_search",
+            arguments={"query": phrase},
+        )
+        quarantined_retrieve = _call_tool(
+            client,
+            headers,
+            request_id=4,
+            name="memory_retrieve",
+            arguments={"id": memory_id, "memory_status": "quarantined"},
+        )
+        reject = _call_tool(
+            client,
+            headers,
+            request_id=5,
+            name="memory_pending_reject",
+            arguments={"id": memory_id},
+        )
+
+    assert insert["status"] == "quarantined"
+    assert insert["memory_status"] == "quarantined"
+    assert "secret.openai_api_key" in insert["quarantine_reason_codes"]
+    assert secret not in json.dumps(insert)
+    assert default_search["results"] == []
+    assert quarantined_retrieve["status"] == "ok"
+    assert quarantined_retrieve["memory"]["metadata"]["memory_status"] == "quarantined"
+    assert reject["status"] == "ok"
+    assert reject["memory_status"] == "rejected"
 
 
 def test_review_pending_api_read_filters_expose_pending_and_rejected(tmp_path: Path) -> None:
@@ -739,7 +905,11 @@ def test_review_pending_mcp_read_filters_expose_pending_for_ask_and_retrieve(
             headers,
             request_id=5,
             name="memory_ask",
-            arguments={"question": phrase, "memory_status": "pending_review"},
+            arguments={
+                "question": phrase,
+                "memory_status": "pending_review",
+                "response_format": "detailed",
+            },
         )
 
     assert default_retrieve["status"] == "not_found"

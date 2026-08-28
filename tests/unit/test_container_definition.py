@@ -51,6 +51,12 @@ def test_containerfile_installs_project_after_copying_package() -> None:
     assert "useradd --uid 1001 --gid 0" in containerfile
     assert 'CMD ["/app/.venv/bin/aim", "serve", "--host", "0.0.0.0", "--port", "8000"]' in containerfile
     assert 'CMD ["uv", "run", "aim"' not in containerfile
+    for package_pin in (
+        "libssl3t64=3.5.7-1~deb13u2",
+        "openssl=3.5.7-1~deb13u2",
+        "openssl-provider-legacy=3.5.7-1~deb13u2",
+    ):
+        assert package_pin in containerfile
 
     config = Path("examples/container/config.yaml").read_text(encoding="utf-8")
     assert "metadata_db: sqlite" in config
@@ -69,6 +75,7 @@ def test_local_stack_uses_oauth_containerfile() -> None:
     assert "./${AMH_CONFIG_FILE:-config.yaml}:/app/config.yaml:ro,Z" in compose
     assert f"image: {PINNED_PGVECTOR_IMAGE}" in compose
     assert "image: pgvector/pgvector:pg16\n" not in compose
+    assert "127.0.0.1:5432:5432" not in compose
     assert "http://127.0.0.1:8000/ready" in compose
     assert PINNED_UV_IMAGE in containerfile
     assert "python -m pip install --no-cache-dir uv" not in containerfile

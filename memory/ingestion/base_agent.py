@@ -251,3 +251,8 @@ class BaseIngestionAgent(ABC):
 
     async def revoke_oauth_refresh_token_family(self, token_family_id: str) -> bool:
         raise NotImplementedError("revoke_oauth_refresh_token_family is not implemented")
+
+    async def revoke_oauth_authorization_for_access_token(self, access_token: str) -> bool:
+        raise NotImplementedError(
+            "revoke_oauth_authorization_for_access_token is not implemented"
+        )

@@ -153,6 +153,33 @@ closely matched chunks from the same conversation can surface together without
 hiding strong unrelated matches.
 Use `result_mode=threads` to group matching conversations by `metadata.thread_id`.
 
+MCP `memory_search` adds a `response_format` enum. The default,
+`response_format="concise"`, returns each row as matched chunk fields plus a
+small `citation` object with conversation ID, source, title, timestamp,
+thread ID, and generated summary text when available:
+
+```json
+{
+  "id": "11111111-2222-4333-8444-555555555555",
+  "score": 0.0,
+  "chunk_index": 0,
+  "role": "user",
+  "text": "Remember that I prefer local-first tools.",
+  "matching_chunks": 1,
+  "citation": {
+    "id": "11111111-2222-4333-8444-555555555555",
+    "source": "codex",
+    "timestamp": "2026-06-08T12:00:00Z",
+    "thread_id": "codex:session-42",
+    "summary": "User said they prefer local-first tools."
+  }
+}
+```
+
+Use `response_format="detailed"` when an MCP client needs the full
+conversation envelope, generated-summary metadata, auto-tag provenance, and
+chunk manifests for audit or diagnostics.
+
 ## Ask Result Shape
 
 `/memory/ask` returns:
@@ -187,6 +214,18 @@ Pass `max_context_tokens` to `/memory/ask` to build the answer from only the
 chunks that fit the requested context budget. When budgeting is active, the
 response can include `context_tokens_used`, `chunks_selected`, `chunks_dropped`,
 and `tokenizer_used`.
+
+MCP `memory_ask`, `memory_fact_search`, and `memory_profile_get` support the
+same `response_format` enum as search. Concise ask responses are
+answer-centric: they keep `answer`, `confidence`, `confidence_reason`,
+`answer_basis`, and small result/fact/citation counts, but omit full
+`citations`, `evidence`, `structured_evidence`, `provenance`, chunk result
+arrays, and token-budget diagnostics. Concise fact/profile reads deduplicate
+and limit fact rows to 10 by default, drop qualifiers, source message indexes,
+owner/project fields, and summary provenance while keeping fact display values,
+freshness, source quality, confidence, and supersession status. Use
+`response_format="detailed"` for the full evidence-rich answer and fact
+provenance.
 
 ## CLI
 
@@ -269,11 +308,11 @@ Core tools:
 
 - `memory_validate(conversation_json)`
 - `memory_insert(conversation_json)`
-- `memory_search(query, top_k=5, limit, cursor, source, date_from, date_to, tags, thread_id)`
+- `memory_search(query, top_k=5, limit, cursor, result_mode="chunks", response_format="concise", source, date_from, date_to, tags, thread_id)`
 - `memory_retrieve(id)`
-- `memory_ask(question, top_k=5, max_context_tokens=None, result_mode="chunks", source, date_from, date_to, tags, thread_id, project_id)`
-- `memory_fact_search(subject=None, predicate=None, include_superseded=False, source, date_from, date_to, confidence, status, source_quality, save_intent, save_intent_source, freshness_from, freshness_to, project_id)`
-- `memory_profile_get(subject="user", predicate, source, date_from, date_to, confidence, status, source_quality, save_intent, save_intent_source, freshness_from, freshness_to, project_id)`
+- `memory_ask(question, top_k=5, max_context_tokens=None, result_mode="chunks", response_format="concise", source, date_from, date_to, tags, thread_id, project_id)`
+- `memory_fact_search(subject=None, predicate=None, include_superseded=False, response_format="concise", limit=None, source, date_from, date_to, confidence, status, source_quality, save_intent, save_intent_source, freshness_from, freshness_to, project_id)`
+- `memory_profile_get(subject="user", predicate, response_format="concise", limit=None, source, date_from, date_to, confidence, status, source_quality, save_intent, save_intent_source, freshness_from, freshness_to, project_id)`
 - `memory_fact_supersede(fact_id, superseded_by)`
 - `memory_project_list()`
 - `memory_project_default_get()`

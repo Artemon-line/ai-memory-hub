@@ -26,6 +26,7 @@ The public docs are now split into three kinds of pages:
 | [Planned features](planned_features.md) | Human-friendly summary of what is not shipped yet. |
 | [Prioritized feature plan](prioritized_feature_plan.md) | Near-term implementation queue and priority notes. |
 | [First release readiness plan](first_release_readiness_plan.md) | Release hardening checklist. |
+| [P0 beta governance checklist](improvements/p0_beta_governance_checklist.md) | Immutable-history, audit, quarantine, auth/project, clean install, and docs-matching checklist for beta. |
 | [Release, container, and docs publishing plan](release_container_docs_plan.md) | Packaging and publishing work. |
 | [Plugin readiness plan](plugin_readiness_plan.md) | Client/plugin setup and verification work. |
 | [Observability, logging, and telemetry plan](observability_logging_telemetry_plan.md) | Detailed observability implementation plan. |

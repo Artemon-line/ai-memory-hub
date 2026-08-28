@@ -169,9 +169,14 @@ def register_oauth_authorization_routes(
         if token:
             if await service.agent.revoke_oauth_refresh_token(token):
                 return JSONResponse({})
-            token_id = jwt_payload(token).get("jti")
-            if isinstance(token_id, str) and token_id:
-                await service.agent.revoke_auth_token(token_id)
+            try:
+                revoked = await service.agent.revoke_oauth_authorization_for_access_token(token)
+            except NotImplementedError:
+                revoked = False
+            if not revoked:
+                token_id = jwt_payload(token).get("jti")
+                if isinstance(token_id, str) and token_id:
+                    await service.agent.revoke_auth_token(token_id)
         return JSONResponse({})
 
 

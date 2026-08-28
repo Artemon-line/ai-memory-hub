@@ -23,7 +23,7 @@ elasticsearch = [
     "elasticsearch>=8.15.0",
 ]
 milvus = [
-    "pymilvus>=2.5.0",
+    "pymilvus>=3.0.1",
     "setuptools>=84.0.0",
 ]
 mongodb = [
@@ -46,7 +46,7 @@ oauth = [
     "cryptography>=50.0.0",
     "httpx>=0.28.1",
     "joserfc>=1.7.4",
-    "python-multipart>=0.0.31",
+    "python-multipart>=0.0.32",
 ]
 postgres = [
     "psycopg[binary]>=3.3.4",
@@ -73,14 +73,14 @@ typesense = [
     "typesense>=0.21.0",
 ]
 weaviate = [
-    "weaviate-client>=4.9.0",
+    "weaviate-client>=4.23.0",
 ]
 
 [project.scripts]
 aim = "memory.cli:main"
 
 [build-system]
-requires = ["hatchling>=1.31.0"]
+requires = ["hatchling>=1.32.0"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]

@@ -53,6 +53,7 @@ What ships:
 - deterministic ingestion, search, retrieve, ask, facts, and summaries
 - CLI and container runtime
 - bearer-token auth and project workspace boundaries
+- append-only memory history with sensitive-content quarantine
 
 Try it:
 
@@ -76,11 +77,13 @@ Known limits:
 - production-quality retrieval requires your own embedding model
 - browser extensions are future adapters, not part of this release
 - UI dashboards and SDKs are future work
+- destructive memory update/delete and archive/restore are not part of the beta
+  surface
 
 Feedback wanted:
 - Which MCP clients should get first-class setup docs next?
 - Which storage provider is most important for your deployment?
-- What memory review/deletion workflow would make this safer for daily use?
+- What memory review/archive workflow would make this safer for daily use?
 ````
 
 ## Terminal Transcript Demo
@@ -150,7 +153,7 @@ docker.io/<namespace>/ai-memory-hub:v0.1.0
 Useful feedback:
 - Which agent client should get the next setup guide?
 - Which storage backend should be hardened next?
-- What review/deletion workflow would make this safer for personal memory?
+- What review/archive workflow would make this safer for personal memory?
 ```
 
 ## Follow-Up Technical Post Draft
@@ -180,8 +183,8 @@ That boundary is deliberate:
 
 The first release ships the service side: API, MCP tools, CLI, Docker runtime,
 SQLite/LanceDB defaults, Postgres/PGVector option, bearer auth, facts, citations,
-and provenance.
+provenance, append-only history, and sensitive-content quarantine.
 
 The next useful work is adapter polish: clearer client setup docs, safer save
-intent defaults, and review/delete workflows for long-lived memory.
+intent defaults, and review/archive workflows for long-lived memory.
 ```

@@ -13,6 +13,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from memory.api.connect_ui import connect_status, register_connect_routes
 from memory.auth import (
+    AUTH_ERROR_CODE_HEADER,
+    AUTH_MISSING_SCOPES_HEADER,
+    AUTH_REQUIRED_SCOPES_HEADER,
     authorization_server_metadata,
     install_auth_middleware,
     protected_resource_metadata,
@@ -21,6 +24,7 @@ from memory.backend.log_safety import install_secret_redaction_filter, redact_se
 from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig, ensure_token_hash_secret, normalize_config
 from memory.ingestion.base_agent import BaseIngestionAgent
+from memory.ingestion.mvp_ingestion import reset_audit_context, set_audit_context
 from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
 from memory.ingestion.save_intent import (
     InsertDisposition,
@@ -271,6 +275,7 @@ def _register_request_failure_logging(app: FastAPI, config: HubConfig) -> None:
     async def log_request_failures(request: Request, call_next: Any) -> Any:
         request_id = _request_id(request, header_name=request_id_header)
         request.state.request_id = request_id
+        audit_token = set_audit_context(source_surface="http", request_id=request_id)
         started = time.perf_counter()
         route = request.url.path
         try:
@@ -300,6 +305,8 @@ def _register_request_failure_logging(app: FastAPI, config: HubConfig) -> None:
                 },
             )
             raise
+        finally:
+            reset_audit_context(audit_token)
         elapsed_ms = (time.perf_counter() - started) * 1000
         metrics.increment(
             "memory_api_requests_total",
@@ -314,16 +321,26 @@ def _register_request_failure_logging(app: FastAPI, config: HubConfig) -> None:
         )
         response.headers[request_id_header] = request_id
         if response.status_code >= 400:
+            log_extra = {
+                "event": "http_request_error",
+                "method": request.method,
+                "path": request.url.path,
+                "auth_mode": config.api.auth,
+                "status_code": response.status_code,
+                "request_id": request_id,
+            }
+            auth_error_code = response.headers.get(AUTH_ERROR_CODE_HEADER)
+            if auth_error_code:
+                log_extra["error_code"] = auth_error_code
+            required_scopes = response.headers.get(AUTH_REQUIRED_SCOPES_HEADER)
+            if required_scopes:
+                log_extra["required_scopes"] = required_scopes
+            missing_scopes = response.headers.get(AUTH_MISSING_SCOPES_HEADER)
+            if missing_scopes:
+                log_extra["missing_scopes"] = missing_scopes
             logger.info(
                 "memory request returned error",
-                extra={
-                    "event": "http_request_error",
-                    "method": request.method,
-                    "path": request.url.path,
-                    "auth_mode": config.api.auth,
-                    "status_code": response.status_code,
-                    "request_id": request_id,
-                },
+                extra=log_extra,
             )
         _normalize_public_redirect_location(request, response, config)
         return response
@@ -344,6 +361,9 @@ def _configure_cors(app: FastAPI, config: HubConfig) -> None:
         ],
         expose_headers=[
             "WWW-Authenticate",
+            AUTH_ERROR_CODE_HEADER,
+            AUTH_REQUIRED_SCOPES_HEADER,
+            AUTH_MISSING_SCOPES_HEADER,
             config.observability.logging.request_id_header,
         ],
     )

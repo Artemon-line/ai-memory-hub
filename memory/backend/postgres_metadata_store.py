@@ -19,12 +19,16 @@ from memory.backend.metadata_store import (
     _oauth_user_id,
     _owner_id_from_payload,
     _parse_token_scopes,
+    _prepare_audit_event,
     _stamp_project_id,
     _token_id_from_bearer_token,
     _token_id_from_hash,
     _token_prefix,
+    _validate_audit_limit,
+    _validate_audit_token,
     _validate_oauth_provider,
     _validate_oauth_subject,
+    _validate_optional_audit_field,
     _validate_owner_id,
     _validate_project_id,
     _validate_project_role,
@@ -248,6 +252,38 @@ CREATE TABLE IF NOT EXISTS runtime_metadata (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 )
 """
+CREATE_AUDIT_EVENTS_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS audit_events (
+    id TEXT PRIMARY KEY,
+    event_type TEXT NOT NULL,
+    actor_id TEXT NULL,
+    project_id TEXT NULL,
+    memory_id TEXT NULL,
+    fact_id TEXT NULL,
+    request_id TEXT NULL,
+    source_surface TEXT NOT NULL,
+    outcome TEXT NOT NULL,
+    reason_code TEXT NULL,
+    metadata JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL
+)
+"""
+CREATE_AUDIT_EVENTS_TYPE_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_audit_events_type_created
+ON audit_events(event_type, created_at)
+"""
+CREATE_AUDIT_EVENTS_PROJECT_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_audit_events_project_created
+ON audit_events(project_id, created_at)
+"""
+CREATE_AUDIT_EVENTS_ACTOR_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_audit_events_actor_created
+ON audit_events(actor_id, created_at)
+"""
+CREATE_AUDIT_EVENTS_MEMORY_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_audit_events_memory_created
+ON audit_events(memory_id, created_at)
+"""
 CREATE_GRAPH_ENTITIES_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS graph_entities (
     id TEXT PRIMARY KEY,
@@ -390,6 +426,11 @@ class PostgresMetadataStore:
                 cur.execute(CREATE_DEFAULT_PROJECT_LOCAL_INDEX_SQL)
                 cur.execute(CREATE_FACTS_TABLE_SQL)
                 cur.execute(CREATE_RUNTIME_METADATA_TABLE_SQL)
+                cur.execute(CREATE_AUDIT_EVENTS_TABLE_SQL)
+                cur.execute(CREATE_AUDIT_EVENTS_TYPE_INDEX_SQL)
+                cur.execute(CREATE_AUDIT_EVENTS_PROJECT_INDEX_SQL)
+                cur.execute(CREATE_AUDIT_EVENTS_ACTOR_INDEX_SQL)
+                cur.execute(CREATE_AUDIT_EVENTS_MEMORY_INDEX_SQL)
                 cur.execute(CREATE_GRAPH_ENTITIES_TABLE_SQL)
                 cur.execute(CREATE_GRAPH_RELATIONSHIPS_TABLE_SQL)
                 cur.execute(CREATE_GRAPH_ENTITIES_INDEX_SQL)
@@ -953,6 +994,75 @@ class PostgresMetadataStore:
                     (family_id,),
                 )
                 return bool(cur.rowcount)
+
+    def revoke_oauth_authorization_for_access_token(self, access_token: str) -> bool:
+        token_hash = _hash_bearer_token(access_token)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT token_id
+                    FROM auth_tokens
+                    WHERE token_hash = %s
+                    """,
+                    (token_hash,),
+                )
+                row = cur.fetchone()
+                if row is None:
+                    return False
+                token_id = str(row[0])
+                cur.execute(
+                    """
+                    SELECT 1
+                    FROM oauth_refresh_tokens
+                    WHERE access_token_id = %s
+                    LIMIT 1
+                    """,
+                    (token_id,),
+                )
+                if cur.fetchone() is None:
+                    return False
+                cur.execute(
+                    """
+                    UPDATE auth_tokens
+                    SET revoked_at = NOW()
+                    WHERE token_hash = %s
+                      AND revoked_at IS NULL
+                    """,
+                    (token_hash,),
+                )
+                cur.execute(
+                    """
+                    UPDATE auth_tokens
+                    SET revoked_at = NOW()
+                    WHERE token_id IN (
+                        SELECT access_token_id
+                        FROM oauth_refresh_tokens
+                        WHERE token_family_id IN (
+                            SELECT token_family_id
+                            FROM oauth_refresh_tokens
+                            WHERE access_token_id = %s
+                        )
+                          AND access_token_id IS NOT NULL
+                    )
+                      AND revoked_at IS NULL
+                    """,
+                    (token_id,),
+                )
+                cur.execute(
+                    """
+                    UPDATE oauth_refresh_tokens
+                    SET revoked_at = NOW()
+                    WHERE token_family_id IN (
+                        SELECT token_family_id
+                        FROM oauth_refresh_tokens
+                        WHERE access_token_id = %s
+                    )
+                      AND revoked_at IS NULL
+                    """,
+                    (token_id,),
+                )
+        return True
 
     def revoke_oauth_refresh_token(self, refresh_token: str) -> bool:
         record = self.oauth_refresh_token(refresh_token)
@@ -1581,6 +1691,7 @@ class PostgresMetadataStore:
             supports_decay_fields=True,
             supports_shared_scopes=True,
             supports_plugin_metadata=True,
+            supports_audit_events=True,
         )
 
     def health(self) -> dict[str, Any]:
@@ -1614,6 +1725,85 @@ class PostgresMetadataStore:
                     """,
                     (str(key), json.dumps(value, sort_keys=True)),
                 )
+
+    def append_audit_event(self, event: dict[str, Any]) -> dict[str, Any]:
+        normalized = _prepare_audit_event(event)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO audit_events (
+                        id, event_type, actor_id, project_id, memory_id, fact_id,
+                        request_id, source_surface, outcome, reason_code, metadata,
+                        created_at
+                    )
+                    VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s
+                    )
+                    """,
+                    (
+                        normalized["id"],
+                        normalized["event_type"],
+                        normalized.get("actor_id"),
+                        normalized.get("project_id"),
+                        normalized.get("memory_id"),
+                        normalized.get("fact_id"),
+                        normalized.get("request_id"),
+                        normalized["source_surface"],
+                        normalized["outcome"],
+                        normalized.get("reason_code"),
+                        json.dumps(
+                            normalized["metadata"],
+                            separators=(",", ":"),
+                            ensure_ascii=False,
+                        ),
+                        normalized["created_at"],
+                    ),
+                )
+        return normalized
+
+    def list_audit_events(
+        self,
+        *,
+        event_type: str | None = None,
+        actor_id: str | None = None,
+        project_id: str | None = None,
+        memory_id: str | None = None,
+        fact_id: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if event_type is not None:
+            clauses.append("event_type = %s")
+            params.append(_validate_audit_token(event_type, field_name="event_type"))
+        if actor_id is not None:
+            clauses.append("actor_id = %s")
+            params.append(_validate_owner_id(actor_id))
+        if project_id is not None:
+            clauses.append("project_id = %s")
+            params.append(_validate_project_id(project_id))
+        if memory_id is not None:
+            clauses.append("memory_id = %s")
+            params.append(self._validate_memory_id(memory_id))
+        if fact_id is not None:
+            clauses.append("fact_id = %s")
+            params.append(_validate_optional_audit_field(fact_id, field_name="fact_id"))
+        params.append(_validate_audit_limit(limit))
+        sql = """
+        SELECT id, event_type, actor_id, project_id, memory_id, fact_id,
+               request_id, source_surface, outcome, reason_code, metadata::text,
+               created_at::text
+        FROM audit_events
+        """
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
+        sql += " ORDER BY created_at DESC, id ASC LIMIT %s"
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, tuple(params))
+                rows = cur.fetchall()
+        return [self._audit_event_from_row(row) for row in rows]
 
     def _validate_memory_id(self, memory_id: Any) -> str:
         value = str(memory_id)
@@ -1962,6 +2152,25 @@ class PostgresMetadataStore:
             "revoked_at": row[6],
             "scopes": _parse_token_scopes(row[7]),
             "last_used_at": row[8],
+        }
+
+    def _audit_event_from_row(self, row: Any) -> dict[str, Any]:
+        metadata = row[10]
+        if isinstance(metadata, str):
+            metadata = json.loads(metadata)
+        return {
+            "id": str(row[0]),
+            "event_type": str(row[1]),
+            "actor_id": row[2],
+            "project_id": row[3],
+            "memory_id": row[4],
+            "fact_id": row[5],
+            "request_id": row[6],
+            "source_surface": str(row[7]),
+            "outcome": str(row[8]),
+            "reason_code": row[9],
+            "metadata": metadata if isinstance(metadata, dict) else {},
+            "created_at": str(row[11]),
         }
 
     def _oauth_identity_from_row(self, row: Any) -> dict[str, Any]:

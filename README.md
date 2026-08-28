@@ -100,7 +100,8 @@ Containerfiles so they install only the extras needed by that example.
 
 - Stores structured conversations with validation and deduplication
 - Searches semantic memory with conversation-aware grouping
-- Answers questions with citations, confidence, and provenance
+- Answers questions with concise MCP defaults or detailed citations,
+  confidence, and provenance on request
 - Extracts useful profile/project facts for direct answers
 - Supports multilingual memory when the configured embedding model supports the
   languages involved
@@ -334,19 +335,23 @@ uv run python -m mkdocs build --strict
 
 ## Status
 
-The project currently includes deterministic ingestion, MCP tools/resources/prompts,
-HTTP endpoints, CLI commands, fact-backed answers, SQLite/Postgres/MongoDB
-metadata, LanceDB/Qdrant/Milvus/Weaviate/PGVector/MongoDB Atlas/
-Elasticsearch/OpenSearch/Redis/Vespa/Typesense/Pinecone/Turbopuffer/in-memory vectors, token-budgeted ask, container CI,
-provider live-test CI, and GitHub Pages docs publishing.
+The project currently includes deterministic append-only ingestion, MCP
+tools/resources/prompts, HTTP endpoints, CLI commands, fact-backed answers,
+sensitive-content quarantine, SQLite/Postgres/MongoDB metadata,
+LanceDB/Qdrant/Milvus/Weaviate/PGVector/MongoDB Atlas/Elasticsearch/OpenSearch/
+Redis/Vespa/Typesense/Pinecone/Turbopuffer/in-memory vectors, token-budgeted
+ask, container CI, provider live-test CI, and GitHub Pages docs publishing.
 
-Planned work includes broader importers, richer summaries, deletion/update
-workflows, provider-specific index compatibility checks, and release publishing.
+Planned work includes broader importers, richer summaries, admin-only
+archive/retention workflows, provider-specific index compatibility checks, and
+release publishing. General destructive memory update/delete workflows are not
+part of `v0.1.0-beta`; corrections should be represented as new memory, fact
+supersession, or explicit governance events over immutable history.
 
 Known first-release limits: ai-memory-hub does not ship as a hosted memory
 service, production-quality retrieval requires a bring-your-own embedding model,
-browser extensions are planned as separate adapters, and UI dashboards/SDKs are
-future work.
+browser extensions are planned as separate adapters, UI dashboards/SDKs are
+future work, and archive/restore does not ship in `v0.1.0-beta`.
 
 ## Contributing
 

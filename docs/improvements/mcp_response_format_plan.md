@@ -2,7 +2,7 @@
 
 Source date: `24-08-2026`
 
-Status: planned
+Status: implemented
 
 Priority: P0 before `v0.1.0`
 
@@ -92,9 +92,10 @@ For `memory_profile_get`, concise output should keep:
 - `summary.source_quality_counts`
 - facts reduced to `subject`, `predicate`, `object`, `object_normalized`,
   `confidence`, `source_quality`, `last_confirmed_at`, and supersession status
+- fact rows deduplicated and capped by the concise default or explicit `limit`
 
 For `memory_fact_search`, concise output should keep the same reduced fact
-shape used by profile reads.
+shape used by profile reads, plus total/unique/returned/omitted counts.
 
 For `memory_ask`, concise output should keep:
 
@@ -102,9 +103,11 @@ For `memory_ask`, concise output should keep:
 - `confidence`
 - `confidence_reason`
 - `answer_basis`
-- compact citations and evidence
-- selected facts in the reduced fact shape
-- selected chunks without embedded full conversations
+- small memory/fact/citation counts
+
+It should omit citation, evidence, provenance, structured evidence, selected
+fact, selected chunk, and token-budget diagnostic arrays unless the client asks
+for `response_format="detailed"`.
 
 ## Non-Goals
 
@@ -118,21 +121,23 @@ For `memory_ask`, concise output should keep:
 
 ## Implementation Sequence
 
-- [ ] Add a shared response-format enum and validation helper.
-- [ ] Add MCP tool parameters with explicit enum descriptions.
-- [ ] Keep `detailed` equivalent to the current MCP output.
-- [ ] Add concise presenter helpers for facts, profile summaries, search rows,
-      ask evidence, and conversation citations.
-- [ ] Strip full conversations and noisy metadata from concise search and ask
+- [x] Add a shared response-format enum and validation helper.
+- [x] Add MCP tool parameters with explicit enum descriptions.
+- [x] Keep `detailed` equivalent to the current MCP output.
+- [x] Add concise presenter helpers for facts, profile summaries, search rows,
+      ask summaries, and conversation citations.
+- [x] Strip full conversations and noisy metadata from concise search and ask
       responses.
-- [ ] Update MCP initialize instructions and tool descriptions to recommend
+- [x] Deduplicate and limit concise fact/profile rows while preserving detailed
+      full provenance.
+- [x] Update MCP initialize instructions and tool descriptions to recommend
       `response_format="concise"` for normal agent recall.
-- [ ] Update `docs/agents.md` and `docs/overview.md` with concise versus
+- [x] Update `docs/agents.md` and `docs/overview.md` with concise versus
       detailed examples.
-- [ ] Update real-client smoke arguments to use `response_format="concise"`
+- [x] Update real-client smoke arguments to use `response_format="concise"`
       where supported.
-- [ ] Add unit and integration coverage for concise and detailed parity.
-- [ ] Add regression tests that concise output excludes `metadata.index_chunks`,
+- [x] Add unit and integration coverage for concise and detailed parity.
+- [x] Add regression tests that concise output excludes `metadata.index_chunks`,
       `metadata.tag_sources`, and full `conversation` payloads.
 
 ## Acceptance Criteria
@@ -140,11 +145,12 @@ For `memory_ask`, concise output should keep:
 - MCP read tools expose `response_format` as an enum, not a boolean.
 - `response_format="concise"` returns enough information for an agent to answer
   common recall/profile questions without secondary filtering.
-- Concise MCP search and ask responses do not include full conversations or
-  internal metadata manifests.
+- Concise MCP search and ask responses do not include full conversations,
+  citation/evidence/provenance arrays, or internal metadata manifests.
+- Concise MCP fact/profile responses deduplicate facts and include returned
+  counts so clients can see when rows were omitted.
 - `response_format="detailed"` preserves the existing audit-friendly shape.
 - Tool descriptions explain when to use `concise` versus `detailed` without
   bloating schemas.
 - Existing MCP, API, Bruno, and real-client smoke coverage passes after the
   response-format change.
-
