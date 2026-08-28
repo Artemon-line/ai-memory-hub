@@ -4,7 +4,11 @@ import logging
 
 from uvicorn.logging import AccessFormatter
 
-from memory.backend.log_safety import SecretRedactionFilter, redact_secrets
+from memory.backend.log_safety import (
+    SecretRedactionFilter,
+    install_secret_redaction_filter,
+    redact_secrets,
+)
 
 
 def test_secret_redaction_filter_preserves_uvicorn_access_log_args() -> None:
@@ -29,6 +33,21 @@ def test_secret_redaction_filter_preserves_uvicorn_access_log_args() -> None:
     formatted = AccessFormatter("%(client_addr)s - \"%(request_line)s\" %(status_code)s").format(record)
     assert "secret-token" not in formatted
     assert "access_token=***" in formatted
+
+
+def test_install_secret_redaction_filter_redacts_httpx2_request_logs(
+    caplog,
+) -> None:
+    install_secret_redaction_filter()
+
+    logger = logging.getLogger("httpx2")
+    with caplog.at_level(logging.INFO, logger="httpx2"):
+        logger.info(
+            "HTTP Request: POST http://testserver/mcp?access_token=secret-token"
+        )
+
+    assert "secret-token" not in caplog.text
+    assert "access_token=***" in caplog.text
 
 
 def test_redact_secrets_covers_provider_keys_and_dsns() -> None:

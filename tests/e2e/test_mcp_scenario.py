@@ -17,6 +17,13 @@ def _get_text_from_content(content: list[Any]) -> str:
     raise ValueError(f"No text content found in: {content}")
 
 
+def _tool_result_is_error(result: Any) -> bool:
+    is_error = getattr(result, "is_error", None)
+    if is_error is not None:
+        return bool(is_error)
+    return bool(getattr(result, "isError", False))
+
+
 @pytest.mark.asyncio
 async def test_memory_scenario_e2e():
     """
@@ -66,7 +73,7 @@ async def _run_memory_scenario(session: ClientSession) -> None:
         result = await session.call_tool("memory_insert", payload)
 
         # Verify tool execution succeeded
-        assert not result.isError, f"Tool call failed for '{text}': {result}"
+        assert not _tool_result_is_error(result), f"Tool call failed for '{text}': {result}"
 
         # Parse the JSON response from the tool
         # FastMCP tool results have a 'content' list
@@ -80,7 +87,7 @@ async def _run_memory_scenario(session: ClientSession) -> None:
     ask_payload = {"question": "GPU", "top_k": 3}
     ask_result = await session.call_tool("memory_ask", ask_payload)
 
-    assert not ask_result.isError, f"memory_ask failed: {ask_result}"
+    assert not _tool_result_is_error(ask_result), f"memory_ask failed: {ask_result}"
 
     assert len(ask_result.content) > 0
     ask_res = json.loads(_get_text_from_content(ask_result.content))
@@ -100,7 +107,7 @@ async def _run_memory_scenario(session: ClientSession) -> None:
         "memory_ask",
         {**ask_payload, "response_format": "detailed"},
     )
-    assert not detailed_result.isError, f"detailed memory_ask failed: {detailed_result}"
+    assert not _tool_result_is_error(detailed_result), f"detailed memory_ask failed: {detailed_result}"
     assert len(detailed_result.content) > 0
     detailed_res = json.loads(_get_text_from_content(detailed_result.content))
 
@@ -122,7 +129,7 @@ def _is_connection_setup_error(exc: Exception) -> bool:
 @pytest.mark.asyncio
 async def test_memory_scenario_tool_connection_error_fails_after_setup():
     class FailedToolResult:
-        isError = True
+        is_error = True
         content: list[Any] = []
 
         def __repr__(self) -> str:
