@@ -73,12 +73,15 @@ capabilities only:
 - SQLite/LanceDB local default.
 - Postgres/PGVector runtime option.
 - Deterministic ingestion, search, retrieve, ask, facts, and generated summaries.
+- Append-only memory history, fact supersession, audit events, and
+  sensitive-content quarantine.
 - CLI and container runtime.
 - Bearer-token auth and project workspace boundaries.
 - Local-first, bring-your-own embedding model/storage posture.
 
 Do not market unreleased browser extensions, hosted sync, UI dashboards, SDKs, or
-cloud service behavior as shipped release features.
+cloud service behavior as shipped release features. Do not market destructive
+memory update/delete or archive/restore as shipped beta behavior.
 
 ## P0: Repository Governance
 
@@ -208,7 +211,40 @@ release requirements:
   - no hosted memory service;
   - bring-your-own embedding model for production-quality retrieval;
   - browser extensions are future/separate repos;
-  - UI and SDKs are future work.
+  - UI and SDKs are future work;
+  - destructive memory update/delete and archive/restore are future work, not
+    shipped beta behavior.
+
+## P0: Agent-Facing MCP Response Formats
+
+Use `improvements/mcp_response_format_plan.md` as the source of truth.
+
+This is required before `v0.1.0` because MCP read tools are the main public
+agent contract. Agent recall should default to concise, high-signal payloads
+without forcing clients to parse full stored conversations and internal metadata.
+
+- [ ] Add `response_format` as an enum, not a boolean, to the MCP read tools.
+- [ ] Preserve the current detailed output as `response_format="detailed"`.
+- [ ] Provide concise output for search, ask, facts, and profile reads.
+- [ ] Update agent docs and real-client smoke coverage to exercise concise
+      output before stable release.
+
+## P0: Agent And Model Footprint Provenance
+
+Use `improvements/agent_model_footprint_plan.md` as the source of truth.
+
+This is required before `v0.1.0` because saved memory should preserve which
+agent runtime and model produced or captured the conversation. Agents should not
+have to infer that a record came from Hermes using `gemini-3.6-flash` from raw
+message text.
+
+- [ ] Treat `source` as the canonical agent/client runtime for saved
+      conversations.
+- [ ] Preserve conversation-level agent, model, provider, platform, capture
+      client, and ingestion method metadata.
+- [ ] Add message-level agent/model overrides for subagents and mixed-model
+      turns.
+- [ ] Carry agent/model footprint into facts, summaries, and read provenance.
 
 ## P0: Release Candidate Drill
 
@@ -290,6 +326,8 @@ Use this checklist for the release PR:
 - [x] Version/tag validation added.
 - [x] Release checklist added.
 - [x] README and docs reviewed.
+- [ ] P0 MCP response-format plan completed.
+- [ ] P0 agent/model footprint plan completed.
 - [ ] Branch protection enabled.
 - [ ] Required checks selected.
 - [ ] `main` is green.

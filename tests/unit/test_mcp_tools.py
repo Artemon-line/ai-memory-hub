@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import threading
 import time
 
@@ -145,6 +146,26 @@ def test_mcp_search_sort_preserves_conversation_group_score() -> None:
 
 
 @pytest.mark.asyncio
+async def test_mcp_insert_records_audit_event_with_tool_request_id() -> None:
+    runtime = _runtime()
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=runtime)
+    handlers = build_tool_handlers(agent)
+    ctx = StubMCPContextWithRequestId()
+
+    result = await handlers["memory_insert"](
+        conversation_json=_conversation(),
+        ctx=ctx,
+    )
+
+    assert result["status"] == "ok"
+    events = getattr(runtime.metadata_store, "_audit_events")
+    inserted = next(event for event in events if event["event_type"] == "memory.inserted")
+    assert inserted["source_surface"] == "mcp"
+    assert inserted["request_id"] == "mcp-call-123"
+    assert inserted["memory_id"] == result["id"]
+
+
+@pytest.mark.asyncio
 async def test_mcp_tool_log_payload_is_sanitized() -> None:
     ctx = StubMCPContext()
 
@@ -228,6 +249,10 @@ async def test_mcp_tool_handlers_insert_search_retrieve() -> None:
 
     search_result = await handlers["memory_search"]("hello", 5, ctx=ctx)
     assert search_result["status"] == "ok"
+    assert "conversation" not in search_result["results"][0]
+    assert search_result["results"][0]["citation"]["id"] == (
+        "d9fd4c95-9cb3-4fd5-b967-3027f8863210"
+    )
 
     retrieve_result = await handlers["memory_retrieve"](
         "d9fd4c95-9cb3-4fd5-b967-3027f8863210",
@@ -246,21 +271,71 @@ async def test_mcp_tool_handlers_insert_search_retrieve() -> None:
     ask_result = await handlers["memory_ask"]("what was stored?", 3, ctx=ctx)
     assert ask_result["status"] == "ok"
     assert "answer" in ask_result
-    assert len(ask_result["results"]) == 1
-    assert ask_result["results"][0]["id"] == "d9fd4c95-9cb3-4fd5-b967-3027f8863210"
-    assert ask_result["results"][0]["text"] == "hello mcp"
-    assert "hash" not in ask_result["results"][0]["conversation"]["messages"][0]
-    assert isinstance(ask_result["citations"], list)
-    assert ask_result["citations"][0]["id"] == ask_result["results"][0]["id"]
-    assert ask_result["citations"][0]["text"] == ask_result["results"][0]["text"]
+    assert ask_result["results"] == []
+    assert ask_result["memory_result_count"] == 1
+    assert ask_result["citation_count"] == 1
+    for verbose_key in (
+        "citations",
+        "evidence",
+        "structured_evidence",
+        "provenance",
+        "context_tokens_used",
+        "chunks_selected",
+    ):
+        assert verbose_key not in ask_result
+
+    detailed_ask_result = await handlers["memory_ask"](
+        "what was stored?", 3, response_format="detailed", ctx=ctx
+    )
+    assert detailed_ask_result["status"] == "ok"
+    assert "conversation" in detailed_ask_result["results"][0]
+    assert "hash" not in detailed_ask_result["results"][0]["conversation"]["messages"][0]
 
     budgeted_ask_result = await handlers["memory_ask"](
-        "what was stored?", 3, max_context_tokens=100, ctx=ctx
+        "what was stored?",
+        3,
+        max_context_tokens=100,
+        response_format="detailed",
+        ctx=ctx,
     )
     assert budgeted_ask_result["status"] == "ok"
     assert budgeted_ask_result["context_tokens_used"] <= 100
     assert budgeted_ask_result["chunks_selected"] == 1
     assert ctx.logs == []
+
+
+@pytest.mark.asyncio
+async def test_mcp_search_response_format_controls_conversation_payloads() -> None:
+    runtime = _runtime()
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=runtime)
+    handlers = build_tool_handlers(agent)
+    payload = _conversation()
+    payload["metadata"]["summary"] = "User greeted MCP in a compact response test."
+    payload["metadata"]["thread_id"] = "thread-response-format"
+
+    await handlers["memory_insert"](payload)
+    concise = await handlers["memory_search"]("hello", 5)
+    detailed = await handlers["memory_search"](
+        "hello", 5, response_format="detailed"
+    )
+
+    concise_row = concise["results"][0]
+    detailed_row = detailed["results"][0]
+    assert concise["status"] == "ok"
+    assert "conversation" not in concise_row
+    assert concise_row["citation"]["id"] == payload["id"]
+    assert concise_row["citation"]["source"] == "claude"
+    assert concise_row["citation"]["timestamp"] == "2026-01-01T00:00:00Z"
+    assert concise_row["citation"]["thread_id"] == "thread-response-format"
+    assert "hello mcp" in concise_row["citation"]["summary"]
+    concise_json = json.dumps(concise)
+    assert "index_chunks" not in concise_json
+    assert "tag_sources" not in concise_json
+
+    assert detailed["status"] == "ok"
+    assert "conversation" in detailed_row
+    assert "index_chunks" in detailed_row["conversation"]["metadata"]
+    assert "tag_sources" in detailed_row["conversation"]["metadata"]
 
 
 @pytest.mark.asyncio
@@ -357,10 +432,17 @@ async def test_mcp_fact_tools_return_profile_facts() -> None:
 
     await handlers["memory_insert"](payload)
     facts = await handlers["memory_fact_search"](
-        subject="user", predicate="owns_guitar", save_intent="explicit_user_request"
+        subject="user",
+        predicate="owns_guitar",
+        save_intent="explicit_user_request",
+        response_format="detailed",
     )
-    profile = await handlers["memory_profile_get"](subject="user", save_intent_source="codex")
-    ask = await handlers["memory_ask"]("What guitar do I own?", 5)
+    profile = await handlers["memory_profile_get"](
+        subject="user", save_intent_source="codex", response_format="detailed"
+    )
+    ask = await handlers["memory_ask"](
+        "What guitar do I own?", 5, response_format="detailed"
+    )
 
     assert facts["status"] == "ok"
     assert facts["results"][0]["predicate"] == "owns_guitar"
@@ -377,11 +459,131 @@ async def test_mcp_fact_tools_return_profile_facts() -> None:
     assert ask["structured_evidence"]["facts"][0]["source_quality"] == "direct_user_statement"
 
 
+@pytest.mark.asyncio
+async def test_mcp_fact_and_profile_concise_format_reduces_fact_payloads() -> None:
+    runtime = _runtime()
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=runtime)
+    handlers = build_tool_handlers(agent)
+    payload = _conversation()
+    payload["metadata"]["save_intent"] = "explicit_user_request"
+    payload["messages"] = [
+        {"role": "user", "text": "I own a blue Gibson Special guitar."}
+    ]
+
+    await handlers["memory_insert"](payload)
+    facts = await handlers["memory_fact_search"](
+        subject="user", predicate="owns_guitar"
+    )
+    profile = await handlers["memory_profile_get"](
+        subject="user", predicate="owns_guitar"
+    )
+
+    assert facts["status"] == "ok"
+    assert "qualifiers" not in facts["results"][0]
+    assert "source_message_indexes" not in facts["results"][0]
+    assert facts["results"][0]["object_normalized"] == "a blue Gibson Special guitar"
+    assert facts["results"][0]["superseded"] is False
+
+    assert profile["status"] == "ok"
+    assert set(profile["summary"]) == {
+        "text",
+        "active_fact_count",
+        "freshest_at",
+        "confidence_counts",
+        "source_quality_counts",
+    }
+    assert "qualifiers" not in profile["facts"][0]
+    assert profile["facts"][0]["predicate"] == "owns_guitar"
+
+
+@pytest.mark.asyncio
+async def test_mcp_fact_and_profile_concise_deduplicates_and_limits_rows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
+    handlers = build_tool_handlers(agent)
+    facts = [
+        {
+            "id": "fact-a",
+            "subject": "user",
+            "predicate": "owns_guitar",
+            "object": "a cherry Gibson guitar",
+            "object_normalized": "a cherry Gibson guitar",
+            "confidence": "high",
+            "qualifiers": {"source_role": "user"},
+        },
+        {
+            "id": "fact-b",
+            "subject": "user",
+            "predicate": "owns_guitar",
+            "object": "a cherry Gibson guitar",
+            "object_normalized": "a cherry Gibson guitar",
+            "confidence": "high",
+            "qualifiers": {"source_role": "user"},
+        },
+        {
+            "id": "fact-c",
+            "subject": "user",
+            "predicate": "owns_guitar",
+            "object": "a blue Jazzmaster guitar",
+            "object_normalized": "a blue Jazzmaster guitar",
+            "confidence": "medium",
+            "qualifiers": {"source_role": "user"},
+        },
+    ]
+
+    async def fake_fact_search(**_kwargs):
+        return {"status": "ok", "results": facts}
+
+    async def fake_profile_get(**_kwargs):
+        return {
+            "status": "ok",
+            "subject": "user",
+            "summary": {"text": "User has guitar facts.", "active_fact_count": 3},
+            "facts": facts,
+        }
+
+    monkeypatch.setattr(agent, "fact_search", fake_fact_search)
+    monkeypatch.setattr(agent, "profile_get", fake_profile_get)
+
+    concise_facts = await handlers["memory_fact_search"](subject="user", limit=1)
+    detailed_facts = await handlers["memory_fact_search"](
+        subject="user", response_format="detailed", limit=1
+    )
+    concise_profile = await handlers["memory_profile_get"](subject="user", limit=1)
+
+    assert [row["id"] for row in concise_facts["results"]] == ["fact-a"]
+    assert concise_facts["total_results"] == 3
+    assert concise_facts["unique_results"] == 2
+    assert concise_facts["returned_results"] == 1
+    assert concise_facts["omitted_results"] == 1
+    assert concise_facts["result_limit"] == 1
+    assert "qualifiers" not in concise_facts["results"][0]
+
+    assert len(detailed_facts["results"]) == 3
+    assert "qualifiers" in detailed_facts["results"][0]
+
+    assert [row["id"] for row in concise_profile["facts"]] == ["fact-a"]
+    assert concise_profile["total_facts"] == 3
+    assert concise_profile["unique_facts"] == 2
+    assert concise_profile["returned_facts"] == 1
+    assert concise_profile["omitted_facts"] == 1
+    assert concise_profile["fact_limit"] == 1
+
+
 def test_mcp_does_not_expose_agent_facing_forget_or_delete_tools() -> None:
     agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
     handlers = build_tool_handlers(agent)
 
     assert all("forget" not in name and "delete" not in name and "purge" not in name for name in handlers)
+
+
+def test_mcp_tool_policies_cover_registered_handlers() -> None:
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
+    handlers = build_tool_handlers(agent)
+
+    assert set(handlers) == set(mcp_server.TOOL_DESCRIPTIONS)
+    assert set(handlers) == set(mcp_server.MCP_TOOL_POLICIES)
 
 
 @pytest.mark.asyncio
@@ -540,7 +742,7 @@ async def test_mcp_tool_handlers_search_pagination_and_filters() -> None:
     assert first_id != second_id
 
     filtered_source = await handlers["memory_search"](
-        "hello", source="chatgpt", top_k=10
+        "hello", source="chatgpt", top_k=10, response_format="detailed"
     )
     assert filtered_source["status"] == "ok"
     assert all(
@@ -556,6 +758,7 @@ async def test_mcp_tool_handlers_search_pagination_and_filters() -> None:
         date_from="2026-01-02T00:00:00Z",
         date_to="2026-01-02T23:59:59Z",
         top_k=10,
+        response_format="detailed",
     )
     assert filtered_date["status"] == "ok"
     assert all(
@@ -563,7 +766,9 @@ async def test_mcp_tool_handlers_search_pagination_and_filters() -> None:
         for row in filtered_date["results"]
     )
 
-    filtered_tags = await handlers["memory_search"]("hello", tags=["beta"], top_k=10)
+    filtered_tags = await handlers["memory_search"](
+        "hello", tags=["beta"], top_k=10, response_format="detailed"
+    )
     assert filtered_tags["status"] == "ok"
     assert all(
         "beta" in row["conversation"]["metadata"].get("tags", [])
@@ -571,7 +776,10 @@ async def test_mcp_tool_handlers_search_pagination_and_filters() -> None:
     )
 
     wrapped_tags = await handlers["memory_search"](
-        "hello", tags={"item": ["beta"]}, top_k=10  # type: ignore[arg-type]
+        "hello",
+        tags={"item": ["beta"]},  # type: ignore[arg-type]
+        top_k=10,
+        response_format="detailed",
     )
     assert wrapped_tags["status"] == "ok"
     assert all(
@@ -594,7 +802,12 @@ async def test_mcp_tool_handlers_search_pagination_and_filters() -> None:
     assert "thread_id" in grouped_threads["results"][0]
 
     filtered_ask = await handlers["memory_ask"](
-        "hello", top_k=10, source="chatgpt", tags=["beta"], thread_id="thread-beta"
+        "hello",
+        top_k=10,
+        source="chatgpt",
+        tags=["beta"],
+        thread_id="thread-beta",
+        response_format="detailed",
     )
     assert filtered_ask["status"] == "ok"
     assert [row["id"] for row in filtered_ask["results"]] == [

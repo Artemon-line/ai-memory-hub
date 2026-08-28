@@ -389,11 +389,15 @@ def test_mcp_client_profile_smoke_with_ollama_embeddings(
         )
         assert search["status"] == "ok"
         assert search["results"]
-        assert search["results"][0]["id"] == insert["id"]
+        search_row = search["results"][0]
+        assert search_row["id"] == insert["id"]
         assert search["cursor"] is None
         assert search["error_code"] is None
         assert search["error_message"] is None
-        _assert_public_memory_shape(search["results"][0]["conversation"], profile)
+        assert "conversation" not in search_row
+        assert search_row["citation"]["id"] == insert["id"]
+        assert search_row["citation"]["source"] == profile["expected"]["source"]
+        assert "hash" not in json.dumps(search_row)
 
         retrieve = _call_tool(
             client,
@@ -419,11 +423,17 @@ def test_mcp_client_profile_smoke_with_ollama_embeddings(
             arguments={"question": profile["query"], "top_k": 5},
         )
         assert ask["status"] == "ok"
-        assert ask["citations"]
-        assert ask["citations"][0]["id"] == insert["id"]
         assert ask["error_code"] is None
         assert ask["error_message"] is None
-        assert "hash" not in ask["results"][0]["conversation"]["messages"][0]
+        assert ask["answer"]
+        assert ask["results"] == []
+        assert ask["memory_result_count"] >= 1
+        assert ask["citation_count"] >= 1
+        assert "citations" not in ask
+        assert "evidence" not in ask
+        assert "structured_evidence" not in ask
+        assert "provenance" not in ask
+        assert "hash" not in json.dumps(ask)
 
 
 @pytest.mark.parametrize(

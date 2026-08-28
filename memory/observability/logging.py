@@ -69,6 +69,13 @@ class TextLogFormatter(logging.Formatter):
             datefmt="%Y-%m-%dT%H:%M:%S%z",
         )
 
+    def format(self, record: logging.LogRecord) -> str:
+        message = super().format(record)
+        extra = _format_text_extra_attrs(record)
+        if not extra:
+            return message
+        return f"{message} {extra}"
+
 
 class JsonLogFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
@@ -134,6 +141,23 @@ def _extra_record_attrs(record: logging.LogRecord) -> dict[str, Any]:
         if isinstance(value, str | int | float | bool) or value is None:
             extra[key] = _safe_log_value(value)
     return extra
+
+
+def _format_text_extra_attrs(record: logging.LogRecord) -> str:
+    return " ".join(
+        f"{key}={_format_text_log_value(value)}"
+        for key, value in sorted(_extra_record_attrs(record).items())
+    )
+
+
+def _format_text_log_value(value: Any) -> str:
+    if isinstance(value, str):
+        if not value or any(char.isspace() for char in value):
+            return json.dumps(value, separators=(",", ":"))
+        return value
+    if value is None:
+        return "null"
+    return str(value)
 
 
 def _safe_log_value(value: Any) -> Any:

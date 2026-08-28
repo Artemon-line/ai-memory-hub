@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+from dataclasses import dataclass
 from datetime import datetime
 from functools import wraps
 from typing import Annotated, Any, Awaitable, Callable
@@ -12,21 +13,43 @@ import jsonschema
 from fastmcp import Context as FastMCPContext
 from pydantic import Field
 
-from memory.auth import WRITE_SCOPE, current_auth_context, current_owner_id
+from memory.auth import (
+    AUTH_CONFIG_PATH,
+    AUTH_RECONNECT_HINT,
+    MCP_CLIENT_APPROVAL_HINT,
+    READ_SCOPE,
+    WRITE_SCOPE,
+    current_auth_context,
+    current_owner_id,
+)
 from memory.backend.log_safety import redact_secrets
 from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig
 from memory.ingestion.base_agent import BaseIngestionAgent
-from memory.ingestion.mvp_ingestion import normalize_conversation_json, validate_json
+from memory.ingestion.mvp_ingestion import (
+    normalize_conversation_json,
+    reset_audit_context,
+    set_audit_context,
+    validate_json,
+)
 from memory.ingestion.save_intent import (
     InsertDisposition,
     SaveIntentError,
     validate_insert_save_intent,
 )
 from memory.ingestion.thread_models import (
+    MCPResponseFormat,
     SearchResultMode,
+    response_format_error_message,
+    response_format_values,
     result_mode_error_message,
     result_mode_values,
+)
+from memory.interfaces.mcp_response_format import (
+    format_ask_response,
+    format_fact_search_response,
+    format_profile_response,
+    format_search_response,
 )
 from memory.observability.metrics import metrics
 from memory.observability.tracing import start_observability_span
@@ -39,6 +62,27 @@ MCP_LOG_NOTIFICATION_LIMIT = 100
 _MCP_LOG_NOTIFICATION_COUNT_ATTR = "_amh_mcp_log_notification_count"
 ConversationJsonArg = Annotated[
     Any, Field(json_schema_extra={"type": "object", "additionalProperties": True})
+]
+ResponseFormatArg = Annotated[
+    str,
+    Field(
+        description=(
+            "Payload detail for MCP read tools: concise returns agent-facing facts, "
+            "summaries, and citations without full conversations; detailed preserves "
+            "the audit-friendly record shape."
+        ),
+        json_schema_extra={"enum": [mode.value for mode in MCPResponseFormat]},
+    ),
+]
+FactLimitArg = Annotated[
+    int | None,
+    Field(
+        description=(
+            "Maximum fact rows returned by concise fact/profile reads. Omit for "
+            "the concise default; detailed remains unbounded."
+        ),
+        json_schema_extra={"minimum": 1, "maximum": 100},
+    ),
 ]
 
 SERVER_INSTRUCTIONS = (
@@ -53,20 +97,22 @@ SERVER_INSTRUCTIONS = (
     "include metadata.save_intent as explicit_user_request, user_confirmed, or client_auto_save. "
     "Pass project_id when saving to or reading from a shared project; omit it for the default private project. "
     "memory_search and memory_ask support source, date_from, date_to, tags, thread_id, and memory_status filters "
-    "when narrowing recall. "
+    "when narrowing recall. Use response_format=concise for normal agent recall; "
+    "use response_format=detailed only when auditing full stored records. "
     "memory_fact_search and memory_profile_get support source, predicate, date range, confidence, status, "
-    "source_quality, save-intent, and freshness filters."
+    "source_quality, save-intent, and freshness filters, plus the same response_format option."
 )
 
 
 TOOL_DESCRIPTIONS: dict[str, str] = {
     "memory_validate": (
-        "Validate a conversation payload against the conversation schema. "
+        "Read-only validation for a conversation payload against the conversation schema. "
         "Pass `conversation_json` as a nested JSON object, omit `id` unless it is a valid UUID, "
         "and use message `text` or `content` fields."
     ),
     "memory_insert": (
-        "Insert a conversation into memory. Pass `conversation_json` as a nested JSON object, "
+        "Write a conversation into local memory. Requires the `memory:write` auth scope when MCP auth is enabled. "
+        "Pass `conversation_json` as a nested JSON object, "
         "omit `id` unless it is a valid UUID, use message `text` or `content` fields, "
         "include the whole conversation in one object rather than splitting it into batches, "
         "optionally include a short factual `metadata.summary` retrieval hint, "
@@ -74,31 +120,114 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "and optionally pass `project_id` for a shared workspace."
     ),
     "memory_search": (
-        "Search existing memory by text query. Optional filters: source, date_from, date_to, tags, "
+        "Read-only search of existing memory by text query. Optional filters: source, date_from, date_to, tags, "
         "and thread_id. Use project_id for a shared workspace. Use limit and cursor for paged "
-        "results. Use result_mode=threads for thread-grouped results. Use memory_status to inspect active, pending_review, rejected, or all memories."
+        "results. Use result_mode=threads for thread-grouped results. Use response_format=concise "
+        "for normal recall or detailed for full conversation payloads. Use memory_status to inspect active, pending_review, quarantined, rejected, or all memories."
     ),
-    "memory_retrieve": "Retrieve a stored memory item by ID, optionally within a project_id and memory_status filter.",
+    "memory_retrieve": "Read-only retrieval of a stored memory item by ID, optionally within a project_id and memory_status filter.",
     "memory_ask": (
-        "Answer a question using stored memory and facts. Optional filters: source, date_from, "
-        "date_to, tags, thread_id, project_id, and memory_status."
+        "Read-only question answering using stored memory and facts. Optional filters: source, date_from, "
+        "date_to, tags, thread_id, project_id, and memory_status. Use response_format=concise "
+        "for normal recall or detailed for full search rows."
     ),
     "memory_fact_search": (
-        "Search normalized extracted memory facts. Optional filters: source, subject, predicate, "
+        "Read-only search of normalized extracted memory facts. Optional filters: source, subject, predicate, "
         "date_from, date_to, confidence, status, source_quality, save_intent, save_intent_source, "
-        "freshness_from, freshness_to, and project_id."
+        "freshness_from, freshness_to, limit, and project_id. Use response_format=concise for "
+        "deduplicated, limited facts or detailed for full fact provenance."
     ),
     "memory_profile_get": (
-        "Return normalized facts plus a compact fact-based summary for a subject. Optional filters: "
+        "Read-only profile retrieval with normalized facts plus a compact fact-based summary for a subject. Optional filters: "
         "source, predicate, date_from, date_to, confidence, status, source_quality, freshness_from, "
-        "freshness_to, save_intent, save_intent_source, and project_id."
+        "freshness_to, save_intent, save_intent_source, limit, and project_id. Use "
+        "response_format=concise for deduplicated, limited facts and summary counts or detailed "
+        "for full fact provenance."
     ),
-    "memory_fact_supersede": "Mark one normalized fact as superseded by another fact within a project_id.",
-    "memory_pending_approve": "Approve a pending memory insert so it becomes searchable and can create facts.",
-    "memory_pending_reject": "Reject a pending memory insert so it remains excluded from default reads.",
-    "memory_project_list": "List project workspaces visible to the authenticated user.",
-    "memory_project_default_get": "Return the authenticated user's default private project workspace.",
-    "memory_project_get": "Return one visible project workspace by project_id.",
+    "memory_fact_supersede": "Write fact state by marking one normalized fact as superseded by another fact within a project_id. Requires the `memory:write` auth scope when MCP auth is enabled.",
+    "memory_pending_approve": "Write reviewable memory state by approving a pending or quarantined insert so it becomes searchable and can create facts. Requires the `memory:write` auth scope when MCP auth is enabled.",
+    "memory_pending_reject": "Write reviewable memory state by rejecting a pending or quarantined insert so it remains excluded from default reads. Requires the `memory:write` auth scope when MCP auth is enabled.",
+    "memory_project_list": "Read-only list of project workspaces visible to the authenticated user.",
+    "memory_project_default_get": "Read-only retrieval of the authenticated user's default private project workspace.",
+    "memory_project_get": "Read-only retrieval of one visible project workspace by project_id.",
+}
+
+@dataclass(frozen=True, slots=True)
+class MCPToolPolicy:
+    read_only: bool
+    required_scopes: tuple[str, ...] = (READ_SCOPE,)
+    destructive: bool = False
+    idempotent: bool = True
+    open_world: bool = False
+    memory_effect: str = "reads local memory state"
+    internal_side_effects: str | None = None
+    retry_behavior: str | None = None
+
+    def annotations(self) -> dict[str, bool]:
+        return {
+            "readOnlyHint": self.read_only,
+            "destructiveHint": self.destructive,
+            "idempotentHint": self.idempotent,
+            "openWorldHint": self.open_world,
+        }
+
+    def auth_meta(self, *, auth_mode: str | None) -> dict[str, Any]:
+        authenticated = auth_mode is not None and auth_mode != "none"
+        meta: dict[str, Any] = {
+            "auth_mode": auth_mode or "unknown",
+            "required_scopes": list(self.required_scopes) if authenticated else [],
+            "scopes_when_authenticated": list(self.required_scopes),
+            "memory_effect": self.memory_effect,
+            "config_path": AUTH_CONFIG_PATH,
+            "configuration_hint": AUTH_RECONNECT_HINT,
+            "approval_hint": MCP_CLIENT_APPROVAL_HINT,
+        }
+        if authenticated and WRITE_SCOPE in self.required_scopes:
+            meta["write_scope"] = WRITE_SCOPE
+        if self.internal_side_effects:
+            meta["internal_side_effects"] = self.internal_side_effects
+        if self.retry_behavior:
+            meta["retry_behavior"] = self.retry_behavior
+        return meta
+
+
+READ_ONLY_TOOL_POLICY = MCPToolPolicy(read_only=True)
+READ_ONLY_WITH_INTERNAL_WRITES_POLICY = MCPToolPolicy(
+    read_only=True,
+    internal_side_effects=(
+        "May refresh server-owned derived summaries or initialize default project metadata; "
+        "does not store user conversation memory."
+    ),
+)
+MEMORY_INSERT_POLICY = MCPToolPolicy(
+    read_only=False,
+    required_scopes=(READ_SCOPE, WRITE_SCOPE),
+    idempotent=False,
+    memory_effect="writes local conversation memory",
+    retry_behavior=(
+        "Exact repeated inserts are deduplicated; changed same-thread payloads may append or create memory."
+    ),
+)
+NON_DESTRUCTIVE_WRITE_POLICY = MCPToolPolicy(
+    read_only=False,
+    required_scopes=(READ_SCOPE, WRITE_SCOPE),
+    idempotent=False,
+    memory_effect="writes local memory state",
+)
+MCP_TOOL_POLICIES: dict[str, MCPToolPolicy] = {
+    "memory_validate": READ_ONLY_TOOL_POLICY,
+    "memory_insert": MEMORY_INSERT_POLICY,
+    "memory_search": READ_ONLY_TOOL_POLICY,
+    "memory_retrieve": READ_ONLY_WITH_INTERNAL_WRITES_POLICY,
+    "memory_ask": READ_ONLY_TOOL_POLICY,
+    "memory_fact_search": READ_ONLY_TOOL_POLICY,
+    "memory_profile_get": READ_ONLY_WITH_INTERNAL_WRITES_POLICY,
+    "memory_fact_supersede": NON_DESTRUCTIVE_WRITE_POLICY,
+    "memory_pending_approve": NON_DESTRUCTIVE_WRITE_POLICY,
+    "memory_pending_reject": NON_DESTRUCTIVE_WRITE_POLICY,
+    "memory_project_list": READ_ONLY_WITH_INTERNAL_WRITES_POLICY,
+    "memory_project_default_get": READ_ONLY_WITH_INTERNAL_WRITES_POLICY,
+    "memory_project_get": READ_ONLY_WITH_INTERNAL_WRITES_POLICY,
 }
 
 CONVERSATION_JSON_TOOL_META: dict[str, Any] = {
@@ -128,6 +257,35 @@ CONVERSATION_JSON_TOOL_META: dict[str, Any] = {
         }
     }
 }
+
+
+def _tool_policy(tool_name: str) -> MCPToolPolicy:
+    try:
+        return MCP_TOOL_POLICIES[tool_name]
+    except KeyError as exc:
+        raise ValueError(f"MCP tool policy missing for {tool_name}") from exc
+
+
+def _tool_meta(tool_name: str, *, config: HubConfig | None = None) -> dict[str, Any]:
+    meta: dict[str, Any] = {}
+    if tool_name in {"memory_validate", "memory_insert"}:
+        meta.update(CONVERSATION_JSON_TOOL_META)
+    auth_mode = str(config.api.auth) if config is not None else None
+    meta["ai-memory-hub/auth"] = _tool_policy(tool_name).auth_meta(auth_mode=auth_mode)
+    return meta
+
+
+def _validate_tool_registration(handlers: dict[str, ToolFn]) -> None:
+    handler_names = set(handlers)
+    missing_descriptions = handler_names - set(TOOL_DESCRIPTIONS)
+    missing_policies = handler_names - set(MCP_TOOL_POLICIES)
+    if missing_descriptions or missing_policies:
+        problems: list[str] = []
+        if missing_descriptions:
+            problems.append(f"descriptions missing for {sorted(missing_descriptions)}")
+        if missing_policies:
+            problems.append(f"policies missing for {sorted(missing_policies)}")
+        raise ValueError("MCP tool registration is incomplete: " + "; ".join(problems))
 
 
 def _envelope(
@@ -173,6 +331,26 @@ def _with_envelope_defaults(data: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
+def _insufficient_scope_error(
+    scope: str, *, auth_mode: str = "unknown", granted_scopes: tuple[str, ...] = ()
+) -> dict[str, Any]:
+    return _envelope(
+        status="error",
+        error_code="insufficient_scope",
+        error_message=(
+            f"{scope} scope is required for this MCP tool. "
+            f"{MCP_CLIENT_APPROVAL_HINT} {AUTH_RECONNECT_HINT}"
+        ),
+        required_scope=scope,
+        required_scopes=[scope],
+        granted_scopes=sorted(granted_scopes),
+        auth_mode=auth_mode,
+        auth_config_path=AUTH_CONFIG_PATH,
+        auth_config_hint=AUTH_RECONNECT_HINT,
+        approval_hint=MCP_CLIENT_APPROVAL_HINT,
+    )
+
+
 async def _emit_mcp_tool_log(
     ctx: FastMCPContext | None,
     *,
@@ -216,6 +394,26 @@ async def _emit_mcp_tool_log(
         )
     except Exception:
         logger.debug("MCP client log notification failed", exc_info=True)
+
+
+async def _mcp_permission_denied_response(
+    ctx: FastMCPContext | None, *, tool_name: str, exc: Exception
+) -> dict[str, Any]:
+    await _emit_mcp_tool_log(
+        ctx,
+        tool_name=tool_name,
+        status="error",
+        error_code="permission_denied",
+    )
+    return _envelope(
+        status="error",
+        error_code="permission_denied",
+        error_message=str(exc),
+    )
+
+
+def _is_permission_denied_exception(exc: Exception) -> bool:
+    return isinstance(exc, PermissionError) or str(exc) == "project access denied"
 
 
 def _log_mcp_tool_failure(
@@ -266,6 +464,11 @@ def _instrument_mcp_tool(tool_name: str, tool_fn: ToolFn) -> ToolFn:
         started = time.perf_counter()
         status = "error"
         error_code = "unhandled_exception"
+        ctx = kwargs.get("ctx")
+        audit_token = set_audit_context(
+            source_surface="mcp",
+            request_id=_mcp_tool_call_id(ctx) if ctx is not None else None,
+        )
         with start_observability_span(
             f"mcp.{tool_name}",
             attributes={
@@ -301,6 +504,7 @@ def _instrument_mcp_tool(tool_name: str, tool_fn: ToolFn) -> ToolFn:
                     tool=tool_name,
                     status=status,
                 )
+                reset_audit_context(audit_token)
 
     return wrapped
 
@@ -435,6 +639,30 @@ def _validate_result_mode(result_mode: str) -> str:
     if result_mode not in result_mode_values():
         raise ValueError(result_mode_error_message())
     return result_mode
+
+
+def _validate_response_format(response_format: Any) -> str:
+    value = unwrap_array(response_format)
+    if value is None:
+        return MCPResponseFormat.CONCISE.value
+    normalized = str(value)
+    if normalized not in response_format_values():
+        raise ValueError(response_format_error_message())
+    return normalized
+
+
+def _validate_optional_limit(limit: Any, *, field_name: str = "limit") -> int | None:
+    value = unwrap_array(limit)
+    if value is None:
+        return None
+    if isinstance(value, str):
+        try:
+            value = int(value)
+        except ValueError as exc:
+            raise ValueError(f"{field_name} must be an integer") from exc
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1 or value > 100:
+        raise ValueError(f"{field_name} must be an integer between 1 and 100")
+    return value
 
 
 def _ingest_value_error_code(message: str) -> str:
@@ -632,11 +860,10 @@ def build_tool_handlers(
         auth = current_auth_context()
         if auth is None or scope in auth.scopes:
             return None
-        return _envelope(
-            status="error",
-            error_code="insufficient_scope",
-            error_message=f"{scope} scope is required for this MCP tool",
-            required_scope=scope,
+        return _insufficient_scope_error(
+            scope,
+            auth_mode=auth.auth_mode,
+            granted_scopes=tuple(auth.scopes),
         )
 
     async def memory_validate(
@@ -785,7 +1012,15 @@ def build_tool_handlers(
                 error_code=error_code,
                 error_message=error_message,
             )
+        except PermissionError as exc:
+            return await _mcp_permission_denied_response(
+                ctx, tool_name="memory_insert", exc=exc
+            )
         except Exception as exc:
+            if _is_permission_denied_exception(exc):
+                return await _mcp_permission_denied_response(
+                    ctx, tool_name="memory_insert", exc=exc
+                )
             _log_mcp_tool_failure(
                 operation="memory_insert",
                 error_code="insert_failed",
@@ -823,6 +1058,7 @@ def build_tool_handlers(
         date_to: str | None = None,
         tags: list[str] | None = None,
         result_mode: str = SearchResultMode.CHUNKS.value,
+        response_format: ResponseFormatArg = MCPResponseFormat.CONCISE.value,
         project_id: str | None = None,
         memory_status: str = "active",
         thread_id: str | None = None,
@@ -850,6 +1086,7 @@ def build_tool_handlers(
             )
         try:
             result_mode = _validate_result_mode(str(result_mode))
+            response_format = _validate_response_format(response_format)
         except ValueError as exc:
             return _envelope(
                 status="error",
@@ -886,15 +1123,23 @@ def build_tool_handlers(
                     error_message=str(exc),
                 )
             result["results"] = paged_rows
-            result["results"] = redact_content_hashes(result["results"])
             result["cursor"] = next_cursor
+            result = format_search_response(result, response_format)
         except ValueError as exc:
             return _envelope(
                 status="error",
                 error_code="invalid_input",
                 error_message=str(exc),
             )
+        except PermissionError as exc:
+            return await _mcp_permission_denied_response(
+                ctx, tool_name="memory_search", exc=exc
+            )
         except Exception as exc:
+            if _is_permission_denied_exception(exc):
+                return await _mcp_permission_denied_response(
+                    ctx, tool_name="memory_search", exc=exc
+                )
             _log_mcp_tool_failure(
                 operation="memory_search",
                 error_code="search_failed",
@@ -934,16 +1179,14 @@ def build_tool_handlers(
                 project_id=project_id,
                 memory_status=unwrap_array(memory_status) or "active",
             )
+        except PermissionError as exc:
+            return await _mcp_permission_denied_response(
+                ctx, tool_name="memory_retrieve", exc=exc
+            )
         except ValueError as exc:
             return _envelope(
                 status="error",
                 error_code="invalid_input",
-                error_message=str(exc),
-            )
-        except PermissionError as exc:
-            return _envelope(
-                status="error",
-                error_code="permission_denied",
                 error_message=str(exc),
             )
 
@@ -961,6 +1204,7 @@ def build_tool_handlers(
         top_k: int = 5,
         max_context_tokens: int | None = None,
         result_mode: str = SearchResultMode.CHUNKS.value,
+        response_format: ResponseFormatArg = MCPResponseFormat.CONCISE.value,
         source: str | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
@@ -1020,6 +1264,7 @@ def build_tool_handlers(
                 )
         try:
             result_mode = _validate_result_mode(str(result_mode))
+            response_format = _validate_response_format(response_format)
         except ValueError as exc:
             return _envelope(
                 status="error",
@@ -1048,7 +1293,15 @@ def build_tool_handlers(
                 error_code="invalid_input",
                 error_message=str(exc),
             )
+        except PermissionError as exc:
+            return await _mcp_permission_denied_response(
+                ctx, tool_name="memory_ask", exc=exc
+            )
         except Exception as exc:
+            if _is_permission_denied_exception(exc):
+                return await _mcp_permission_denied_response(
+                    ctx, tool_name="memory_ask", exc=exc
+                )
             _log_mcp_tool_failure(
                 operation="memory_ask",
                 error_code="ask_failed",
@@ -1066,7 +1319,7 @@ def build_tool_handlers(
                 error_code="ask_failed",
                 error_message=redact_secrets(str(exc)),
             )
-        return _with_envelope_defaults(result)
+        return _with_envelope_defaults(format_ask_response(result, response_format))
 
     async def memory_fact_search(
         subject: str | None = None,
@@ -1082,9 +1335,20 @@ def build_tool_handlers(
         save_intent_source: str | None = None,
         freshness_from: str | None = None,
         freshness_to: str | None = None,
+        limit: FactLimitArg = None,
         project_id: str | None = None,
+        response_format: ResponseFormatArg = MCPResponseFormat.CONCISE.value,
         ctx: FastMCPContext | None = None,
     ) -> dict[str, Any]:
+        try:
+            response_format = _validate_response_format(response_format)
+            limit = _validate_optional_limit(limit)
+        except ValueError as exc:
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message=str(exc),
+            )
         try:
             result = await agent.fact_search(
                 subject=unwrap_array(subject),
@@ -1103,13 +1367,25 @@ def build_tool_handlers(
                 freshness_from=unwrap_array(freshness_from),
                 freshness_to=unwrap_array(freshness_to),
             )
+        except PermissionError as exc:
+            return await _mcp_permission_denied_response(
+                ctx, tool_name="memory_fact_search", exc=exc
+            )
         except ValueError as exc:
             return _envelope(
                 status="error",
                 error_code="invalid_input",
                 error_message=str(exc),
             )
-        return _with_envelope_defaults(result)
+        except Exception as exc:
+            if _is_permission_denied_exception(exc):
+                return await _mcp_permission_denied_response(
+                    ctx, tool_name="memory_fact_search", exc=exc
+                )
+            raise
+        return _with_envelope_defaults(
+            format_fact_search_response(result, response_format, limit=limit)
+        )
 
     async def memory_profile_get(
         subject: str = "user",
@@ -1124,9 +1400,20 @@ def build_tool_handlers(
         save_intent_source: str | None = None,
         freshness_from: str | None = None,
         freshness_to: str | None = None,
+        limit: FactLimitArg = None,
         project_id: str | None = None,
+        response_format: ResponseFormatArg = MCPResponseFormat.CONCISE.value,
         ctx: FastMCPContext | None = None,
     ) -> dict[str, Any]:
+        try:
+            response_format = _validate_response_format(response_format)
+            limit = _validate_optional_limit(limit)
+        except ValueError as exc:
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message=str(exc),
+            )
         try:
             result = await agent.profile_get(
                 subject=str(unwrap_array(subject) or "user"),
@@ -1144,13 +1431,25 @@ def build_tool_handlers(
                 freshness_from=unwrap_array(freshness_from),
                 freshness_to=unwrap_array(freshness_to),
             )
+        except PermissionError as exc:
+            return await _mcp_permission_denied_response(
+                ctx, tool_name="memory_profile_get", exc=exc
+            )
         except ValueError as exc:
             return _envelope(
                 status="error",
                 error_code="invalid_input",
                 error_message=str(exc),
             )
-        return _with_envelope_defaults(result)
+        except Exception as exc:
+            if _is_permission_denied_exception(exc):
+                return await _mcp_permission_denied_response(
+                    ctx, tool_name="memory_profile_get", exc=exc
+                )
+            raise
+        return _with_envelope_defaults(
+            format_profile_response(result, response_format, limit=limit)
+        )
 
     async def memory_fact_supersede(
         fact_id: str,
@@ -1179,12 +1478,29 @@ def build_tool_handlers(
                 error_code="invalid_input",
                 error_message="superseded_by must be a non-empty string",
             )
-        result = await agent.fact_supersede(
-            fact_id=fact_id,
-            superseded_by=superseded_by,
-            owner_id=owner_id(),
-            project_id=project_id,
-        )
+        try:
+            result = await agent.fact_supersede(
+                fact_id=fact_id,
+                superseded_by=superseded_by,
+                owner_id=owner_id(),
+                project_id=project_id,
+            )
+        except PermissionError as exc:
+            return await _mcp_permission_denied_response(
+                ctx, tool_name="memory_fact_supersede", exc=exc
+            )
+        except ValueError as exc:
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message=str(exc),
+            )
+        except Exception as exc:
+            if _is_permission_denied_exception(exc):
+                return await _mcp_permission_denied_response(
+                    ctx, tool_name="memory_fact_supersede", exc=exc
+                )
+            raise
         return _with_envelope_defaults(result)
 
     async def memory_pending_approve(
@@ -1205,9 +1521,26 @@ def build_tool_handlers(
                 error_code="invalid_input",
                 error_message="id must be a non-empty string",
             )
-        result = await agent.approve_pending_memory(
-            id, owner_id=owner_id(), project_id=project_id
-        )
+        try:
+            result = await agent.approve_pending_memory(
+                id, owner_id=owner_id(), project_id=project_id
+            )
+        except PermissionError as exc:
+            return await _mcp_permission_denied_response(
+                ctx, tool_name="memory_pending_approve", exc=exc
+            )
+        except ValueError as exc:
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message=str(exc),
+            )
+        except Exception as exc:
+            if _is_permission_denied_exception(exc):
+                return await _mcp_permission_denied_response(
+                    ctx, tool_name="memory_pending_approve", exc=exc
+                )
+            raise
         return _with_envelope_defaults(result)
 
     async def memory_pending_reject(
@@ -1228,9 +1561,26 @@ def build_tool_handlers(
                 error_code="invalid_input",
                 error_message="id must be a non-empty string",
             )
-        result = await agent.reject_pending_memory(
-            id, owner_id=owner_id(), project_id=project_id
-        )
+        try:
+            result = await agent.reject_pending_memory(
+                id, owner_id=owner_id(), project_id=project_id
+            )
+        except PermissionError as exc:
+            return await _mcp_permission_denied_response(
+                ctx, tool_name="memory_pending_reject", exc=exc
+            )
+        except ValueError as exc:
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message=str(exc),
+            )
+        except Exception as exc:
+            if _is_permission_denied_exception(exc):
+                return await _mcp_permission_denied_response(
+                    ctx, tool_name="memory_pending_reject", exc=exc
+                )
+            raise
         return _with_envelope_defaults(result)
 
     async def memory_project_list(ctx: FastMCPContext | None = None) -> dict[str, Any]:
@@ -1255,10 +1605,8 @@ def build_tool_handlers(
         try:
             result = await agent.project_get(project_id, owner_id=owner_id())
         except PermissionError as exc:
-            return _envelope(
-                status="error",
-                error_code="permission_denied",
-                error_message=str(exc),
+            return await _mcp_permission_denied_response(
+                ctx, tool_name="memory_project_get", exc=exc
             )
         except ValueError as exc:
             return _envelope(
@@ -1266,6 +1614,12 @@ def build_tool_handlers(
                 error_code="invalid_input",
                 error_message=str(exc),
             )
+        except Exception as exc:
+            if _is_permission_denied_exception(exc):
+                return await _mcp_permission_denied_response(
+                    ctx, tool_name="memory_project_get", exc=exc
+                )
+            raise
         return _with_envelope_defaults(result)
 
     handlers: dict[str, ToolFn] = {
@@ -1301,16 +1655,16 @@ def create_mcp_server(*, config: HubConfig, agent: BaseIngestionAgent):
         list_page_size=config.mcp.list_page_size,
     )
     handlers = build_tool_handlers(agent, config=config)
+    _validate_tool_registration(handlers)
 
     for tool_name, tool_fn in handlers.items():
-        meta = (
-            CONVERSATION_JSON_TOOL_META
-            if tool_name in {"memory_validate", "memory_insert"}
-            else None
-        )
-        mcp.tool(name=tool_name, description=TOOL_DESCRIPTIONS[tool_name], meta=meta)(
-            tool_fn
-        )
+        tool_policy = _tool_policy(tool_name)
+        mcp.tool(
+            name=tool_name,
+            description=TOOL_DESCRIPTIONS[tool_name],
+            annotations=tool_policy.annotations(),
+            meta=_tool_meta(tool_name, config=config),
+        )(tool_fn)
     _register_resources(mcp, agent)
     _register_prompts(mcp)
 

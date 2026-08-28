@@ -12,6 +12,7 @@ def test_sqlite_reports_advanced_memory_capabilities(tmp_path) -> None:
     assert capabilities.supports_decay_fields is True
     assert capabilities.supports_shared_scopes is True
     assert capabilities.supports_plugin_metadata is True
+    assert capabilities.supports_audit_events is True
 
 
 def test_postgres_capabilities_include_advanced_memory_flags() -> None:
@@ -21,6 +22,7 @@ def test_postgres_capabilities_include_advanced_memory_flags() -> None:
     assert capabilities.supports_decay_fields is True
     assert capabilities.supports_shared_scopes is True
     assert capabilities.supports_plugin_metadata is True
+    assert capabilities.supports_audit_events is True
 
 
 def test_mongodb_capabilities_stay_conservative_for_unimplemented_advanced_storage() -> None:
@@ -30,3 +32,4 @@ def test_mongodb_capabilities_stay_conservative_for_unimplemented_advanced_stora
     assert capabilities.supports_decay_fields is False
     assert capabilities.supports_shared_scopes is True
     assert capabilities.supports_plugin_metadata is False
+    assert capabilities.supports_audit_events is True

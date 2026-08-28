@@ -559,11 +559,20 @@ def _tool_input(tool_name: str, context: Any | None = None) -> dict[str, Any]:
     if tool_name in {"memory_validate", "memory_insert"}:
         return {"conversation_json": conversation}
     if tool_name == "memory_search":
-        return {"query": SMOKE_MARKER, "top_k": 5, "result_mode": "compact"}
+        return {
+            "query": SMOKE_MARKER,
+            "top_k": 5,
+            "result_mode": "compact",
+            "response_format": "concise",
+        }
     if tool_name == "memory_retrieve":
         return {"id": _extract_memory_id(context) or "use-search-result-id"}
     if tool_name == "memory_ask":
-        return {"question": f"What was the conversation about: {SMOKE_MARKER}?", "top_k": 5}
+        return {
+            "question": f"What was the conversation about: {SMOKE_MARKER}?",
+            "top_k": 5,
+            "response_format": "concise",
+        }
     return {}
 
 

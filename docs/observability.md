@@ -14,8 +14,8 @@ default.
 | Health | `/health`, `/ready`, CLI health, and `memory://health` surfaces. |
 | Runtime summary | `/observability` returns redacted runtime and telemetry configuration. |
 | Tracing | Optional OpenTelemetry setup with FastAPI, HTTP client, requests, and psycopg instrumentation. |
-| Metrics | API/MCP outcome and latency metrics, health metrics, provider failure counts, vector row gauges, and fallback state. |
-| Local stack | `examples/local-stack` compose profile with OpenTelemetry Collector, Jaeger, Prometheus, and Grafana-compatible metric flow. |
+| Metrics | API/MCP outcome and latency metrics, health metrics, provider failure counts, vector row gauges, fallback state, and local-stack Postgres exporter metrics. |
+| Local stack | `examples/local-stack` compose profile with OpenTelemetry Collector, Jaeger, Prometheus, Postgres exporter, and a provisioned Grafana dashboard. |
 
 ## Privacy Rules
 
@@ -70,8 +70,41 @@ docker compose -f examples/local-stack/compose.yaml up --build
 ```
 
 The example starts ai-memory-hub with OTLP export, an OpenTelemetry Collector,
-Jaeger for traces, and Prometheus for metric scraping. Keep it as a development
-tool, not a production observability opinion.
+Jaeger for traces, Prometheus for metric scraping, a Postgres exporter for
+database telemetry, and Grafana with preloaded hub dashboards. Keep it as a
+development tool, not a production observability opinion.
+
+Useful local telemetry endpoints:
+
+```text
+http://127.0.0.1:8000/observability
+http://127.0.0.1:9187/metrics
+http://127.0.0.1:16686
+http://127.0.0.1:9090
+http://127.0.0.1:3000
+```
+
+Useful PromQL starters:
+
+```promql
+sum by (route, status_code) (rate(memory_api_requests_total[5m]))
+sum by (tool, status, error_code) (rate(memory_mcp_tool_calls_total[5m]))
+sum by (status, deduplicated) (rate(memory_insert_total[5m]))
+rate(pg_stat_database_xact_commit{datname="memory"}[5m])
+rate(pg_stat_database_xact_rollback{datname="memory"}[5m])
+rate(pg_stat_database_blks_read{datname="memory"}[5m])
+rate(pg_stat_database_blks_hit{datname="memory"}[5m])
+rate(pg_stat_database_tup_inserted{datname="memory"}[5m])
+rate(pg_stat_database_tup_updated{datname="memory"}[5m])
+rate(pg_stat_database_tup_deleted{datname="memory"}[5m])
+pg_stat_database_numbackends{datname="memory"}
+```
+
+Grafana opens with the `ai-memory-hub Local Overview` dashboard provisioned
+from `examples/local-stack/grafana/dashboards`. It includes hub HTTP and MCP
+request rates, insert rates, p95 latencies, ingestion/embedding/vector timings,
+provider fallback signals, Postgres transactions, block reads/cache hits, row
+writes, and active connections.
 
 ## Health And Readiness
 

@@ -163,8 +163,8 @@ authorization attempts still disappear quickly.
 
 The token endpoint returns hub access tokens plus rotating refresh tokens.
 Refresh-token reuse revokes the whole refresh-token family and every linked hub
-access token. `/oauth/revoke` accepts either a refresh token, which revokes that
-family, or a hub access token, which revokes that token's stored `jti`.
+access token. `/oauth/revoke` accepts either a refresh token or a hub access
+token and revokes the matching refresh-token family plus linked access tokens.
 
 Run the built-in local authorization server as a single hub process. Startup
 fails when `api.auth: oauth_resource_server` is paired with common multi-worker
@@ -275,6 +275,11 @@ register the matching Google redirect URI:
 ```text {.amh-copy-block}
 https://YOUR-NGROK-DOMAIN.ngrok-free.app/auth/google/callback
 ```
+
+After startup, `/connect` should display the active public MCP URL, not
+`YOUR-NGROK-DOMAIN`. If the placeholder is still visible, the hub will advertise
+the wrong OAuth metadata to clients and Google token exchange can fail because
+the callback URL no longer matches the OAuth client.
 
 Restart behavior:
 

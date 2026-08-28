@@ -60,6 +60,8 @@ nav:
       - Real-Client MCP Smoke Plan: docs/real_client_mcp_smoke_plan.md
       - OpenClaw Native MCP Setup: docs/openclaw_native_mcp_setup.md
       - MCP Utility Compliance Plan: docs/mcp_utility_compliance_plan.md
+      - MCP Response Format Plan: docs/improvements/mcp_response_format_plan.md
+      - Agent Model Footprint Plan: docs/improvements/agent_model_footprint_plan.md
       - MCP Authorization Compliance Plan: docs/bearer_api_key_auth_plan.md
   - Implementation Plans:
       - Documentation Map: docs/plans.md
@@ -85,6 +87,8 @@ nav:
       - Improvement Plans: docs/improvements.md
       - Client Feedback Improvement Plan: docs/improvements/client_feedback_improvement_plan.md
       - Top Priority MCP Result Shape: docs/improvements/top_priority_mcp_result_shape.md
+      - MCP Response Format Plan: docs/improvements/mcp_response_format_plan.md
+      - Agent Model Footprint Plan: docs/improvements/agent_model_footprint_plan.md
       - Handoff Memory Plan: docs/improvements/handoff_memory_plan.md
       - Retrieval Precision Plan: docs/improvements/retrieval_precision_plan.md
       - Context Building Plan: docs/improvements/context_building_plan.md
@@ -93,6 +97,8 @@ nav:
       - Edge Case Test Coverage Plan: docs/improvements/edge_case_test_coverage_plan.md
       - Explicit Memory Save Intent Plan: docs/improvements/explicit_memory_save_intent_plan.md
       - Google OAuth Connect UI Plan: docs/improvements/google_oauth_connect_ui_plan.md
+      - P0 Beta Governance Checklist: docs/improvements/p0_beta_governance_checklist.md
+      - P1 SQL Hardening Plan: docs/improvements/p1_sql_hardening_plan.md
       - Vector Database Options: docs/improvements/vector_dbs.md
       - Neo4j Aura Graph Memory Plan: docs/improvements/neo4j_aura_graph_memory_plan.md
       - App-Level Memory Encryption Plan: docs/improvements/app_level_encryption_plan.md

@@ -18,10 +18,14 @@ Related docs:
 Implemented and verified in the codebase:
 
 - Schema-first ingestion through HTTP `POST /memory/insert` and MCP `memory_insert`.
-- MCP validation/search/retrieve/ask tools, plus conversation, search, timeline, health resources and prompts.
+- MCP validation/search/retrieve/ask tools, fact/profile/review/project helper
+  tools, plus conversation, search, timeline, health resources and prompts.
 - MCP client smoke profiles for Codex, Gemini, VS Code Copilot, and opencode over the streamable HTTP transport.
 - Omitted-ID insertion: normalization assigns a UUID when clients omit `id`.
 - Deterministic ingestion with message hashes, conversation hashes, duplicate detection, same-thread append handling, append-only chunking, and indexing state updates.
+- Sensitive-content quarantine for likely secrets and high-confidence sensitive
+  PII, stored as `memory_status: quarantined` and excluded from default recall
+  until explicit review approval.
 - Message-level chunking by default, plus opt-in token-window chunking for long messages.
 - Embedding providers: HTTP endpoint and local deterministic embeddings.
 - Multilingual retrieval is supported when the configured embedding model
@@ -35,6 +39,13 @@ Implemented and verified in the codebase:
 - `memory_ask` returns structured `results`, human-readable `answer`, and `citations`.
 - Token-budgeted `memory_ask` is available through config or per-request `max_context_tokens`, with optional diagnostics.
 - Basic deterministic topic enrichment from message text.
+
+Memory history is append-only for `v0.1.0-beta`. General destructive memory
+update/delete endpoints and MCP tools do not ship in the beta. Corrections are
+represented as new memories, fact supersession, or governance/review events.
+Archive/restore remains a near-term retention and storage-optimization feature;
+when it ships, it should be implemented as a visibility state over preserved
+history rather than as history deletion.
 
 Planned or partial:
 
@@ -67,11 +78,13 @@ Steps:
 4. Generate message and conversation hashes.
 5. Validate against `memory/schema/conversation.schema.json`.
 6. Enrich metadata topics with deterministic keyword rules.
-7. Detect exact duplicates and trusted same-thread appends.
-8. Store metadata and child message/chunk records.
-9. Embed only the chunks that need indexing.
-10. Store vectors and mark chunk indexing state.
-11. Return deterministic outcome fields, including `deduplicated`, `appended_messages`, and `embedded_chunks`.
+7. Quarantine likely secrets and high-confidence sensitive PII before chunks,
+   vectors, facts, or graph records are written.
+8. Detect exact duplicates and trusted same-thread appends.
+9. Store metadata and child message/chunk records.
+10. Embed only the chunks that need indexing.
+11. Store vectors and mark chunk indexing state.
+12. Return deterministic outcome fields, including `deduplicated`, `appended_messages`, and `embedded_chunks`.
 
 ## Normalization Layer
 
@@ -123,6 +136,21 @@ HTTP API:
 - `POST /memory/search`
 - `POST /memory/retrieve`
 - `POST /memory/ask`
+- `POST /memory/facts/search`
+- `POST /memory/profile/get`
+- `POST /memory/facts/supersede`
+- `POST /memory/pending/approve`
+- `POST /memory/pending/reject`
+- `GET /memory/projects`
+- `GET /memory/projects/default`
+- `GET /memory/projects/{project_id}`
+- `GET /health`
+- `GET /ready`
+- `GET /observability`
+- `GET /.well-known/oauth-protected-resource`
+- `GET /.well-known/oauth-protected-resource/mcp`
+- `GET /.well-known/oauth-authorization-server`
+- Connect UI and local OAuth routes under `/connect`, `/auth/*`, and `/oauth/*`
 
 MCP tools:
 
@@ -131,6 +159,14 @@ MCP tools:
 - `memory_search`
 - `memory_retrieve`
 - `memory_ask`
+- `memory_fact_search`
+- `memory_profile_get`
+- `memory_fact_supersede`
+- `memory_pending_approve`
+- `memory_pending_reject`
+- `memory_project_list`
+- `memory_project_default_get`
+- `memory_project_get`
 
 MCP resources:
 

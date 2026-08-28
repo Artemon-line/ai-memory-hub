@@ -121,10 +121,10 @@ requires-dist = [
     { name = "pinecone", marker = "extra == 'pinecone'", specifier = ">=7.0.0" },
     { name = "psycopg", extras = ["binary"], marker = "extra == 'postgres'", specifier = ">=3.3.4" },
     { name = "pydantic", specifier = ">=2.13.4" },
-    { name = "pymilvus", marker = "extra == 'milvus'", specifier = ">=2.5.0" },
+    { name = "pymilvus", marker = "extra == 'milvus'", specifier = ">=3.0.1" },
     { name = "pymongo", marker = "extra == 'mongodb'", specifier = ">=4.10.1" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
-    { name = "python-multipart", marker = "extra == 'oauth'", specifier = ">=0.0.31" },
+    { name = "python-multipart", marker = "extra == 'oauth'", specifier = ">=0.0.32" },
     { name = "pyvespa", marker = "extra == 'vespa'", specifier = ">=0.50.0" },
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "qdrant-client", marker = "extra == 'qdrant'", specifier = ">=1.19.0" },
@@ -134,7 +134,7 @@ requires-dist = [
     { name = "turbopuffer", marker = "extra == 'turbopuffer'", specifier = ">=2.8.0" },
     { name = "typesense", marker = "extra == 'typesense'", specifier = ">=0.21.0" },
     { name = "uvicorn", specifier = ">=0.52.1" },
-    { name = "weaviate-client", marker = "extra == 'weaviate'", specifier = ">=4.9.0" },
+    { name = "weaviate-client", marker = "extra == 'weaviate'", specifier = ">=4.23.0" },
 ]
 provides-extras = ["elasticsearch", "milvus", "mongodb", "opensearch", "observability", "oauth", "postgres", "pinecone", "qdrant", "redis", "tokenizer", "turbopuffer", "vespa", "typesense", "weaviate"]
 
@@ -2216,7 +2216,7 @@ wheels = [
 
 [[package]]
 name = "pymilvus"
-version = "3.0.0"
+version = "3.0.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cachetools" },
@@ -2226,10 +2226,10 @@ dependencies = [
     { name = "protobuf" },
     { name = "python-dotenv" },
     { name = "requests" },
-    { name = "setuptools" },
 ]
+sdist = { url = "https://files.pythonhosted.org/packages/c0/78/6bd0dba340706bc63346af96f0ebe36ff17f75404f5de935fda94d476c98/pymilvus-3.0.1.tar.gz", hash = "sha256:c02389059088b18d6e598cd175541e445c772fab4926c5e527c4913be34887f1", size = 347593, upload-time = "2026-07-29T14:55:43.061Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ac/c1/01647e61f3a82fd881382746b6dde3401d65b88cd4f75bd059901fb2392b/pymilvus-3.0.0-1-py3-none-any.whl", hash = "sha256:57c8e7c87fbbf579f122b4df893949bc78e50bca2988527864891bd544817b05", size = 344817, upload-time = "2026-05-07T14:57:45.235Z" },
+    { url = "https://files.pythonhosted.org/packages/60/9d/7011887b29f452905745e8bd321f404068d5bfe78fe84e42c0b7cd81a065/pymilvus-3.0.1-py3-none-any.whl", hash = "sha256:c5a8d5c1fa1de7b416e3529d383d8cc2e7da2170433ffa4a2d9087e14f70171a", size = 386820, upload-time = "2026-07-29T14:55:44.279Z" },
 ]
 
 [[package]]
@@ -2336,11 +2336,11 @@ wheels = [
 
 [[package]]
 name = "python-multipart"
-version = "0.0.31"
+version = "0.0.32"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/64/7e/9b35ad8f3d9ca680f7c87a88f19612fdd8da9796c4d3b46e560ac79dcc4a/python_multipart-0.0.31.tar.gz", hash = "sha256:fc631183bb13e56db3158a4909908dfb2e23565286744e798241e63750e5d680", size = 46689, upload-time = "2026-06-04T08:27:49.014Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5b/42/55c32bb9b12693c092ad250a0e82edb5b31ddeda6eb772de5f308b3804ad/python_multipart-0.0.32.tar.gz", hash = "sha256:be54b7f3fa167bb83e4fcd936b887b708f4e57fe75911c02aebf53efaf8d938e", size = 46881, upload-time = "2026-06-04T16:18:58.647Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5e/1e/7f7f299527a5a8ad90acd5f2f78dfa6c8495c6301a3205106ea68a84de96/python_multipart-0.0.31-py3-none-any.whl", hash = "sha256:8408153d68a9773291fc1da39a8b85a50044bddbabd2dd72e9229776b7b15e28", size = 29996, upload-time = "2026-06-04T08:27:47.804Z" },
+    { url = "https://files.pythonhosted.org/packages/e1/04/e8135ebd1ad02c56ec633277529b2602ff99ff634be76cdba5744cf554fd/python_multipart-0.0.32-py3-none-any.whl", hash = "sha256:ff6d3f776f16878c894e52e107296ffc890e913c611b1a4ec6c44e2821fe2e23", size = 30042, upload-time = "2026-06-04T16:18:57.319Z" },
 ]
 
 [[package]]
@@ -2898,7 +2898,7 @@ wheels = [
 
 [[package]]
 name = "weaviate-client"
-version = "4.22.0"
+version = "4.23.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "authlib" },
@@ -2909,9 +2909,9 @@ dependencies = [
     { name = "pydantic" },
     { name = "validators" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/34/2a/73cf7d6c7c6aa638738dfcb0d318e0404aab3c0673f82a1a4d89455b21a5/weaviate_client-4.22.0.tar.gz", hash = "sha256:0c50fbef546a522262a87d1138cde0509c7a8a48e702e967be33472e9f7fbae3", size = 860126, upload-time = "2026-06-18T06:08:30.202Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/20/9f/8bfe42e3c0693afa321fb712c0a1f1ff2b886059db33543120f6953dde8e/weaviate_client-4.23.0.tar.gz", hash = "sha256:19cc336b4c9e58f06cf01cb9aff8f6d8c0fe747f2e80192a9871c63823e8b18d", size = 873028, upload-time = "2026-08-13T14:23:08.112Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e1/a3/27353ea3fbf9e7d4f03375176a838c632d009f5167d801adcbb5f6d3bd07/weaviate_client-4.22.0-py3-none-any.whl", hash = "sha256:ff2dbc8d1fc25739942402c22d1aba2350a16ba4a6b6ed0ba140689c70adf1d9", size = 652691, upload-time = "2026-06-18T06:08:28.622Z" },
+    { url = "https://files.pythonhosted.org/packages/15/aa/8cafeb1c09901e8d220b00b771ffea35e5ea51db7d384dc85eff6cf667dc/weaviate_client-4.23.0-py3-none-any.whl", hash = "sha256:f17c645d22e1787e8fa4640e20fcfccdee39c81327af410c544a24c21d419e59", size = 656174, upload-time = "2026-08-13T14:23:06.583Z" },
 ]
 
 [[package]]

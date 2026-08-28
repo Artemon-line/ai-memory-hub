@@ -10,6 +10,11 @@ import time
 from fastapi.testclient import TestClient
 
 from memory.api.server import create_app
+from memory.auth import (
+    AUTH_ERROR_CODE_HEADER,
+    AUTH_MISSING_SCOPES_HEADER,
+    AUTH_REQUIRED_SCOPES_HEADER,
+)
 from memory.backend.metadata_store import (
     PROJECT_ROLE_READER,
     PROJECT_ROLE_WRITER,
@@ -237,6 +242,18 @@ def _mcp_result_payload(response_text: str) -> dict[str, object]:
     raise AssertionError(f"No MCP result payload found in response: {response_text}")
 
 
+def _mcp_event_result(response_text: str) -> dict[str, object]:
+    for line in response_text.splitlines():
+        if not line.startswith("data: "):
+            continue
+        payload = json.loads(line.removeprefix("data: "))
+        if "result" in payload:
+            result = payload["result"]
+            assert isinstance(result, dict)
+            return result
+    raise AssertionError(f"No MCP event result found in response: {response_text}")
+
+
 def _base64url_json(payload: dict[str, object]) -> str:
     raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
     return _base64url(raw)
@@ -308,6 +325,58 @@ def test_bearer_auth_enforces_stored_token_scopes(tmp_path) -> None:
     assert insert.status_code == 403
     assert 'error="insufficient_scope"' in insert.headers["www-authenticate"]
     assert 'scope="memory:write"' in insert.headers["www-authenticate"]
+
+
+def test_bearer_auth_protects_memory_routes_without_credentials(tmp_path) -> None:
+    client, _ = _sqlite_auth_client(tmp_path)
+    requests = [
+        ("GET", "/memory/projects", None),
+        ("GET", "/memory/projects/default", None),
+        ("GET", "/memory/projects/shared-321", None),
+        ("POST", "/memory/insert", _conversation()),
+        ("POST", "/memory/search", {"query": "hello"}),
+        ("POST", "/memory/retrieve", {"id": "11111111-1111-4111-8111-111111111111"}),
+        ("POST", "/memory/ask", {"question": "hello?"}),
+        ("POST", "/memory/facts/search", {"subject": "user"}),
+        ("POST", "/memory/profile/get", {"subject": "user"}),
+        (
+            "POST",
+            "/memory/facts/supersede",
+            {
+                "fact_id": "11111111-1111-4111-8111-111111111111",
+                "superseded_by": "22222222-2222-4222-8222-222222222222",
+            },
+        ),
+        ("POST", "/memory/pending/approve", {"id": "11111111-1111-4111-8111-111111111111"}),
+        ("POST", "/memory/pending/reject", {"id": "11111111-1111-4111-8111-111111111111"}),
+    ]
+
+    for method, path, body in requests:
+        response = client.request(method, path, json=body) if body else client.request(method, path)
+        assert response.status_code == 401, (method, path, response.text)
+        assert 'error="invalid_request"' in response.headers["www-authenticate"]
+
+
+def test_bearer_auth_rejects_expired_and_revoked_tokens(tmp_path) -> None:
+    client, store = _sqlite_auth_client(tmp_path)
+    store.create_auth_token(
+        owner_id="owner-a",
+        token="token-expired",
+        expires_at="2000-01-01T00:00:00Z",
+    )
+    revoked = store.create_auth_token(owner_id="owner-a", token="token-revoked")
+    assert store.revoke_auth_token(str(revoked["token_id"])) is not None
+
+    for token in ("token-expired", "token-revoked"):
+        response = client.post(
+            "/memory/search",
+            json={"query": "hello"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 401
+        assert 'error="invalid_token"' in response.headers["www-authenticate"]
+        assert token not in response.text
+        assert token not in response.headers["www-authenticate"]
 
 
 def test_memory_insert_200() -> None:
@@ -519,6 +588,17 @@ def test_oauth_auth_accepts_valid_token_and_enforces_scopes() -> None:
     challenge = write_response.headers["www-authenticate"]
     assert 'error="insufficient_scope"' in challenge
     assert 'scope="memory:write"' in challenge
+    assert write_response.headers[AUTH_ERROR_CODE_HEADER] == "insufficient_scope"
+    assert write_response.headers[AUTH_REQUIRED_SCOPES_HEADER] == "memory:write"
+    assert write_response.headers[AUTH_MISSING_SCOPES_HEADER] == "memory:write"
+    write_error = write_response.json()
+    assert write_error["detail"] == "Forbidden"
+    assert write_error["error_code"] == "insufficient_scope"
+    assert write_error["required_scopes"] == ["memory:write"]
+    assert write_error["granted_scopes"] == ["memory:read"]
+    assert write_error["missing_scopes"] == ["memory:write"]
+    assert "Client tool approval" in write_error["error_message"]
+    assert "MCP client/server auth configuration" in write_error["auth_config_hint"]
     assert full_response.status_code == 200
 
 
@@ -579,7 +659,7 @@ def test_hub_oauth_token_rejects_stored_owner_mismatch(tmp_path) -> None:
     assert 'error="invalid_token"' in response.headers["www-authenticate"]
 
 
-def test_oauth_auth_protects_mcp_initialize() -> None:
+def test_oauth_auth_protects_mcp_initialize(caplog) -> None:
     initialize_payload = {
         "jsonrpc": "2.0",
         "id": 1,
@@ -591,8 +671,16 @@ def test_oauth_auth_protects_mcp_initialize() -> None:
         },
     }
 
-    with _oauth_client() as client:
+    with _oauth_client() as client, caplog.at_level(logging.INFO):
         missing = client.post("/mcp/", json=initialize_payload)
+        wrong_scope = client.post(
+            "/mcp/",
+            json=initialize_payload,
+            headers={
+                "Accept": "application/json, text/event-stream",
+                "Authorization": f"Bearer {_oauth_token(scope='memory:write')}",
+            },
+        )
         valid = client.post(
             "/mcp/",
             json=initialize_payload,
@@ -606,6 +694,46 @@ def test_oauth_auth_protects_mcp_initialize() -> None:
     assert (
         'resource_metadata="https://memory.example.com/.well-known/oauth-protected-resource/mcp"'
         in missing.headers["www-authenticate"]
+    )
+    assert missing.headers[AUTH_ERROR_CODE_HEADER] == "invalid_request"
+    assert missing.headers[AUTH_REQUIRED_SCOPES_HEADER] == "memory:read"
+    missing_body = missing.json()
+    assert missing_body["detail"] == "Unauthorized"
+    assert missing_body["error_code"] == "invalid_request"
+    assert missing_body["required_scopes"] == ["memory:read"]
+    assert missing_body["auth_mode"] == "oauth_resource_server"
+    assert (
+        missing_body["resource_metadata"]
+        == "https://memory.example.com/.well-known/oauth-protected-resource/mcp"
+    )
+    assert "Authorization: Bearer" in missing_body["error_message"]
+    assert "MCP client/server auth configuration" in missing_body["auth_config_hint"]
+    assert wrong_scope.status_code == 403
+    assert wrong_scope.headers[AUTH_ERROR_CODE_HEADER] == "insufficient_scope"
+    assert wrong_scope.headers[AUTH_REQUIRED_SCOPES_HEADER] == "memory:read"
+    assert wrong_scope.headers[AUTH_MISSING_SCOPES_HEADER] == "memory:read"
+    wrong_scope_body = wrong_scope.json()
+    assert wrong_scope_body["detail"] == "Forbidden"
+    assert wrong_scope_body["error_code"] == "insufficient_scope"
+    assert wrong_scope_body["required_scopes"] == ["memory:read"]
+    assert wrong_scope_body["granted_scopes"] == ["memory:write"]
+    assert wrong_scope_body["missing_scopes"] == ["memory:read"]
+    assert "Client tool approval" in wrong_scope_body["error_message"]
+    auth_error_records = [
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "http_request_error"
+        and getattr(record, "path", None) == "/mcp/"
+    ]
+    assert any(
+        getattr(record, "error_code", None) == "invalid_request"
+        and getattr(record, "required_scopes", None) == "memory:read"
+        for record in auth_error_records
+    )
+    assert any(
+        getattr(record, "error_code", None) == "insufficient_scope"
+        and getattr(record, "missing_scopes", None) == "memory:read"
+        for record in auth_error_records
     )
     assert valid.status_code == 200
     assert valid.headers.get("mcp-session-id")
@@ -641,6 +769,26 @@ def test_oauth_auth_accepts_mcp_tools_list_with_session() -> None:
     assert session_id
     assert tools_list.status_code == 200
     assert "memory_search" in tools_list.text
+    tools = _mcp_event_result(tools_list.text)["tools"]
+    assert isinstance(tools, list)
+    tools_by_name = {
+        tool["name"]: tool for tool in tools if isinstance(tool, dict) and "name" in tool
+    }
+    insert = tools_by_name["memory_insert"]
+    insert_annotations = insert["annotations"]
+    assert insert_annotations["readOnlyHint"] is False
+    assert insert_annotations["destructiveHint"] is False
+    assert insert_annotations["idempotentHint"] is False
+    insert_auth = insert["_meta"]["ai-memory-hub/auth"]
+    assert insert_auth["auth_mode"] == "oauth_resource_server"
+    assert insert_auth["required_scopes"] == ["memory:read", "memory:write"]
+    assert insert_auth["write_scope"] == "memory:write"
+    assert "deduplicated" in insert_auth["retry_behavior"]
+    search = tools_by_name["memory_search"]
+    assert search["annotations"]["readOnlyHint"] is True
+    search_auth = search["_meta"]["ai-memory-hub/auth"]
+    assert search_auth["required_scopes"] == ["memory:read"]
+    assert "write_scope" not in search_auth
 
 
 def test_oauth_mcp_write_tool_requires_write_scope() -> None:
@@ -697,6 +845,16 @@ def test_oauth_mcp_write_tool_requires_write_scope() -> None:
     assert insert_payload["status"] == "error"
     assert insert_payload["error_code"] == "insufficient_scope"
     assert insert_payload["required_scope"] == "memory:write"
+    assert insert_payload["required_scopes"] == ["memory:write"]
+    assert insert_payload["granted_scopes"] == ["memory:read"]
+    assert insert_payload["auth_mode"] == "oauth_resource_server"
+    assert "Client tool approval" in insert_payload["error_message"]
+    assert "MCP auth token" in insert_payload["error_message"]
+    assert (
+        insert_payload["auth_config_path"]
+        == "api.auth / api.oauth.scopes_supported / MCP client Authorization bearer token"
+    )
+    assert "MCP client/server auth configuration" in insert_payload["auth_config_hint"]
     assert read_search.status_code == 200
     assert _mcp_result_payload(read_search.text)["status"] == "ok"
 
@@ -815,6 +973,218 @@ def test_bearer_auth_allows_shared_project_collaboration(tmp_path) -> None:
     assert owner_b_default_search.json()["results"] == []
     assert owner_c_shared_search.status_code == 403
     assert reader_write.status_code == 403
+
+
+def test_bearer_project_denials_cover_http_routes_without_leaking_text(tmp_path) -> None:
+    client, store = _sqlite_auth_client(tmp_path)
+    store.create_auth_token(owner_id="owner-e", token="token-e")
+    store.create_project(
+        project_id="other-999",
+        owner_id="owner-e",
+        name="Other Hidden Project",
+        description="classified project metadata",
+    )
+    phrase = "other project sapphire phrase"
+    hidden_payload = _conversation()
+    hidden_payload["id"] = "22222222-2222-4222-8222-222222222222"
+    hidden_payload["project_id"] = "other-999"
+    hidden_payload["messages"] = [
+        {"role": "user", "text": f"The sealed project phrase is {phrase}."}
+    ]
+    owner_e_headers = {"Authorization": "Bearer token-e"}
+    seed = client.post("/memory/insert", json=hidden_payload, headers=owner_e_headers)
+    assert seed.status_code == 200, seed.text
+    memory_id = seed.json()["id"]
+
+    forbidden = [phrase, "Other Hidden Project", "classified project metadata"]
+    for token in ("token-a", "token-b", "token-c", "token-d"):
+        headers = {"Authorization": f"Bearer {token}"}
+        denied = [
+            client.get("/memory/projects/other-999", headers=headers),
+            client.post(
+                "/memory/search",
+                json={"query": phrase, "project_id": "other-999"},
+                headers=headers,
+            ),
+            client.post(
+                "/memory/ask",
+                json={"question": phrase, "project_id": "other-999"},
+                headers=headers,
+            ),
+            client.post(
+                "/memory/retrieve",
+                json={"id": memory_id, "project_id": "other-999"},
+                headers=headers,
+            ),
+            client.post(
+                "/memory/insert",
+                json={**_conversation(), "project_id": "other-999"},
+                headers=headers,
+            ),
+            client.post(
+                "/memory/facts/search",
+                json={"subject": "user", "project_id": "other-999"},
+                headers=headers,
+            ),
+            client.post(
+                "/memory/profile/get",
+                json={"subject": "user", "project_id": "other-999"},
+                headers=headers,
+            ),
+            client.post(
+                "/memory/facts/supersede",
+                json={
+                    "fact_id": "11111111-1111-4111-8111-111111111111",
+                    "superseded_by": "22222222-2222-4222-8222-222222222222",
+                    "project_id": "other-999",
+                },
+                headers=headers,
+            ),
+        ]
+        for response in denied:
+            assert response.status_code == 403, (token, response.text)
+            for value in forbidden:
+                assert value not in response.text
+
+    owner_a_headers = {"Authorization": "Bearer token-a"}
+    hidden_retrieve = client.post(
+        "/memory/retrieve", json={"id": memory_id}, headers=owner_a_headers
+    )
+    hidden_search = client.post(
+        "/memory/search", json={"query": phrase}, headers=owner_a_headers
+    )
+    hidden_ask = client.post(
+        "/memory/ask", json={"question": phrase}, headers=owner_a_headers
+    )
+
+    assert hidden_retrieve.status_code == 404
+    assert hidden_search.status_code == 200
+    assert hidden_search.json()["results"] == []
+    assert hidden_ask.status_code == 200
+    assert hidden_ask.json()["answer_basis"] == "not_found"
+    for response in (hidden_retrieve, hidden_search, hidden_ask):
+        for value in forbidden:
+            assert value not in response.text
+
+
+def test_bearer_mcp_project_denial_matches_http_without_leaking_text(tmp_path) -> None:
+    client, _ = _sqlite_auth_client(tmp_path)
+    owner_a_headers = {"Authorization": "Bearer token-a"}
+    phrase = "shared project hidden mcp phrase"
+    shared_payload = _conversation()
+    shared_payload["messages"] = [{"role": "user", "text": phrase}]
+    shared_payload["project_id"] = "shared-321"
+    with client:
+        seed = client.post("/memory/insert", json=shared_payload, headers=owner_a_headers)
+        assert seed.status_code == 200, seed.text
+
+        initialize_payload = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": {"name": "pytest", "version": "0.1"},
+            },
+        }
+        base_headers = {
+            "Accept": "application/json, text/event-stream",
+            "Authorization": "Bearer token-c",
+        }
+        initialize = client.post("/mcp/", json=initialize_payload, headers=base_headers)
+        session_id = initialize.headers.get("mcp-session-id")
+        assert initialize.status_code == 200
+        assert session_id
+
+        for request_id, name, arguments in (
+            (
+                2,
+                "memory_search",
+                {"query": phrase, "project_id": "shared-321"},
+            ),
+            (
+                3,
+                "memory_insert",
+                {"conversation_json": _conversation(), "project_id": "shared-321"},
+            ),
+            (
+                4,
+                "memory_retrieve",
+                {"id": seed.json()["id"], "project_id": "shared-321"},
+            ),
+        ):
+            response = client.post(
+                "/mcp/",
+                json={
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "method": "tools/call",
+                    "params": {"name": name, "arguments": arguments},
+                },
+                headers={**base_headers, "Mcp-Session-Id": session_id},
+            )
+            payload = _mcp_result_payload(response.text)
+            assert payload["status"] == "error"
+            assert payload["error_code"] == "permission_denied"
+            assert phrase not in json.dumps(payload)
+
+
+def test_api_memory_operations_record_audit_events_with_request_id(tmp_path) -> None:
+    client, store = _sqlite_auth_client(tmp_path)
+    headers = {"Authorization": "Bearer token-a", "x-request-id": "req-audit-http"}
+    payload = _conversation()
+    payload["messages"] = [
+        {"role": "user", "text": "Audit trail remembers the Europa mission."}
+    ]
+
+    insert = client.post("/memory/insert", json=payload, headers=headers)
+    memory_id = insert.json()["id"]
+    search = client.post(
+        "/memory/search",
+        json={"query": "Europa mission"},
+        headers=headers,
+    )
+    retrieve = client.post(
+        "/memory/retrieve",
+        json={"id": memory_id},
+        headers=headers,
+    )
+
+    assert insert.status_code == 200
+    assert search.status_code == 200
+    assert retrieve.status_code == 200
+    events = store.list_audit_events(actor_id="owner-a", limit=20)
+    event_types = [event["event_type"] for event in events]
+    assert "memory.inserted" in event_types
+    assert "memory.searched" in event_types
+    assert "memory.retrieved" in event_types
+    searched = next(event for event in events if event["event_type"] == "memory.searched")
+    assert searched["request_id"] == "req-audit-http"
+    assert searched["source_surface"] == "http"
+    assert searched["metadata"]["query_hash"].startswith("sha256:")
+    assert "Europa" not in json.dumps(searched["metadata"])
+
+
+def test_api_project_access_denied_records_audit_event(tmp_path) -> None:
+    client, store = _sqlite_auth_client(tmp_path)
+
+    response = client.post(
+        "/memory/search",
+        json={"query": "Velvet Lantern", "project_id": "shared-321"},
+        headers={"Authorization": "Bearer token-c", "x-request-id": "req-denied"},
+    )
+
+    assert response.status_code == 403
+    events = store.list_audit_events(
+        event_type="project.access_denied",
+        actor_id="owner-c",
+    )
+    assert len(events) == 1
+    assert events[0]["project_id"] == "shared-321"
+    assert events[0]["request_id"] == "req-denied"
+    assert events[0]["reason_code"] == "missing_project_role"
+    assert events[0]["metadata"] == {"required_role": PROJECT_ROLE_READER}
 
 
 def test_memory_insert_400_on_invalid_schema() -> None:
