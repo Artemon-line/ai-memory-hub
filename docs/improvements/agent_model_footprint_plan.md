@@ -2,9 +2,12 @@
 
 Source date: `24-08-2026`
 
-Status: planned
+Status: partially implemented
 
-Priority: P0 before `v0.1.0`
+Priority: P0 before `v0.1.0` for the remaining message-level attribution work.
+The current codebase already ships conversation-level source/model metadata,
+source filtering, save-intent provenance, client compatibility profiles, and
+server-side owner/project audit context.
 
 ## Goal
 
@@ -24,6 +27,40 @@ produced it. The current schema has conversation-level `source`,
 `metadata.agent`, and `metadata.model`, but message objects only allow `role`,
 `text`, and `hash`. That blocks precise attribution for subagents and
 mixed-model conversations.
+
+## Current Shipped State
+
+The current implementation covers the conversation-level footprint and several
+supporting provenance paths:
+
+- Conversation payloads support top-level `source` and metadata fields such as
+  `metadata.agent`, `metadata.model`, `metadata.platform`, and
+  `metadata.ingestion_method`.
+- Conversation metadata remains open for adapter-specific non-secret fields, so
+  clients can already send values such as provider, workspace, session, and
+  capture metadata.
+- Ingestion normalizes top-level `source`, `content` message fields,
+  top-level tags, `saved_at` to `imported_at`, server-generated message hashes,
+  and server-generated conversation hashes.
+- Existing message hashes still use `role` and `text` only, preserving the
+  duplicate-detection contract.
+- The API/MCP path stamps server-side `owner_id` and `project_id` into stored
+  metadata and records audit events for memory, fact, auth, and project
+  operations without exposing secrets.
+- Facts and answer evidence already include source conversation IDs, source
+  message indexes, source quality, confidence reasons, and
+  `save_intent`/`save_intent_source` provenance.
+- Concise MCP result formatting keeps compact citations and source-quality
+  fields while detailed reads preserve the full non-secret stored payload.
+- Client compatibility coverage includes Codex, Gemini CLI, VS Code Copilot,
+  Claude Code, and opencode payload shapes.
+
+The core gap remains message-level agent/model attribution. The current
+conversation schema still restricts message objects to `role`, `text`, and
+server-computed `hash`, so `messages[].agent`, `messages[].model`,
+`messages[].model_provider`, and `messages[].source_message_id` are not shipped
+yet. Fact and generated-summary provenance therefore cannot yet carry per-message
+agent/model/provider footprint.
 
 The expected saved shape should support cases like:
 
@@ -152,29 +189,47 @@ agent/model footprint:
 - [ ] Fill assistant-message attribution from conversation defaults when
       message-level fields are omitted.
 - [ ] Preserve per-message overrides for subagents and mixed-model turns.
-- [ ] Add server-side saved-by audit fields or read-only metadata for owner,
+- [x] Preserve conversation-level `source` and existing metadata footprint fields
+      such as `metadata.agent`, `metadata.model`, `metadata.platform`, and
+      `metadata.ingestion_method`.
+- [x] Preserve adapter-specific non-secret metadata fields through ingestion and
+      retrieval.
+- [x] Keep existing `messages[].hash` and conversation hash behavior stable by
+      hashing only role/text-derived message hashes.
+- [x] Add server-side saved-by audit fields or read-only metadata for owner,
       token id, and project where appropriate, without exposing secrets.
+- [x] Carry source conversation IDs, source message indexes, source quality,
+      confidence reasons, and save-intent provenance into facts, citations, ask
+      evidence, and profile summaries.
 - [ ] Attach source agent/model/provider footprint to extracted facts and
-      generated summary provenance.
+      generated summary provenance once message-level attribution lands.
 - [ ] Update MCP initialize instructions and tool descriptions with canonical
       `source`, `metadata.agent`, `metadata.model`, and per-message override
       guidance.
-- [ ] Update docs and examples for Hermes, Codex, Gemini CLI, opencode, and
-      manual imports.
-- [ ] Add unit and integration tests for schema validation, normalization,
-      fact provenance, search/ask/profile output, and backwards compatibility.
+- [x] Update docs and compatibility smoke coverage for Codex, Gemini CLI, VS
+      Code Copilot, Claude Code, and opencode payload shapes.
+- [ ] Add Hermes-specific and manual-import examples for the full footprint
+      model.
+- [x] Add tests for source preservation, source filters, content-to-text
+      normalization, server-generated hash compatibility, save-intent
+      provenance, and client compatibility profiles.
+- [ ] Add unit and integration tests for message-level attribution schema
+      validation, default filling, per-message overrides, fact provenance,
+      search/ask/profile output, and backwards compatibility.
 
 ## Acceptance Criteria
 
-- A saved Hermes conversation can be retrieved later with
+- [ ] A saved Hermes conversation can be retrieved later with
   `source="hermes"` and `metadata.model="gemini-3.6-flash"`.
-- Mixed-model or subagent conversations preserve per-message `agent` and
+- [ ] Mixed-model or subagent conversations preserve per-message `agent` and
   `model` values.
-- Existing conversations without the new fields still validate, ingest, search,
+- [x] Existing conversations without the new fields still validate, ingest, search,
   and retrieve.
-- Facts and generated summaries retain source agent/model footprint when it is
+- [ ] Facts and generated summaries retain source agent/model footprint when it is
   available.
-- Concise MCP reads can show enough attribution for agents to judge source
-  quality without parsing full conversation payloads.
-- Detailed MCP/API reads expose the full non-secret footprint for audit.
+- [x] Concise MCP reads can show enough source, citation, confidence,
+  source-quality, and save-intent information for agents to judge memory quality
+  without parsing full conversation payloads.
+- [x] Detailed MCP/API reads expose the full currently stored non-secret
+  conversation footprint for audit.
 
