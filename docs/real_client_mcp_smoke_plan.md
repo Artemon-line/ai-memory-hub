@@ -136,7 +136,7 @@ Candidate order:
 |-------|-----------------------|-------------------|--------------------|------------------------|
 | Hermes Agent | Candidate | Not started | Not started | Determine whether Hermes supports MCP tools or another native tool protocol that can call ai-memory-hub. |
 | Claude Code | Tracked | Planned | Weekly slot implemented when configured | Keep validating the native CLI command and MCP config path. |
-| Codex CLI | Tracked | Partially validated through prior local use | Weekly slot implemented when configured | Confirm the native CLI command template can use temporary `CODEX_HOME` with MCP and local provider config. |
+| Codex CLI | Tracked | Partially validated through prior local use; latest product-quality findings are tracked in `improvements/codex_cli_findings_coverage_plan.md` | Weekly slot implemented when configured | Confirm the native CLI command template can use temporary `CODEX_HOME` with MCP and local provider config. |
 | Codex App | Candidate | Not started | Not started | Determine whether it exposes MCP config and scriptable delegation suitable for repeatable smoke. |
 | Copilot CLI | Tracked | Planned | Weekly slot implemented when configured | Keep validating the native command template and provider override path. |
 | OpenCode | Tracked | Partially validated through prior local use | Weekly slot implemented when configured | Confirm the native config path can reliably provide MCP and provider settings. |
@@ -224,7 +224,9 @@ Current client status:
   `AMH_REAL_CLIENT_COPILOT_COMMAND` and the `copilot` executable are available,
   otherwise skips explicitly.
 - Codex CLI: temporary `CODEX_HOME` config generation is implemented; the slot
-  remains skipped unless `AMH_REAL_CLIENT_CODEX_COMMAND` is provided.
+  remains skipped unless `AMH_REAL_CLIENT_CODEX_COMMAND` is provided. Product
+  behavior findings from the latest manual Codex CLI MCP run are tracked in
+  `docs/improvements/codex_cli_findings_coverage_plan.md`.
 - opencode: temporary config generation is implemented; the slot remains
   skipped unless `AMH_REAL_CLIENT_OPENCODE_COMMAND` is provided.
 - Gemini CLI: tracked and skipped by default pending confirmed local-gateway

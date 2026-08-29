@@ -61,6 +61,7 @@ nav:
       - OpenClaw Native MCP Setup: docs/openclaw_native_mcp_setup.md
       - MCP Utility Compliance Plan: docs/mcp_utility_compliance_plan.md
       - MCP Response Format Plan: docs/improvements/mcp_response_format_plan.md
+      - Codex CLI MCP Findings Coverage Plan: docs/improvements/codex_cli_findings_coverage_plan.md
       - Agent Model Footprint Plan: docs/improvements/agent_model_footprint_plan.md
       - MCP Authorization Compliance Plan: docs/bearer_api_key_auth_plan.md
   - Implementation Plans:
@@ -88,6 +89,7 @@ nav:
       - Client Feedback Improvement Plan: docs/improvements/client_feedback_improvement_plan.md
       - Top Priority MCP Result Shape: docs/improvements/top_priority_mcp_result_shape.md
       - MCP Response Format Plan: docs/improvements/mcp_response_format_plan.md
+      - Codex CLI MCP Findings Coverage Plan: docs/improvements/codex_cli_findings_coverage_plan.md
       - Agent Model Footprint Plan: docs/improvements/agent_model_footprint_plan.md
       - Handoff Memory Plan: docs/improvements/handoff_memory_plan.md
       - Retrieval Precision Plan: docs/improvements/retrieval_precision_plan.md
