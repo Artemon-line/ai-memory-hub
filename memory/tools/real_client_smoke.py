@@ -18,7 +18,7 @@ import urllib.request
 from dataclasses import asdict, dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Iterable, Sequence
+from typing import Any, Iterable, Mapping, Sequence
 
 from memory.backend.log_safety import redact_secrets
 
@@ -31,6 +31,15 @@ SMOKE_PROMPT = (
     "what the conversation was about. Inspect saved facts and report the inserted ID."
 )
 SMOKE_FACT_OBJECT = "real-client smoke checks"
+_CONTENT_TYPE_HEADER = "content-type"
+_CONTENT_LENGTH_HEADER = "content-length"
+_CACHE_CONTROL_HEADER = "cache-control"
+_JSON_CONTENT_TYPE = "application/json"
+_SSE_CONTENT_TYPE = "text/event-stream"
+_SSE_CACHE_CONTROL = "no-cache"
+_SSE_EVENT_TYPE_FIELD = "type"
+_SSE_DEFAULT_EVENT_NAME = "message"
+_SSE_DONE_FRAME = b"data: [DONE]\n\n"
 
 
 @dataclass(frozen=True)
@@ -479,24 +488,44 @@ def _make_gateway_handler(log_file: Path | None) -> type[BaseHTTPRequestHandler]
 
         def _send_json(self, payload: dict[str, Any], *, status: int = 200) -> None:
             data = json.dumps(payload).encode("utf-8")
-            self.send_response(status)
-            self.send_header("content-type", "application/json")
-            self.send_header("content-length", str(len(data)))
-            self.end_headers()
+            self._send_headers(
+                status,
+                {
+                    _CONTENT_TYPE_HEADER: _JSON_CONTENT_TYPE,
+                    _CONTENT_LENGTH_HEADER: str(len(data)),
+                },
+            )
             self.wfile.write(data)
 
         def _send_sse(self, events: Iterable[dict[str, Any]], *, status: int = 200) -> None:
+            self._send_headers(
+                status,
+                {
+                    _CONTENT_TYPE_HEADER: _SSE_CONTENT_TYPE,
+                    _CACHE_CONTROL_HEADER: _SSE_CACHE_CONTROL,
+                },
+            )
+            self.wfile.writelines(_sse_frames(events))
+
+        def _send_headers(self, status: int, headers: Mapping[str, str]) -> None:
             self.send_response(status)
-            self.send_header("content-type", "text/event-stream")
-            self.send_header("cache-control", "no-cache")
+            for name, value in headers.items():
+                self.send_header(name, value)
             self.end_headers()
-            for event in events:
-                event_name = str(event.get("type", "message"))
-                data = json.dumps(event)
-                self.wfile.write(f"event: {event_name}\ndata: {data}\n\n".encode("utf-8"))
-            self.wfile.write(b"data: [DONE]\n\n")
 
     return GatewayHandler
+
+
+def _sse_frames(events: Iterable[dict[str, Any]]) -> Iterable[bytes]:
+    for event in events:
+        yield _sse_event_frame(event)
+    yield _SSE_DONE_FRAME
+
+
+def _sse_event_frame(event: dict[str, Any]) -> bytes:
+    event_name = str(event.get(_SSE_EVENT_TYPE_FIELD, _SSE_DEFAULT_EVENT_NAME))
+    data = json.dumps(event)
+    return f"event: {event_name}\ndata: {data}\n\n".encode("utf-8")
 
 
 def _openai_chat_response(payload: dict[str, Any]) -> dict[str, Any]:

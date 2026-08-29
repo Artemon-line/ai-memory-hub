@@ -123,6 +123,16 @@ def test_responses_stream_emits_tool_arguments_and_completed_event() -> None:
     assert events[-1]["response"]["status"] == "completed"
 
 
+def test_sse_frames_encode_events_and_done_marker() -> None:
+    frames = list(
+        real_client_smoke._sse_frames([{"type": "response.completed", "ok": True}])
+    )
+
+    assert frames[0].startswith(b"event: response.completed\n")
+    assert b'data: {"type": "response.completed", "ok": true}\n\n' in frames[0]
+    assert frames[-1] == b"data: [DONE]\n\n"
+
+
 def test_unsupported_tool_call_is_reported_as_dispatch_error(tmp_path: Path) -> None:
     log = tmp_path / "codex.stderr.log"
     log.write_text("ERROR router: unsupported call: mcp__ai_memory_hub.memory_insert\n", encoding="utf-8")

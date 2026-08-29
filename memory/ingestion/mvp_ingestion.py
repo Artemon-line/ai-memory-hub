@@ -12,8 +12,9 @@ from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
-from typing import Any, Callable, Iterator, Protocol, Sequence
+from typing import Any, Callable, Iterator, Mapping, Protocol, Sequence, TypeVar
 from uuid import uuid4
 
 from memory.advanced_memory import (
@@ -317,6 +318,59 @@ class FactFilters:
     @property
     def include_superseded(self) -> bool:
         return self.status in {"superseded", "all"}
+
+
+class _AskResponseKey(StrEnum):
+    STATUS = "status"
+    RESULTS = "results"
+    ANSWER = "answer"
+    CITATIONS = "citations"
+    CONFIDENCE = "confidence"
+    CONFIDENCE_REASON = "confidence_reason"
+    ANSWER_BASIS = "answer_basis"
+    PROVENANCE = "provenance"
+    EVIDENCE = "evidence"
+    STRUCTURED_EVIDENCE = "structured_evidence"
+    CONTEXT_TOKENS_USED = "context_tokens_used"
+    CHUNKS_SELECTED = "chunks_selected"
+    CHUNKS_DROPPED = "chunks_dropped"
+    CONTEXT_TRUNCATED = "context_truncated"
+    TOKENIZER_USED = "tokenizer_used"
+
+
+class _AskResponseStatus(StrEnum):
+    OK = "ok"
+
+
+class _AskAnswerBasis(StrEnum):
+    DIRECT_MEMORY = "direct_memory"
+
+
+class _StructuredEvidenceKey(StrEnum):
+    FACTS = "facts"
+    RESULTS = "results"
+
+
+class _FactCorrectionGroup(StrEnum):
+    ITEM = "item"
+    NEW_VALUE = "new"
+    OLD_VALUE = "old"
+
+
+class _FactCorrectionQualifierKey(StrEnum):
+    ITEM = "item"
+    CORRECTS = "corrects"
+
+
+@dataclass(frozen=True)
+class _FactCorrectionMatch:
+    span: tuple[int, int]
+    item: str
+    new_value: str
+    old_value: str
+
+
+_PayloadKey = TypeVar("_PayloadKey", bound=StrEnum)
 
 
 _RUNTIME: RuntimeDependencies | None = None
@@ -3380,37 +3434,15 @@ def ask(
         max_context_tokens=token_budget,
         encoding=runtime.tokenizer_encoding,
     )
-    answer = (
-        "Based on stored memory:\n" + "\n".join(context_lines)
-        if context_lines
-        else "I could not fit relevant memory within the context budget."
+    result = _budgeted_direct_memory_ask_result(
+        selected_matches=selected_matches,
+        citations=citations,
+        context_lines=context_lines,
+        tokens_used=tokens_used,
+        chunks_dropped=chunks_dropped,
+        context_truncated=context_truncated,
+        tokenizer_encoding=runtime.tokenizer_encoding,
     )
-    result = {
-        "status": "ok",
-        "results": selected_matches,
-        "answer": answer,
-        "citations": citations,
-        "confidence": _confidence_from_context(
-            selected_matches,
-            context_truncated=context_truncated,
-        ),
-        "confidence_reason": _confidence_reason_from_matches(
-            selected_matches,
-            context_truncated=context_truncated,
-        ),
-        "answer_basis": "direct_memory",
-        "provenance": _provenance_from_matches(selected_matches, citations),
-        "evidence": _chunk_evidence_from_matches(selected_matches),
-        "structured_evidence": {
-            "facts": [],
-            "results": selected_matches,
-        },
-        "context_tokens_used": tokens_used,
-        "chunks_selected": len(selected_matches),
-        "chunks_dropped": chunks_dropped,
-        "context_truncated": context_truncated,
-        "tokenizer_used": tokenizer_used(runtime.tokenizer_encoding),
-    }
     _record_audit_event(
         "memory.asked",
         owner_id=owner_id,
@@ -3509,21 +3541,99 @@ def _ask_from_matches(matches: list[dict[str, Any]], *, top_k: int) -> dict[str,
     answer = "Based on stored memory:\n" + "\n".join(context_lines[:top_k])
     selected = matches[:top_k]
     selected_citations = citations[:top_k]
-    return {
-        "status": "ok",
-        "results": selected,
-        "answer": answer,
-        "citations": selected_citations,
-        "confidence": _confidence_from_matches(selected),
-        "confidence_reason": _confidence_reason_from_matches(selected),
-        "answer_basis": "direct_memory",
-        "provenance": _provenance_from_matches(selected, selected_citations),
-        "evidence": _chunk_evidence_from_matches(selected),
-        "structured_evidence": {
-            "facts": [],
-            "results": selected,
+    return _direct_memory_ask_result(
+        selected_matches=selected,
+        citations=selected_citations,
+        answer=answer,
+        confidence=_confidence_from_matches(selected),
+        confidence_reason=_confidence_reason_from_matches(selected),
+    )
+
+
+def _budgeted_direct_memory_ask_result(
+    *,
+    selected_matches: list[dict[str, Any]],
+    citations: list[dict[str, Any]],
+    context_lines: list[str],
+    tokens_used: int,
+    chunks_dropped: int,
+    context_truncated: bool,
+    tokenizer_encoding: str,
+) -> dict[str, Any]:
+    answer = (
+        "Based on stored memory:\n" + "\n".join(context_lines)
+        if context_lines
+        else "I could not fit relevant memory within the context budget."
+    )
+    return _direct_memory_ask_result(
+        selected_matches=selected_matches,
+        citations=citations,
+        answer=answer,
+        confidence=_confidence_from_context(
+            selected_matches,
+            context_truncated=context_truncated,
+        ),
+        confidence_reason=_confidence_reason_from_matches(
+            selected_matches,
+            context_truncated=context_truncated,
+        ),
+        extra_fields={
+            _AskResponseKey.CONTEXT_TOKENS_USED: tokens_used,
+            _AskResponseKey.CHUNKS_SELECTED: len(selected_matches),
+            _AskResponseKey.CHUNKS_DROPPED: chunks_dropped,
+            _AskResponseKey.CONTEXT_TRUNCATED: context_truncated,
+            _AskResponseKey.TOKENIZER_USED: tokenizer_used(tokenizer_encoding),
         },
+    )
+
+
+def _direct_memory_ask_result(
+    *,
+    selected_matches: list[dict[str, Any]],
+    citations: list[dict[str, Any]],
+    answer: str,
+    confidence: str,
+    confidence_reason: str,
+    extra_fields: dict[_AskResponseKey, Any] | None = None,
+) -> dict[str, Any]:
+    result = {
+        _AskResponseKey.STATUS: _AskResponseStatus.OK.value,
+        _AskResponseKey.RESULTS: selected_matches,
+        _AskResponseKey.ANSWER: answer,
+        _AskResponseKey.CITATIONS: citations,
+        _AskResponseKey.CONFIDENCE: confidence,
+        _AskResponseKey.CONFIDENCE_REASON: confidence_reason,
+        _AskResponseKey.ANSWER_BASIS: _AskAnswerBasis.DIRECT_MEMORY.value,
+        _AskResponseKey.PROVENANCE: _provenance_from_matches(
+            selected_matches,
+            citations,
+        ),
+        _AskResponseKey.EVIDENCE: _chunk_evidence_from_matches(selected_matches),
+        _AskResponseKey.STRUCTURED_EVIDENCE: _enum_keyed_payload(
+            {
+                _StructuredEvidenceKey.FACTS: [],
+                _StructuredEvidenceKey.RESULTS: selected_matches,
+            }
+        ),
     }
+    if extra_fields:
+        result.update(extra_fields)
+    return _enum_keyed_payload(result)
+
+
+def _enum_keyed_payload(payload: Mapping[_PayloadKey, Any]) -> dict[str, Any]:
+    return {key.value: value for key, value in payload.items()}
+
+
+def _fact_correction_qualifiers(
+    correction: _FactCorrectionMatch,
+) -> dict[str, str]:
+    return _enum_keyed_payload(
+        {
+            _FactCorrectionQualifierKey.ITEM: correction.item,
+            _FactCorrectionQualifierKey.CORRECTS: correction.old_value,
+        }
+    )
 
 
 def _citation_from_row(row: dict[str, Any]) -> dict[str, Any]:
@@ -3803,11 +3913,11 @@ def _extract_message_facts(
     facts: list[dict[str, Any]] = []
     correction_spans: list[tuple[int, int]] = []
     for correction in _fact_correction_matches(text):
-        correction_spans.append(correction["span"])
-        item = correction["item"]
-        new_value = correction["new"]
-        old_value = correction["old"]
-        predicate, object_value = _corrected_fact_shape(item, new_value)
+        correction_spans.append(correction.span)
+        predicate, object_value = _corrected_fact_shape(
+            correction.item,
+            correction.new_value,
+        )
         facts.append(
             _fact(
                 subject="user",
@@ -3815,7 +3925,7 @@ def _extract_message_facts(
                 object_value=object_value,
                 conversation=conversation,
                 message_index=message_index,
-                qualifiers={"item": item, "corrects": old_value},
+                qualifiers=_fact_correction_qualifiers(correction),
                 source_role=source_role,
             )
         )
@@ -3910,26 +4020,32 @@ def _extract_message_facts(
     return _dedupe_facts(facts)
 
 
-def _fact_correction_matches(text: str) -> list[dict[str, Any]]:
-    corrections: list[dict[str, Any]] = []
+def _fact_correction_matches(text: str) -> list[_FactCorrectionMatch]:
+    corrections: list[_FactCorrectionMatch] = []
     for pattern in (_FACT_CORRECTION_RE, _FACT_REPLACES_CORRECTION_RE):
         for match in pattern.finditer(text):
             span = match.span()
-            if _span_overlaps(span, [correction["span"] for correction in corrections]):
+            if _span_overlaps(span, [correction.span for correction in corrections]):
                 continue
             corrections.append(
-                {
-                    "span": span,
-                    "item": _clean_fact_object(match.group("item")),
-                    "new": _clean_fact_object(match.group("new")),
-                    "old": _clean_fact_object(match.group("old")),
-                }
+                _FactCorrectionMatch(
+                    span=span,
+                    item=_clean_fact_object(
+                        match.group(_FactCorrectionGroup.ITEM.value)
+                    ),
+                    new_value=_clean_fact_object(
+                        match.group(_FactCorrectionGroup.NEW_VALUE.value)
+                    ),
+                    old_value=_clean_fact_object(
+                        match.group(_FactCorrectionGroup.OLD_VALUE.value)
+                    ),
+                )
             )
-    corrections.sort(key=lambda correction: correction["span"][0])
+    corrections.sort(key=lambda correction: correction.span[0])
     return corrections
 
 
-def _span_overlaps(span: tuple[int, int], spans: list[tuple[int, int]]) -> bool:
+def _span_overlaps(span: tuple[int, int], spans: Sequence[tuple[int, int]]) -> bool:
     start, end = span
     return any(start < other_end and other_start < end for other_start, other_end in spans)
 
