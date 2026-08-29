@@ -305,6 +305,26 @@ def test_ingest_messages_allows_secret_topic_without_secret_value() -> None:
     assert len(vectors.rows) == 1
 
 
+def test_ingest_messages_allows_numeric_run_id_in_text() -> None:
+    metadata, vectors = _configure_stubs()
+    conversation = _valid_conversation()
+    run_id = "local-1788013783047"
+    conversation["messages"] = [
+        {
+            "role": "user",
+            "text": f"Bruno API integration memory {run_id} stores contract coverage.",
+        }
+    ]
+    conversation["metadata"]["summary"] = f"Bruno smoke conversation {run_id}."
+    conversation["metadata"]["run_id"] = run_id
+
+    result = mvp_ingestion.ingest_messages(conversation)
+
+    assert result["status"] == "ok"
+    assert metadata.by_id[result["id"]]["metadata"].get("memory_status") is None
+    assert len(vectors.rows) == 1
+
+
 @pytest.mark.parametrize(
     ("text", "reason_code"),
     [

@@ -354,6 +354,7 @@ _SENSITIVE_SCAN_EXCLUDED_KEYS = {
     "id",
     "conversation_id",
     "chunk_id",
+    "conversation_hash",
     "created_at",
     "embedding_index",
     "hash",
@@ -436,7 +437,7 @@ _SENSITIVE_CONTENT_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
         ),
     ),
 ]
-_PAYMENT_CARD_RE = re.compile(r"\b(?:\d[ -]?){13,19}\b")
+_PAYMENT_CARD_RE = re.compile(r"(?<![A-Za-z0-9_-])(?:\d[ -]?){13,19}(?![A-Za-z0-9_-])")
 _TOPIC_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("python", re.compile(r"\bpython\b", re.IGNORECASE)),
     (
