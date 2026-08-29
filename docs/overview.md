@@ -108,6 +108,8 @@ under `metadata.generated_summary` for search, retrieve, and CLI display.
 The server also writes deterministic `metadata.auto_tags` and
 `metadata.tag_sources` from source, topics, entities, and fact predicates.
 Manual `metadata.tags` remain authoritative and are not overwritten.
+Search and ask `tags` filters match only explicit `metadata.tags`; generated
+`auto_tags` support ranking and inspection, but are not filter values.
 For continuing source threads, clients may send `metadata.upstream_thread_id`
 or `metadata.thread_id`. The server preserves upstream IDs, derives
 `metadata.thread_id` when needed, and accepts optional

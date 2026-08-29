@@ -111,17 +111,17 @@ Acceptance criteria:
 
 ## Phase 4: Harden Filters, Review States, And Tight Budgets
 
-- [ ] Document the difference between explicit `metadata.tags` and generated
+- [x] Document the difference between explicit `metadata.tags` and generated
       `auto_tags`.
-- [ ] Decide whether topic-derived tags should be filterable through `tags`;
+- [x] Decide whether topic-derived tags should be filterable through `tags`;
       either implement it consistently or document that tag filters only match
       explicit metadata tags.
-- [ ] Add regression coverage for `source`, `tags`, `date_from`, `date_to`,
+- [x] Add regression coverage for `source`, `tags`, `date_from`, `date_to`,
       `thread_id`, `project_id`, `memory_status`, cursor pagination, and
       `result_mode="threads"`.
-- [ ] Add seeded storage or protected admin/test-path coverage for
+- [x] Add seeded storage or protected admin/test-path coverage for
       `pending_review`, `quarantined`, and `rejected` reads.
-- [ ] Make extremely small `max_context_tokens` values produce cautious answers
+- [x] Make extremely small `max_context_tokens` values produce cautious answers
       when evidence is truncated below a useful threshold.
 
 Acceptance criteria:

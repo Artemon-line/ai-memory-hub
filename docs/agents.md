@@ -351,7 +351,9 @@ search and retrieve responses expose the conversation summary as
 the row's compact `citation`. The hub may also return server-owned
 `metadata.auto_tags` and `metadata.tag_sources` in detailed payloads; clients
 should keep user/manual tags in `metadata.tags` and let the server refresh
-auto-tags during insert or trusted append.
+auto-tags during insert or trusted append. Search and ask `tags` filters match
+only those explicit `metadata.tags`. Generated `metadata.auto_tags` remain
+returned context and ranking hints, not filterable tag values.
 `metadata.save_intent` is optional under the default `permissive` policy,
 required under `memory.insert_policy: require_save_intent`, and controls whether
 `memory.insert_policy: review_pending` inserts are active immediately or held
