@@ -91,8 +91,9 @@ non-interactive mode.
   `COPILOT_PROVIDER_TYPE`, `COPILOT_PROVIDER_API_KEY`, and `COPILOT_MODEL`,
   then run a non-interactive prompt.
 - [x] Codex CLI: write a temporary `CODEX_HOME` config with a custom
-  OpenAI-compatible model provider, model, and MCP server URL. Keep the slot
-  skipped until a reliable non-interactive command template is configured.
+  OpenAI-compatible Responses API model provider, model, and MCP server URL.
+  Keep the slot skipped until a reliable non-interactive command template is
+  configured.
 - [x] opencode: write a temporary opencode config with a custom provider
   `baseURL`, model, and MCP server config. Keep the slot skipped until a
   reliable non-interactive command template is configured.
@@ -223,9 +224,12 @@ Current client status:
 - Copilot CLI: CI slot implemented; runs when
   `AMH_REAL_CLIENT_COPILOT_COMMAND` and the `copilot` executable are available,
   otherwise skips explicitly.
-- Codex CLI: temporary `CODEX_HOME` config generation is implemented; the slot
-  remains skipped unless `AMH_REAL_CLIENT_CODEX_COMMAND` is provided. Product
-  behavior findings from the latest manual Codex CLI MCP run are tracked in
+- Codex CLI: temporary `CODEX_HOME` config generation uses the local Responses
+  API smoke provider and MCP server URL. The slot remains skip-safe by default.
+  On Codex CLI v0.147.0, the local custom-provider path reaches the Responses
+  gateway but MCP namespace tool calls are rejected by the Codex router before
+  ai-memory-hub receives them. Product behavior findings from the latest manual
+  Codex CLI MCP run are tracked in
   `docs/improvements/codex_cli_findings_coverage_plan.md`.
 - opencode: temporary config generation is implemented; the slot remains
   skipped unless `AMH_REAL_CLIENT_OPENCODE_COMMAND` is provided.
@@ -292,6 +296,25 @@ uv run python -m memory.tools.real_client_smoke \
   --artifact-dir /tmp/amh-real-client-smoke-copilot \
   --client-timeout 120
 ```
+
+Diagnostic shape for Codex CLI after installing `codex`:
+
+```bash
+export AMH_REAL_CLIENT_CODEX_COMMAND='codex exec --ephemeral --sandbox read-only --skip-git-repo-check -C "{artifact_dir}" "{prompt}"'
+uv run python -m memory.tools.real_client_smoke \
+  --client codex \
+  --require-success-for codex \
+  --artifact-dir /tmp/amh-real-client-smoke-codex \
+  --client-timeout 180
+```
+
+As of the local Codex CLI v0.147.0 probe on 2026-08-29, this command confirms
+the native headless entry point, temporary `CODEX_HOME`, Responses API provider,
+streaming gateway, and MCP server discovery path. It does not yet pass
+end-to-end with the local deterministic provider because emitted MCP namespace
+calls are reported as unsupported by Codex before the hub receives them. Keep
+the slot skip-safe until custom-provider MCP dispatch is supported or a
+credentialed native-provider validation lane is intentionally added.
 
 The exact client command is intentionally externalized because real client CLIs
 change their non-interactive syntax. A configured run passes only when the client
