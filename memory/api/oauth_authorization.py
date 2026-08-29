@@ -90,16 +90,13 @@ def register_oauth_authorization_routes(
         auth_request = await _validated_authorization_request(
             service=service, request=request, params=params
         )
-        session = await service.session_from_request(request)
-        if session is None:
-            _session(request)["pending_oauth_authorization"] = auth_request
-            provider = _first_enabled_provider(config)
-            return await oauth.authorize_redirect(
-                request,
-                provider=provider,
-                state_data={"pending_oauth_authorization": auth_request},
-            )
-        return _authorization_code_redirect(request, auth_request, owner_id=str(session["user_id"]))
+        _session(request)["pending_oauth_authorization"] = auth_request
+        provider = _first_enabled_provider(config)
+        return await oauth.authorize_redirect(
+            request,
+            provider=provider,
+            state_data={"pending_oauth_authorization": auth_request},
+        )
 
     @app.post("/oauth/authorize/approve", include_in_schema=False)
     async def oauth_authorize_approve(request: Request) -> Response:
@@ -187,8 +184,9 @@ def pending_authorization_redirect(request: Request, *, owner_id: str) -> Redire
         if isinstance(state_data, dict)
         else None
     )
+    session_pending = _session(request).pop("pending_oauth_authorization", None)
     if not isinstance(pending, dict):
-        pending = _session(request).pop("pending_oauth_authorization", None)
+        pending = session_pending
     if not isinstance(pending, dict):
         return None
     return _authorization_code_redirect(request, pending, owner_id=owner_id)

@@ -291,7 +291,10 @@ def _unauthorized(request: Request, config: HubConfig, error: str) -> JSONRespon
         status_code=401,
         headers={
             "WWW-Authenticate": build_www_authenticate_challenge(
-                request, config, error=error, scopes=required_scopes
+                request,
+                config,
+                error=error,
+                scopes=_challenge_scopes_for_request(request, config, required_scopes),
             ),
             **_auth_error_headers(error, required_scopes),
         },
@@ -409,6 +412,20 @@ def _is_mcp_path(path: str) -> bool:
 def _has_query_access_token(request: Request) -> bool:
     params = request.query_params
     return "access_token" in params or "token" in params
+
+
+def _challenge_scopes_for_request(
+    request: Request, config: HubConfig, required_scopes: set[str]
+) -> set[str]:
+    if config.api.auth == "oauth_resource_server" and _is_mcp_path(request.url.path):
+        supported_scopes = {
+            str(scope).strip()
+            for scope in config.api.oauth.scopes_supported
+            if str(scope).strip()
+        }
+        if supported_scopes:
+            return supported_scopes
+    return required_scopes
 
 
 def _has_required_scopes(actual: frozenset[str], required: set[str]) -> bool:
