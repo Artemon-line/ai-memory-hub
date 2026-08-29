@@ -500,6 +500,13 @@ _FACT_RULES: list[tuple[str, re.Pattern[str]]] = [
             re.IGNORECASE,
         ),
     ),
+    (
+        "likes",
+        re.compile(
+            r"\bI\s+(?:really\s+)?(?:like|enjoy|prefer)\s+(?P<object>[^.?!\n]+)",
+            re.IGNORECASE,
+        ),
+    ),
     ("creator", re.compile(r"\bThe\s+creator\s+is\s+(?P<object>[^.?!\n]+)", re.IGNORECASE)),
     (
         "subject_creator",
@@ -3356,12 +3363,17 @@ def ask(
         if max_context_tokens is not None
         else runtime.ask_max_context_tokens
     )
-    selected_matches, citations, context_lines, tokens_used, chunks_dropped = (
-        _select_ask_context(
-            matches=matches[:top_k],
-            max_context_tokens=token_budget,
-            encoding=runtime.tokenizer_encoding,
-        )
+    (
+        selected_matches,
+        citations,
+        context_lines,
+        tokens_used,
+        chunks_dropped,
+        context_truncated,
+    ) = _select_ask_context(
+        matches=matches[:top_k],
+        max_context_tokens=token_budget,
+        encoding=runtime.tokenizer_encoding,
     )
     answer = (
         "Based on stored memory:\n" + "\n".join(context_lines)
@@ -3373,8 +3385,14 @@ def ask(
         "results": selected_matches,
         "answer": answer,
         "citations": citations,
-        "confidence": _confidence_from_matches(selected_matches),
-        "confidence_reason": _confidence_reason_from_matches(selected_matches),
+        "confidence": _confidence_from_context(
+            selected_matches,
+            context_truncated=context_truncated,
+        ),
+        "confidence_reason": _confidence_reason_from_matches(
+            selected_matches,
+            context_truncated=context_truncated,
+        ),
         "answer_basis": "direct_memory",
         "provenance": _provenance_from_matches(selected_matches, citations),
         "evidence": _chunk_evidence_from_matches(selected_matches),
@@ -3385,6 +3403,7 @@ def ask(
         "context_tokens_used": tokens_used,
         "chunks_selected": len(selected_matches),
         "chunks_dropped": chunks_dropped,
+        "context_truncated": context_truncated,
         "tokenizer_used": tokenizer_used(runtime.tokenizer_encoding),
     }
     _record_audit_event(
@@ -3516,12 +3535,13 @@ def _select_ask_context(
     matches: list[dict[str, Any]],
     max_context_tokens: int,
     encoding: str,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str], int, int]:
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str], int, int, bool]:
     selected_matches: list[dict[str, Any]] = []
     citations: list[dict[str, Any]] = []
     context_lines: list[str] = []
     tokens_used = 0
     chunks_dropped = 0
+    context_truncated = False
 
     for row in matches:
         citation_id = row.get("id")
@@ -3531,6 +3551,7 @@ def _select_ask_context(
         remaining = max_context_tokens - tokens_used - prefix_tokens
         if remaining <= 0:
             chunks_dropped += 1
+            context_truncated = True
             continue
 
         text = str(row.get("text", ""))
@@ -3539,8 +3560,10 @@ def _select_ask_context(
         if text_tokens > remaining:
             selected_text = truncate_to_tokens(text, remaining, encoding)
             text_tokens = count_tokens(selected_text, encoding)
+            context_truncated = True
         if not selected_text:
             chunks_dropped += 1
+            context_truncated = True
             continue
 
         line = prefix + selected_text
@@ -3553,7 +3576,14 @@ def _select_ask_context(
         context_lines.append(line)
         tokens_used += line_tokens
 
-    return selected_matches, citations, context_lines, tokens_used, chunks_dropped
+    return (
+        selected_matches,
+        citations,
+        context_lines,
+        tokens_used,
+        chunks_dropped,
+        context_truncated,
+    )
 
 
 def _confidence_from_matches(matches: list[dict[str, Any]]) -> str:
@@ -3565,6 +3595,16 @@ def _confidence_from_matches(matches: list[dict[str, Any]]) -> str:
     if best <= 4.0:
         return "medium"
     return "low"
+
+
+def _confidence_from_context(
+    matches: list[dict[str, Any]], *, context_truncated: bool
+) -> str:
+    if not matches:
+        return "none"
+    if context_truncated:
+        return "low"
+    return _confidence_from_matches(matches)
 
 
 def _provenance_from_matches(
@@ -3609,7 +3649,11 @@ def _chunk_evidence_from_matches(matches: list[dict[str, Any]]) -> list[dict[str
     ]
 
 
-def _confidence_reason_from_matches(matches: list[dict[str, Any]]) -> str:
+def _confidence_reason_from_matches(
+    matches: list[dict[str, Any]], *, context_truncated: bool = False
+) -> str:
+    if context_truncated:
+        return "Retrieved memory was truncated by the context budget."
     if not matches:
         return "No retrieved chunks were used."
     return "Answer built from ranked retrieved conversation chunks."
@@ -3792,6 +3836,18 @@ def _extract_message_facts(
                         object_value=_clean_fact_object(match.group("object")),
                         conversation=conversation,
                         message_index=message_index,
+                        source_role=source_role,
+                    )
+                )
+            elif rule_name == "likes":
+                facts.append(
+                    _fact(
+                        subject="user",
+                        predicate="likes",
+                        object_value=_clean_fact_object(match.group("object")),
+                        conversation=conversation,
+                        message_index=message_index,
+                        qualifiers={"preference": "positive"},
                         source_role=source_role,
                     )
                 )
@@ -4082,6 +4138,8 @@ def _fact_query(question: str) -> dict[str, str] | None:
     favorite_match = re.search(r"favorite\s+(?P<name>[A-Za-z0-9 _-]+)", question, re.IGNORECASE)
     if favorite_match:
         return {"subject": "user", "predicate": f"favorite_{_normalize_predicate_part(favorite_match.group('name'))}"}
+    if any(term in lowered for term in ("do i like", "i like", "prefer", "preference")):
+        return {"subject": "user", "predicate": "likes"}
     if "topic" in lowered or "recurring" in lowered:
         return {"subject": "user", "predicate": "recurring_topic"}
     if "command name" in lowered:

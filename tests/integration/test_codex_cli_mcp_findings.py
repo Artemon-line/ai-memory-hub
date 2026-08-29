@@ -160,10 +160,6 @@ def _call_tool(
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Codex CLI finding: simple preference wording is not fact-backed yet.",
-)
 def test_codex_cli_preference_fixture_returns_fact_backed_concise_ask(
     tmp_path: Path,
 ) -> None:
@@ -627,10 +623,6 @@ def test_codex_cli_review_state_reads_are_explicit_and_secret_safe(
     assert pending_ask["results"][0]["id"] == pending_insert["id"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Codex CLI finding: tiny ask budgets can still report high confidence.",
-)
 def test_codex_cli_tight_context_budget_is_cautious_when_evidence_truncates(
     tmp_path: Path,
 ) -> None:

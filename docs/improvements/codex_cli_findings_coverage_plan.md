@@ -70,15 +70,15 @@ Acceptance criteria:
 
 ## Phase 2: Improve `memory_ask` Synthesis And Confidence
 
-- [ ] Make direct preference questions return a synthesized answer in concise
+- [x] Make direct preference questions return a synthesized answer in concise
       mode, not only evidence chunks.
-- [ ] Keep structured evidence available so agents can cite or inspect the
+- [x] Keep structured evidence available so agents can cite or inspect the
       basis for the answer.
-- [ ] Ensure citations and `results` align with the evidence actually used in
+- [x] Ensure citations and `results` align with the evidence actually used in
       the answer.
-- [ ] Treat typo-heavy wording as a retrieval quality input, while keeping the
+- [x] Treat typo-heavy wording as a retrieval quality input, while keeping the
       final answer clean and human-readable.
-- [ ] Lower confidence or explain uncertainty when answer synthesis cannot use
+- [x] Lower confidence or explain uncertainty when answer synthesis cannot use
       enough intact context.
 
 Acceptance criteria:
