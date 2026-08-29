@@ -93,14 +93,14 @@ Acceptance criteria:
 
 ## Phase 3: Fix Correction And Supersession Behavior
 
-- [ ] Detect explicit correction language that replaces an older preference or
+- [x] Detect explicit correction language that replaces an older preference or
       favorite-food fact with a newer one.
-- [ ] Supersede older facts when the subject, predicate family, and corrected
+- [x] Supersede older facts when the subject, predicate family, and corrected
       object are clear.
-- [ ] Keep ambiguous corrections active as conflicts only when the replacement
+- [x] Keep ambiguous corrections active as conflicts only when the replacement
       relationship is not safe to infer.
-- [ ] Add tests for "actually X, not Y" and "correction: X replaces Y" wording.
-- [ ] Verify detailed reads preserve the audit trail for superseded facts.
+- [x] Add tests for "actually X, not Y" and "correction: X replaces Y" wording.
+- [x] Verify detailed reads preserve the audit trail for superseded facts.
 
 Acceptance criteria:
 

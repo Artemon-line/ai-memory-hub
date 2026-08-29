@@ -488,7 +488,11 @@ def _ingestion_stage(stage: str, **attributes: Any) -> Iterator[None]:
                 stage=stage,
             )
 _FACT_CORRECTION_RE = re.compile(
-    r"\bactually,\s+my\s+(?P<item>[A-Za-z0-9][A-Za-z0-9 _-]{1,80})\s+is\s+(?P<new>[^,.]+),\s+not\s+(?P<old>[^.]+)",
+    r"\b(?:actually,|correction:)\s+my\s+(?P<item>[A-Za-z0-9][A-Za-z0-9 _-]{1,80})\s+is\s+(?P<new>[^,.]+),\s+not\s+(?P<old>[^.]+)",
+    re.IGNORECASE,
+)
+_FACT_REPLACES_CORRECTION_RE = re.compile(
+    r"\bcorrection:\s+(?P<new>[^.?!\n]+?)\s+replaces\s+(?P<old>[^.?!\n]+?)\s+for\s+my\s+(?P<item>[A-Za-z0-9][A-Za-z0-9 _-]{1,80})",
     re.IGNORECASE,
 )
 _FACT_RULES: list[tuple[str, re.Pattern[str]]] = [
@@ -3796,16 +3800,18 @@ def _extract_message_facts(
     text: str, *, conversation: dict[str, Any], message_index: int, source_role: str
 ) -> list[dict[str, Any]]:
     facts: list[dict[str, Any]] = []
-    correction = _FACT_CORRECTION_RE.search(text)
-    if correction:
-        item = correction.group("item").strip()
-        new_value = correction.group("new").strip()
-        old_value = correction.group("old").strip()
+    correction_spans: list[tuple[int, int]] = []
+    for correction in _fact_correction_matches(text):
+        correction_spans.append(correction["span"])
+        item = correction["item"]
+        new_value = correction["new"]
+        old_value = correction["old"]
+        predicate, object_value = _corrected_fact_shape(item, new_value)
         facts.append(
             _fact(
                 subject="user",
-                predicate=_owned_item_predicate(item),
-                object_value=f"{item} is {new_value}",
+                predicate=predicate,
+                object_value=object_value,
                 conversation=conversation,
                 message_index=message_index,
                 qualifiers={"item": item, "corrects": old_value},
@@ -3814,6 +3820,8 @@ def _extract_message_facts(
         )
     for rule_name, pattern in _FACT_RULES:
         for match in pattern.finditer(text):
+            if _span_overlaps(match.span(), correction_spans):
+                continue
             if rule_name == "own":
                 object_value = _clean_fact_object(match.group("object"))
                 facts.append(
@@ -3899,6 +3907,41 @@ def _extract_message_facts(
                     )
                 )
     return _dedupe_facts(facts)
+
+
+def _fact_correction_matches(text: str) -> list[dict[str, Any]]:
+    corrections: list[dict[str, Any]] = []
+    for pattern in (_FACT_CORRECTION_RE, _FACT_REPLACES_CORRECTION_RE):
+        for match in pattern.finditer(text):
+            span = match.span()
+            if _span_overlaps(span, [correction["span"] for correction in corrections]):
+                continue
+            corrections.append(
+                {
+                    "span": span,
+                    "item": _clean_fact_object(match.group("item")),
+                    "new": _clean_fact_object(match.group("new")),
+                    "old": _clean_fact_object(match.group("old")),
+                }
+            )
+    corrections.sort(key=lambda correction: correction["span"][0])
+    return corrections
+
+
+def _span_overlaps(span: tuple[int, int], spans: list[tuple[int, int]]) -> bool:
+    start, end = span
+    return any(start < other_end and other_start < end for other_start, other_end in spans)
+
+
+def _corrected_fact_shape(item: str, new_value: str) -> tuple[str, str]:
+    item = _clean_fact_object(item)
+    new_value = _clean_fact_object(new_value)
+    favorite_prefix = "favorite "
+    if item.lower().startswith(favorite_prefix):
+        favorite_name = item[len(favorite_prefix):].strip()
+        predicate = f"favorite_{_normalize_predicate_part(favorite_name)}"
+        return predicate, new_value
+    return _owned_item_predicate(item), f"{item} is {new_value}"
 
 
 def _topic_facts(

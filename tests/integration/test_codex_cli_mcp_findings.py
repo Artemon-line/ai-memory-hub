@@ -287,12 +287,23 @@ def test_codex_cli_deduplicates_exact_reinsert_through_mcp(tmp_path: Path) -> No
     assert [row["id"] for row in search["results"]] == [payload["id"]]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Codex CLI finding: food corrections do not supersede old favorites yet.",
+@pytest.mark.parametrize(
+    ("correction_text", "expected_new"),
+    [
+        (
+            "Actually, my favorite food is QA pizza slice, not QA avocado toast.",
+            "QA pizza slice",
+        ),
+        (
+            "Correction: QA pizza slice replaces QA avocado toast for my favorite food.",
+            "QA pizza slice",
+        ),
+    ],
 )
 def test_codex_cli_correction_supersedes_prior_favorite_food(
     tmp_path: Path,
+    correction_text: str,
+    expected_new: str,
 ) -> None:
     old_food = _conversation(
         memory_id="33d79ee0-ce14-4a32-82b1-7e7406ffc999",
@@ -302,7 +313,7 @@ def test_codex_cli_correction_supersedes_prior_favorite_food(
     )
     corrected_food = _conversation(
         memory_id="44d79ee0-ce14-4a32-82b1-7e7406ffc999",
-        text="Correction: my favorite food is QA pizza slice, not QA avocado toast.",
+        text=correction_text,
         tags=["codex-cli-qa", "correction"],
         thread_id="AMH-QA-20260828-CORR",
     )
@@ -352,18 +363,72 @@ def test_codex_cli_correction_supersedes_prior_favorite_food(
             },
         )
 
-    assert [fact["object_normalized"] for fact in active["results"]] == [
-        "QA pizza slice"
-    ]
+    assert [fact["object_normalized"] for fact in active["results"]] == [expected_new]
     audit_by_object = {
         fact["object_normalized"]: fact for fact in audit["results"]
     }
     assert audit_by_object["QA avocado toast"]["superseded_by"] == (
-        audit_by_object["QA pizza slice"]["id"]
+        audit_by_object[expected_new]["id"]
     )
-    assert audit_by_object["QA pizza slice"]["superseded_by"] is None
-    assert ask["answer"] == "QA pizza slice"
+    assert audit_by_object[expected_new]["superseded_by"] is None
+    assert ask["answer"] == expected_new
     assert ask["facts"][0]["source_quality"] == "corrected_by_user"
+
+
+def test_codex_cli_ambiguous_favorite_update_remains_active_conflict(
+    tmp_path: Path,
+) -> None:
+    old_food = _conversation(
+        text="My favorite food is QA avocado toast.",
+        tags=["codex-cli-qa", "correction"],
+        thread_id="AMH-QA-20260828-CORR",
+    )
+    ambiguous_update = _conversation(
+        text="Actually, my favorite food is QA pizza slice.",
+        tags=["codex-cli-qa", "correction"],
+        thread_id="AMH-QA-20260828-CORR",
+    )
+
+    with _client(tmp_path) as client:
+        headers = _initialize_mcp(client)
+        for request_id, payload in enumerate((old_food, ambiguous_update), start=2):
+            insert = _call_tool(
+                client,
+                headers,
+                request_id=request_id,
+                name="memory_insert",
+                arguments={"conversation_json": payload},
+            )
+            assert insert["status"] == "ok"
+        active = _call_tool(
+            client,
+            headers,
+            request_id=4,
+            name="memory_fact_search",
+            arguments={
+                "subject": "user",
+                "predicate": "favorite_food",
+                "response_format": "detailed",
+            },
+        )
+        ask = _call_tool(
+            client,
+            headers,
+            request_id=5,
+            name="memory_ask",
+            arguments={
+                "question": "What is my favorite food?",
+                "response_format": "detailed",
+            },
+        )
+
+    assert {fact["object_normalized"] for fact in active["results"]} == {
+        "QA avocado toast",
+        "QA pizza slice",
+    }
+    assert all(fact["superseded_by"] is None for fact in active["results"])
+    assert ask["answer_basis"] == "conflict"
+    assert ask["confidence"] == "low"
 
 
 def test_codex_cli_filters_pagination_project_and_tag_semantics(
