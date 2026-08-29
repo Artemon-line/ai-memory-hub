@@ -50,7 +50,7 @@ def test_command_template_writes_prompt_file(tmp_path: Path, monkeypatch) -> Non
     assert real_client_smoke.SMOKE_MARKER in (tmp_path / "claude.prompt.txt").read_text(encoding="utf-8")
 
 
-def test_codex_config_uses_responses_wire_api(tmp_path: Path) -> None:
+def test_responses_provider_config_is_written_for_codex(tmp_path: Path) -> None:
     spec = real_client_smoke._client_spec(
         name="codex",
         hub_url="http://127.0.0.1:8000",
@@ -86,7 +86,7 @@ def test_gateway_moves_to_next_tool_after_prior_tool_result() -> None:
     assert tool_call["function"]["name"] == "memory_insert"
 
 
-def test_gateway_responses_moves_to_fact_search_after_ask() -> None:
+def test_responses_gateway_requests_fact_search_after_ask() -> None:
     response = real_client_smoke._openai_responses_response(
         {
             "input": [
@@ -108,7 +108,7 @@ def test_gateway_responses_moves_to_fact_search_after_ask() -> None:
     )
 
 
-def test_gateway_responses_stream_emits_namespaced_function_call_and_completed_event() -> None:
+def test_responses_stream_emits_tool_arguments_and_completed_event() -> None:
     response = real_client_smoke._openai_responses_response(
         {"model": "amh-smoke-model", "input": [{"type": "message", "content": "go"}]}
     )
@@ -123,7 +123,7 @@ def test_gateway_responses_stream_emits_namespaced_function_call_and_completed_e
     assert events[-1]["response"]["status"] == "completed"
 
 
-def test_client_dispatch_error_detects_unsupported_tool_call(tmp_path: Path) -> None:
+def test_unsupported_tool_call_is_reported_as_dispatch_error(tmp_path: Path) -> None:
     log = tmp_path / "codex.stderr.log"
     log.write_text("ERROR router: unsupported call: mcp__ai_memory_hub.memory_insert\n", encoding="utf-8")
 

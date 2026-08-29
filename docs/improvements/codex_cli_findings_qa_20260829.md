@@ -21,7 +21,7 @@ manual Codex CLI MCP run:
 
 Validation evidence:
 
-- `uv run pytest tests/integration/test_codex_cli_mcp_findings.py tests/unit/test_mvp_ask_budget.py tests/unit/test_mvp_ingestion.py tests/unit/test_mcp_tools.py tests/integration/test_payload_validation_edges.py -q`
+- `uv run pytest tests/integration/test_mcp_memory_quality_regressions.py tests/unit/test_mvp_ask_budget.py tests/unit/test_mvp_ingestion.py tests/unit/test_mcp_tools.py tests/integration/test_payload_validation_edges.py -q`
   passed with `135 passed`.
 - The Phase 4 commit hook passed with `629 passed, 18 skipped`.
 

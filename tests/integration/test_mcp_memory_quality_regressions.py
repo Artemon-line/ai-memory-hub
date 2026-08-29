@@ -160,7 +160,7 @@ def _call_tool(
     )
 
 
-def test_codex_cli_preference_fixture_returns_fact_backed_concise_ask(
+def test_preference_question_uses_fact_backed_concise_answer(
     tmp_path: Path,
 ) -> None:
     payload = _conversation(
@@ -243,7 +243,7 @@ def test_codex_cli_preference_fixture_returns_fact_backed_concise_ask(
     assert detailed_ask["structured_evidence"]["facts"][0]["used_in_answer"] is True
 
 
-def test_codex_cli_deduplicates_exact_reinsert_through_mcp(tmp_path: Path) -> None:
+def test_mcp_insert_deduplicates_exact_reinsert(tmp_path: Path) -> None:
     payload = _conversation(
         memory_id="a5858840-3de5-4194-bf37-16f57dd3a353",
         text="Codex CLI exact duplicate QA phrase is violet atlas.",
@@ -300,7 +300,7 @@ def test_codex_cli_deduplicates_exact_reinsert_through_mcp(tmp_path: Path) -> No
         ),
     ],
 )
-def test_codex_cli_correction_supersedes_prior_favorite_food(
+def test_clear_correction_supersedes_prior_favorite_food(
     tmp_path: Path,
     correction_text: str,
     expected_new: str,
@@ -375,7 +375,7 @@ def test_codex_cli_correction_supersedes_prior_favorite_food(
     assert ask["facts"][0]["source_quality"] == "corrected_by_user"
 
 
-def test_codex_cli_ambiguous_favorite_update_remains_active_conflict(
+def test_ambiguous_favorite_update_remains_active_conflict(
     tmp_path: Path,
 ) -> None:
     old_food = _conversation(
@@ -431,7 +431,7 @@ def test_codex_cli_ambiguous_favorite_update_remains_active_conflict(
     assert ask["confidence"] == "low"
 
 
-def test_codex_cli_filters_pagination_project_and_tag_semantics(
+def test_search_filters_pagination_threads_and_explicit_tags(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     target = _conversation(
@@ -574,7 +574,7 @@ def test_codex_cli_filters_pagination_project_and_tag_semantics(
     assert auto_tag_filter["results"] == []
 
 
-def test_codex_cli_review_state_reads_are_explicit_and_secret_safe(
+def test_review_state_reads_are_explicit_and_secret_safe(
     tmp_path: Path,
 ) -> None:
     pending_phrase = "codex pending review status phrase"
@@ -688,7 +688,7 @@ def test_codex_cli_review_state_reads_are_explicit_and_secret_safe(
     assert pending_ask["results"][0]["id"] == pending_insert["id"]
 
 
-def test_codex_cli_tight_context_budget_is_cautious_when_evidence_truncates(
+def test_tight_context_budget_reports_truncated_evidence(
     tmp_path: Path,
 ) -> None:
     payload = _conversation(
