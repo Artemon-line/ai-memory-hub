@@ -343,6 +343,28 @@ exact command or config has been tested.
 <code>openclaw mcp add ai-memory-hub-local --url &lt;mcp-url&gt; --transport streamable-http --auth oauth</code>
 <p>Then run `openclaw mcp login ai-memory-hub-local`. After approval, run `openclaw mcp login ai-memory-hub-local --code &lt;code&gt;`.</p>
 </article>
+<article>
+<h3>Droid <span class="pending">Unverified</span></h3>
+<code>droid mcp add ai-memory-hub-local &lt;mcp-url&gt; --type http</code>
+<p>Based on the Droid HTTP MCP add command shape; keep labeled unverified until tested against ai-memory-hub.</p>
+</article>
+<article>
+<h3>DeepSeek Harness <span class="pending">Unverified</span></h3>
+<pre><code>- id: ai-memory-hub-local
+  name: '@deepseek-ai/dsh-mcp-client'
+  config:
+    serverName: ai-memory-hub-local
+    transport: streamable-http
+    url: &lt;mcp-url&gt;
+    headers:
+      Authorization: !!js '`Bearer ${process.env.MCP_TOKEN}`'</code></pre>
+<p>Use an environment variable for the token if the harness requires a bearer header.</p>
+</article>
+<article>
+<h3>Qwen Code <span class="pending">Unverified</span></h3>
+<code>qwen mcp add --transport http ai-memory-hub-local &lt;mcp-url&gt;</code>
+<p>Based on the <a href="https://qwenlm.github.io/qwen-code-docs/en/users/features/mcp/#adding-a-server-qwen-mcp-add">Qwen Code documented HTTP MCP command form</a>; keep labeled unverified until tested against ai-memory-hub.</p>
+</article>
 </div>
 
 Do not commit OAuth client secrets or captured bearer tokens.

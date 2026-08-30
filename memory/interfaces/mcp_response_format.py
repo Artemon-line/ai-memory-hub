@@ -61,6 +61,8 @@ _CITATION_KEYS = (
     "save_intent_source",
 )
 DEFAULT_CONCISE_FACT_LIMIT = 10
+_DEFAULT_MEMORY_STATUS = "active"
+_MEMORY_STATUS_KEY = "memory_status"
 _CONCISE_ASK_KEYS = (
     "status",
     "answer",
@@ -68,6 +70,9 @@ _CONCISE_ASK_KEYS = (
     "confidence_reason",
     "answer_basis",
 )
+_CONCISE_RETRIEVE_MESSAGE_LIMIT = 6
+_CONCISE_RETRIEVE_MESSAGE_TEXT_LIMIT = 800
+_CONCISE_RETRIEVE_METADATA_KEYS = (_MEMORY_STATUS_KEY,)
 
 
 def format_search_response(
@@ -80,6 +85,18 @@ def format_search_response(
     formatted["results"] = [
         _concise_search_row(row) for row in results if isinstance(row, dict)
     ] if isinstance(results, list) else []
+    return formatted
+
+
+def format_retrieve_response(
+    payload: dict[str, Any], response_format: str
+) -> dict[str, Any]:
+    if response_format == MCPResponseFormat.DETAILED.value:
+        return payload
+    formatted = _compact_mapping(payload, ("status", "id"))
+    memory = payload.get("memory")
+    if isinstance(memory, dict):
+        formatted["memory"] = _concise_retrieved_memory(memory)
     return formatted
 
 
@@ -184,6 +201,37 @@ def _conversation_summary_text(metadata: dict[str, Any]) -> str | None:
     return str(summary) if summary else None
 
 
+def _concise_retrieved_memory(memory: dict[str, Any]) -> dict[str, Any]:
+    concise = _conversation_citation(memory, fallback_id=memory.get("id"))
+    metadata = memory.get("metadata")
+    if isinstance(metadata, dict):
+        concise.update(_compact_mapping(metadata, _CONCISE_RETRIEVE_METADATA_KEYS))
+    concise.setdefault(_MEMORY_STATUS_KEY, _DEFAULT_MEMORY_STATUS)
+    messages = memory.get("messages")
+    if not isinstance(messages, list):
+        return concise
+    compact_messages = [
+        _concise_message(message) for message in messages if isinstance(message, dict)
+    ]
+    concise["message_count"] = len(compact_messages)
+    concise["messages"] = compact_messages[:_CONCISE_RETRIEVE_MESSAGE_LIMIT]
+    omitted = len(compact_messages) - len(concise["messages"])
+    if omitted > 0:
+        concise["omitted_messages"] = omitted
+    return concise
+
+
+def _concise_message(message: dict[str, Any]) -> dict[str, Any]:
+    text = message.get("text")
+    concise = _compact_mapping(message, ("role",))
+    if text is not None:
+        concise["text"] = _truncate_text(
+            str(text),
+            limit=_CONCISE_RETRIEVE_MESSAGE_TEXT_LIMIT,
+        )
+    return concise
+
+
 def _concise_fact(fact: dict[str, Any]) -> dict[str, Any]:
     concise = _compact_mapping(fact, _FACT_KEYS)
     if "id" not in concise and fact.get("fact_id") is not None:
@@ -248,6 +296,13 @@ def _compact_mapping(keys_source: dict[str, Any], keys: tuple[str, ...]) -> dict
 
 def _drop_empty_values(payload: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in payload.items() if value is not None}
+
+
+def _truncate_text(text: str, *, limit: int) -> str:
+    value = " ".join(text.strip().split())
+    if len(value) <= limit:
+        return value
+    return value[: limit - 1].rstrip() + "..."
 
 
 def _limited_concise_facts(

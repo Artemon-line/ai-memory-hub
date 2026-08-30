@@ -3530,21 +3530,16 @@ def _extend_index_chunks(obj: dict[str, Any], chunks: list[dict[str, Any]]) -> N
 
 def _ask_from_matches(matches: list[dict[str, Any]], *, top_k: int) -> dict[str, Any]:
     citations: list[dict[str, Any]] = []
-    context_lines: list[str] = []
     for row in matches:
         citation = _citation_from_row(row)
         citations.append(citation)
-        context_lines.append(
-            f"- [{citation['id']}#{citation['chunk_index']}] {citation['text']}"
-        )
 
-    answer = "Based on stored memory:\n" + "\n".join(context_lines[:top_k])
     selected = matches[:top_k]
     selected_citations = citations[:top_k]
     return _direct_memory_ask_result(
         selected_matches=selected,
         citations=selected_citations,
-        answer=answer,
+        answer=_direct_memory_answer_text(selected),
         confidence=_confidence_from_matches(selected),
         confidence_reason=_confidence_reason_from_matches(selected),
     )
@@ -3561,7 +3556,7 @@ def _budgeted_direct_memory_ask_result(
     tokenizer_encoding: str,
 ) -> dict[str, Any]:
     answer = (
-        "Based on stored memory:\n" + "\n".join(context_lines)
+        _direct_memory_answer_text(selected_matches)
         if context_lines
         else "I could not fit relevant memory within the context budget."
     )
@@ -3619,6 +3614,26 @@ def _direct_memory_ask_result(
     if extra_fields:
         result.update(extra_fields)
     return _enum_keyed_payload(result)
+
+
+def _direct_memory_answer_text(matches: Sequence[dict[str, Any]]) -> str:
+    snippets: list[str] = []
+    for row in matches:
+        snippet = _direct_memory_answer_snippet(row)
+        if snippet and snippet not in snippets:
+            snippets.append(snippet)
+        if len(snippets) >= 3:
+            break
+    if not snippets:
+        return "I found relevant memory, but it did not include usable text."
+    return " ".join(snippets)
+
+
+def _direct_memory_answer_snippet(row: dict[str, Any]) -> str:
+    text = " ".join(str(row.get("text", "")).strip().split())
+    if not text:
+        return ""
+    return _truncate_summary_text(text, limit=600)
 
 
 def _enum_keyed_payload(payload: Mapping[_PayloadKey, Any]) -> dict[str, Any]:

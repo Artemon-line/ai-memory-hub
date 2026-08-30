@@ -101,6 +101,9 @@ def test_ask_uses_config_budget_when_tokenizer_enabled(monkeypatch) -> None:
     assert result["context_tokens_used"] <= 5
     assert result["chunks_selected"] == 1
     assert result["citations"][0]["text"] == "alpha beta gamma"
+    assert result["answer"] == "alpha beta gamma"
+    assert "Based on stored memory" not in result["answer"]
+    assert "- [" not in result["answer"]
     assert result["context_truncated"] is True
     assert result["confidence"] == "low"
 

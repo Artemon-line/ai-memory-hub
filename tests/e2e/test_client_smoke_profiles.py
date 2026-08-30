@@ -404,7 +404,7 @@ def test_mcp_client_profile_smoke_with_ollama_embeddings(
             headers,
             request_id=5,
             name="memory_retrieve",
-            arguments={"id": insert["id"]},
+            arguments={"id": insert["id"], "response_format": "detailed"},
         )
         assert retrieve["status"] == "ok"
         assert retrieve["id"] == insert["id"]

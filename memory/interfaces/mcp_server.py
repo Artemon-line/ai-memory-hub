@@ -49,6 +49,7 @@ from memory.interfaces.mcp_response_format import (
     format_ask_response,
     format_fact_search_response,
     format_profile_response,
+    format_retrieve_response,
     format_search_response,
 )
 from memory.observability.metrics import metrics
@@ -97,7 +98,8 @@ SERVER_INSTRUCTIONS = (
     "include metadata.save_intent as explicit_user_request, user_confirmed, or client_auto_save. "
     "Pass project_id when saving to or reading from a shared project; omit it for the default private project. "
     "memory_search and memory_ask support source, date_from, date_to, tags, thread_id, and memory_status filters "
-    "when narrowing recall. Use response_format=concise for normal agent recall; "
+    "when narrowing recall. memory_retrieve supports response_format for id-based reads. "
+    "Use response_format=concise for normal agent recall; "
     "use response_format=detailed only when auditing full stored records. "
     "memory_fact_search and memory_profile_get support source, predicate, date range, confidence, status, "
     "source_quality, save-intent, and freshness filters, plus the same response_format option."
@@ -125,7 +127,11 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "results. Use result_mode=threads for thread-grouped results. Use response_format=concise "
         "for normal recall or detailed for full conversation payloads. Use memory_status to inspect active, pending_review, quarantined, rejected, or all memories."
     ),
-    "memory_retrieve": "Read-only retrieval of a stored memory item by ID, optionally within a project_id and memory_status filter.",
+    "memory_retrieve": (
+        "Read-only retrieval of a stored memory item by ID, optionally within "
+        "a project_id and memory_status filter. Use response_format=concise "
+        "for normal recall or detailed for the full stored record."
+    ),
     "memory_ask": (
         "Read-only question answering using stored memory and facts. Optional filters: source, date_from, "
         "date_to, tags, thread_id, project_id, and memory_status. Use response_format=concise "
@@ -1164,6 +1170,7 @@ def build_tool_handlers(
         id: str,
         project_id: str | None = None,
         memory_status: str = "active",
+        response_format: ResponseFormatArg = MCPResponseFormat.CONCISE.value,
         ctx: FastMCPContext | None = None,
     ) -> dict[str, Any]:
         if not isinstance(id, str) or not id.strip():
@@ -1171,6 +1178,14 @@ def build_tool_handlers(
                 status="error",
                 error_code="invalid_input",
                 error_message="id must be a non-empty string",
+            )
+        try:
+            response_format = _validate_response_format(response_format)
+        except ValueError as exc:
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message=str(exc),
             )
         try:
             memory = await agent.retrieve(
@@ -1197,7 +1212,12 @@ def build_tool_handlers(
                 error_code="not_found",
                 error_message="memory not found",
             )
-        return _envelope(status="ok", id=id, memory=redact_content_hashes(memory))
+        return _with_envelope_defaults(
+            format_retrieve_response(
+                _envelope(status="ok", id=id, memory=redact_content_hashes(memory)),
+                response_format,
+            )
+        )
 
     async def memory_ask(
         question: str,

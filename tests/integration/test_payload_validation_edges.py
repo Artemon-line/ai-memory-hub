@@ -194,7 +194,7 @@ def test_mcp_insert_ignores_client_supplied_owner_id_and_stamps_authenticated_ow
             headers,
             request_id=3,
             name="memory_retrieve",
-            arguments={"id": payload["id"]},
+            arguments={"id": payload["id"], "response_format": "detailed"},
         )
 
     assert insert["status"] == "ok"
@@ -315,10 +315,20 @@ def test_mcp_rejects_unknown_response_format_values(tmp_path: Path) -> None:
                 "response_format": "verbose",
             },
         )
-        mcp_facts = _call_tool(
+        mcp_retrieve = _call_tool(
             client,
             headers,
             request_id=4,
+            name="memory_retrieve",
+            arguments={
+                "id": str(uuid4()),
+                "response_format": "verbose",
+            },
+        )
+        mcp_facts = _call_tool(
+            client,
+            headers,
+            request_id=5,
             name="memory_fact_search",
             arguments={
                 "subject": "payload-secret-subject",
@@ -328,7 +338,7 @@ def test_mcp_rejects_unknown_response_format_values(tmp_path: Path) -> None:
         mcp_profile = _call_tool(
             client,
             headers,
-            request_id=5,
+            request_id=6,
             name="memory_profile_get",
             arguments={
                 "subject": "payload-secret-subject",
@@ -336,7 +346,7 @@ def test_mcp_rejects_unknown_response_format_values(tmp_path: Path) -> None:
             },
         )
 
-    for payload in (mcp_search, mcp_ask, mcp_facts, mcp_profile):
+    for payload in (mcp_search, mcp_ask, mcp_retrieve, mcp_facts, mcp_profile):
         assert payload["status"] == "error"
         assert payload["error_code"] == "invalid_input"
         assert "response_format must be one of" in payload["error_message"]
@@ -816,7 +826,8 @@ def test_sensitive_content_mcp_insert_is_quarantined_and_rejectable(tmp_path: Pa
     assert secret not in json.dumps(insert)
     assert default_search["results"] == []
     assert quarantined_retrieve["status"] == "ok"
-    assert quarantined_retrieve["memory"]["metadata"]["memory_status"] == "quarantined"
+    assert quarantined_retrieve["memory"]["memory_status"] == "quarantined"
+    assert "metadata" not in quarantined_retrieve["memory"]
     assert reject["status"] == "ok"
     assert reject["memory_status"] == "rejected"
 
@@ -914,6 +925,7 @@ def test_review_pending_mcp_read_filters_expose_pending_for_ask_and_retrieve(
 
     assert default_retrieve["status"] == "not_found"
     assert pending_retrieve["status"] == "ok"
-    assert pending_retrieve["memory"]["metadata"]["memory_status"] == "pending_review"
+    assert pending_retrieve["memory"]["memory_status"] == "pending_review"
+    assert "metadata" not in pending_retrieve["memory"]
     assert pending_ask["answer_basis"] == "direct_memory"
     assert pending_ask["results"][0]["id"] == memory_id

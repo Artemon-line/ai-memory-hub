@@ -108,6 +108,18 @@ def test_responses_gateway_requests_fact_search_after_ask() -> None:
     )
 
 
+def test_real_client_smoke_retrieve_uses_concise_response_format() -> None:
+    arguments = real_client_smoke._tool_input(
+        "memory_retrieve",
+        {"insert_result": {"id": "11111111-2222-4333-8444-555555555555"}},
+    )
+
+    assert arguments == {
+        "id": "11111111-2222-4333-8444-555555555555",
+        "response_format": "concise",
+    }
+
+
 def test_responses_stream_emits_tool_arguments_and_completed_event() -> None:
     response = real_client_smoke._openai_responses_response(
         {"model": "amh-smoke-model", "input": [{"type": "message", "content": "go"}]}

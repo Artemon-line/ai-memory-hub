@@ -149,6 +149,7 @@ def test_mcp_initialize_and_tools_list_with_session() -> None:
         assert "does not store user conversation memory" in profile_auth["internal_side_effects"]
         for tool_name in (
             "memory_search",
+            "memory_retrieve",
             "memory_ask",
             "memory_fact_search",
             "memory_profile_get",

@@ -260,13 +260,27 @@ async def test_mcp_tool_handlers_insert_search_retrieve() -> None:
     )
     assert retrieve_result["status"] == "ok"
     assert retrieve_result["memory"]["id"] == "d9fd4c95-9cb3-4fd5-b967-3027f8863210"
-    assert "hash" not in retrieve_result["memory"]["messages"][0]
-    assert "conversation_hash" not in retrieve_result["memory"]["metadata"]
-    assert "message_hashes" not in retrieve_result["memory"]["metadata"]
+    assert retrieve_result["memory"]["source"] == "claude"
+    assert retrieve_result["memory"]["memory_status"] == "active"
+    assert retrieve_result["memory"]["message_count"] == 1
+    assert retrieve_result["memory"]["messages"] == [
+        {"role": "user", "text": "hello mcp"}
+    ]
+    assert "metadata" not in retrieve_result["memory"]
     assert "results" in retrieve_result
     assert "cursor" in retrieve_result
     assert "error_code" in retrieve_result
     assert "error_message" in retrieve_result
+
+    detailed_retrieve_result = await handlers["memory_retrieve"](
+        "d9fd4c95-9cb3-4fd5-b967-3027f8863210",
+        response_format="detailed",
+        ctx=ctx,
+    )
+    assert detailed_retrieve_result["status"] == "ok"
+    assert "hash" not in detailed_retrieve_result["memory"]["messages"][0]
+    assert "conversation_hash" not in detailed_retrieve_result["memory"]["metadata"]
+    assert "message_hashes" not in detailed_retrieve_result["memory"]["metadata"]
 
     ask_result = await handlers["memory_ask"]("what was stored?", 3, ctx=ctx)
     assert ask_result["status"] == "ok"

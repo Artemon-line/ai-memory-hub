@@ -1271,6 +1271,9 @@ def test_ask_direct_memory_returns_structured_chunk_evidence() -> None:
     result = mvp_ingestion.ask("rareterm", top_k=1)
 
     assert result["answer_basis"] == "direct_memory"
+    assert result["answer"] == "rareterm deployment note"
+    assert "Based on stored memory" not in result["answer"]
+    assert "- [" not in result["answer"]
     assert result["confidence_reason"] == "Answer built from ranked retrieved conversation chunks."
     assert result["evidence"][0]["type"] == "chunk"
     assert result["evidence"][0]["conversation_id"] == conversation["id"]

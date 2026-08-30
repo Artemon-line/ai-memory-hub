@@ -52,6 +52,7 @@ Keep `result_mode` separate from `response_format`:
 Apply `response_format` to the MCP read tools that agents call during recall:
 
 - `memory_search`
+- `memory_retrieve`
 - `memory_ask`
 - `memory_fact_search`
 - `memory_profile_get`
@@ -97,6 +98,16 @@ For `memory_profile_get`, concise output should keep:
 For `memory_fact_search`, concise output should keep the same reduced fact
 shape used by profile reads, plus total/unique/returned/omitted counts.
 
+For `memory_retrieve`, concise output should keep:
+
+- conversation citation fields: `id`, `source`, `title`, `timestamp`,
+  `thread_id`, and `summary`
+- `memory_status`
+- `message_count`
+- a small list of role/text messages
+- `omitted_messages` when the stored conversation has more messages than the
+  concise limit
+
 For `memory_ask`, concise output should keep:
 
 - `answer`
@@ -126,8 +137,8 @@ for `response_format="detailed"`.
 - [x] Keep `detailed` equivalent to the current MCP output.
 - [x] Add concise presenter helpers for facts, profile summaries, search rows,
       ask summaries, and conversation citations.
-- [x] Strip full conversations and noisy metadata from concise search and ask
-      responses.
+- [x] Strip full conversations and noisy metadata from concise search, retrieve,
+      and ask responses.
 - [x] Deduplicate and limit concise fact/profile rows while preserving detailed
       full provenance.
 - [x] Update MCP initialize instructions and tool descriptions to recommend
@@ -145,8 +156,9 @@ for `response_format="detailed"`.
 - MCP read tools expose `response_format` as an enum, not a boolean.
 - `response_format="concise"` returns enough information for an agent to answer
   common recall/profile questions without secondary filtering.
-- Concise MCP search and ask responses do not include full conversations,
-  citation/evidence/provenance arrays, or internal metadata manifests.
+- Concise MCP search, retrieve, and ask responses do not include full
+  conversations, citation/evidence/provenance arrays, or internal metadata
+  manifests.
 - Concise MCP fact/profile responses deduplicate facts and include returned
   counts so clients can see when rows were omitted.
 - `response_format="detailed"` preserves the existing audit-friendly shape.

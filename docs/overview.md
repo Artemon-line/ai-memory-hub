@@ -182,6 +182,12 @@ Use `response_format="detailed"` when an MCP client needs the full
 conversation envelope, generated-summary metadata, auto-tag provenance, and
 chunk manifests for audit or diagnostics.
 
+MCP `memory_retrieve` also accepts `response_format`. The default
+`response_format="concise"` returns a compact `memory` object with public recall
+fields, memory status, message count, and a small list of role/text messages.
+Use `response_format="detailed"` for the full redacted stored record. HTTP
+`/memory/retrieve` keeps the detailed administrative shape.
+
 ## Ask Result Shape
 
 `/memory/ask` returns:
@@ -217,8 +223,9 @@ chunks that fit the requested context budget. When budgeting is active, the
 response can include `context_tokens_used`, `chunks_selected`, `chunks_dropped`,
 and `tokenizer_used`.
 
-MCP `memory_ask`, `memory_fact_search`, and `memory_profile_get` support the
-same `response_format` enum as search. Concise ask responses are
+MCP `memory_retrieve`, `memory_ask`, `memory_fact_search`, and
+`memory_profile_get` support the same `response_format` enum as search.
+Concise ask responses are
 answer-centric: they keep `answer`, `confidence`, `confidence_reason`,
 `answer_basis`, and small result/fact/citation counts, but omit full
 `citations`, `evidence`, `structured_evidence`, `provenance`, chunk result
@@ -311,7 +318,7 @@ Core tools:
 - `memory_validate(conversation_json)`
 - `memory_insert(conversation_json)`
 - `memory_search(query, top_k=5, limit, cursor, result_mode="chunks", response_format="concise", source, date_from, date_to, tags, thread_id)`
-- `memory_retrieve(id)`
+- `memory_retrieve(id, response_format="concise", project_id, memory_status)`
 - `memory_ask(question, top_k=5, max_context_tokens=None, result_mode="chunks", response_format="concise", source, date_from, date_to, tags, thread_id, project_id)`
 - `memory_fact_search(subject=None, predicate=None, include_superseded=False, response_format="concise", limit=None, source, date_from, date_to, confidence, status, source_quality, save_intent, save_intent_source, freshness_from, freshness_to, project_id)`
 - `memory_profile_get(subject="user", predicate, response_format="concise", limit=None, source, date_from, date_to, confidence, status, source_quality, save_intent, save_intent_source, freshness_from, freshness_to, project_id)`

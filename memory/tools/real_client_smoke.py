@@ -824,7 +824,10 @@ def _tool_input(tool_name: str, context: Any | None = None) -> dict[str, Any]:
             "response_format": "concise",
         }
     if tool_name == "memory_retrieve":
-        return {"id": _extract_memory_id(context) or "use-search-result-id"}
+        return {
+            "id": _extract_memory_id(context) or "use-search-result-id",
+            "response_format": "concise",
+        }
     if tool_name == "memory_ask":
         return {
             "question": f"What was the conversation about: {SMOKE_MARKER}?",

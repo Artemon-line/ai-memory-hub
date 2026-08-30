@@ -60,6 +60,30 @@ CLIENT_MATRIX: tuple[dict[str, str], ...] = (
         ),
     },
     {
+        "name": "Droid",
+        "status": "Unverified",
+        "snippet": "droid mcp add ai-memory-hub-local {mcp_url} --type http",
+    },
+    {
+        "name": "DeepSeek Harness",
+        "status": "Unverified",
+        "snippet": (
+            "- id: ai-memory-hub-local\n"
+            "  name: '@deepseek-ai/dsh-mcp-client'\n"
+            "  config:\n"
+            "    serverName: ai-memory-hub-local\n"
+            "    transport: streamable-http\n"
+            "    url: {mcp_url}\n"
+            "    headers:\n"
+            "      Authorization: !!js '`Bearer ${{process.env.MCP_TOKEN}}`'"
+        ),
+    },
+    {
+        "name": "Qwen Code",
+        "status": "Unverified",
+        "snippet": "qwen mcp add --transport http ai-memory-hub-local {mcp_url}",
+    },
+    {
         "name": "Gemini CLI",
         "status": "Verified",
         "snippet": "gemini mcp add ai-memory-hub-local {mcp_url} -t http",
