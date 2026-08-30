@@ -357,6 +357,21 @@ class _FactCorrectionGroup(StrEnum):
     OLD_VALUE = "old"
 
 
+class _FactRuleName(StrEnum):
+    OWN = "own"
+    FAVORITE = "favorite"
+    LIKES = "likes"
+    CREATOR = "creator"
+    SUBJECT_CREATOR = "subject_creator"
+    COMMAND_NAME = "command_name"
+    INDEXING_STRATEGY = "indexing_strategy"
+    PROJECT_ATTRIBUTE = "project_attribute"
+    PROFILE_NAME = "profile_name"
+    PROFILE_IDENTITY = "profile_identity"
+    PROFILE_ROLE = "profile_role"
+    PROFILE_LOCATION = "profile_location"
+
+
 class _FactCorrectionQualifierKey(StrEnum):
     ITEM = "item"
     CORRECTS = "corrects"
@@ -542,59 +557,129 @@ def _ingestion_stage(stage: str, **attributes: Any) -> Iterator[None]:
                 elapsed_ms,
                 stage=stage,
             )
+_FACT_CORRECTION_ITEM = (
+    rf"(?P<{_FactCorrectionGroup.ITEM.value}>[A-Za-z0-9][A-Za-z0-9 _-]{{1,80}})"
+)
+_FACT_CORRECTION_NEW = rf"(?P<{_FactCorrectionGroup.NEW_VALUE.value}>[^.?!\n,]+?)"
+_FACT_CORRECTION_OLD = rf"(?P<{_FactCorrectionGroup.OLD_VALUE.value}>[^.?!\n]+)"
 _FACT_CORRECTION_RE = re.compile(
-    r"\b(?:actually,|correction:)\s+my\s+(?P<item>[A-Za-z0-9][A-Za-z0-9 _-]{1,80})\s+is\s+(?P<new>[^,.]+),\s+not\s+(?P<old>[^.]+)",
+    rf"\b(?:(?:actually|no),?\s+|correction:\s+)?my\s+{_FACT_CORRECTION_ITEM}"
+    rf"\s+is\s+{_FACT_CORRECTION_NEW},\s+not\s+{_FACT_CORRECTION_OLD}",
     re.IGNORECASE,
 )
 _FACT_REPLACES_CORRECTION_RE = re.compile(
-    r"\bcorrection:\s+(?P<new>[^.?!\n]+?)\s+replaces\s+(?P<old>[^.?!\n]+?)\s+for\s+my\s+(?P<item>[A-Za-z0-9][A-Za-z0-9 _-]{1,80})",
+    rf"\bcorrection:\s+{_FACT_CORRECTION_NEW}\s+replaces\s+{_FACT_CORRECTION_OLD}"
+    rf"\s+for\s+my\s+{_FACT_CORRECTION_ITEM}",
     re.IGNORECASE,
 )
-_FACT_RULES: list[tuple[str, re.Pattern[str]]] = [
-    ("own", re.compile(r"\bI\s+(?:have|own)\s+(?P<object>[^.?!\n]+)", re.IGNORECASE)),
+_FACT_RULES: list[tuple[_FactRuleName, re.Pattern[str]]] = [
     (
-        "favorite",
+        _FactRuleName.OWN,
+        re.compile(r"\bI\s+(?:have|own)\s+(?P<object>[^.?!\n]+)", re.IGNORECASE),
+    ),
+    (
+        _FactRuleName.FAVORITE,
         re.compile(
             r"\bMy\s+favorite\s+(?P<name>[A-Za-z0-9 _-]+?)\s+is\s+(?P<object>[^.?!\n]+)",
             re.IGNORECASE,
         ),
     ),
     (
-        "likes",
+        _FactRuleName.LIKES,
         re.compile(
             r"\bI\s+(?:really\s+)?(?:like|enjoy|prefer)\s+(?P<object>[^.?!\n]+)",
             re.IGNORECASE,
         ),
     ),
-    ("creator", re.compile(r"\bThe\s+creator\s+is\s+(?P<object>[^.?!\n]+)", re.IGNORECASE)),
     (
-        "subject_creator",
+        _FactRuleName.CREATOR,
+        re.compile(r"\bThe\s+creator\s+is\s+(?P<object>[^.?!\n]+)", re.IGNORECASE),
+    ),
+    (
+        _FactRuleName.SUBJECT_CREATOR,
         re.compile(
             r"\b(?P<subject>[A-Z][A-Za-z0-9 _-]{1,80})\s+creator\s+is\s+(?P<object>[^.?!\n]+)",
             re.IGNORECASE,
         ),
     ),
     (
-        "command_name",
+        _FactRuleName.COMMAND_NAME,
         re.compile(r"\bThe\s+command\s+name\s+is\s+(?P<object>[^.?!\n]+)", re.IGNORECASE),
     ),
     (
-        "indexing_strategy",
+        _FactRuleName.INDEXING_STRATEGY,
         re.compile(r"\bThe\s+indexing\s+strategy\s+is\s+(?P<object>[^.?!\n]+)", re.IGNORECASE),
     ),
     (
-        "project_attribute",
+        _FactRuleName.PROJECT_ATTRIBUTE,
         re.compile(
             r"\b(?P<subject>[A-Z][A-Za-z0-9 _-]{1,80})\s+is\s+(?P<object>[^.?!\n]+)",
             re.IGNORECASE,
         ),
     ),
-    ("profile_name", re.compile(r"\bMy\s+name\s+is\s+(?P<object>[^.?!\n]+)", re.IGNORECASE)),
-    ("profile_identity", re.compile(r"\bI\s+am\s+(?P<object>[^.?!\n]+)", re.IGNORECASE)),
-    ("profile_identity", re.compile(r"\bI'm\s+(?P<object>[^.?!\n]+)", re.IGNORECASE)),
-    ("profile_role", re.compile(r"\bI\s+work\s+as\s+(?P<object>[^.?!\n]+)", re.IGNORECASE)),
-    ("profile_location", re.compile(r"\bI\s+live\s+in\s+(?P<object>[^.?!\n]+)", re.IGNORECASE)),
+    (
+        _FactRuleName.PROFILE_NAME,
+        re.compile(r"\bMy\s+name\s+is\s+(?P<object>[^.?!\n]+)", re.IGNORECASE),
+    ),
+    (
+        _FactRuleName.PROFILE_IDENTITY,
+        re.compile(r"\bI\s+am\s+(?P<object>[^.?!\n]+)", re.IGNORECASE),
+    ),
+    (
+        _FactRuleName.PROFILE_IDENTITY,
+        re.compile(r"\bI'm\s+(?P<object>[^.?!\n]+)", re.IGNORECASE),
+    ),
+    (
+        _FactRuleName.PROFILE_ROLE,
+        re.compile(r"\bI\s+work\s+as\s+(?P<object>[^.?!\n]+)", re.IGNORECASE),
+    ),
+    (
+        _FactRuleName.PROFILE_LOCATION,
+        re.compile(r"\bI\s+live\s+in\s+(?P<object>[^.?!\n]+)", re.IGNORECASE),
+    ),
 ]
+_FACT_INLINE_CORRECTION_RE = re.compile(r",\s+not\s+[^.?!\n]+", re.IGNORECASE)
+_NOISY_PROJECT_ATTRIBUTE_SUBJECT_TOKENS = {
+    "favorite",
+    "favourite",
+    "question",
+    "remember",
+    "remeber",
+}
+_FACT_QUESTION_STOPWORDS = {
+    "about",
+    "answer",
+    "did",
+    "discuss",
+    "do",
+    "does",
+    "favorite",
+    "favourite",
+    "for",
+    "from",
+    "handle",
+    "have",
+    "how",
+    "like",
+    "likes",
+    "me",
+    "memory",
+    "my",
+    "own",
+    "prefer",
+    "preference",
+    "please",
+    "source",
+    "the",
+    "this",
+    "typo",
+    "what",
+    "when",
+    "where",
+    "which",
+    "who",
+    "why",
+}
 _COMMON_FACT_SPELLING_CORRECTIONS = {
     "aniversary": "anniversary",
     "anniversery": "anniversary",
@@ -3260,12 +3345,13 @@ def _metadata_search_values(metadata: dict[str, Any]) -> list[str]:
     return values
 
 
-def _query_tokens(query: str) -> list[str]:
-    return [
+def _query_tokens(query: str, *, limit: int | None = 8) -> list[str]:
+    tokens = [
         token.lower()
         for token in re.findall(r"[A-Za-z0-9][A-Za-z0-9_-]*", query)
         if len(token) >= 2
-    ][:8]
+    ]
+    return tokens[:limit] if limit is not None else tokens
 
 
 def _unique_strings(values: list[str]) -> list[str]:
@@ -3617,16 +3703,11 @@ def _direct_memory_ask_result(
 
 
 def _direct_memory_answer_text(matches: Sequence[dict[str, Any]]) -> str:
-    snippets: list[str] = []
     for row in matches:
         snippet = _direct_memory_answer_snippet(row)
-        if snippet and snippet not in snippets:
-            snippets.append(snippet)
-        if len(snippets) >= 3:
-            break
-    if not snippets:
-        return "I found relevant memory, but it did not include usable text."
-    return " ".join(snippets)
+        if snippet:
+            return snippet
+    return "I found relevant memory, but it did not include usable text."
 
 
 def _direct_memory_answer_snippet(row: dict[str, Any]) -> str:
@@ -3948,7 +4029,7 @@ def _extract_message_facts(
         for match in pattern.finditer(text):
             if _span_overlaps(match.span(), correction_spans):
                 continue
-            if rule_name == "own":
+            if rule_name == _FactRuleName.OWN:
                 object_value = _clean_fact_object(match.group("object"))
                 facts.append(
                     _fact(
@@ -3961,19 +4042,22 @@ def _extract_message_facts(
                         source_role=source_role,
                     )
                 )
-            elif rule_name == "favorite":
+            elif rule_name == _FactRuleName.FAVORITE:
                 name = _normalize_predicate_part(match.group("name"))
+                object_value = _clean_fact_object(match.group("object"))
+                if _has_inline_correction(object_value):
+                    continue
                 facts.append(
                     _fact(
                         subject="user",
                         predicate=f"favorite_{name}",
-                        object_value=_clean_fact_object(match.group("object")),
+                        object_value=object_value,
                         conversation=conversation,
                         message_index=message_index,
                         source_role=source_role,
                     )
                 )
-            elif rule_name == "likes":
+            elif rule_name == _FactRuleName.LIKES:
                 facts.append(
                     _fact(
                         subject="user",
@@ -3985,7 +4069,7 @@ def _extract_message_facts(
                         source_role=source_role,
                     )
                 )
-            elif rule_name == "subject_creator":
+            elif rule_name == _FactRuleName.SUBJECT_CREATOR:
                 facts.append(
                     _fact(
                         subject=match.group("subject").strip(),
@@ -3996,37 +4080,47 @@ def _extract_message_facts(
                         source_role=source_role,
                     )
                 )
-            elif rule_name in {"creator", "command_name", "indexing_strategy"}:
+            elif rule_name in {
+                _FactRuleName.CREATOR,
+                _FactRuleName.COMMAND_NAME,
+                _FactRuleName.INDEXING_STRATEGY,
+            }:
                 facts.append(
                     _fact(
                         subject=_project_subject(conversation),
-                        predicate=rule_name,
+                        predicate=rule_name.value,
                         object_value=_clean_fact_object(match.group("object")),
                         conversation=conversation,
                         message_index=message_index,
                         source_role=source_role,
                     )
                 )
-            elif rule_name in {"profile_name", "profile_identity", "profile_role", "profile_location"}:
+            elif rule_name in {
+                _FactRuleName.PROFILE_NAME,
+                _FactRuleName.PROFILE_IDENTITY,
+                _FactRuleName.PROFILE_ROLE,
+                _FactRuleName.PROFILE_LOCATION,
+            }:
                 facts.append(
                     _fact(
                         subject="user",
-                        predicate=rule_name,
+                        predicate=rule_name.value,
                         object_value=_clean_fact_object(match.group("object")),
                         conversation=conversation,
                         message_index=message_index,
                         source_role=source_role,
                     )
                 )
-            elif rule_name == "project_attribute":
+            elif rule_name == _FactRuleName.PROJECT_ATTRIBUTE:
                 subject = match.group("subject").strip()
-                if subject.lower() in {"i", "my", "the", "this"}:
+                object_value = _clean_fact_object(match.group("object"))
+                if _should_skip_project_attribute_fact(subject, object_value):
                     continue
                 facts.append(
                     _fact(
                         subject=subject,
                         predicate="description",
-                        object_value=_clean_fact_object(match.group("object")),
+                        object_value=object_value,
                         conversation=conversation,
                         message_index=message_index,
                         source_role=source_role,
@@ -4074,6 +4168,20 @@ def _corrected_fact_shape(item: str, new_value: str) -> tuple[str, str]:
         predicate = f"favorite_{_normalize_predicate_part(favorite_name)}"
         return predicate, new_value
     return _owned_item_predicate(item), f"{item} is {new_value}"
+
+
+def _has_inline_correction(value: str) -> bool:
+    return _FACT_INLINE_CORRECTION_RE.search(value) is not None
+
+
+def _should_skip_project_attribute_fact(subject: str, object_value: str) -> bool:
+    subject_lower = subject.lower()
+    if subject_lower in {"i", "my", "the", "this"}:
+        return True
+    if _has_inline_correction(object_value):
+        return True
+    subject_tokens = set(_query_tokens(subject, limit=None))
+    return bool(subject_tokens.intersection(_NOISY_PROJECT_ATTRIBUTE_SUBJECT_TOKENS))
 
 
 def _topic_facts(
@@ -4241,6 +4349,7 @@ def _answer_from_facts(
     )
     facts = _filter_facts_for_question(facts, question, query)
     active = [fact for fact in facts if not fact.get("superseded_by") and not fact.get("deleted_at")]
+    active = _narrow_facts_for_question(active, question, query)
     if not active:
         return None
     objects = {str(fact.get("object_normalized") or fact.get("object", "")) for fact in active}
@@ -4372,6 +4481,57 @@ def _filter_facts_for_question(
         for fact in facts
         if set(_query_tokens(str(fact.get("subject", "")))).intersection(question_tokens)
     ] or facts
+
+
+def _narrow_facts_for_question(
+    facts: list[dict[str, Any]], question: str, query: dict[str, str]
+) -> list[dict[str, Any]]:
+    if len(facts) < 2:
+        return facts
+    question_tokens = _specific_fact_question_tokens(question, query)
+    if not question_tokens:
+        return facts
+    scored = [
+        (_fact_question_overlap_score(fact, question_tokens), index, fact)
+        for index, fact in enumerate(facts)
+    ]
+    best_score = max(score for score, _index, _fact in scored)
+    if best_score <= 0:
+        return facts
+    narrowed = [fact for score, _index, fact in scored if score == best_score]
+    return narrowed if len(narrowed) < len(facts) else facts
+
+
+def _specific_fact_question_tokens(question: str, query: dict[str, str]) -> set[str]:
+    predicate_tokens = set(_query_tokens(query.get("predicate", "").replace("_", " "), limit=None))
+    subject_tokens = set(_query_tokens(query.get("subject", ""), limit=None))
+    ignored_tokens = _FACT_QUESTION_STOPWORDS | predicate_tokens | subject_tokens
+    return {
+        token
+        for token in _query_tokens(question, limit=None)
+        if token not in ignored_tokens
+    }
+
+
+def _fact_question_overlap_score(
+    fact: dict[str, Any], question_tokens: set[str]
+) -> int:
+    fact_tokens = set(_query_tokens(_fact_search_text(fact), limit=None))
+    return len(question_tokens.intersection(fact_tokens))
+
+
+def _fact_search_text(fact: dict[str, Any]) -> str:
+    parts = [
+        str(fact.get("subject", "")),
+        str(fact.get("predicate", "")).replace("_", " "),
+        str(fact.get("object", "")),
+        str(fact.get("object_normalized", "")),
+        str(fact.get("source_conversation_id", "")),
+    ]
+    conversation = _runtime().metadata_store.get(str(fact.get("source_conversation_id", "")))
+    if isinstance(conversation, dict):
+        parts.append(_conversation_search_text(conversation))
+    return " ".join(parts)
 
 
 def _fact_question_needs_context(question: str) -> bool:

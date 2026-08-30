@@ -1281,6 +1281,26 @@ def test_ask_direct_memory_returns_structured_chunk_evidence() -> None:
     assert result["structured_evidence"]["results"] == result["results"]
 
 
+def test_ask_direct_memory_uses_best_snippet() -> None:
+    _configure_stubs()
+    first = _valid_conversation()
+    first["id"] = "11111111-1111-4111-8111-111111111111"
+    first["messages"] = [{"role": "user", "text": "rareterm clean answer"}]
+    second = _valid_conversation()
+    second["id"] = "22222222-2222-4222-8222-222222222222"
+    second["messages"] = [
+        {"role": "user", "text": "rareterm extra evidence should stay in results only"}
+    ]
+    mvp_ingestion.ingest_messages(first)
+    mvp_ingestion.ingest_messages(second)
+
+    result = mvp_ingestion.ask("rareterm", top_k=2)
+
+    assert result["answer_basis"] == "direct_memory"
+    assert result["answer"] == "rareterm clean answer"
+    assert len(result["results"]) == 2
+
+
 def test_ask_no_hit_returns_empty_structured_evidence() -> None:
     _configure_stubs(retrieval_vector_score_threshold=999.0, retrieval_keyword_enabled=False)
 
@@ -1430,6 +1450,35 @@ def test_fact_correction_supersedes_old_fact() -> None:
     assert result["evidence"][0]["source_quality"] == "corrected_by_user"
 
 
+def test_plain_favorite_correction_supersedes_old_food() -> None:
+    _configure_stubs()
+    first = _valid_conversation()
+    first["id"] = "11111111-1111-4111-8111-111111111111"
+    first["messages"] = [{"role": "user", "text": "My favorite food is QA green curry."}]
+    second = _valid_conversation()
+    second["id"] = "22222222-2222-4222-8222-222222222222"
+    second["messages"] = [
+        {"role": "user", "text": "My favorite food is QA mushroom ramen, not QA green curry."}
+    ]
+    mvp_ingestion.ingest_messages(first)
+    mvp_ingestion.ingest_messages(second)
+
+    result = mvp_ingestion.ask("What is my favorite food?", top_k=5)
+    active = mvp_ingestion.fact_search(subject="user", predicate="favorite_food")
+    audit = mvp_ingestion.fact_search(
+        subject="user",
+        predicate="favorite_food",
+        include_superseded=True,
+    )
+    descriptions = mvp_ingestion.fact_search(predicate="description")
+
+    assert result["answer"] == "QA mushroom ramen"
+    assert [fact["object"] for fact in active["results"]] == ["QA mushroom ramen"]
+    assert any(fact["superseded_by"] for fact in audit["results"])
+    assert all(", not " not in fact["object"] for fact in audit["results"])
+    assert descriptions["results"] == []
+
+
 def test_fact_and_profile_filters_cover_status_quality_and_freshness() -> None:
     _configure_stubs()
     first = _valid_conversation()
@@ -1521,6 +1570,24 @@ def test_conflicting_active_facts_return_conflict_basis() -> None:
     assert result["confidence_reason"] == "Multiple active facts match the question but disagree."
     assert "red Gibson" in result["answer"]
     assert "black Fender" in result["answer"]
+
+
+def test_fact_answer_uses_specific_question_tokens() -> None:
+    _configure_stubs()
+    first = _valid_conversation()
+    first["id"] = "11111111-1111-4111-8111-111111111111"
+    first["messages"] = [{"role": "user", "text": "I like QA red beacon potato chips."}]
+    second = _valid_conversation()
+    second["id"] = "22222222-2222-4222-8222-222222222222"
+    second["messages"] = [{"role": "user", "text": "I like QA blue beacon corn chips."}]
+    mvp_ingestion.ingest_messages(first)
+    mvp_ingestion.ingest_messages(second)
+
+    result = mvp_ingestion.ask("What QA snack do I like with blue beacon?", top_k=5)
+
+    assert result["answer_basis"] == "fact_layer"
+    assert result["answer"] == "QA blue beacon corn chips"
+    assert [fact["object"] for fact in result["facts"]] == ["QA blue beacon corn chips"]
 
 
 def test_fact_answer_can_include_retrieval_context_as_mixed() -> None:

@@ -298,6 +298,10 @@ def test_mcp_insert_deduplicates_exact_reinsert(tmp_path: Path) -> None:
             "Correction: QA pizza slice replaces QA avocado toast for my favorite food.",
             "QA pizza slice",
         ),
+        (
+            "My favorite food is QA pizza slice, not QA avocado toast.",
+            "QA pizza slice",
+        ),
     ],
 )
 def test_clear_correction_supersedes_prior_favorite_food(
