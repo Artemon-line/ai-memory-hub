@@ -691,10 +691,12 @@ def test_oauth_auth_protects_mcp_initialize(caplog) -> None:
         )
 
     assert missing.status_code == 401
+    missing_challenge = missing.headers["www-authenticate"]
     assert (
         'resource_metadata="https://memory.example.com/.well-known/oauth-protected-resource/mcp"'
-        in missing.headers["www-authenticate"]
+        in missing_challenge
     )
+    assert 'scope="memory:read memory:write"' in missing_challenge
     assert missing.headers[AUTH_ERROR_CODE_HEADER] == "invalid_request"
     assert missing.headers[AUTH_REQUIRED_SCOPES_HEADER] == "memory:read"
     missing_body = missing.json()

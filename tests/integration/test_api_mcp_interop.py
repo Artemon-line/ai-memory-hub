@@ -33,7 +33,12 @@ def _tool_payload(response: Any) -> dict[str, Any]:
     return json.loads(text)
 
 
-def _initialize_mcp(client: TestClient, *, token: str | None = None) -> dict[str, str]:
+def _initialize_mcp(
+    client: TestClient,
+    *,
+    token: str | None = None,
+    client_name: str = "pytest-interop",
+) -> dict[str, str]:
     headers = {"Accept": "application/json, text/event-stream"}
     if token is not None:
         headers["Authorization"] = f"Bearer {token}"
@@ -46,7 +51,7 @@ def _initialize_mcp(client: TestClient, *, token: str | None = None) -> dict[str
             "params": {
                 "protocolVersion": "2025-06-18",
                 "capabilities": {},
-                "clientInfo": {"name": "pytest-interop", "version": "0.1"},
+                "clientInfo": {"name": client_name, "version": "0.1"},
             },
         },
         headers=headers,
@@ -527,6 +532,176 @@ def test_mcp_bearer_insert_is_readable_by_api_same_owner_and_hidden_from_other_o
     assert search_b.status_code == 200
     assert payload["id"] not in {row["id"] for row in search_b.json()["results"]}
     assert retrieve_b.status_code == 404
+
+
+def test_mcp_codex_and_opencode_sessions_share_same_bearer_token(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    codex_payload = _conversation(
+        text="Codex same-token MCP phrase is azure lattice.",
+        source="codex",
+    )
+    opencode_payload = _conversation(
+        text="opencode same-token MCP phrase is ruby ledger.",
+        source="opencode",
+    )
+
+    with _auth_client(tmp_path, monkeypatch) as client:
+        codex_headers = _initialize_mcp(client, token="token-a", client_name="codex")
+        opencode_headers = _initialize_mcp(
+            client, token="token-a", client_name="opencode"
+        )
+        codex_insert = _call_tool(
+            client,
+            codex_headers,
+            request_id=2,
+            name="memory_insert",
+            arguments={"conversation_json": codex_payload},
+        )
+        opencode_insert = _call_tool(
+            client,
+            opencode_headers,
+            request_id=3,
+            name="memory_insert",
+            arguments={"conversation_json": opencode_payload},
+        )
+        opencode_reads_codex = _call_tool(
+            client,
+            opencode_headers,
+            request_id=4,
+            name="memory_retrieve",
+            arguments={"id": codex_payload["id"]},
+        )
+        codex_reads_opencode = _call_tool(
+            client,
+            codex_headers,
+            request_id=5,
+            name="memory_retrieve",
+            arguments={"id": opencode_payload["id"]},
+        )
+        opencode_searches_codex = _call_tool(
+            client,
+            opencode_headers,
+            request_id=6,
+            name="memory_search",
+            arguments={"query": "azure lattice", "top_k": 5},
+        )
+        codex_searches_opencode = _call_tool(
+            client,
+            codex_headers,
+            request_id=7,
+            name="memory_search",
+            arguments={"query": "ruby ledger", "top_k": 5},
+        )
+
+    assert codex_insert["status"] == "ok"
+    assert codex_insert["id"] == codex_payload["id"]
+    assert opencode_insert["status"] == "ok"
+    assert opencode_insert["id"] == opencode_payload["id"]
+    assert opencode_reads_codex["status"] == "ok"
+    _assert_public_memory(opencode_reads_codex["memory"], codex_payload)
+    assert codex_reads_opencode["status"] == "ok"
+    _assert_public_memory(codex_reads_opencode["memory"], opencode_payload)
+    assert opencode_searches_codex["status"] == "ok"
+    assert codex_payload["id"] in {
+        row["id"] for row in opencode_searches_codex["results"]
+    }
+    assert codex_searches_opencode["status"] == "ok"
+    assert opencode_payload["id"] in {
+        row["id"] for row in codex_searches_opencode["results"]
+    }
+
+
+def test_mcp_codex_and_opencode_sessions_isolate_different_bearer_tokens(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    codex_payload = _conversation(
+        text="Codex different-token private phrase is saffron prism.",
+        source="codex",
+    )
+    opencode_payload = _conversation(
+        text="opencode different-token private phrase is cobalt ledger.",
+        source="opencode",
+    )
+
+    with _auth_client(tmp_path, monkeypatch) as client:
+        codex_headers = _initialize_mcp(client, token="token-a", client_name="codex")
+        opencode_headers = _initialize_mcp(
+            client, token="token-b", client_name="opencode"
+        )
+        codex_insert = _call_tool(
+            client,
+            codex_headers,
+            request_id=2,
+            name="memory_insert",
+            arguments={"conversation_json": codex_payload},
+        )
+        opencode_insert = _call_tool(
+            client,
+            opencode_headers,
+            request_id=3,
+            name="memory_insert",
+            arguments={"conversation_json": opencode_payload},
+        )
+        codex_reads_own = _call_tool(
+            client,
+            codex_headers,
+            request_id=4,
+            name="memory_retrieve",
+            arguments={"id": codex_payload["id"]},
+        )
+        opencode_reads_own = _call_tool(
+            client,
+            opencode_headers,
+            request_id=5,
+            name="memory_retrieve",
+            arguments={"id": opencode_payload["id"]},
+        )
+        opencode_reads_codex = _call_tool(
+            client,
+            opencode_headers,
+            request_id=6,
+            name="memory_retrieve",
+            arguments={"id": codex_payload["id"]},
+        )
+        codex_reads_opencode = _call_tool(
+            client,
+            codex_headers,
+            request_id=7,
+            name="memory_retrieve",
+            arguments={"id": opencode_payload["id"]},
+        )
+        opencode_searches_codex = _call_tool(
+            client,
+            opencode_headers,
+            request_id=8,
+            name="memory_search",
+            arguments={"query": "saffron prism", "top_k": 5},
+        )
+        codex_searches_opencode = _call_tool(
+            client,
+            codex_headers,
+            request_id=9,
+            name="memory_search",
+            arguments={"query": "cobalt ledger", "top_k": 5},
+        )
+
+    assert codex_insert["status"] == "ok"
+    assert opencode_insert["status"] == "ok"
+    assert codex_reads_own["status"] == "ok"
+    _assert_public_memory(codex_reads_own["memory"], codex_payload)
+    assert opencode_reads_own["status"] == "ok"
+    _assert_public_memory(opencode_reads_own["memory"], opencode_payload)
+    assert opencode_reads_codex["status"] == "not_found"
+    assert codex_reads_opencode["status"] == "not_found"
+    assert opencode_searches_codex["status"] == "ok"
+    assert codex_payload["id"] not in {
+        row["id"] for row in opencode_searches_codex["results"]
+    }
+    assert codex_searches_opencode["status"] == "ok"
+    assert opencode_payload["id"] not in {
+        row["id"] for row in codex_searches_opencode["results"]
+    }
 
 
 def test_api_and_mcp_response_shapes_share_public_fields(tmp_path: Path) -> None:
