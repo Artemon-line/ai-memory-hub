@@ -511,6 +511,37 @@ async def test_mcp_fact_and_profile_concise_format_reduces_fact_payloads() -> No
 
 
 @pytest.mark.asyncio
+async def test_mcp_concise_ask_includes_latest_value_metadata() -> None:
+    runtime = _runtime()
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=runtime)
+    handlers = build_tool_handlers(agent)
+    older = _conversation()
+    older["id"] = "11111111-1111-4111-8111-111111111111"
+    older["source"] = "codex"
+    older["timestamp"] = "2026-08-12T00:00:00Z"
+    older["messages"] = [{"role": "user", "text": "The command name is alpha runner."}]
+    newer = _conversation_two()
+    newer["id"] = "22222222-2222-4222-8222-222222222222"
+    newer["source"] = "hermes"
+    newer["timestamp"] = "2026-12-12T00:00:00Z"
+    newer["messages"] = [{"role": "user", "text": "The command name is beta runner."}]
+
+    await handlers["memory_insert"](older)
+    await handlers["memory_insert"](newer)
+    ask = await handlers["memory_ask"]("What is the command name?", 5)
+
+    assert ask["answer"] == "beta runner"
+    assert ask["answer_basis"] == "fact_layer"
+    assert ask["latest"]["value"] == "beta runner"
+    assert ask["latest"]["stored_at"] == "2026-12-12T00:00:00Z"
+    assert ask["latest"]["author"] == "hermes"
+    assert ask["fact_count"] == 1
+    assert "fact_timeline" not in ask
+    assert "facts" not in ask
+    assert "evidence" not in ask
+
+
+@pytest.mark.asyncio
 async def test_mcp_fact_and_profile_concise_deduplicates_and_limits_rows(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

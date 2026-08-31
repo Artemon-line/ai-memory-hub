@@ -17,68 +17,82 @@ profile fields as a primary goal.
 
 ## Target Model
 
-- [ ] Treat stored conversations as the source of truth.
-- [ ] Treat extracted facts as derived, rebuildable index rows.
-- [ ] Preserve each observed value with the source memory timestamp.
-- [ ] Compute the latest applicable value at read time from source timestamps.
-- [ ] Do not store `current=true`, `valid_from`, or `valid_until` as source-of-truth state.
-- [ ] Return the latest value, latest stored timestamp, and author in compact/default reads.
-- [ ] Return the value timeline, sources, authors, and timestamps in detailed reads.
-- [ ] Use corrections as timestamped memory events, not as historical erasure.
+- [x] Treat stored conversations as the source of truth.
+- [x] Treat extracted facts as derived, rebuildable index rows.
+- [x] Preserve each observed value with the source memory timestamp.
+- [x] Compute the latest applicable value at read time from source timestamps.
+- [x] Do not store `current=true`, `valid_from`, or `valid_until` as source-of-truth state.
+- [x] Return the latest value, latest stored timestamp, and author in compact/default reads.
+- [x] Return the value timeline, sources, authors, and timestamps in detailed reads.
+- [x] Use corrections as timestamped memory events, not as historical erasure.
 - [ ] Keep fact extraction generic enough for arbitrary memory content.
 - [ ] Avoid fixture-shaped product behavior for favorites, likes, and profile fields.
 
 ## Phase 1: Inventory Current Profile-Shaped Behavior
 
-- [ ] List every deterministic extraction rule that creates user-profile-style facts.
-- [ ] Identify tests that rely on favorite/likes/profile examples only as QA fixtures.
-- [ ] Identify tests that encode actual public API compatibility.
-- [ ] Separate generic temporal-memory expectations from fixture-specific wording.
-- [ ] Document current concise versus detailed response fields for ask/search/retrieve/fact reads.
+- [x] List every deterministic extraction rule that creates user-profile-style facts.
+- [x] Identify tests that rely on favorite/likes/profile examples only as QA fixtures.
+- [x] Identify tests that encode actual public API compatibility.
+- [x] Separate generic temporal-memory expectations from fixture-specific wording.
+- [x] Document current concise versus detailed response fields for ask/search/retrieve/fact reads.
+
+Current deterministic extraction rules include ownership, favorites, likes,
+creator, subject creator, command name, indexing strategy, generic project
+attributes, profile name, profile identity, profile role, profile location,
+recurring topics, and optional external extractor rows. Favorites, likes, and
+profile examples remain compatibility and QA fixtures; the temporal projection
+tests use command/indexing facts to avoid encoding preferences as product
+semantics.
 
 ## Phase 2: Define Temporal Fact Semantics
 
-- [ ] Add explicit terminology for stored memory event, observed value, latest projection, and historical value.
-- [ ] Use the source memory timestamp as the only temporal source of truth.
-- [ ] Define how correction phrases are stored as ordinary timestamped memory events.
-- [ ] Define how compact reads choose the latest value when multiple active historical values exist.
-- [ ] Define how detailed reads expose older values without calling them deleted or invalid.
-- [ ] Define how conflicts differ from normal temporal changes.
+- [x] Add explicit terminology for stored memory event, observed value, latest projection, and historical value.
+- [x] Use the source memory timestamp as the only temporal source of truth.
+- [x] Define how correction phrases are stored as ordinary timestamped memory events.
+- [x] Define how compact reads choose the latest value when multiple active historical values exist.
+- [x] Define how detailed reads expose older values without calling them deleted or invalid.
+- [x] Define how conflicts differ from normal temporal changes.
+
+Implemented semantics: a stored memory event is the conversation payload; an
+observed value is a derived fact row pointing back to a stored memory event; the
+latest projection is computed at read time from the source memory timestamp; a
+historical value is any older observed value for the same question. Conflicts
+are limited to multiple distinct values in the same latest timestamp group.
 
 ## Phase 3: Refactor Extraction Away From Favorite Plumbing
 
 - [ ] Replace favorite-specific helpers with generic attribute extraction helpers.
-- [ ] Keep named regex groups or parser fields local to extraction, not spread through product logic.
-- [ ] Avoid hardcoded `favorite_...` predicates outside compatibility adapters and tests.
+- [x] Keep named regex groups or parser fields local to extraction, not spread through product logic.
+- [x] Avoid hardcoded `favorite_...` predicates outside compatibility adapters and tests.
 - [ ] Re-evaluate whether profile-like deterministic extraction should run by default.
 - [ ] Keep "likes" extraction only if it behaves as generic memory indexing, not profile collection.
 - [ ] Make fixture tests assert temporal behavior rather than a special favorite domain.
 
 ## Phase 4: Update Read Behavior
 
-- [ ] Make compact `memory_ask` prefer the latest derived projection when a question asks for a current value.
-- [ ] Include `value`, `stored_at`, and `author` for latest-value compact answers.
-- [ ] Make detailed `memory_ask` include timeline evidence for older observed values.
-- [ ] Keep `memory_search` and `memory_retrieve` grounded in stored memory records.
+- [x] Make compact `memory_ask` prefer the latest derived projection when a question asks for a current value.
+- [x] Include `value`, `stored_at`, and `author` for latest-value compact answers.
+- [x] Make detailed `memory_ask` include timeline evidence for older observed values.
+- [x] Keep `memory_search` and `memory_retrieve` grounded in stored memory records.
 - [ ] Ensure `memory_fact_search` can filter or group by latest-only versus timeline views.
 - [ ] Preserve backwards-compatible detailed/audit payloads where clients may depend on them.
 
 ## Phase 5: Migration And Compatibility
 
-- [ ] Decide whether existing fact rows need a schema migration or can be interpreted with existing timestamps.
-- [ ] Preserve existing public field names unless a compatibility adapter can bridge them.
-- [ ] Add tests for older favorite/likes fixtures so compatibility does not regress accidentally.
-- [ ] Add tests that prove new temporal semantics with non-profile examples.
+- [x] Decide whether existing fact rows need a schema migration or can be interpreted with existing timestamps.
+- [x] Preserve existing public field names unless a compatibility adapter can bridge them.
+- [x] Add tests for older favorite/likes fixtures so compatibility does not regress accidentally.
+- [x] Add tests that prove new temporal semantics with non-profile examples.
 - [ ] Document any deprecated fixture-shaped behavior.
 
 ## Phase 6: Validation
 
-- [ ] Run focused extraction and ask tests.
-- [ ] Run MCP concise/detailed response shape tests.
-- [ ] Run SQLite-backed integration tests for temporal projections.
-- [ ] Run `uv run python -m ruff check memory tests tools`.
-- [ ] Run `uv run python -m pyright`.
-- [ ] Run `uv run pytest tests/unit tests/integration -q`.
+- [x] Run focused extraction and ask tests.
+- [x] Run MCP concise/detailed response shape tests.
+- [x] Run SQLite-backed integration tests for temporal projections.
+- [x] Run `uv run python -m ruff check memory tests tools`.
+- [x] Run `uv run python -m pyright`.
+- [x] Run `uv run pytest tests/unit tests/integration -q`.
 - [ ] Update the PR description with the completed phase and validation results.
 - [ ] Push and monitor CI before marking the phase done.
 

@@ -236,6 +236,11 @@ def test_preference_question_uses_fact_backed_concise_answer(
         "kettle cooked potato chips, especially sea salt flavor"
     )
     assert concise_ask["answer_basis"] == "fact_layer"
+    assert concise_ask["latest"]["value"] == (
+        "kettle cooked potato chips, especially sea salt flavor"
+    )
+    assert concise_ask["latest"]["stored_at"] == payload["timestamp"]
+    assert concise_ask["latest"]["author"] == payload["source"]
     assert concise_ask["fact_count"] == 1
     assert concise_ask["memory_result_count"] == 0
     assert detailed_ask["results"] == []
@@ -312,12 +317,16 @@ def test_clear_correction_supersedes_prior_favorite_food(
     old_food = _conversation(
         memory_id="33d79ee0-ce14-4a32-82b1-7e7406ffc999",
         text="My favorite food is QA avocado toast.",
+        source="codex",
+        timestamp="2026-08-12T00:00:00Z",
         tags=["codex-cli-qa", "correction"],
         thread_id="AMH-QA-20260828-CORR",
     )
     corrected_food = _conversation(
         memory_id="44d79ee0-ce14-4a32-82b1-7e7406ffc999",
         text=correction_text,
+        source="hermes",
+        timestamp="2026-12-12T00:00:00Z",
         tags=["codex-cli-qa", "correction"],
         thread_id="AMH-QA-20260828-CORR",
     )
@@ -376,6 +385,9 @@ def test_clear_correction_supersedes_prior_favorite_food(
     )
     assert audit_by_object[expected_new]["superseded_by"] is None
     assert ask["answer"] == expected_new
+    assert ask["latest"]["value"] == expected_new
+    assert ask["latest"]["stored_at"] == "2026-12-12T00:00:00Z"
+    assert ask["latest"]["author"] == "hermes"
     assert ask["facts"][0]["source_quality"] == "corrected_by_user"
 
 

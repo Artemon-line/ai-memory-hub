@@ -1429,6 +1429,7 @@ def test_fact_correction_supersedes_old_fact() -> None:
     ]
     second = _valid_conversation()
     second["id"] = "22222222-2222-4222-8222-222222222222"
+    second["timestamp"] = "2026-01-02T00:00:00Z"
     second["messages"] = [
         {"role": "user", "text": "Actually, my Gibson Special is TV yellow, not cherry."}
     ]
@@ -1457,6 +1458,7 @@ def test_plain_favorite_correction_supersedes_old_food() -> None:
     first["messages"] = [{"role": "user", "text": "My favorite food is QA green curry."}]
     second = _valid_conversation()
     second["id"] = "22222222-2222-4222-8222-222222222222"
+    second["timestamp"] = "2026-01-02T00:00:00Z"
     second["messages"] = [
         {"role": "user", "text": "My favorite food is QA mushroom ramen, not QA green curry."}
     ]
@@ -1567,9 +1569,73 @@ def test_conflicting_active_facts_return_conflict_basis() -> None:
 
     assert result["answer_basis"] == "conflict"
     assert result["confidence"] == "low"
-    assert result["confidence_reason"] == "Multiple active facts match the question but disagree."
+    assert result["confidence_reason"] == (
+        "Multiple latest facts match the question at the same timestamp but disagree."
+    )
     assert "red Gibson" in result["answer"]
     assert "black Fender" in result["answer"]
+
+
+def test_ask_returns_latest_fact_by_memory_timestamp() -> None:
+    _configure_stubs()
+    first = _valid_conversation()
+    first["id"] = "11111111-1111-4111-8111-111111111111"
+    first["source"] = "codex"
+    first["timestamp"] = "2026-08-12T00:00:00Z"
+    first["messages"] = [{"role": "user", "text": "The command name is alpha runner."}]
+    second = _valid_conversation()
+    second["id"] = "22222222-2222-4222-8222-222222222222"
+    second["source"] = "hermes"
+    second["timestamp"] = "2026-12-12T00:00:00Z"
+    second["messages"] = [{"role": "user", "text": "The command name is beta runner."}]
+    mvp_ingestion.ingest_messages(first)
+    mvp_ingestion.ingest_messages(second)
+
+    result = mvp_ingestion.ask("What is the command name?", top_k=5)
+
+    assert result["answer_basis"] == "fact_layer"
+    assert result["answer"] == "beta runner"
+    assert result["latest"] == {
+        "value": "beta runner",
+        "stored_at": "2026-12-12T00:00:00Z",
+        "author": "hermes",
+        "fact_id": result["facts"][0]["id"],
+        "subject": "project",
+        "predicate": "command_name",
+        "source_conversation_id": "22222222-2222-4222-8222-222222222222",
+    }
+    assert [entry["value"] for entry in result["fact_timeline"]] == [
+        "beta runner",
+        "alpha runner",
+    ]
+    assert result["facts"][0]["stored_at"] == "2026-12-12T00:00:00Z"
+    assert result["facts"][0]["author"] == "hermes"
+    assert result["evidence"][1]["used_in_answer"] is False
+
+
+def test_ask_reports_conflict_for_latest_same_timestamp_values() -> None:
+    _configure_stubs()
+    first = _valid_conversation()
+    first["id"] = "11111111-1111-4111-8111-111111111111"
+    first["source"] = "codex"
+    first["timestamp"] = "2026-08-12T00:00:00Z"
+    first["messages"] = [{"role": "user", "text": "The indexing strategy is lexical windows."}]
+    second = _valid_conversation()
+    second["id"] = "22222222-2222-4222-8222-222222222222"
+    second["source"] = "hermes"
+    second["timestamp"] = "2026-08-12T00:00:00Z"
+    second["messages"] = [{"role": "user", "text": "The indexing strategy is semantic chunks."}]
+    mvp_ingestion.ingest_messages(first)
+    mvp_ingestion.ingest_messages(second)
+
+    result = mvp_ingestion.ask("What is the indexing strategy?", top_k=5)
+
+    assert result["answer_basis"] == "conflict"
+    assert result["confidence"] == "low"
+    assert set(result["latest"]["values"]) == {"semantic chunks", "lexical windows"}
+    assert result["latest"]["stored_at"] == "2026-08-12T00:00:00Z"
+    assert "semantic chunks" in result["answer"]
+    assert "lexical windows" in result["answer"]
 
 
 def test_fact_answer_uses_specific_question_tokens() -> None:

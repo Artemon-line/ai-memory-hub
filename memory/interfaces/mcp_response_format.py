@@ -1,10 +1,39 @@
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Any
 
+from memory.ingestion.fact_timeline import FactField
 from memory.ingestion.thread_models import MCPResponseFormat, ThreadMetadataKey, ThreadResultKey
 
-_SEARCH_ROW_KEYS = (
+
+class MCPPayloadKey(StrEnum):
+    ANSWER = "answer"
+    ANSWER_BASIS = "answer_basis"
+    CITATION = "citation"
+    CITATION_COUNT = "citation_count"
+    CONFIDENCE = "confidence"
+    CONFIDENCE_REASON = "confidence_reason"
+    FACT_COUNT = "fact_count"
+    FACTS = "facts"
+    LATEST = "latest"
+    MEMORY = "memory"
+    MEMORY_RESULT_COUNT = "memory_result_count"
+    MESSAGES = "messages"
+    OBJECT = "object"
+    OBJECT_NORMALIZED = "object_normalized"
+    OMITTED_MESSAGES = "omitted_messages"
+    RESULTS = "results"
+    STATUS = "status"
+    SUMMARY = "summary"
+    TOTAL = "total"
+    UNIQUE = "unique"
+    RETURNED = "returned"
+    OMITTED = "omitted"
+    LIMIT = "limit"
+
+
+_SEARCH_ROW_KEYS: tuple[str | StrEnum, ...] = (
     "id",
     "score",
     "text",
@@ -14,31 +43,33 @@ _SEARCH_ROW_KEYS = (
     "evidence_chunks",
     "used_in_answer",
 )
-_THREAD_ROW_KEYS = (
+_THREAD_ROW_KEYS: tuple[str | StrEnum, ...] = (
     ThreadResultKey.THREAD_ID.value,
     ThreadResultKey.THREAD_CONVERSATION_IDS.value,
     ThreadResultKey.THREAD_CONVERSATION_COUNT.value,
     ThreadResultKey.MATCHING_CONVERSATIONS.value,
 )
-_FACT_KEYS = (
-    "id",
-    "subject",
-    "predicate",
-    "object",
-    "object_normalized",
-    "confidence",
-    "source_quality",
-    "last_confirmed_at",
-    "source_conversation_id",
+_FACT_KEYS: tuple[str | StrEnum, ...] = (
+    FactField.ID,
+    FactField.SUBJECT,
+    FactField.PREDICATE,
+    FactField.OBJECT,
+    FactField.OBJECT_NORMALIZED,
+    FactField.CONFIDENCE,
+    FactField.SOURCE_QUALITY,
+    FactField.LAST_CONFIRMED_AT,
+    FactField.STORED_AT,
+    FactField.AUTHOR,
+    FactField.SOURCE_CONVERSATION_ID,
 )
-_PROFILE_SUMMARY_KEYS = (
+_PROFILE_SUMMARY_KEYS: tuple[str | StrEnum, ...] = (
     "text",
     "active_fact_count",
     "freshest_at",
     "confidence_counts",
     "source_quality_counts",
 )
-_CHUNK_EVIDENCE_KEYS = (
+_CHUNK_EVIDENCE_KEYS: tuple[str | StrEnum, ...] = (
     "type",
     "conversation_id",
     "chunk_index",
@@ -47,28 +78,31 @@ _CHUNK_EVIDENCE_KEYS = (
     "score",
     "used_in_answer",
 )
-_CITATION_KEYS = (
+_CITATION_KEYS: tuple[str | StrEnum, ...] = (
     "id",
     "chunk_index",
     "score",
     "text",
     "fact_id",
-    "predicate",
-    "source_quality",
-    "confidence_reason",
-    "last_confirmed_at",
+    FactField.PREDICATE,
+    FactField.SOURCE_QUALITY,
+    FactField.CONFIDENCE_REASON,
+    FactField.LAST_CONFIRMED_AT,
+    FactField.STORED_AT,
+    FactField.AUTHOR,
     "save_intent",
     "save_intent_source",
 )
 DEFAULT_CONCISE_FACT_LIMIT = 10
 _DEFAULT_MEMORY_STATUS = "active"
 _MEMORY_STATUS_KEY = "memory_status"
-_CONCISE_ASK_KEYS = (
-    "status",
-    "answer",
-    "confidence",
-    "confidence_reason",
-    "answer_basis",
+_CONCISE_ASK_KEYS: tuple[str | StrEnum, ...] = (
+    MCPPayloadKey.STATUS,
+    MCPPayloadKey.ANSWER,
+    MCPPayloadKey.CONFIDENCE,
+    MCPPayloadKey.CONFIDENCE_REASON,
+    MCPPayloadKey.ANSWER_BASIS,
+    MCPPayloadKey.LATEST,
 )
 _CONCISE_RETRIEVE_MESSAGE_LIMIT = 6
 _CONCISE_RETRIEVE_MESSAGE_TEXT_LIMIT = 800
@@ -234,19 +268,24 @@ def _concise_message(message: dict[str, Any]) -> dict[str, Any]:
 
 def _concise_fact(fact: dict[str, Any]) -> dict[str, Any]:
     concise = _compact_mapping(fact, _FACT_KEYS)
-    if "id" not in concise and fact.get("fact_id") is not None:
-        concise["id"] = fact["fact_id"]
-    if "object" not in concise and fact.get("object_raw") is not None:
-        concise["object"] = fact["object_raw"]
-    if "object_normalized" not in concise and concise.get("object") is not None:
-        concise["object_normalized"] = concise["object"]
-    concise["superseded"] = bool(fact.get("superseded_by") or fact.get("superseded_at"))
-    if fact.get("superseded_by") is not None:
-        concise["superseded_by"] = fact["superseded_by"]
-    if fact.get("superseded_at") is not None:
-        concise["superseded_at"] = fact["superseded_at"]
-    if fact.get("deleted_at") is not None:
-        concise["deleted_at"] = fact["deleted_at"]
+    if FactField.ID.value not in concise and fact.get("fact_id") is not None:
+        concise[FactField.ID.value] = fact["fact_id"]
+    if FactField.OBJECT.value not in concise and fact.get(FactField.OBJECT_RAW.value) is not None:
+        concise[FactField.OBJECT.value] = fact[FactField.OBJECT_RAW.value]
+    if (
+        FactField.OBJECT_NORMALIZED.value not in concise
+        and concise.get(FactField.OBJECT.value) is not None
+    ):
+        concise[FactField.OBJECT_NORMALIZED.value] = concise[FactField.OBJECT.value]
+    concise["superseded"] = bool(
+        fact.get(FactField.SUPERSEDED_BY.value) or fact.get(FactField.SUPERSEDED_AT.value)
+    )
+    if fact.get(FactField.SUPERSEDED_BY.value) is not None:
+        concise[FactField.SUPERSEDED_BY.value] = fact[FactField.SUPERSEDED_BY.value]
+    if fact.get(FactField.SUPERSEDED_AT.value) is not None:
+        concise[FactField.SUPERSEDED_AT.value] = fact[FactField.SUPERSEDED_AT.value]
+    if fact.get(FactField.DELETED_AT.value) is not None:
+        concise[FactField.DELETED_AT.value] = fact[FactField.DELETED_AT.value]
     return concise
 
 
@@ -286,12 +325,20 @@ def _concise_structured_evidence(
     return concise
 
 
-def _compact_mapping(keys_source: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
+def _compact_mapping(
+    keys_source: dict[str, Any],
+    keys: tuple[str | StrEnum, ...],
+) -> dict[str, Any]:
     return {
-        key: keys_source[key]
+        key_value: keys_source[key_value]
         for key in keys
-        if key in keys_source and keys_source[key] is not None
+        for key_value in (_payload_key(key),)
+        if key_value in keys_source and keys_source[key_value] is not None
     }
+
+
+def _payload_key(key: str | StrEnum) -> str:
+    return key.value if isinstance(key, StrEnum) else key
 
 
 def _drop_empty_values(payload: dict[str, Any]) -> dict[str, Any]:
@@ -328,9 +375,12 @@ def _dedupe_concise_facts(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
     deduped: list[dict[str, Any]] = []
     for fact in facts:
         key = (
-            str(fact.get("subject", "")),
-            str(fact.get("predicate", "")),
-            str(fact.get("object_normalized") or fact.get("object", "")),
+            str(fact.get(FactField.SUBJECT.value, "")),
+            str(fact.get(FactField.PREDICATE.value, "")),
+            str(
+                fact.get(FactField.OBJECT_NORMALIZED.value)
+                or fact.get(FactField.OBJECT.value, "")
+            ),
         )
         if key in seen:
             continue
