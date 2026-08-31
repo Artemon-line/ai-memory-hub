@@ -427,6 +427,7 @@ class _FactRuleName(StrEnum):
     COMMAND_NAME = "command_name"
     INDEXING_STRATEGY = "indexing_strategy"
     PROJECT_ATTRIBUTE = "project_attribute"
+    PROJECT_ATTRIBUTE_CHANGE = "project_attribute_change"
     PROFILE_NAME = "profile_name"
     PROFILE_IDENTITY = "profile_identity"
     PROFILE_ROLE = "profile_role"
@@ -628,6 +629,11 @@ _FACT_REPLACES_CORRECTION_RE = re.compile(
     rf"\s+for\s+my\s+{_FACT_CORRECTION_ITEM}",
     re.IGNORECASE,
 )
+_GENERIC_ATTRIBUTE_QUESTION_RE = re.compile(
+    rf"\bwhat\s+is\s+(?:the\s+)?(?P<{FactField.SUBJECT.value}>[A-Za-z0-9][A-Za-z0-9 _-]{{1,120}})\??\s*$",
+    re.IGNORECASE,
+)
+_GENERIC_ATTRIBUTE_ARTICLE_RE = re.compile(r"^(?:the|a|an)\s+", re.IGNORECASE)
 _FACT_RULES: list[tuple[_FactRuleName, re.Pattern[str]]] = [
     (
         _FactRuleName.OWN,
@@ -669,7 +675,17 @@ _FACT_RULES: list[tuple[_FactRuleName, re.Pattern[str]]] = [
     (
         _FactRuleName.PROJECT_ATTRIBUTE,
         re.compile(
-            r"\b(?P<subject>[A-Z][A-Za-z0-9 _-]{1,80})\s+is\s+(?P<object>[^.?!\n]+)",
+            rf"\b(?P<{FactField.SUBJECT.value}>[A-Z][A-Za-z0-9 _-]{{1,80}})\s+is\s+"
+            rf"(?P<{FactField.OBJECT.value}>[^.?!\n]+)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        _FactRuleName.PROJECT_ATTRIBUTE_CHANGE,
+        re.compile(
+            rf"\b(?P<{FactField.SUBJECT.value}>[A-Z][A-Za-z0-9 _-]{{1,80}})\s+"
+            rf"(?:changes|changed)\s+to\s+(?P<{FactField.OBJECT.value}>[^.?!\n]+?)"
+            r"(?:\s+on\s+\d{4}-\d{2}-\d{2})?(?=$|[.?!\n])",
             re.IGNORECASE,
         ),
     ),
@@ -3552,7 +3568,7 @@ def ask(
     runtime = _runtime()
     budget_enabled = runtime.tokenizer_enabled or max_context_tokens is not None
     if not budget_enabled:
-        result = _ask_from_matches(matches, top_k=top_k)
+        result = _ask_from_matches(matches, top_k=top_k, question=question)
         _record_audit_event(
             "memory.asked",
             owner_id=owner_id,
@@ -3588,6 +3604,7 @@ def ask(
         selected_matches=selected_matches,
         citations=citations,
         context_lines=context_lines,
+        question=question,
         tokens_used=tokens_used,
         chunks_dropped=chunks_dropped,
         context_truncated=context_truncated,
@@ -3678,7 +3695,9 @@ def _extend_index_chunks(obj: dict[str, Any], chunks: list[dict[str, Any]]) -> N
     ]
 
 
-def _ask_from_matches(matches: list[dict[str, Any]], *, top_k: int) -> dict[str, Any]:
+def _ask_from_matches(
+    matches: list[dict[str, Any]], *, top_k: int, question: str
+) -> dict[str, Any]:
     citations: list[dict[str, Any]] = []
     for row in matches:
         citation = _citation_from_row(row)
@@ -3689,7 +3708,7 @@ def _ask_from_matches(matches: list[dict[str, Any]], *, top_k: int) -> dict[str,
     return _direct_memory_ask_result(
         selected_matches=selected,
         citations=selected_citations,
-        answer=_direct_memory_answer_text(selected),
+        answer=_direct_memory_answer_text(selected, question=question),
         confidence=_confidence_from_matches(selected),
         confidence_reason=_confidence_reason_from_matches(selected),
     )
@@ -3700,13 +3719,14 @@ def _budgeted_direct_memory_ask_result(
     selected_matches: list[dict[str, Any]],
     citations: list[dict[str, Any]],
     context_lines: list[str],
+    question: str,
     tokens_used: int,
     chunks_dropped: int,
     context_truncated: bool,
     tokenizer_encoding: str,
 ) -> dict[str, Any]:
     answer = (
-        _direct_memory_answer_text(selected_matches)
+        _direct_memory_answer_text(selected_matches, question=question)
         if context_lines
         else "I could not fit relevant memory within the context budget."
     )
@@ -3766,11 +3786,20 @@ def _direct_memory_ask_result(
     return _enum_keyed_payload(result)
 
 
-def _direct_memory_answer_text(matches: Sequence[dict[str, Any]]) -> str:
-    for row in matches:
-        snippet = _direct_memory_answer_snippet(row)
-        if snippet:
+def _direct_memory_answer_text(
+    matches: Sequence[dict[str, Any]], *, question: str | None = None
+) -> str:
+    snippets = [
+        snippet
+        for row in matches
+        for snippet in (_direct_memory_answer_snippet(row),)
+        if snippet
+    ]
+    for snippet in snippets:
+        if not _direct_memory_answer_snippet_is_question_echo(snippet, question):
             return snippet
+    if snippets:
+        return snippets[0]
     return "I found relevant memory, but it did not include usable text."
 
 
@@ -3779,6 +3808,19 @@ def _direct_memory_answer_snippet(row: dict[str, Any]) -> str:
     if not text:
         return ""
     return _truncate_summary_text(text, limit=600)
+
+
+def _direct_memory_answer_snippet_is_question_echo(
+    snippet: str, question: str | None
+) -> bool:
+    normalized_snippet = _normalized_question_echo_text(snippet)
+    if question is not None and normalized_snippet == _normalized_question_echo_text(question):
+        return True
+    return snippet.rstrip().endswith("?")
+
+
+def _normalized_question_echo_text(value: str) -> str:
+    return " ".join(_query_tokens(value, limit=None))
 
 
 def _enum_keyed_payload(payload: Mapping[_PayloadKey, Any]) -> dict[str, Any]:
@@ -4094,7 +4136,7 @@ def _extract_message_facts(
             if _span_overlaps(match.span(), correction_spans):
                 continue
             if rule_name == _FactRuleName.OWN:
-                object_value = _clean_fact_object(match.group("object"))
+                object_value = _clean_fact_object(match.group(FactField.OBJECT.value))
                 facts.append(
                     _fact(
                         subject=_FactSubject.USER.value,
@@ -4175,9 +4217,12 @@ def _extract_message_facts(
                         source_role=source_role,
                     )
                 )
-            elif rule_name == _FactRuleName.PROJECT_ATTRIBUTE:
-                subject = match.group("subject").strip()
-                object_value = _clean_fact_object(match.group("object"))
+            elif rule_name in {
+                _FactRuleName.PROJECT_ATTRIBUTE,
+                _FactRuleName.PROJECT_ATTRIBUTE_CHANGE,
+            }:
+                subject = match.group(FactField.SUBJECT.value).strip()
+                object_value = _clean_fact_object(match.group(FactField.OBJECT.value))
                 if _should_skip_project_attribute_fact(subject, object_value):
                     continue
                 facts.append(
@@ -4576,7 +4621,38 @@ def _fact_query(question: str) -> dict[str, str] | None:
         if subject:
             query[FactField.SUBJECT.value] = subject
         return query
+    generic_attribute_query = _generic_attribute_query(question)
+    if generic_attribute_query is not None:
+        return generic_attribute_query
     return None
+
+
+def _generic_attribute_query(question: str) -> dict[str, str] | None:
+    match = _GENERIC_ATTRIBUTE_QUESTION_RE.search(question)
+    if match is None:
+        return None
+    subject = _clean_generic_attribute_subject(match.group(FactField.SUBJECT.value))
+    if _should_skip_generic_attribute_question_subject(subject):
+        return None
+    return {
+        FactField.SUBJECT.value: subject,
+        FactField.PREDICATE.value: _FactPredicate.DESCRIPTION.value,
+    }
+
+
+def _clean_generic_attribute_subject(value: str) -> str:
+    stripped = _GENERIC_ATTRIBUTE_ARTICLE_RE.sub("", value.strip())
+    return _clean_fact_object(stripped)
+
+
+def _should_skip_generic_attribute_question_subject(subject: str) -> bool:
+    if not subject:
+        return True
+    subject_lower = subject.lower()
+    if subject_lower in {"i", "my", "the", "this"}:
+        return True
+    subject_tokens = set(_query_tokens(subject, limit=None))
+    return bool(subject_tokens.intersection(_NOISY_PROJECT_ATTRIBUTE_SUBJECT_TOKENS))
 
 
 def _question_project_subject(question: str) -> str | None:

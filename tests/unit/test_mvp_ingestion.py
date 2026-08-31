@@ -1196,7 +1196,10 @@ def test_ask_applies_conversation_filters_before_answering() -> None:
     )
 
     assert result["status"] == "ok"
-    assert [row["id"] for row in result["results"]] == [opencode["id"]]
+    assert result["results"] == []
+    assert result["answer_basis"] == "fact_layer"
+    assert result["latest"]["value"] == "Cobalt"
+    assert result["latest"]["author"] == "opencode"
     assert "Cobalt" in result["answer"]
     assert "Amber" not in result["answer"]
 

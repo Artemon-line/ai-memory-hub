@@ -1339,7 +1339,11 @@ def build_tool_handlers(
                 error_code="ask_failed",
                 error_message=redact_secrets(str(exc)),
             )
-        return _with_envelope_defaults(format_ask_response(result, response_format))
+        formatted = format_ask_response(result, response_format)
+        response = _with_envelope_defaults(formatted)
+        if response_format == MCPResponseFormat.CONCISE.value and "results" not in formatted:
+            response.pop("results", None)
+        return response
 
     async def memory_fact_search(
         subject: str | None = None,

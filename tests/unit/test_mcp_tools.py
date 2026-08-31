@@ -285,7 +285,7 @@ async def test_mcp_tool_handlers_insert_search_retrieve() -> None:
     ask_result = await handlers["memory_ask"]("what was stored?", 3, ctx=ctx)
     assert ask_result["status"] == "ok"
     assert "answer" in ask_result
-    assert ask_result["results"] == []
+    assert "results" not in ask_result
     assert ask_result["memory_result_count"] == 1
     assert ask_result["citation_count"] == 1
     for verbose_key in (

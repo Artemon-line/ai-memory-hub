@@ -14,6 +14,14 @@ from memory.config import ensure_token_hash_secret, parse_config
 
 CODEX_PROJECT_ID = "codex-cli-findings"
 OTHER_PROJECT_ID = "codex-cli-findings-other"
+FORBIDDEN_CONCISE_ASK_KEYS = {
+    "results",
+    "citations",
+    "evidence",
+    "structured_evidence",
+    "provenance",
+    "fact_timeline",
+}
 
 
 def _config(
@@ -158,6 +166,157 @@ def _call_tool(
             headers=headers,
         )
     )
+
+
+def _assert_concise_ask_contract(payload: dict[str, Any], *, question: str) -> None:
+    assert payload["answer"] != question
+    assert "Based on stored memory:" not in payload["answer"]
+    assert "- [" not in payload["answer"]
+    assert FORBIDDEN_CONCISE_ASK_KEYS.isdisjoint(payload)
+
+
+def test_mcp_concise_ask_uses_latest_temporal_fact_for_generic_attribute(
+    tmp_path: Path,
+) -> None:
+    marker = "QA_CONTRACT_TEMPORAL_ASK"
+    attribute = f"{marker} command runner"
+    older = _conversation(
+        memory_id="0a77288a-62a1-4a62-a29b-b24d73464d7b",
+        text=f"In January, {attribute} is alpha runner.",
+        source="agent-a",
+        timestamp="2026-01-15T10:00:00Z",
+        tags=["mcp-ask-contract", "temporal"],
+        thread_id="AMH-QA-CONTRACT-ASK",
+    )
+    newer = _conversation(
+        memory_id="8776477f-18f9-4c79-b4e1-9d2d5a8d5ef3",
+        text=f"{attribute} changes to beta runner on 2026-06-20.",
+        source="agent-b",
+        timestamp="2026-06-20T14:30:00Z",
+        tags=["mcp-ask-contract", "temporal"],
+        thread_id="AMH-QA-CONTRACT-ASK",
+    )
+    question = f"What is the {attribute}?"
+
+    with _client(tmp_path) as client:
+        headers = _initialize_mcp(client)
+        for request_id, payload in enumerate((older, newer), start=2):
+            insert = _call_tool(
+                client,
+                headers,
+                request_id=request_id,
+                name="memory_insert",
+                arguments={"conversation_json": payload},
+            )
+            assert insert["status"] == "ok"
+        concise = _call_tool(
+            client,
+            headers,
+            request_id=4,
+            name="memory_ask",
+            arguments={
+                "question": question,
+                "top_k": 5,
+                "response_format": "concise",
+            },
+        )
+        detailed = _call_tool(
+            client,
+            headers,
+            request_id=5,
+            name="memory_ask",
+            arguments={
+                "question": question,
+                "top_k": 5,
+                "response_format": "detailed",
+            },
+        )
+
+    _assert_concise_ask_contract(concise, question=question)
+    assert concise["answer"] == "beta runner"
+    assert concise["answer_basis"] == "fact_layer"
+    assert concise["latest"]["value"] == "beta runner"
+    assert concise["latest"]["stored_at"] == newer["timestamp"]
+    assert concise["latest"]["author"] == newer["source"]
+    assert concise["fact_count"] == 1
+    assert concise["citation_count"] == 1
+    assert detailed["answer_basis"] == "fact_layer"
+    assert detailed["latest"]["value"] == "beta runner"
+    assert [entry["value"] for entry in detailed["fact_timeline"]] == [
+        "beta runner",
+        "alpha runner",
+    ]
+    assert detailed["facts"][0]["subject"] == attribute
+    assert detailed["facts"][0]["predicate"] == "description"
+
+
+def test_mcp_concise_ask_keeps_direct_memory_fallback_compact(
+    tmp_path: Path,
+) -> None:
+    question = "qa contract direct ask raretrm deploymnt note?"
+    payload = _conversation(
+        memory_id="0269fbf2-fab8-4e0e-997b-7f5e4ead2747",
+        text="placeholder",
+        source="agent-a",
+        timestamp="2026-06-20T15:00:00Z",
+        tags=["mcp-ask-contract", "direct-memory"],
+        thread_id="AMH-QA-CONTRACT-DIRECT",
+    )
+    payload["messages"] = [
+        {"role": "user", "text": question},
+        {
+            "role": "assistant",
+            "text": (
+                "QA_CONTRACT_DIRECT_ASK rareterm deployment note: "
+                "use cobalt spool for staging"
+            ),
+        },
+    ]
+
+    with _client(tmp_path) as client:
+        headers = _initialize_mcp(client)
+        insert = _call_tool(
+            client,
+            headers,
+            request_id=2,
+            name="memory_insert",
+            arguments={"conversation_json": payload},
+        )
+        concise = _call_tool(
+            client,
+            headers,
+            request_id=3,
+            name="memory_ask",
+            arguments={
+                "question": question,
+                "top_k": 5,
+                "response_format": "concise",
+            },
+        )
+        detailed = _call_tool(
+            client,
+            headers,
+            request_id=4,
+            name="memory_ask",
+            arguments={
+                "question": question,
+                "top_k": 5,
+                "response_format": "detailed",
+            },
+        )
+
+    assert insert["status"] == "ok"
+    _assert_concise_ask_contract(concise, question=question)
+    assert concise["answer"] == (
+        "QA_CONTRACT_DIRECT_ASK rareterm deployment note: "
+        "use cobalt spool for staging"
+    )
+    assert concise["answer_basis"] == "direct_memory"
+    assert concise["fact_count"] == 0
+    assert concise["citation_count"] >= 1
+    assert "latest" not in concise
+    assert detailed["answer_basis"] == "direct_memory"
+    assert detailed["results"]
 
 
 def test_preference_question_uses_fact_backed_concise_answer(
@@ -709,7 +868,7 @@ def test_tight_context_budget_reports_truncated_evidence(
 ) -> None:
     payload = _conversation(
         text=(
-            "The Codex tight budget answer is lapis compass, with enough extra "
+            "The Codex tight budget answer can be recovered as lapis compass, with enough extra "
             "detail after the phrase to force truncation under a tiny context budget."
         ),
         tags=["codex-cli-qa", "budget"],

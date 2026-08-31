@@ -90,6 +90,7 @@ are limited to multiple distinct values in the same latest timestamp group.
 - [x] Run focused extraction and ask tests.
 - [x] Run MCP concise/detailed response shape tests.
 - [x] Run SQLite-backed integration tests for temporal projections.
+- [x] Add agent-agnostic MCP ask contract tests for concise latest-value and direct-memory fallback shapes.
 - [x] Run `uv run python -m ruff check memory tests tools`.
 - [x] Run `uv run python -m pyright`.
 - [x] Run `uv run pytest tests/unit tests/integration -q`.
