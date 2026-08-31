@@ -75,7 +75,7 @@ are limited to multiple distinct values in the same latest timestamp group.
 - [x] Make detailed `memory_ask` include timeline evidence for older observed values.
 - [x] Keep `memory_search` and `memory_retrieve` grounded in stored memory records.
 - [ ] Ensure `memory_fact_search` can filter or group by latest-only versus timeline views.
-- [ ] Preserve backwards-compatible detailed/audit payloads where clients may depend on them.
+- [x] Preserve backwards-compatible detailed/audit payloads where clients may depend on them.
 
 ## Phase 5: Migration And Compatibility
 
@@ -93,8 +93,8 @@ are limited to multiple distinct values in the same latest timestamp group.
 - [x] Run `uv run python -m ruff check memory tests tools`.
 - [x] Run `uv run python -m pyright`.
 - [x] Run `uv run pytest tests/unit tests/integration -q`.
-- [ ] Update the PR description with the completed phase and validation results.
-- [ ] Push and monitor CI before marking the phase done.
+- [x] Update the PR description with the completed phase and validation results.
+- [x] Push and monitor CI before marking the phase done.
 
 ## Decisions From Review
 
