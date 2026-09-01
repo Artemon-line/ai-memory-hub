@@ -4,6 +4,7 @@ import asyncio
 import json
 import threading
 import time
+from typing import Any
 
 import pytest
 
@@ -547,6 +548,7 @@ async def test_mcp_fact_and_profile_concise_deduplicates_and_limits_rows(
 ) -> None:
     agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
     handlers = build_tool_handlers(agent)
+    fact_search_kwargs: list[dict[str, Any]] = []
     facts = [
         {
             "id": "fact-a",
@@ -577,7 +579,8 @@ async def test_mcp_fact_and_profile_concise_deduplicates_and_limits_rows(
         },
     ]
 
-    async def fake_fact_search(**_kwargs):
+    async def fake_fact_search(**kwargs):
+        fact_search_kwargs.append(kwargs)
         return {"status": "ok", "results": facts}
 
     async def fake_profile_get(**_kwargs):
@@ -591,11 +594,22 @@ async def test_mcp_fact_and_profile_concise_deduplicates_and_limits_rows(
     monkeypatch.setattr(agent, "fact_search", fake_fact_search)
     monkeypatch.setattr(agent, "profile_get", fake_profile_get)
 
+    query_facts = await handlers["memory_fact_search"](query="cherry Gibson")
+    default_facts = await handlers["memory_fact_search"](subject="user")
     concise_facts = await handlers["memory_fact_search"](subject="user", limit=1)
     detailed_facts = await handlers["memory_fact_search"](
         subject="user", response_format="detailed", limit=1
     )
     concise_profile = await handlers["memory_profile_get"](subject="user", limit=1)
+
+    assert fact_search_kwargs[0]["query"] == "cherry Gibson"
+    assert [row["id"] for row in query_facts["results"]] == ["fact-a", "fact-c"]
+    assert [row["id"] for row in default_facts["results"]] == ["fact-a", "fact-c"]
+    assert default_facts["total_results"] == 3
+    assert default_facts["unique_results"] == 2
+    assert default_facts["returned_results"] == 2
+    assert default_facts["omitted_results"] == 0
+    assert default_facts["result_limit"] == 10
 
     assert [row["id"] for row in concise_facts["results"]] == ["fact-a"]
     assert concise_facts["total_results"] == 3

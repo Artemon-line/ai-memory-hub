@@ -279,6 +279,7 @@ class ConversationFilters:
 
 @dataclass(frozen=True)
 class FactFilters:
+    query: str | None = None
     source: str | None = None
     date_from: str | None = None
     date_to: str | None = None
@@ -294,6 +295,7 @@ class FactFilters:
     def from_options(
         cls,
         *,
+        query: str | None = None,
         source: str | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
@@ -309,6 +311,7 @@ class FactFilters:
         if normalized_status not in {"active", "superseded", "all"}:
             raise ValueError("status must be one of: active, superseded, all")
         return cls(
+            query=str(query).strip() if query and str(query).strip() else None,
             source=str(source) if source else None,
             date_from=str(date_from) if date_from else None,
             date_to=str(date_to) if date_to else None,
@@ -4753,6 +4756,31 @@ def _fact_search_text(fact: dict[str, Any]) -> str:
     return " ".join(parts)
 
 
+def _rank_facts_by_text_query(
+    facts: list[dict[str, Any]], query: str | None
+) -> list[dict[str, Any]]:
+    if not query:
+        return facts
+    query_tokens = _fact_text_query_tokens(query)
+    if not query_tokens:
+        return facts
+    scored: list[tuple[int, int, dict[str, Any]]] = []
+    for index, fact in enumerate(facts):
+        fact_text = _fact_search_text(fact)
+        fact_tokens = set(_query_tokens(fact_text, limit=None))
+        overlap = len(query_tokens.intersection(fact_tokens))
+        if overlap <= 0:
+            continue
+        scored.append((overlap, index, fact))
+    return [fact for _score, _index, fact in sorted(scored, key=lambda row: (-row[0], row[1]))]
+
+
+def _fact_text_query_tokens(query: str) -> set[str]:
+    tokens = _query_tokens(query, limit=None)
+    meaningful = {token for token in tokens if token not in _FACT_QUESTION_STOPWORDS}
+    return meaningful or set(tokens)
+
+
 def _fact_question_needs_context(question: str) -> bool:
     lowered = question.lower()
     return any(term in lowered for term in ("context", "source", "why", "when", "where did", "discuss"))
@@ -4865,6 +4893,7 @@ def _fact_matches_filters(
 
 def fact_search(
     *,
+    query: str | None = None,
     subject: str | None = None,
     predicate: str | None = None,
     include_superseded: bool = False,
@@ -4882,6 +4911,7 @@ def fact_search(
     freshness_to: str | None = None,
 ) -> dict[str, Any]:
     fact_filters = FactFilters.from_options(
+        query=query,
         source=source,
         date_from=date_from,
         date_to=date_to,
@@ -4926,6 +4956,7 @@ def fact_search(
             and _fact_matches_filters(fact, ConversationFilters(), fact_filters)
             and not fact.get(FactField.DELETED_AT.value)
         ]
+    facts = _rank_facts_by_text_query(facts, fact_filters.query)
     return {"status": "ok", "results": [_public_fact(fact) for fact in facts]}
 
 

@@ -1557,6 +1557,22 @@ def test_fact_save_intent_filters_and_auto_save_confidence() -> None:
     )
 
 
+def test_fact_search_query_filters_across_fact_text() -> None:
+    _configure_stubs()
+    first = _valid_conversation()
+    first["id"] = "11111111-1111-4111-8111-111111111111"
+    first["messages"] = [{"role": "user", "text": "I own a silver field recorder."}]
+    second = _valid_conversation()
+    second["id"] = "22222222-2222-4222-8222-222222222222"
+    second["messages"] = [{"role": "user", "text": "I own a teal macro lens."}]
+    mvp_ingestion.ingest_messages(first)
+    mvp_ingestion.ingest_messages(second)
+
+    result = mvp_ingestion.fact_search(query="teal macro lens")
+
+    assert [fact["object"] for fact in result["results"]] == ["a teal macro lens"]
+
+
 def test_conflicting_active_facts_return_conflict_basis() -> None:
     _configure_stubs()
     first = _valid_conversation()

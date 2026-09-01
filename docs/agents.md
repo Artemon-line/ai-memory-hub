@@ -261,10 +261,12 @@ diagnostics.
 
 `memory_retrieve`, `memory_fact_search`, and `memory_profile_get` also accept
 `response_format: "concise"` or `"detailed"`; fact/profile reads also accept an
-optional `limit`. Concise fact/profile reads deduplicate and limit fact rows to
-10 by default while keeping the subject, predicate, object, normalized object,
-confidence, source quality, freshness, and supersession status. Detailed reads
-preserve full fact provenance such as qualifiers and summary provenance.
+optional `limit`. `memory_fact_search` accepts `query` for free-text lookup
+across normalized fact text when a client does not know the subject or predicate
+yet. Concise fact/profile reads deduplicate and limit fact rows to 10 by default
+while keeping the subject, predicate, object, normalized object, confidence,
+source quality, freshness, and supersession status. Detailed reads preserve full
+fact provenance such as qualifiers and summary provenance.
 
 ## MCP Resources And Prompts
 

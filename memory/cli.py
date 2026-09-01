@@ -247,6 +247,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     fact_search = subparsers.add_parser("fact-search", help="Review extracted facts.")
     _add_common_options(fact_search)
+    fact_search.add_argument("--query", default=None, help="Free-text search over fact text.")
     fact_search.add_argument("--subject", default=None, help="Filter by fact subject.")
     fact_search.add_argument("--predicate", default=None, help="Filter by fact predicate.")
     fact_search.add_argument("--include-superseded", action="store_true", help="Include superseded facts.")
@@ -615,6 +616,7 @@ def _run_server(app: Any, *, host: str, port: int, access_log: bool = True) -> N
 def _fact_search(args: argparse.Namespace) -> int:
     _configure_memory_runtime(args.config)
     result = mvp_ingestion.fact_search(
+        query=args.query,
         subject=args.subject,
         predicate=args.predicate,
         include_superseded=args.include_superseded,

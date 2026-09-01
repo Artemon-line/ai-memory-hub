@@ -75,6 +75,8 @@ are limited to multiple distinct values in the same latest timestamp group.
 - [x] Make detailed `memory_ask` include timeline evidence for older observed values.
 - [x] Keep `memory_search` and `memory_retrieve` grounded in stored memory records.
 - [ ] Ensure `memory_fact_search` can filter or group by latest-only versus timeline views.
+- [x] Add free-text `memory_fact_search.query` for agent-facing lookup before a client knows the subject or predicate.
+- [x] Pin concise fact search to emit deduplicated rows by default, not only when a custom limit is supplied.
 - [x] Preserve backwards-compatible detailed/audit payloads where clients may depend on them.
 
 ## Phase 5: Migration And Compatibility
@@ -91,6 +93,7 @@ are limited to multiple distinct values in the same latest timestamp group.
 - [x] Run MCP concise/detailed response shape tests.
 - [x] Run SQLite-backed integration tests for temporal projections.
 - [x] Add agent-agnostic MCP ask contract tests for concise latest-value and direct-memory fallback shapes.
+- [x] Add agent-agnostic fact-search contract tests for free-text lookup and default concise dedupe.
 - [x] Run `uv run python -m ruff check memory tests tools`.
 - [x] Run `uv run python -m pyright`.
 - [x] Run `uv run pytest tests/unit tests/integration -q`.
@@ -103,4 +106,4 @@ are limited to multiple distinct values in the same latest timestamp group.
 - [x] Do not set `valid_until` on older derived facts; memory is stored in time and read as a timeline.
 - [x] Compact latest-value payloads should include the latest value, the latest stored timestamp, and the author/agent that wrote the source memory.
 - [ ] Decide whether deterministic extraction should remain enabled by default for profile-shaped sentences.
-- [ ] Decide whether direct fact upsert should exist, or whether all fact-like updates must come from timestamped memory inserts.
+- [x] Keep fact-like writes on timestamped memory inserts; do not add direct fact upsert in this phase.

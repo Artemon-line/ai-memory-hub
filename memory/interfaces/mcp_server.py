@@ -85,6 +85,15 @@ FactLimitArg = Annotated[
         json_schema_extra={"minimum": 1, "maximum": 100},
     ),
 ]
+FactQueryArg = Annotated[
+    str | None,
+    Field(
+        description=(
+            "Optional free-text query over normalized fact text. Use this when "
+            "the client does not know the subject or predicate yet."
+        )
+    ),
+]
 
 SERVER_INSTRUCTIONS = (
     "Use ai-memory-hub tools directly. For memory_validate and memory_insert, "
@@ -101,7 +110,8 @@ SERVER_INSTRUCTIONS = (
     "when narrowing recall. memory_retrieve supports response_format for id-based reads. "
     "Use response_format=concise for normal agent recall; "
     "use response_format=detailed only when auditing full stored records. "
-    "memory_fact_search and memory_profile_get support source, predicate, date range, confidence, status, "
+    "memory_fact_search supports free-text query plus subject and predicate filters. "
+    "memory_fact_search and memory_profile_get support source, date range, confidence, status, "
     "source_quality, save-intent, and freshness filters, plus the same response_format option."
 )
 
@@ -138,7 +148,7 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "for normal recall or detailed for full search rows."
     ),
     "memory_fact_search": (
-        "Read-only search of normalized extracted memory facts. Optional filters: source, subject, predicate, "
+        "Read-only search of normalized extracted memory facts. Optional filters: query, source, subject, predicate, "
         "date_from, date_to, confidence, status, source_quality, save_intent, save_intent_source, "
         "freshness_from, freshness_to, limit, and project_id. Use response_format=concise for "
         "deduplicated, limited facts or detailed for full fact provenance."
@@ -1346,6 +1356,7 @@ def build_tool_handlers(
         return response
 
     async def memory_fact_search(
+        query: FactQueryArg = None,
         subject: str | None = None,
         predicate: str | None = None,
         include_superseded: bool = False,
@@ -1375,6 +1386,7 @@ def build_tool_handlers(
             )
         try:
             result = await agent.fact_search(
+                query=unwrap_array(query),
                 subject=unwrap_array(subject),
                 predicate=unwrap_array(predicate),
                 include_superseded=bool(include_superseded),
