@@ -7,6 +7,7 @@ from typing import Any
 import jsonschema
 import pytest
 
+from memory.backend.metadata_store import IndexChunkField, IndexState, MetadataField
 from memory.ingestion import mvp_ingestion
 from memory.ingestion import validate as ingestion_validate
 from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
@@ -838,10 +839,14 @@ def test_token_chunking_splits_long_messages_with_overlap() -> None:
         "gamma delta epsilon",
     ]
     stored = metadata.by_id["d9fd4c95-9cb3-4fd5-b967-3027f8863210"]
-    assert [chunk["chunk_index"] for chunk in stored["metadata"]["index_chunks"]] == [
+    index_chunks = stored["metadata"][MetadataField.INDEX_CHUNKS.value]
+    assert [chunk["chunk_index"] for chunk in index_chunks] == [
         0,
         1,
     ]
+    assert {chunk[IndexChunkField.INDEX_STATE.value] for chunk in index_chunks} == {
+        IndexState.INDEXED.value
+    }
 
 
 def test_token_chunking_append_continues_chunk_indexes() -> None:
@@ -867,12 +872,34 @@ def test_token_chunking_append_continues_chunk_indexes() -> None:
     assert result["embedded_chunks"] == 2
     assert [row["chunk_index"] for row in vectors.rows] == [0, 1, 2, 3]
     stored = metadata.by_id["d9fd4c95-9cb3-4fd5-b967-3027f8863210"]
-    assert [chunk["chunk_index"] for chunk in stored["metadata"]["index_chunks"]] == [
+    index_chunks = stored["metadata"][MetadataField.INDEX_CHUNKS.value]
+    assert [chunk["chunk_index"] for chunk in index_chunks] == [
         0,
         1,
         2,
         3,
     ]
+    assert {chunk[IndexChunkField.INDEX_STATE.value] for chunk in index_chunks} == {
+        IndexState.INDEXED.value
+    }
+
+
+def test_retrieve_returns_indexed_chunk_state_after_insert() -> None:
+    _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["messages"] = [
+        {"role": "user", "text": "QA_INDEX_STATE retrieve should show indexed chunks."}
+    ]
+
+    result = mvp_ingestion.ingest_messages(conversation)
+    retrieved = mvp_ingestion.retrieve(result["id"])
+
+    assert retrieved is not None
+    index_chunks = retrieved["metadata"][MetadataField.INDEX_CHUNKS.value]
+    assert index_chunks
+    assert {chunk[IndexChunkField.INDEX_STATE.value] for chunk in index_chunks} == {
+        IndexState.INDEXED.value
+    }
 
 
 def test_ingest_messages_invalid_json_raises() -> None:
@@ -1354,6 +1381,84 @@ def test_ask_answers_direct_guitar_question_from_fact_layer() -> None:
     assert result["provenance"][0]["save_intent_sources"] == ["codex"]
 
 
+@pytest.mark.parametrize(
+    ("attribute", "older_value", "newer_value", "question"),
+    [
+        (
+            "QA_GENERIC_ASK hardware adapter",
+            "alpha dock",
+            "beta dock",
+            "Which hardware adapter should QA_GENERIC_ASK use?",
+        ),
+        (
+            "QA_GENERIC_ASK food option",
+            "apple tart",
+            "miso soup",
+            "What food option is stored for QA_GENERIC_ASK?",
+        ),
+    ],
+)
+def test_ask_uses_generic_fact_projection_for_unclassified_questions(
+    attribute: str,
+    older_value: str,
+    newer_value: str,
+    question: str,
+) -> None:
+    _configure_stubs()
+    older = _valid_conversation()
+    older["id"] = "11111111-1111-4111-8111-111111111111"
+    older["source"] = "agent-a"
+    older["timestamp"] = "2026-01-15T10:00:00Z"
+    older["messages"] = [{"role": "user", "text": f"{attribute} is {older_value}."}]
+    newer = _valid_conversation()
+    newer["id"] = "22222222-2222-4222-8222-222222222222"
+    newer["source"] = "agent-b"
+    newer["timestamp"] = "2026-06-20T14:30:00Z"
+    newer["messages"] = [
+        {"role": "user", "text": f"{attribute} changes to {newer_value} on 2026-06-20."}
+    ]
+    distractor = _valid_conversation()
+    distractor["id"] = "33333333-3333-4333-8333-333333333333"
+    distractor["timestamp"] = "2026-07-01T00:00:00Z"
+    distractor["messages"] = [
+        {"role": "user", "text": "QA_GENERIC_ASK unrelated setting is copper."}
+    ]
+    for payload in (older, newer, distractor):
+        mvp_ingestion.ingest_messages(payload)
+
+    result = mvp_ingestion.ask(question, top_k=5)
+
+    assert result["answer_basis"] == "fact_layer"
+    assert result["answer"] == newer_value
+    assert result["results"] == []
+    assert result["latest"]["value"] == newer_value
+    assert result["latest"]["stored_at"] == newer["timestamp"]
+    assert result["latest"]["author"] == "agent-b"
+    assert [entry["value"] for entry in result["fact_timeline"]] == [
+        newer_value,
+        older_value,
+    ]
+    assert {fact["subject"] for fact in result["facts"]} == {attribute}
+    assert {fact["predicate"] for fact in result["facts"]} == {"description"}
+
+
+def test_ask_plain_keyword_query_uses_direct_memory() -> None:
+    _configure_stubs()
+    payload = _valid_conversation()
+    payload["source"] = "agent-a"
+    payload["messages"] = [
+        {"role": "user", "text": "Agent smoke memory: pytest should use MCP tools."}
+    ]
+    inserted = mvp_ingestion.ingest_messages(payload)
+
+    result = mvp_ingestion.ask("pytest MCP", top_k=5)
+
+    assert inserted["status"] == "ok"
+    assert result["answer_basis"] == "direct_memory"
+    assert result["results"]
+    assert result["results"][0]["id"] == payload["id"]
+
+
 def test_fact_from_assistant_statement_exposes_source_quality() -> None:
     _configure_stubs()
     conversation = _valid_conversation()
@@ -1469,6 +1574,7 @@ def test_plain_favorite_correction_supersedes_old_food() -> None:
     mvp_ingestion.ingest_messages(second)
 
     result = mvp_ingestion.ask("What is my favorite food?", top_k=5)
+    stale_value_question = mvp_ingestion.ask("Do I prefer QA green curry?", top_k=5)
     active = mvp_ingestion.fact_search(subject="user", predicate="favorite_food")
     audit = mvp_ingestion.fact_search(
         subject="user",
@@ -1478,6 +1584,9 @@ def test_plain_favorite_correction_supersedes_old_food() -> None:
     descriptions = mvp_ingestion.fact_search(predicate="description")
 
     assert result["answer"] == "QA mushroom ramen"
+    assert stale_value_question["answer_basis"] == "fact_layer"
+    assert stale_value_question["answer"] == "QA mushroom ramen"
+    assert stale_value_question["latest"]["value"] == "QA mushroom ramen"
     assert [fact["object"] for fact in active["results"]] == ["QA mushroom ramen"]
     assert any(fact["superseded_by"] for fact in audit["results"])
     assert all(", not " not in fact["object"] for fact in audit["results"])

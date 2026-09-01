@@ -74,6 +74,10 @@ are limited to multiple distinct values in the same latest timestamp group.
 - [x] Include `value`, `stored_at`, and `author` for latest-value compact answers.
 - [x] Make detailed `memory_ask` include timeline evidence for older observed values.
 - [x] Keep `memory_search` and `memory_retrieve` grounded in stored memory records.
+- [x] Synchronize detailed `memory_retrieve` index chunk state after embedding so
+      audit reads match searchable/indexed storage state.
+- [x] Retry generic active temporal fact projection before direct chunk fallback
+      when a specific question parser finds no active facts.
 - [ ] Ensure `memory_fact_search` can filter or group by latest-only versus timeline views.
 - [x] Add free-text `memory_fact_search.query` for agent-facing lookup before a client knows the subject or predicate.
 - [x] Pin concise fact search to emit deduplicated rows by default, not only when a custom limit is supplied.
@@ -94,6 +98,8 @@ are limited to multiple distinct values in the same latest timestamp group.
 - [x] Run SQLite-backed integration tests for temporal projections.
 - [x] Add agent-agnostic MCP ask contract tests for concise latest-value and direct-memory fallback shapes.
 - [x] Add agent-agnostic fact-search contract tests for free-text lookup and default concise dedupe.
+- [x] Add regression coverage for detailed retrieve index-state consistency and
+      corrected temporal facts winning over stale direct chunks.
 - [x] Run `uv run python -m ruff check memory tests tools`.
 - [x] Run `uv run python -m pyright`.
 - [x] Run `uv run pytest tests/unit tests/integration -q`.

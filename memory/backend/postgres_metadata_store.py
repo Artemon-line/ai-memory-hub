@@ -11,6 +11,7 @@ from memory.backend.metadata_store import (
     LOCAL_DEFAULT_PROJECT_ID,
     PROJECT_ROLE_ADMIN,
     PROJECT_ROLE_ORDER,
+    IndexState,
     _default_project_id,
     _hash_bearer_token,
     _new_token_id,
@@ -34,6 +35,8 @@ from memory.backend.metadata_store import (
     _validate_project_role,
     _validate_secret_hash,
     _validate_token_lookup,
+    normalize_index_state,
+    update_index_chunks_payload,
 )
 
 CREATE_CONVERSATIONS_TABLE_SQL = """
@@ -351,6 +354,7 @@ VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
 
 GET_CONVERSATION_SQL = "SELECT payload::text FROM conversations WHERE id = %s"
 GET_MANY_CONVERSATIONS_SQL = "SELECT id, payload::text FROM conversations WHERE id = ANY(%s)"
+UPDATE_CONVERSATION_PAYLOAD_SQL = "UPDATE conversations SET payload = %s::jsonb WHERE id = %s"
 GET_CONVERSATION_BY_UPSTREAM_THREAD_SQL = """
 SELECT payload::text FROM conversations
 WHERE source = %s AND upstream_thread_id = %s
@@ -1676,10 +1680,33 @@ class PostgresMetadataStore:
         return json.loads(str(row[0]))
 
     def mark_chunks_indexed(self, memory_id: str, chunk_ids: list[str]) -> None:
-        _ = (memory_id, chunk_ids)
+        self._mark_chunks_state(memory_id, chunk_ids, IndexState.INDEXED)
 
     def mark_chunks_indexing_failed(self, memory_id: str, chunk_ids: list[str]) -> None:
-        _ = (memory_id, chunk_ids)
+        self._mark_chunks_state(memory_id, chunk_ids, IndexState.FAILED)
+
+    def _mark_chunks_state(
+        self, memory_id: str, chunk_ids: list[str], state: IndexState | str
+    ) -> None:
+        validated = self._validate_memory_id(memory_id)
+        normalized_state = normalize_index_state(state)
+        normalized_chunk_ids = [str(item) for item in chunk_ids]
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(GET_CONVERSATION_SQL, (validated,))
+                row = cur.fetchone()
+                if row is None:
+                    return
+                payload = json.loads(str(row[0]))
+                updated = update_index_chunks_payload(
+                    payload,
+                    chunk_ids=normalized_chunk_ids,
+                    state=normalized_state,
+                )
+                cur.execute(
+                    UPDATE_CONVERSATION_PAYLOAD_SQL,
+                    (json.dumps(updated, separators=(",", ":"), ensure_ascii=False), validated),
+                )
 
     def capabilities(self) -> ProviderCapabilities:
         return ProviderCapabilities(

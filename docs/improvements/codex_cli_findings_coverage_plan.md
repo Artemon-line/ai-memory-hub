@@ -155,6 +155,14 @@ Phase 5 status on 2026-08-29:
   `mcp__ai_memory_hub.memory_validate`, so direct hub verification finds no
   inserted smoke memory.
 - Latest QA summary: `docs/improvements/codex_cli_findings_qa_20260829.md`.
+- Latest live hub retest: run marker `AMH-QA-20260901-CODEX-RT5F19`, saved as
+  memory `963e04bf-85af-43bb-8924-7ae7bf3b2e02`. It confirmed insert,
+  dedup/idempotency, simple preference extraction, corrected fact state in
+  `memory_fact_search`, codename ask via `answer_basis=fact_layer`,
+  tight-budget confidence downgrades, and explicit filters/pagination. It still
+  reproduced stale detailed `memory_retrieve` index chunk state and
+  `memory_ask` fallback to stale direct chunks for corrected facts; those two
+  regressions are now covered by local tests in this phase.
 
 Acceptance criteria:
 

@@ -250,6 +250,105 @@ def test_mcp_concise_ask_uses_latest_temporal_fact_for_generic_attribute(
     assert detailed["facts"][0]["predicate"] == "description"
 
 
+@pytest.mark.parametrize(
+    ("attribute", "older_value", "newer_value", "question"),
+    [
+        (
+            "QA_CONTRACT_ROUTE hardware adapter",
+            "alpha dock",
+            "beta dock",
+            "Which hardware adapter should QA_CONTRACT_ROUTE use?",
+        ),
+        (
+            "QA_CONTRACT_ROUTE food option",
+            "apple tart",
+            "miso soup",
+            "What food option is stored for QA_CONTRACT_ROUTE?",
+        ),
+    ],
+)
+def test_mcp_ask_routes_unclassified_questions_to_fact_layer(
+    tmp_path: Path,
+    attribute: str,
+    older_value: str,
+    newer_value: str,
+    question: str,
+) -> None:
+    older = _conversation(
+        memory_id="3876477f-18f9-4c79-b4e1-9d2d5a8d5ef3",
+        text=f"{attribute} is {older_value}.",
+        source="agent-a",
+        timestamp="2026-01-15T10:00:00Z",
+        tags=["mcp-ask-contract", "temporal"],
+        thread_id="AMH-QA-CONTRACT-ASK-ROUTE",
+    )
+    newer = _conversation(
+        memory_id="4876477f-18f9-4c79-b4e1-9d2d5a8d5ef3",
+        text=f"{attribute} changes to {newer_value} on 2026-06-20.",
+        source="agent-b",
+        timestamp="2026-06-20T14:30:00Z",
+        tags=["mcp-ask-contract", "temporal"],
+        thread_id="AMH-QA-CONTRACT-ASK-ROUTE",
+    )
+    distractor = _conversation(
+        memory_id="5876477f-18f9-4c79-b4e1-9d2d5a8d5ef3",
+        text="QA_CONTRACT_ROUTE unrelated setting is copper.",
+        source="agent-c",
+        timestamp="2026-07-01T00:00:00Z",
+        tags=["mcp-ask-contract", "temporal"],
+        thread_id="AMH-QA-CONTRACT-ASK-ROUTE",
+    )
+
+    with _client(tmp_path) as client:
+        headers = _initialize_mcp(client)
+        for request_id, payload in enumerate((older, newer, distractor), start=2):
+            insert = _call_tool(
+                client,
+                headers,
+                request_id=request_id,
+                name="memory_insert",
+                arguments={"conversation_json": payload},
+            )
+            assert insert["status"] == "ok"
+        concise = _call_tool(
+            client,
+            headers,
+            request_id=5,
+            name="memory_ask",
+            arguments={
+                "question": question,
+                "top_k": 5,
+                "response_format": "concise",
+            },
+        )
+        detailed = _call_tool(
+            client,
+            headers,
+            request_id=6,
+            name="memory_ask",
+            arguments={
+                "question": question,
+                "top_k": 5,
+                "response_format": "detailed",
+            },
+        )
+
+    _assert_concise_ask_contract(concise, question=question)
+    assert concise["answer"] == newer_value
+    assert concise["answer_basis"] == "fact_layer"
+    assert concise["latest"]["value"] == newer_value
+    assert concise["latest"]["stored_at"] == newer["timestamp"]
+    assert concise["latest"]["author"] == newer["source"]
+    assert concise["fact_count"] == 1
+    assert detailed["answer_basis"] == "fact_layer"
+    assert detailed["results"] == []
+    assert [entry["value"] for entry in detailed["fact_timeline"]] == [
+        newer_value,
+        older_value,
+    ]
+    assert {fact["subject"] for fact in detailed["facts"]} == {attribute}
+
+
 def test_mcp_concise_ask_keeps_direct_memory_fallback_compact(
     tmp_path: Path,
 ) -> None:
@@ -476,7 +575,7 @@ def test_clear_correction_supersedes_prior_favorite_food(
     old_food = _conversation(
         memory_id="33d79ee0-ce14-4a32-82b1-7e7406ffc999",
         text="My favorite food is QA avocado toast.",
-        source="codex",
+        source="agent-a",
         timestamp="2026-08-12T00:00:00Z",
         tags=["codex-cli-qa", "correction"],
         thread_id="AMH-QA-20260828-CORR",
@@ -484,7 +583,7 @@ def test_clear_correction_supersedes_prior_favorite_food(
     corrected_food = _conversation(
         memory_id="44d79ee0-ce14-4a32-82b1-7e7406ffc999",
         text=correction_text,
-        source="hermes",
+        source="agent-b",
         timestamp="2026-12-12T00:00:00Z",
         tags=["codex-cli-qa", "correction"],
         thread_id="AMH-QA-20260828-CORR",
@@ -534,6 +633,16 @@ def test_clear_correction_supersedes_prior_favorite_food(
                 "response_format": "detailed",
             },
         )
+        stale_value_ask = _call_tool(
+            client,
+            headers,
+            request_id=7,
+            name="memory_ask",
+            arguments={
+                "question": "Do I prefer QA avocado toast?",
+                "response_format": "detailed",
+            },
+        )
 
     assert [fact["object_normalized"] for fact in active["results"]] == [expected_new]
     audit_by_object = {
@@ -546,8 +655,12 @@ def test_clear_correction_supersedes_prior_favorite_food(
     assert ask["answer"] == expected_new
     assert ask["latest"]["value"] == expected_new
     assert ask["latest"]["stored_at"] == "2026-12-12T00:00:00Z"
-    assert ask["latest"]["author"] == "hermes"
+    assert ask["latest"]["author"] == "agent-b"
     assert ask["facts"][0]["source_quality"] == "corrected_by_user"
+    assert stale_value_ask["answer_basis"] == "fact_layer"
+    assert stale_value_ask["answer"] == expected_new
+    assert stale_value_ask["latest"]["value"] == expected_new
+    assert stale_value_ask["latest"]["author"] == "agent-b"
 
 
 def test_ambiguous_favorite_update_remains_active_conflict(

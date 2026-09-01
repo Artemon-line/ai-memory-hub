@@ -7,7 +7,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from memory.api.server import create_app
-from memory.backend.metadata_store import PROJECT_ROLE_WRITER, SQLiteMetadataStore
+from memory.backend.metadata_store import (
+    PROJECT_ROLE_WRITER,
+    IndexChunkField,
+    IndexState,
+    MetadataField,
+    SQLiteMetadataStore,
+)
 from memory.backend.vector_store import InMemoryVectorStore
 from memory.ingestion import mvp_ingestion
 from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
@@ -850,6 +856,11 @@ def test_mcp_concise_response_format_strips_heavy_search_and_ask_payloads(
 
     assert detailed_retrieve["memory"]["id"] == payload["id"]
     assert "index_chunks" in detailed_retrieve["memory"]["metadata"]
+    index_chunks = detailed_retrieve["memory"]["metadata"][MetadataField.INDEX_CHUNKS.value]
+    assert {
+        chunk[IndexChunkField.INDEX_STATE.value]
+        for chunk in index_chunks
+    } == {IndexState.INDEXED.value}
     assert "tag_sources" in detailed_retrieve["memory"]["metadata"]
 
     assert concise_ask["status"] == "ok"

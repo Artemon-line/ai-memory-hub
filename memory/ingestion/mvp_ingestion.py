@@ -30,6 +30,9 @@ from memory.backend.metadata_store import (
     LOCAL_DEFAULT_PROJECT_ID,
     PROJECT_ROLE_READER,
     PROJECT_ROLE_WRITER,
+    IndexChunkField,
+    IndexState,
+    MetadataField,
     SQLiteMetadataStore,
     _default_project_id,
     _validate_owner_id,
@@ -360,6 +363,10 @@ class _AskAnswerBasis(StrEnum):
     MIXED = "mixed"
     CONFLICT = "conflict"
     NOT_FOUND = "not_found"
+
+
+class _FactQueryKey(StrEnum):
+    TEXT = "query"
 
 
 class _FactQualifierKey(StrEnum):
@@ -756,6 +763,20 @@ _FACT_QUESTION_STOPWORDS = {
     "who",
     "why",
 }
+_GENERIC_FACT_PROJECTION_QUESTION_PREFIXES = (
+    "are ",
+    "can ",
+    "could ",
+    "did ",
+    "do ",
+    "does ",
+    "is ",
+    "should ",
+    "what ",
+    "which ",
+    "who ",
+    "would ",
+)
 _COMMON_FACT_SPELLING_CORRECTIONS = {
     "aniversary": "anniversary",
     "anniversery": "anniversary",
@@ -1369,15 +1390,17 @@ def chunk_selected_messages(
             chunk_index = start_index + len(chunks)
             chunks.append(
                 {
-                    "chunk_id": f"{conversation_id}:{chunk_index}:{message_hash}",
-                    "chunk_index": chunk_index,
+                    IndexChunkField.CHUNK_ID.value: (
+                        f"{conversation_id}:{chunk_index}:{message_hash}"
+                    ),
+                    IndexChunkField.CHUNK_INDEX.value: chunk_index,
                     "conversation_id": conversation_id,
-                    "message_hash": message_hash,
+                    IndexChunkField.MESSAGE_HASH.value: message_hash,
                     "message_index": start_index + offset,
-                    "token_window_index": token_window_index,
-                    "role": role,
-                    "text": chunk_text,
-                    "index_state": "pending_index",
+                    IndexChunkField.TOKEN_WINDOW_INDEX.value: token_window_index,
+                    IndexChunkField.ROLE.value: role,
+                    IndexChunkField.TEXT.value: chunk_text,
+                    IndexChunkField.INDEX_STATE.value: IndexState.PENDING.value,
                 }
             )
     return chunks
@@ -1408,14 +1431,20 @@ def _attach_index_chunks(obj: dict[str, Any], chunks: list[dict[str, Any]]) -> N
     if not isinstance(metadata, dict):
         metadata = {}
         obj["metadata"] = metadata
-    metadata["index_chunks"] = [
+    metadata[MetadataField.INDEX_CHUNKS.value] = [
         {
-            "chunk_id": str(chunk["chunk_id"]),
-            "chunk_index": int(chunk["chunk_index"]),
-            "message_hash": str(chunk["message_hash"]),
-            "role": str(chunk["role"]),
-            "text": str(chunk["text"]),
-            "index_state": str(chunk.get("index_state", "pending_index")),
+            IndexChunkField.CHUNK_ID.value: str(chunk[IndexChunkField.CHUNK_ID.value]),
+            IndexChunkField.CHUNK_INDEX.value: int(
+                chunk[IndexChunkField.CHUNK_INDEX.value]
+            ),
+            IndexChunkField.MESSAGE_HASH.value: str(
+                chunk[IndexChunkField.MESSAGE_HASH.value]
+            ),
+            IndexChunkField.ROLE.value: str(chunk[IndexChunkField.ROLE.value]),
+            IndexChunkField.TEXT.value: str(chunk[IndexChunkField.TEXT.value]),
+            IndexChunkField.INDEX_STATE.value: str(
+                chunk.get(IndexChunkField.INDEX_STATE.value, IndexState.PENDING.value)
+            ),
         }
         for chunk in chunks
     ]
@@ -1425,7 +1454,7 @@ def embed_chunks(
     chunks: list[dict[str, Any]], *, project_id: str | None = None, owner_id: str | None = None
 ) -> list[dict[str, Any]]:
     runtime = _runtime()
-    texts = [chunk["text"] for chunk in chunks]
+    texts = [chunk[IndexChunkField.TEXT.value] for chunk in chunks]
     provider = str(runtime.health_state.get("embedding", {}).get("provider") or "unknown")
     model = str(runtime.health_state.get("embedding", {}).get("model") or "unknown")
     started = time.perf_counter()
@@ -1453,15 +1482,21 @@ def embed_chunks(
     for chunk, vector in zip(chunks, vectors):
         embeddings.append(
             {
-                "chunk_id": chunk.get("chunk_id"),
-                "chunk_index": chunk["chunk_index"],
+                IndexChunkField.CHUNK_ID.value: chunk.get(
+                    IndexChunkField.CHUNK_ID.value
+                ),
+                IndexChunkField.CHUNK_INDEX.value: chunk[
+                    IndexChunkField.CHUNK_INDEX.value
+                ],
                 "conversation_id": chunk.get("conversation_id"),
                 "project_id": project_id,
                 "owner_id": owner_id,
-                "message_hash": chunk.get("message_hash"),
-                "index_state": "indexed",
-                "role": chunk["role"],
-                "text": chunk["text"],
+                IndexChunkField.MESSAGE_HASH.value: chunk.get(
+                    IndexChunkField.MESSAGE_HASH.value
+                ),
+                IndexChunkField.INDEX_STATE.value: IndexState.INDEXED.value,
+                IndexChunkField.ROLE.value: chunk[IndexChunkField.ROLE.value],
+                IndexChunkField.TEXT.value: chunk[IndexChunkField.TEXT.value],
                 "vector": [float(v) for v in vector],
             }
         )
@@ -2410,9 +2445,9 @@ def ingest_messages(
                 chunks, project_id=effective_project_id, owner_id=owner_id
             )
             store_vectors(str(updated["id"]), embeddings, replace=(start_index == 0))
-            _mark_chunks_indexed(str(updated["id"]), chunks)
+            _mark_chunks_indexed(str(updated["id"]), chunks, updated)
         except Exception:
-            _mark_chunks_indexing_failed(str(updated["id"]), chunks)
+            _mark_chunks_indexing_failed(str(updated["id"]), chunks, updated)
             raise
         if new_messages:
             with _ingestion_stage("fact_extract", message_count=len(new_messages)):
@@ -2474,9 +2509,9 @@ def ingest_messages(
     try:
         embeddings = embed_chunks(chunks, project_id=effective_project_id, owner_id=owner_id)
         store_vectors(metadata_id, embeddings, replace=not inserted)
-        _mark_chunks_indexed(metadata_id, chunks)
+        _mark_chunks_indexed(metadata_id, chunks, conversation_json)
     except Exception:
-        _mark_chunks_indexing_failed(metadata_id, chunks)
+        _mark_chunks_indexing_failed(metadata_id, chunks, conversation_json)
         raise
     if inserted:
         with _ingestion_stage("fact_extract"):
@@ -2771,18 +2806,63 @@ def _is_fully_indexed(metadata_id: str) -> bool:
     return False
 
 
-def _mark_chunks_indexed(metadata_id: str, chunks: list[dict[str, Any]]) -> None:
+def _mark_chunks_indexed(
+    metadata_id: str, chunks: list[dict[str, Any]], conversation: dict[str, Any] | None = None
+) -> None:
+    if conversation is not None:
+        _set_index_chunks_state(conversation, chunks, IndexState.INDEXED)
     store = _runtime().metadata_store
     if hasattr(store, "mark_chunks_indexed"):
-        store.mark_chunks_indexed(metadata_id, [str(chunk["chunk_id"]) for chunk in chunks])
+        store.mark_chunks_indexed(
+            metadata_id, [str(chunk[IndexChunkField.CHUNK_ID.value]) for chunk in chunks]
+        )
+    elif conversation is not None and hasattr(store, "insert"):
+        store.insert(conversation)
 
 
-def _mark_chunks_indexing_failed(metadata_id: str, chunks: list[dict[str, Any]]) -> None:
+def _mark_chunks_indexing_failed(
+    metadata_id: str, chunks: list[dict[str, Any]], conversation: dict[str, Any] | None = None
+) -> None:
+    if conversation is not None:
+        _set_index_chunks_state(conversation, chunks, IndexState.FAILED)
     store = _runtime().metadata_store
     if hasattr(store, "mark_chunks_indexing_failed"):
         store.mark_chunks_indexing_failed(
-            metadata_id, [str(chunk["chunk_id"]) for chunk in chunks]
+            metadata_id, [str(chunk[IndexChunkField.CHUNK_ID.value]) for chunk in chunks]
         )
+    elif conversation is not None and hasattr(store, "insert"):
+        store.insert(conversation)
+
+
+def _set_index_chunks_state(
+    conversation: dict[str, Any], chunks: list[dict[str, Any]], state: IndexState
+) -> None:
+    for chunk in chunks:
+        chunk[IndexChunkField.INDEX_STATE.value] = state.value
+    metadata = conversation.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+        conversation["metadata"] = metadata
+    existing = metadata.get(MetadataField.INDEX_CHUNKS.value)
+    if not isinstance(existing, list):
+        _attach_index_chunks(conversation, chunks)
+        return
+    target_ids = {str(chunk[IndexChunkField.CHUNK_ID.value]) for chunk in chunks}
+    present_ids: set[str] = set()
+    for item in existing:
+        if not isinstance(item, dict):
+            continue
+        chunk_id = str(item.get(IndexChunkField.CHUNK_ID.value, ""))
+        if chunk_id in target_ids:
+            item[IndexChunkField.INDEX_STATE.value] = state.value
+            present_ids.add(chunk_id)
+    missing = [
+        chunk
+        for chunk in chunks
+        if str(chunk[IndexChunkField.CHUNK_ID.value]) not in present_ids
+    ]
+    if missing:
+        _extend_index_chunks(conversation, missing)
 
 
 def reindex_stored_conversations(
@@ -2831,12 +2911,12 @@ def reindex_stored_conversations(
                 owner_id=owner_id,
             )
             store_vectors(memory_id, embeddings, replace=replace_existing)
-            _mark_chunks_indexed(memory_id, chunks)
+            _mark_chunks_indexed(memory_id, chunks, conversation)
             reindexed += 1
             chunks_reindexed += len(chunks)
         except Exception as exc:
             if chunks:
-                _mark_chunks_indexing_failed(memory_id, chunks)
+                _mark_chunks_indexing_failed(memory_id, chunks, conversation)
             failures.append({"id": memory_id, "error": str(exc)})
     return {
         "status": "ok" if not failures else "error",
@@ -3665,10 +3745,14 @@ def _next_chunk_index(
     conversation: dict[str, Any], *, fallback_start_index: int
 ) -> int:
     metadata = conversation.get("metadata", {})
-    index_chunks = metadata.get("index_chunks") if isinstance(metadata, dict) else None
+    index_chunks = (
+        metadata.get(MetadataField.INDEX_CHUNKS.value)
+        if isinstance(metadata, dict)
+        else None
+    )
     if isinstance(index_chunks, list):
         indexes = [
-            int(chunk.get("chunk_index", -1))
+            int(chunk.get(IndexChunkField.CHUNK_INDEX.value, -1))
             for chunk in index_chunks
             if isinstance(chunk, dict)
         ]
@@ -3682,17 +3766,25 @@ def _extend_index_chunks(obj: dict[str, Any], chunks: list[dict[str, Any]]) -> N
     if not isinstance(metadata, dict):
         metadata = {}
         obj["metadata"] = metadata
-    existing = metadata.get("index_chunks")
+    existing = metadata.get(MetadataField.INDEX_CHUNKS.value)
     if not isinstance(existing, list):
         existing = []
-    metadata["index_chunks"] = existing + [
+    metadata[MetadataField.INDEX_CHUNKS.value] = existing + [
         {
-            "chunk_id": str(chunk["chunk_id"]),
-            "chunk_index": int(chunk["chunk_index"]),
-            "message_hash": str(chunk["message_hash"]),
-            "role": str(chunk["role"]),
-            "text": str(chunk["text"]),
-            "index_state": str(chunk.get("index_state", "pending_index")),
+            IndexChunkField.CHUNK_ID.value: str(
+                chunk[IndexChunkField.CHUNK_ID.value]
+            ),
+            IndexChunkField.CHUNK_INDEX.value: int(
+                chunk[IndexChunkField.CHUNK_INDEX.value]
+            ),
+            IndexChunkField.MESSAGE_HASH.value: str(
+                chunk[IndexChunkField.MESSAGE_HASH.value]
+            ),
+            IndexChunkField.ROLE.value: str(chunk[IndexChunkField.ROLE.value]),
+            IndexChunkField.TEXT.value: str(chunk[IndexChunkField.TEXT.value]),
+            IndexChunkField.INDEX_STATE.value: str(
+                chunk.get(IndexChunkField.INDEX_STATE.value, IndexState.PENDING.value)
+            ),
         }
         for chunk in chunks
     ]
@@ -4457,24 +4549,17 @@ def _answer_from_facts(
     filters: ConversationFilters | None = None,
 ) -> dict[str, Any] | None:
     filters = filters or ConversationFilters()
-    query = _fact_query(question)
-    if query is None:
-        return None
-    facts = _search_facts(
-        subject=(
-            query.get(FactField.SUBJECT.value)
-            if query.get(FactField.SUBJECT.value) == _FactSubject.USER.value
-            else None
-        ),
-        predicate=query.get(FactField.PREDICATE.value),
-        owner_id=owner_id,
-        project_id=project_id,
-        conversation_filters=filters,
-        fact_filters=FactFilters.from_options(status="all"),
-    )
-    facts = _filter_facts_for_question(facts, question, query)
-    candidates = [fact for fact in facts if fact.get(FactField.DELETED_AT.value) is None]
-    candidates = _narrow_facts_for_question(candidates, question, query)
+    candidates: list[dict[str, Any]] = []
+    for query in _fact_answer_queries(question):
+        candidates = _candidate_facts_for_question(
+            question=question,
+            query=query,
+            owner_id=owner_id,
+            project_id=project_id,
+            filters=filters,
+        )
+        if candidates:
+            break
     if not candidates:
         return None
     public_timeline = [_public_fact(fact) for fact in candidates]
@@ -4553,6 +4638,45 @@ def _answer_from_facts(
     )
 
 
+def _fact_answer_queries(question: str) -> list[dict[str, str]]:
+    queries: list[dict[str, str]] = []
+    specific_query = _fact_query(question)
+    if specific_query is not None:
+        queries.append(specific_query)
+    generic_query = _generic_fact_projection_query(question)
+    if generic_query is not None and generic_query not in queries:
+        queries.append(generic_query)
+    return queries
+
+
+def _candidate_facts_for_question(
+    *,
+    question: str,
+    query: dict[str, str],
+    owner_id: str | None,
+    project_id: str | None,
+    filters: ConversationFilters,
+) -> list[dict[str, Any]]:
+    facts = _search_facts(
+        subject=(
+            query.get(FactField.SUBJECT.value)
+            if query.get(FactField.SUBJECT.value) == _FactSubject.USER.value
+            else None
+        ),
+        predicate=query.get(FactField.PREDICATE.value),
+        owner_id=owner_id,
+        project_id=project_id,
+        conversation_filters=filters,
+        fact_filters=FactFilters.from_options(status="active"),
+    )
+    text_query = query.get(_FactQueryKey.TEXT.value)
+    if text_query is not None:
+        return _generic_fact_projection_candidates(facts, text_query)
+    facts = _filter_facts_for_question(facts, question, query)
+    candidates = [fact for fact in facts if fact.get(FactField.DELETED_AT.value) is None]
+    return _narrow_facts_for_question(candidates, question, query)
+
+
 def _fact_query(question: str) -> dict[str, str] | None:
     lowered = question.lower()
     subject = _question_project_subject(question)
@@ -4628,6 +4752,29 @@ def _fact_query(question: str) -> dict[str, str] | None:
     if generic_attribute_query is not None:
         return generic_attribute_query
     return None
+
+
+def _generic_fact_projection_query(question: str) -> dict[str, str] | None:
+    if not _question_can_use_generic_fact_projection(question):
+        return None
+    return {_FactQueryKey.TEXT.value: question}
+
+
+def _question_can_use_generic_fact_projection(question: str) -> bool:
+    if _fact_question_needs_context(question):
+        return False
+    if not _looks_like_fact_projection_question(question):
+        return False
+    return bool(_fact_text_query_tokens(question))
+
+
+def _looks_like_fact_projection_question(question: str) -> bool:
+    normalized = question.strip().lower()
+    if not normalized:
+        return False
+    return "?" in normalized or normalized.startswith(
+        _GENERIC_FACT_PROJECTION_QUESTION_PREFIXES
+    )
 
 
 def _generic_attribute_query(question: str) -> dict[str, str] | None:
@@ -4717,6 +4864,57 @@ def _narrow_facts_for_question(
     return narrowed if len(narrowed) < len(facts) else facts
 
 
+def _generic_fact_projection_candidates(
+    facts: list[dict[str, Any]], question: str
+) -> list[dict[str, Any]]:
+    active = [fact for fact in facts if fact.get(FactField.DELETED_AT.value) is None]
+    ranked = _rank_facts_by_text_query(
+        active, question, include_source_memory=False
+    )
+    if len(ranked) < 2:
+        return ranked
+    return _best_fact_projection_group(
+        ranked, question, include_source_memory=False
+    )
+
+
+def _best_fact_projection_group(
+    facts: list[dict[str, Any]],
+    question: str,
+    *,
+    include_source_memory: bool = True,
+) -> list[dict[str, Any]]:
+    query_tokens = _fact_text_query_tokens(question)
+    groups: dict[tuple[str, str], list[tuple[int, int, dict[str, Any]]]] = {}
+    for index, fact in enumerate(facts):
+        fact_tokens = set(
+            _query_tokens(
+                _fact_search_text(fact, include_source_memory=include_source_memory),
+                limit=None,
+            )
+        )
+        score = len(query_tokens.intersection(fact_tokens))
+        key = (
+            str(fact.get(FactField.SUBJECT.value, "")),
+            str(fact.get(FactField.PREDICATE.value, "")),
+        )
+        groups.setdefault(key, []).append((score, index, fact))
+    if not groups:
+        return []
+    best_group = min(
+        groups.values(),
+        key=lambda group: (
+            -max(score for score, _index, _fact in group),
+            -sum(score for score, _index, _fact in group),
+            min(index for _score, index, _fact in group),
+        ),
+    )
+    best_score = max(score for score, _index, _fact in best_group)
+    if best_score <= 0:
+        return []
+    return [fact for _score, _index, fact in best_group]
+
+
 def _specific_fact_question_tokens(question: str, query: dict[str, str]) -> set[str]:
     predicate_tokens = set(
         _query_tokens(
@@ -4742,7 +4940,9 @@ def _fact_question_overlap_score(
     return len(question_tokens.intersection(fact_tokens))
 
 
-def _fact_search_text(fact: dict[str, Any]) -> str:
+def _fact_search_text(
+    fact: dict[str, Any], *, include_source_memory: bool = True
+) -> str:
     parts = [
         str(fact.get(FactField.SUBJECT.value, "")),
         str(fact.get(FactField.PREDICATE.value, "")).replace("_", " "),
@@ -4750,14 +4950,18 @@ def _fact_search_text(fact: dict[str, Any]) -> str:
         str(fact.get(FactField.OBJECT_NORMALIZED.value, "")),
         str(fact.get(FactField.SOURCE_CONVERSATION_ID.value, "")),
     ]
-    conversation = _source_conversation_for_fact(fact)
-    if isinstance(conversation, dict):
-        parts.append(_conversation_search_text(conversation))
+    if include_source_memory:
+        conversation = _source_conversation_for_fact(fact)
+        if isinstance(conversation, dict):
+            parts.append(_conversation_search_text(conversation))
     return " ".join(parts)
 
 
 def _rank_facts_by_text_query(
-    facts: list[dict[str, Any]], query: str | None
+    facts: list[dict[str, Any]],
+    query: str | None,
+    *,
+    include_source_memory: bool = True,
 ) -> list[dict[str, Any]]:
     if not query:
         return facts
@@ -4766,7 +4970,9 @@ def _rank_facts_by_text_query(
         return facts
     scored: list[tuple[int, int, dict[str, Any]]] = []
     for index, fact in enumerate(facts):
-        fact_text = _fact_search_text(fact)
+        fact_text = _fact_search_text(
+            fact, include_source_memory=include_source_memory
+        )
         fact_tokens = set(_query_tokens(fact_text, limit=None))
         overlap = len(query_tokens.intersection(fact_tokens))
         if overlap <= 0:
