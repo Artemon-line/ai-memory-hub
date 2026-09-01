@@ -452,6 +452,12 @@ class _FactCorrectionMatch:
     old_value: str
 
 
+@dataclass(frozen=True)
+class _ProfileSummaryLine:
+    predicate: str
+    value: str
+
+
 _PayloadKey = TypeVar("_PayloadKey", bound=StrEnum)
 
 
@@ -777,6 +783,9 @@ _GENERIC_FACT_PROJECTION_QUESTION_PREFIXES = (
     "who ",
     "would ",
 )
+_PROFILE_SUMMARY_FACT_LIMIT = 12
+_PROFILE_SUMMARY_EMPTY_TEXT = "No active profile facts match the requested filters."
+_PROFILE_SUMMARY_FALLBACK_PREDICATE = "fact"
 _COMMON_FACT_SPELLING_CORRECTIONS = {
     "aniversary": "anniversary",
     "anniversery": "anniversary",
@@ -5952,20 +5961,44 @@ def _get_conversation_summary(conversation: dict[str, Any]) -> dict[str, Any] | 
 
 def _profile_summary_text(facts: list[dict[str, Any]]) -> str:
     if not facts:
-        return "No active profile facts match the requested filters."
-    lines: list[str] = []
-    for fact in facts[:12]:
-        predicate = str(fact.get(FactField.PREDICATE.value, "fact"))
-        value = str(
-            fact.get(FactField.OBJECT_NORMALIZED.value)
-            or fact.get(FactField.OBJECT.value, "")
-        )
-        if value:
-            lines.append(f"{predicate}: {value}")
-    remaining = len(facts) - len(lines)
+        return _PROFILE_SUMMARY_EMPTY_TEXT
+    summary_lines = _unique_profile_summary_lines(facts)
+    if not summary_lines:
+        return _PROFILE_SUMMARY_EMPTY_TEXT
+    displayed = summary_lines[:_PROFILE_SUMMARY_FACT_LIMIT]
+    lines = [f"{line.predicate}: {line.value}" for line in displayed]
+    remaining = len(summary_lines) - len(displayed)
     if remaining > 0:
         lines.append(f"{remaining} more active fact(s).")
     return "; ".join(lines)
+
+
+def _unique_profile_summary_lines(facts: list[dict[str, Any]]) -> list[_ProfileSummaryLine]:
+    lines: list[_ProfileSummaryLine] = []
+    seen: set[tuple[str, str]] = set()
+    for fact in facts:
+        predicate = str(
+            fact.get(
+                FactField.PREDICATE.value,
+                _PROFILE_SUMMARY_FALLBACK_PREDICATE,
+            )
+        )
+        value = _profile_summary_fact_value(fact)
+        if not value:
+            continue
+        key = (predicate.casefold(), value.casefold())
+        if key in seen:
+            continue
+        seen.add(key)
+        lines.append(_ProfileSummaryLine(predicate=predicate, value=value))
+    return lines
+
+
+def _profile_summary_fact_value(fact: dict[str, Any]) -> str:
+    return str(
+        fact.get(FactField.OBJECT_NORMALIZED.value)
+        or fact.get(FactField.OBJECT.value, "")
+    ).strip()
 
 
 def _freshest_fact_timestamp(facts: list[dict[str, Any]]) -> str | None:

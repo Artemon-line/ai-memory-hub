@@ -163,6 +163,11 @@ Phase 5 status on 2026-08-29:
   reproduced stale detailed `memory_retrieve` index chunk state and
   `memory_ask` fallback to stale direct chunks for corrected facts; those two
   regressions are now covered by local tests in this phase.
+- Hermes follow-up after commit `efe42f2` confirmed the response-format and
+  native-JSON fixes, and narrowed remaining product work to profile summary
+  dedup/canonicalization plus future API-surface design. The profile summary
+  duplicate-line concern and a repeated fresh-insert stability contract are now
+  covered by local tests.
 
 Acceptance criteria:
 

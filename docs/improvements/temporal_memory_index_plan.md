@@ -78,6 +78,8 @@ are limited to multiple distinct values in the same latest timestamp group.
       audit reads match searchable/indexed storage state.
 - [x] Retry generic active temporal fact projection before direct chunk fallback
       when a specific question parser finds no active facts.
+- [x] Deduplicate human-readable profile summary lines at read time while
+      preserving observed fact rows for timeline and audit views.
 - [ ] Ensure `memory_fact_search` can filter or group by latest-only versus timeline views.
 - [x] Add free-text `memory_fact_search.query` for agent-facing lookup before a client knows the subject or predicate.
 - [x] Pin concise fact search to emit deduplicated rows by default, not only when a custom limit is supplied.
@@ -100,6 +102,8 @@ are limited to multiple distinct values in the same latest timestamp group.
 - [x] Add agent-agnostic fact-search contract tests for free-text lookup and default concise dedupe.
 - [x] Add regression coverage for detailed retrieve index-state consistency and
       corrected temporal facts winning over stale direct chunks.
+- [x] Add an MCP insert stability contract for repeated fresh timestamped
+      memory inserts.
 - [x] Run `uv run python -m ruff check memory tests tools`.
 - [x] Run `uv run python -m pyright`.
 - [x] Run `uv run pytest tests/unit tests/integration -q`.

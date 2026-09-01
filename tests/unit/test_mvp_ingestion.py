@@ -1829,6 +1829,30 @@ def test_profile_and_recurring_topic_facts_are_extracted() -> None:
     assert stored[profile["summary"]["id"]]["provenance_status"] == "fact_ids"
 
 
+def test_profile_summary_text_deduplicates_repeated_topic_lines() -> None:
+    _configure_stubs()
+    first = _valid_conversation()
+    first["id"] = "11111111-1111-4111-8111-111111111111"
+    first["messages"] = [
+        {"role": "assistant", "text": "We discussed FastAPI, MCP, SQLite, and pytest."}
+    ]
+    second = _valid_conversation()
+    second["id"] = "22222222-2222-4222-8222-222222222222"
+    second["messages"] = [
+        {"role": "assistant", "text": "Again we discussed FastAPI, MCP, SQLite, and pytest."}
+    ]
+    mvp_ingestion.ingest_messages(first)
+    mvp_ingestion.ingest_messages(second)
+
+    profile = mvp_ingestion.profile_get("user", predicate="recurring_topic")
+    summary_text = profile["summary"]["text"]
+
+    assert len(profile["facts"]) == 8
+    for topic in ("backend", "mcp", "sql", "testing"):
+        assert summary_text.count(f"recurring_topic: {topic}") == 1
+    assert "more active fact" not in summary_text
+
+
 def test_profile_summary_handles_empty_filtered_view() -> None:
     _configure_stubs()
 

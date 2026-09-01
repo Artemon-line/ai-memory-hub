@@ -251,6 +251,9 @@ def test_mcp_fact_and_profile_concise_response_format_reduces_fact_payloads(
         "confidence_counts",
         "source_quality_counts",
     }
+    summary_text = concise_profile["summary"]["text"]
+    assert summary_text.count("owns_guitar: a green Gibson guitar") == 1
+    assert summary_text.count("owns_guitar: a blue Jazzmaster guitar") == 1
     assert "provenance" not in concise_profile["summary"]
     assert "qualifiers" not in concise_profile["facts"][0]
     assert concise_profile["total_facts"] == 3

@@ -550,6 +550,52 @@ def test_mcp_insert_deduplicates_exact_reinsert(tmp_path: Path) -> None:
     assert [row["id"] for row in search["results"]] == [payload["id"]]
 
 
+def test_mcp_insert_handles_repeated_fresh_memories_stably(tmp_path: Path) -> None:
+    payloads = [
+        _conversation(
+            memory_id=f"b5858840-3de5-4194-bf37-16f57dd3a35{index}",
+            text=f"AMH QA insert stability marker {index} stores teal quartz.",
+            source="agent-a",
+            tags=["codex-cli-qa", "insert-stability"],
+            thread_id="AMH-QA-INSERT-STABILITY",
+        )
+        for index in range(4)
+    ]
+
+    with _client(tmp_path) as client:
+        headers = _initialize_mcp(client)
+        inserts = [
+            _call_tool(
+                client,
+                headers,
+                request_id=request_id,
+                name="memory_insert",
+                arguments={"conversation_json": payload},
+            )
+            for request_id, payload in enumerate(payloads, start=2)
+        ]
+        search = _call_tool(
+            client,
+            headers,
+            request_id=6,
+            name="memory_search",
+            arguments={
+                "query": "AMH QA insert stability teal quartz",
+                "top_k": 10,
+                "tags": ["insert-stability"],
+                "response_format": "detailed",
+            },
+        )
+
+    assert [insert["status"] for insert in inserts] == ["ok"] * len(payloads)
+    assert [insert["deduplicated"] for insert in inserts] == [False] * len(payloads)
+    assert all(insert["embedded_chunks"] >= 1 for insert in inserts)
+    assert {insert["id"] for insert in inserts} == {payload["id"] for payload in payloads}
+    assert {payload["id"] for payload in payloads}.issubset(
+        {row["id"] for row in search["results"]}
+    )
+
+
 @pytest.mark.parametrize(
     ("correction_text", "expected_new"),
     [
