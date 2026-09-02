@@ -96,6 +96,8 @@ _CITATION_KEYS: tuple[str | StrEnum, ...] = (
 DEFAULT_CONCISE_FACT_LIMIT = 10
 _DEFAULT_MEMORY_STATUS = "active"
 _MEMORY_STATUS_KEY = "memory_status"
+_CONCISE_SEARCH_TEXT_LIMIT = 800
+_CONCISE_SEARCH_EVIDENCE_TEXT_LIMIT = 500
 _CONCISE_ASK_KEYS: tuple[str | StrEnum, ...] = (
     MCPPayloadKey.STATUS,
     MCPPayloadKey.ANSWER,
@@ -193,19 +195,35 @@ def format_profile_response(
 
 def _concise_search_row(row: dict[str, Any]) -> dict[str, Any]:
     concise = _compact_mapping(row, (*_SEARCH_ROW_KEYS, *_THREAD_ROW_KEYS))
+    if concise.get("text") is not None:
+        concise["text"] = _truncate_text(
+            str(concise["text"]), limit=_CONCISE_SEARCH_TEXT_LIMIT
+        )
     if "matching_chunks" not in concise and "conversation_match_count" in row:
         concise["matching_chunks"] = row["conversation_match_count"]
     evidence_chunks = concise.get("evidence_chunks")
     if isinstance(evidence_chunks, list):
-        concise["evidence_chunks"] = [
-            _compact_mapping(chunk, _CITATION_KEYS)
-            for chunk in evidence_chunks
-            if isinstance(chunk, dict)
-        ]
+        concise["evidence_chunks"] = _concise_search_evidence_chunks(evidence_chunks)
     concise["citation"] = _conversation_citation(
         row.get("conversation"), fallback_id=row.get("id")
     )
     return concise
+
+
+def _concise_search_evidence_chunks(
+    evidence_chunks: list[Any],
+) -> list[dict[str, Any]]:
+    chunks: list[dict[str, Any]] = []
+    for chunk in evidence_chunks:
+        if not isinstance(chunk, dict):
+            continue
+        concise = _compact_mapping(chunk, _CITATION_KEYS)
+        if concise.get("text") is not None:
+            concise["text"] = _truncate_text(
+                str(concise["text"]), limit=_CONCISE_SEARCH_EVIDENCE_TEXT_LIMIT
+            )
+        chunks.append(concise)
+    return chunks
 
 
 def _conversation_citation(conversation: Any, *, fallback_id: Any) -> dict[str, Any]:
@@ -349,7 +367,8 @@ def _truncate_text(text: str, *, limit: int) -> str:
     value = " ".join(text.strip().split())
     if len(value) <= limit:
         return value
-    return value[: limit - 1].rstrip() + "..."
+    suffix = "..."
+    return value[: limit - len(suffix)].rstrip() + suffix
 
 
 def _limited_concise_facts(

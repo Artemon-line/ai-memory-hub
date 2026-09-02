@@ -354,6 +354,27 @@ async def test_mcp_search_response_format_controls_conversation_payloads() -> No
 
 
 @pytest.mark.asyncio
+async def test_mcp_concise_search_truncates_large_chunk_text() -> None:
+    runtime = _runtime()
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=runtime)
+    handlers = build_tool_handlers(agent)
+    long_text = "hello " + ("large evidence text " * 80)
+    payload = _conversation()
+    payload["messages"] = [{"role": "user", "text": long_text}]
+
+    await handlers["memory_insert"](payload)
+    concise = await handlers["memory_search"]("hello", 5)
+    detailed = await handlers["memory_search"](
+        "hello", 5, response_format="detailed"
+    )
+
+    concise_text = concise["results"][0]["text"]
+    assert len(concise_text) <= 800
+    assert concise_text.endswith("...")
+    assert detailed["results"][0]["text"] == long_text
+
+
+@pytest.mark.asyncio
 async def test_mcp_tool_handlers_keep_reads_responsive_during_slow_insert(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -74,6 +74,13 @@ class StubVectorStore:
             for index, row in enumerate(self.rows[:top_k])
         ]
 
+    def get_indexed_chunk_ids(self, memory_id: str) -> list[str]:
+        return [
+            str(row["chunk_id"])
+            for row in self.rows
+            if str(row["memory_id"]) == str(memory_id) and row.get("chunk_id")
+        ]
+
 
 class FakeEmbeddingHTTPResponse:
     def __init__(self, payload: dict[str, Any]):
@@ -902,6 +909,48 @@ def test_retrieve_returns_indexed_chunk_state_after_insert() -> None:
     }
 
 
+def test_retrieve_repairs_legacy_pending_index_manifest_from_vector_rows() -> None:
+    metadata, vectors = _configure_stubs()
+    conversation = _valid_conversation()
+    memory_id = str(conversation["id"])
+    chunk_id = f"{memory_id}:0:sha256:{'a' * 64}"
+    conversation["metadata"][MetadataField.INDEX_CHUNKS.value] = [
+        {
+            IndexChunkField.CHUNK_INDEX.value: 0,
+            IndexChunkField.MESSAGE_HASH.value: "sha256:" + "a" * 64,
+            IndexChunkField.ROLE.value: "user",
+            IndexChunkField.TEXT.value: "Legacy indexed chunk text.",
+            IndexChunkField.INDEX_STATE.value: IndexState.PENDING.value,
+        }
+    ]
+    metadata.insert(conversation)
+    vectors.rows = [
+        {
+            "memory_id": memory_id,
+            "chunk_id": chunk_id,
+            "chunk_index": 0,
+            "role": "user",
+            "text": "Legacy indexed chunk text.",
+            "vector": [1.0, 0.0],
+        }
+    ]
+
+    retrieved = mvp_ingestion.retrieve(memory_id)
+
+    assert retrieved is not None
+    index_chunks = retrieved["metadata"][MetadataField.INDEX_CHUNKS.value]
+    assert index_chunks == [
+        {
+            IndexChunkField.CHUNK_INDEX.value: 0,
+            IndexChunkField.MESSAGE_HASH.value: "sha256:" + "a" * 64,
+            IndexChunkField.ROLE.value: "user",
+            IndexChunkField.TEXT.value: "Legacy indexed chunk text.",
+            IndexChunkField.INDEX_STATE.value: IndexState.INDEXED.value,
+            IndexChunkField.CHUNK_ID.value: chunk_id,
+        }
+    ]
+
+
 def test_ingest_messages_invalid_json_raises() -> None:
     _configure_stubs()
     invalid = _valid_conversation()
@@ -1680,6 +1729,62 @@ def test_fact_search_query_filters_across_fact_text() -> None:
     result = mvp_ingestion.fact_search(query="teal macro lens")
 
     assert [fact["object"] for fact in result["results"]] == ["a teal macro lens"]
+
+
+def test_fact_search_query_requires_identifier_match() -> None:
+    _configure_stubs()
+    marker = "QA_MARKER_SCOPELESS"
+    first = _valid_conversation()
+    first["id"] = "11111111-1111-4111-8111-111111111111"
+    first["messages"] = [
+        {"role": "user", "text": f"{marker} hardware adapter is beta dock."}
+    ]
+    second = _valid_conversation()
+    second["id"] = "22222222-2222-4222-8222-222222222222"
+    second["messages"] = [
+        {"role": "user", "text": "QA_OTHER_SCOPELESS hardware adapter is carbon sled."}
+    ]
+    mvp_ingestion.ingest_messages(first)
+    mvp_ingestion.ingest_messages(second)
+
+    result = mvp_ingestion.fact_search(query=f"{marker} hardware adapter")
+
+    assert [fact["object"] for fact in result["results"]] == ["beta dock"]
+
+
+def test_ask_ignores_unrelated_recent_facts_for_identifier_question() -> None:
+    _configure_stubs()
+    marker = "QA_MARKER_SCOPELESS_ASK"
+    older = _valid_conversation()
+    older["id"] = "11111111-1111-4111-8111-111111111111"
+    older["timestamp"] = "2026-01-01T00:00:00Z"
+    older["messages"] = [
+        {"role": "user", "text": f"{marker} hardware adapter is alpha dock."}
+    ]
+    newer = _valid_conversation()
+    newer["id"] = "22222222-2222-4222-8222-222222222222"
+    newer["timestamp"] = "2026-02-01T00:00:00Z"
+    newer["messages"] = [
+        {"role": "user", "text": f"{marker} hardware adapter changes to beta dock."}
+    ]
+    distractor = _valid_conversation()
+    distractor["id"] = "33333333-3333-4333-8333-333333333333"
+    distractor["timestamp"] = "2026-03-01T00:00:00Z"
+    distractor["messages"] = [
+        {"role": "user", "text": "QA_OTHER_SCOPELESS_ASK hardware adapter is carbon sled."}
+    ]
+    mvp_ingestion.ingest_messages(older)
+    mvp_ingestion.ingest_messages(newer)
+    mvp_ingestion.ingest_messages(distractor)
+
+    result = mvp_ingestion.ask(f"Which hardware adapter should {marker} use?", top_k=5)
+
+    assert result["answer_basis"] == "fact_layer"
+    assert result["answer"] == "beta dock"
+    assert result["latest"]["value"] == "beta dock"
+    assert {fact["subject"] for fact in result["facts"]} == {
+        f"{marker} hardware adapter"
+    }
 
 
 def test_conflicting_active_facts_return_conflict_basis() -> None:

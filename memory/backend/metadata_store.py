@@ -8,10 +8,11 @@ import re
 import secrets
 import sqlite3
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping, Sequence
 
 from memory.backend.contracts import ProviderCapabilities
 from memory.backend.errors import NotSupportedError
@@ -55,6 +56,37 @@ class IndexState(StrEnum):
     FAILED = "indexing_failed"
 
 
+@dataclass(frozen=True, slots=True)
+class IndexChunkIdentitySet:
+    chunk_ids: frozenset[str]
+    chunk_indexes: frozenset[int]
+
+    @classmethod
+    def from_chunk_ids(cls, chunk_ids: Sequence[str]) -> "IndexChunkIdentitySet":
+        ids = frozenset(str(chunk_id) for chunk_id in chunk_ids if str(chunk_id))
+        indexes = frozenset(
+            index for chunk_id in ids if (index := _chunk_index_from_chunk_id(chunk_id)) is not None
+        )
+        return cls(chunk_ids=ids, chunk_indexes=indexes)
+
+    def matches(self, chunk: Mapping[str, Any]) -> bool:
+        chunk_id = str(chunk.get(IndexChunkField.CHUNK_ID.value, ""))
+        if chunk_id:
+            return chunk_id in self.chunk_ids
+        chunk_index = _chunk_index_from_payload(chunk)
+        return chunk_index is not None and chunk_index in self.chunk_indexes
+
+
+def index_chunk_ids_by_chunk_index(chunk_ids: Sequence[str]) -> dict[int, str]:
+    output: dict[int, str] = {}
+    for chunk_id in chunk_ids:
+        normalized = str(chunk_id)
+        index = _chunk_index_from_chunk_id(normalized)
+        if index is not None and index not in output:
+            output[index] = normalized
+    return output
+
+
 def normalize_index_state(state: IndexState | str) -> IndexState:
     if isinstance(state, IndexState):
         return state
@@ -75,7 +107,8 @@ def update_index_chunks_payload(
         updated[ConversationPayloadField.METADATA.value] = metadata
         return updated
 
-    target_ids = {str(chunk_id) for chunk_id in chunk_ids}
+    targets = IndexChunkIdentitySet.from_chunk_ids(chunk_ids)
+    chunk_id_by_index = index_chunk_ids_by_chunk_index(chunk_ids)
     normalized_state = normalize_index_state(state).value
     updated_chunks: list[Any] = []
     for item in chunks:
@@ -83,12 +116,37 @@ def update_index_chunks_payload(
             updated_chunks.append(item)
             continue
         chunk = dict(item)
-        if str(chunk.get(IndexChunkField.CHUNK_ID.value, "")) in target_ids:
+        if targets.matches(chunk):
+            chunk_index = _chunk_index_from_payload(chunk)
+            if (
+                not chunk.get(IndexChunkField.CHUNK_ID.value)
+                and chunk_index in chunk_id_by_index
+            ):
+                chunk[IndexChunkField.CHUNK_ID.value] = chunk_id_by_index[chunk_index]
             chunk[IndexChunkField.INDEX_STATE.value] = normalized_state
         updated_chunks.append(chunk)
     metadata[MetadataField.INDEX_CHUNKS.value] = updated_chunks
     updated[ConversationPayloadField.METADATA.value] = metadata
     return updated
+
+
+def _chunk_index_from_chunk_id(chunk_id: str) -> int | None:
+    parts = chunk_id.split(":")
+    if len(parts) >= 2 and parts[1].isdigit():
+        return int(parts[1])
+    if len(parts) == 2 and parts[-1].isdigit():
+        return int(parts[-1])
+    return None
+
+
+def _chunk_index_from_payload(chunk: Mapping[str, Any]) -> int | None:
+    value = chunk.get(IndexChunkField.CHUNK_INDEX.value)
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 class SQLiteMetadataStore:

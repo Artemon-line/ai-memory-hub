@@ -31,12 +31,14 @@ from memory.backend.metadata_store import (
     PROJECT_ROLE_READER,
     PROJECT_ROLE_WRITER,
     IndexChunkField,
+    IndexChunkIdentitySet,
     IndexState,
     MetadataField,
     SQLiteMetadataStore,
     _default_project_id,
     _validate_owner_id,
     _validate_project_id,
+    index_chunk_ids_by_chunk_index,
 )
 from memory.backend.mongodb_metadata_store import MongoDBMetadataStore
 from memory.backend.postgres_metadata_store import PostgresMetadataStore
@@ -2815,6 +2817,135 @@ def _is_fully_indexed(metadata_id: str) -> bool:
     return False
 
 
+def _repair_retrieved_index_chunks(
+    memory_id: str, conversation: dict[str, Any]
+) -> dict[str, Any]:
+    if not _has_pending_index_chunks(conversation):
+        return conversation
+
+    indexed_chunk_ids = _vector_indexed_chunk_ids(memory_id)
+    chunks = (
+        _manifest_chunks_for_index_repair(conversation, indexed_chunk_ids=indexed_chunk_ids)
+        if indexed_chunk_ids
+        else []
+    )
+    if not chunks and _is_fully_indexed(memory_id):
+        chunks = _manifest_chunks_for_index_repair(conversation)
+    if not chunks:
+        return conversation
+
+    _mark_chunks_indexed(memory_id, chunks, conversation)
+    refreshed = _runtime().metadata_store.get(memory_id)
+    return refreshed if isinstance(refreshed, dict) else conversation
+
+
+def _has_pending_index_chunks(conversation: dict[str, Any]) -> bool:
+    return any(
+        chunk.get(IndexChunkField.INDEX_STATE.value) == IndexState.PENDING.value
+        for chunk in _index_chunk_manifest(conversation)
+    )
+
+
+def _vector_indexed_chunk_ids(memory_id: str) -> set[str]:
+    getter = getattr(_runtime().vector_store, "get_indexed_chunk_ids", None)
+    if not callable(getter):
+        return set()
+    try:
+        chunk_ids = getter(memory_id)
+        if not isinstance(chunk_ids, (list, tuple, set)):
+            return set()
+        return {str(chunk_id) for chunk_id in chunk_ids if str(chunk_id)}
+    except Exception as exc:
+        logger.warning(
+            "Unable to inspect indexed vector chunks for memory %s: %s",
+            memory_id,
+            type(exc).__name__,
+        )
+        return set()
+
+
+def _manifest_chunks_for_index_repair(
+    conversation: dict[str, Any], *, indexed_chunk_ids: set[str] | None = None
+) -> list[dict[str, Any]]:
+    chunk_ids = sorted(indexed_chunk_ids) if indexed_chunk_ids else []
+    targets = IndexChunkIdentitySet.from_chunk_ids(chunk_ids)
+    indexed_by_chunk_index = index_chunk_ids_by_chunk_index(chunk_ids)
+    chunks: list[dict[str, Any]] = []
+    memory_id = str(conversation.get("id", ""))
+    for fallback_index, item in enumerate(_index_chunk_manifest(conversation)):
+        if indexed_chunk_ids and not targets.matches(item):
+            continue
+        chunk = _manifest_chunk_for_index_repair(
+            memory_id,
+            item,
+            fallback_index=fallback_index,
+            indexed_by_chunk_index=indexed_by_chunk_index,
+        )
+        if chunk is not None:
+            chunks.append(chunk)
+    return chunks
+
+
+def _index_chunk_manifest(conversation: dict[str, Any]) -> list[dict[str, Any]]:
+    metadata = conversation.get("metadata")
+    index_chunks = (
+        metadata.get(MetadataField.INDEX_CHUNKS.value)
+        if isinstance(metadata, dict)
+        else None
+    )
+    if not isinstance(index_chunks, list):
+        return []
+    return [chunk for chunk in index_chunks if isinstance(chunk, dict)]
+
+
+def _manifest_chunk_for_index_repair(
+    memory_id: str,
+    item: dict[str, Any],
+    *,
+    fallback_index: int,
+    indexed_by_chunk_index: Mapping[int, str],
+) -> dict[str, Any] | None:
+    chunk_index = _manifest_chunk_index(item, fallback_index=fallback_index)
+    if chunk_index is None:
+        return None
+    chunk_id = (
+        str(item.get(IndexChunkField.CHUNK_ID.value) or "")
+        or indexed_by_chunk_index.get(chunk_index)
+        or _legacy_manifest_chunk_id(memory_id, chunk_index, item)
+    )
+    return {
+        IndexChunkField.CHUNK_ID.value: chunk_id,
+        IndexChunkField.CHUNK_INDEX.value: chunk_index,
+        IndexChunkField.MESSAGE_HASH.value: str(
+            item.get(IndexChunkField.MESSAGE_HASH.value, "")
+        ),
+        IndexChunkField.ROLE.value: str(item.get(IndexChunkField.ROLE.value, "")),
+        IndexChunkField.TEXT.value: str(item.get(IndexChunkField.TEXT.value, "")),
+        IndexChunkField.INDEX_STATE.value: str(
+            item.get(IndexChunkField.INDEX_STATE.value, IndexState.PENDING.value)
+        ),
+    }
+
+
+def _manifest_chunk_index(
+    item: Mapping[str, Any], *, fallback_index: int
+) -> int | None:
+    value = item.get(IndexChunkField.CHUNK_INDEX.value, fallback_index)
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _legacy_manifest_chunk_id(
+    memory_id: str, chunk_index: int, item: Mapping[str, Any]
+) -> str:
+    message_hash = str(item.get(IndexChunkField.MESSAGE_HASH.value, "")).strip()
+    if message_hash:
+        return f"{memory_id}:{chunk_index}:{message_hash}"
+    return f"{memory_id}:{chunk_index}"
+
+
 def _mark_chunks_indexed(
     metadata_id: str, chunks: list[dict[str, Any]], conversation: dict[str, Any] | None = None
 ) -> None:
@@ -2856,19 +2987,34 @@ def _set_index_chunks_state(
     if not isinstance(existing, list):
         _attach_index_chunks(conversation, chunks)
         return
-    target_ids = {str(chunk[IndexChunkField.CHUNK_ID.value]) for chunk in chunks}
+    target_ids = [str(chunk[IndexChunkField.CHUNK_ID.value]) for chunk in chunks]
+    targets = IndexChunkIdentitySet.from_chunk_ids(target_ids)
+    chunk_id_by_index = index_chunk_ids_by_chunk_index(target_ids)
     present_ids: set[str] = set()
+    present_indexes: set[int] = set()
     for item in existing:
         if not isinstance(item, dict):
             continue
         chunk_id = str(item.get(IndexChunkField.CHUNK_ID.value, ""))
-        if chunk_id in target_ids:
+        if targets.matches(item):
+            chunk_index = _manifest_chunk_index(item, fallback_index=-1)
+            if (
+                not chunk_id
+                and chunk_index is not None
+                and chunk_index in chunk_id_by_index
+            ):
+                chunk_id = chunk_id_by_index[chunk_index]
+                item[IndexChunkField.CHUNK_ID.value] = chunk_id
             item[IndexChunkField.INDEX_STATE.value] = state.value
-            present_ids.add(chunk_id)
+            if chunk_id:
+                present_ids.add(chunk_id)
+            if chunk_index is not None:
+                present_indexes.add(chunk_index)
     missing = [
         chunk
         for chunk in chunks
         if str(chunk[IndexChunkField.CHUNK_ID.value]) not in present_ids
+        and int(chunk[IndexChunkField.CHUNK_INDEX.value]) not in present_indexes
     ]
     if missing:
         _extend_index_chunks(conversation, missing)
@@ -3553,6 +3699,7 @@ def retrieve(
             metadata={"memory_status": status_filter},
         )
         return None
+    conversation = _repair_retrieved_index_chunks(memory_id, conversation)
     result = _with_generated_summary_metadata(conversation)
     _record_audit_event(
         "memory.retrieved",
@@ -4666,6 +4813,7 @@ def _candidate_facts_for_question(
     project_id: str | None,
     filters: ConversationFilters,
 ) -> list[dict[str, Any]]:
+    text_query = query.get(_FactQueryKey.TEXT.value)
     facts = _search_facts(
         subject=(
             query.get(FactField.SUBJECT.value)
@@ -4676,9 +4824,10 @@ def _candidate_facts_for_question(
         owner_id=owner_id,
         project_id=project_id,
         conversation_filters=filters,
-        fact_filters=FactFilters.from_options(status="active"),
+        fact_filters=FactFilters.from_options(
+            status="all" if text_query is not None else "active"
+        ),
     )
-    text_query = query.get(_FactQueryKey.TEXT.value)
     if text_query is not None:
         return _generic_fact_projection_candidates(facts, text_query)
     facts = _filter_facts_for_question(facts, question, query)
@@ -4844,6 +4993,9 @@ def _filter_facts_for_question(
     ]
     if filtered:
         return filtered
+    subject_identity_tokens = _fact_identity_tokens(subject)
+    if subject_identity_tokens:
+        return []
     question_tokens = set(_query_tokens(question))
     return [
         fact
@@ -4880,11 +5032,36 @@ def _generic_fact_projection_candidates(
     ranked = _rank_facts_by_text_query(
         active, question, include_source_memory=False
     )
+    ranked = _with_supersession_successors(ranked, active)
     if len(ranked) < 2:
         return ranked
     return _best_fact_projection_group(
         ranked, question, include_source_memory=False
     )
+
+
+def _with_supersession_successors(
+    ranked: list[dict[str, Any]], facts: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    facts_by_id = {
+        str(fact.get(FactField.ID.value)): fact
+        for fact in facts
+        if fact.get(FactField.ID.value)
+    }
+    output: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for fact in ranked:
+        fact_id = str(fact.get(FactField.ID.value, ""))
+        if fact_id and fact_id not in seen:
+            output.append(fact)
+            seen.add(fact_id)
+        successor_id = str(fact.get(FactField.SUPERSEDED_BY.value) or "")
+        successor = facts_by_id.get(successor_id)
+        if successor is None or successor_id in seen:
+            continue
+        output.append(successor)
+        seen.add(successor_id)
+    return output
 
 
 def _best_fact_projection_group(
@@ -4977,14 +5154,18 @@ def _rank_facts_by_text_query(
     query_tokens = _fact_text_query_tokens(query)
     if not query_tokens:
         return facts
+    identity_tokens = _fact_identity_tokens(query)
+    minimum_overlap = _minimum_fact_text_query_overlap(query_tokens)
     scored: list[tuple[int, int, dict[str, Any]]] = []
     for index, fact in enumerate(facts):
         fact_text = _fact_search_text(
             fact, include_source_memory=include_source_memory
         )
         fact_tokens = set(_query_tokens(fact_text, limit=None))
+        if identity_tokens and not identity_tokens.issubset(fact_tokens):
+            continue
         overlap = len(query_tokens.intersection(fact_tokens))
-        if overlap <= 0:
+        if overlap < minimum_overlap:
             continue
         scored.append((overlap, index, fact))
     return [fact for _score, _index, fact in sorted(scored, key=lambda row: (-row[0], row[1]))]
@@ -4994,6 +5175,24 @@ def _fact_text_query_tokens(query: str) -> set[str]:
     tokens = _query_tokens(query, limit=None)
     meaningful = {token for token in tokens if token not in _FACT_QUESTION_STOPWORDS}
     return meaningful or set(tokens)
+
+
+def _fact_identity_tokens(query: str) -> set[str]:
+    return {
+        token
+        for token in _query_tokens(query, limit=None)
+        if _is_fact_identity_token(token)
+    }
+
+
+def _is_fact_identity_token(token: str) -> bool:
+    return any(char.isdigit() for char in token) or "-" in token or "_" in token
+
+
+def _minimum_fact_text_query_overlap(query_tokens: set[str]) -> int:
+    if len(query_tokens) <= 2:
+        return 1
+    return max(2, (len(query_tokens) + 1) // 2)
 
 
 def _fact_question_needs_context(question: str) -> bool:

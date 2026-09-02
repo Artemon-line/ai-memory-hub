@@ -29,6 +29,7 @@ from memory.backend.metadata_store import (
     MetadataField,
     SQLiteMetadataStore,
     _default_project_id,
+    update_index_chunks_payload,
 )
 from memory.backend.mongodb_metadata_store import MongoDBMetadataStore
 from memory.backend.postgres_metadata_store import PostgresMetadataStore
@@ -375,6 +376,35 @@ def test_sqlite_metadata_store_tracks_index_chunk_manifest(tmp_path: Path) -> No
     index_chunks = stored["metadata"][MetadataField.INDEX_CHUNKS.value]
     assert index_chunks[0][IndexChunkField.INDEX_STATE.value] == IndexState.FAILED.value
     assert index_chunks[1][IndexChunkField.INDEX_STATE.value] == IndexState.INDEXED.value
+
+
+def test_update_index_chunks_payload_matches_legacy_rows_by_chunk_index() -> None:
+    memory_id = "d9fd4c95-9cb3-4fd5-b967-3027f8863210"
+    chunk_id = f"{memory_id}:0:sha256:{'a' * 64}"
+    conversation = {
+        "id": memory_id,
+        "metadata": {
+            "index_chunks": [
+                {
+                    "chunk_index": 0,
+                    "message_hash": "sha256:" + "a" * 64,
+                    "role": "user",
+                    "text": "alpha beta",
+                    "index_state": IndexState.PENDING.value,
+                }
+            ]
+        },
+    }
+
+    updated = update_index_chunks_payload(
+        conversation,
+        chunk_ids=[chunk_id],
+        state=IndexState.INDEXED,
+    )
+
+    index_chunks = updated["metadata"][MetadataField.INDEX_CHUNKS.value]
+    assert index_chunks[0][IndexChunkField.CHUNK_ID.value] == chunk_id
+    assert index_chunks[0][IndexChunkField.INDEX_STATE.value] == IndexState.INDEXED.value
 
 
 def test_mongodb_metadata_store_updates_index_chunk_manifest_state() -> None:
