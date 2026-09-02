@@ -43,7 +43,7 @@ observability = [
 ]
 oauth = [
     "authlib>=1.7.2",
-    "cryptography>=50.0.0",
+    "cryptography>=50.0.1",
     "httpx>=0.28.1",
     "joserfc>=1.7.4",
     "python-multipart>=0.0.32",
