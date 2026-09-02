@@ -210,8 +210,9 @@ Current implementation:
 - Hub-issued MCP tokens are HS256 JWTs with `sub`, `iss`, `aud`, `resource`,
   `scope`, `iat`, `exp`, and `jti`; their hashes are also stored in
   `auth_tokens` so logout can revoke the current token.
-- Client snippets are visible but remain `Unverified` until tested against
-  current client releases.
+- Client snippets are visible. Untested clients remain `Unverified` until
+  checked against current client releases; Droid is verified locally for HTTP
+  MCP setup.
 
 Remaining follow-ups:
 

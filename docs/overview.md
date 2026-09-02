@@ -308,10 +308,10 @@ For user-facing MCP setup, run with `api.auth: oauth_resource_server` and open
 `/connect`. The Connect UI shows the configured MCP resource URL, enabled
 passport providers, sign-in status, hub-issued token workflow, and client setup
 snippets. Google is the current live provider; `meta` and `x` are disabled
-provider slots until their provider-specific flows are implemented. Snippets
-remain marked `Unverified` until checked against current client releases. See
-the [Connect UI and OAuth setup guide](connect_ui.md) for packages, Docker
-setup, provider status, and client verification notes.
+provider slots until their provider-specific flows are implemented. Client
+snippets remain marked `Unverified` until checked against current client
+releases. See the [Connect UI and OAuth setup guide](connect_ui.md) for
+packages, Docker setup, provider status, and client verification notes.
 
 Core tools:
 
@@ -1038,7 +1038,7 @@ docker compose up --build
 The example binds ai-memory-hub on host port `8000` for LAN clients. Use
 `http://<HOST_LAN_IP>:8000/mcp/` from another PC on the same network. It also
 enables tokenizer budgeting with the optional `tiktoken` extra. For remote
-Ollama embeddings, see `examples/local-stack/config.oauth-ngrok.yaml`.
+Ollama embeddings, see `examples/local-stack/config.oauth-public.yaml`.
 
 Additional checked-in provider examples are under `examples/storage_providers`.
 They cover SQLite/LanceDB, in-memory vectors, Qdrant, MongoDB metadata,

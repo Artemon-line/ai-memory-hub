@@ -143,7 +143,7 @@ Candidate order:
 | OpenCode | Tracked | Partially validated through prior local use | Weekly slot implemented when configured | Confirm the native config path can reliably provide MCP and provider settings. |
 | Gemini CLI | Tracked | Not started | Skipped by default pending provider support | Confirm a native no-vendor-credential local-provider path. |
 | OpenClaw | Setup documented | Not started | Not started | Run `openclaw mcp probe ai-memory-hub-local --json`, then manually validate an agent turn using `openclaw_native_mcp_setup.md`. |
-| Droid | Candidate | Not started | Not started | Determine whether Droid has headless execution and external MCP/tool configuration. |
+| Droid | Setup documented | Verified locally for HTTP MCP setup | Not started | Determine whether Droid has headless execution for repeatable smoke coverage. |
 | Pi | Candidate | Not started | Not started | Determine whether Pi plugins can call streamable HTTP MCP tools and run non-interactively. |
 
 Do not advertise a candidate as supported until the documented native setup has

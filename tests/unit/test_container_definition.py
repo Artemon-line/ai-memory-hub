@@ -14,7 +14,7 @@ PINNED_PGVECTOR_IMAGE = (
     "pgvector/pgvector:pg16"
     "@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b"
 )
-LOCAL_STACK_NGROK_PLACEHOLDER = "https://YOUR-NGROK-DOMAIN.ngrok-free.app"
+LOCAL_STACK_PUBLIC_URL_PLACEHOLDER = "https://YOUR-CUSTOM-DOMAIN.app"
 
 
 def test_containerfile_installs_project_after_copying_package() -> None:
@@ -107,7 +107,7 @@ def test_local_stack_uses_oauth_containerfile() -> None:
         assert f"--extra {extra}" not in containerfile
 
     oauth_config = Path(
-        "examples/local-stack/config.oauth-ngrok.yaml"
+        "examples/local-stack/config.oauth-public.yaml"
     ).read_text(encoding="utf-8")
     assert "auth: oauth_resource_server" in oauth_config
     assert "embedding_model: nomic-embed-text" in oauth_config
@@ -116,11 +116,11 @@ def test_local_stack_uses_oauth_containerfile() -> None:
 
 def test_local_stack_google_oauth_config_parses_after_public_url_substitution() -> None:
     public_base_url = "https://memory-dev.example.test"
-    oauth_template = Path("examples/local-stack/config.oauth-ngrok.yaml").read_text(
+    oauth_template = Path("examples/local-stack/config.oauth-public.yaml").read_text(
         encoding="utf-8"
     )
     oauth_config = yaml.safe_load(
-        oauth_template.replace(LOCAL_STACK_NGROK_PLACEHOLDER, public_base_url)
+        oauth_template.replace(LOCAL_STACK_PUBLIC_URL_PLACEHOLDER, public_base_url)
     )
 
     config = parse_config(oauth_config)
@@ -215,7 +215,7 @@ def test_free_provider_examples_use_provider_local_containerfiles() -> None:
 
 def test_local_stack_observability_is_wired() -> None:
     compose = Path("examples/local-stack/compose.yaml").read_text(encoding="utf-8")
-    config = Path("examples/local-stack/config.oauth-ngrok.yaml").read_text(encoding="utf-8")
+    config = Path("examples/local-stack/config.oauth-public.yaml").read_text(encoding="utf-8")
     collector = Path("examples/local-stack/otel-collector.yaml").read_text(encoding="utf-8")
     prometheus = Path("examples/local-stack/prometheus.yaml").read_text(encoding="utf-8")
     grafana_datasources = Path(

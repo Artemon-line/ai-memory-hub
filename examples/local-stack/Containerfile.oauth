@@ -31,7 +31,7 @@ RUN uv sync --frozen --no-dev \
     uv run python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"
 
 COPY memory ./memory
-COPY examples/local-stack/config.oauth-ngrok.yaml /app/config.yaml
+COPY examples/local-stack/config.oauth-public.yaml /app/config.yaml
 
 RUN test -d /app/memory && \
     uv sync --frozen --no-dev \

@@ -14,7 +14,11 @@ from joserfc import jwt
 from joserfc.jwk import RSAKey
 from starlette.requests import Request
 
-from memory.api.connect_service import client_snippet_models, mcp_url_for_config
+from memory.api.connect_service import (
+    ClientVerificationStatus,
+    client_snippet_models,
+    mcp_url_for_config,
+)
 from memory.api.server import create_app
 from memory.backend.metadata_store import SQLiteMetadataStore
 from memory.backend.vector_store import InMemoryVectorStore
@@ -341,21 +345,24 @@ def test_copilot_cli_snippet_is_verified() -> None:
     snippets = client_snippet_models(mcp_url="https://memory.example.com/mcp")
     copilot = next(snippet for snippet in snippets if snippet["name"] == "Copilot CLI")
 
-    assert copilot["status"] == "Verified"
+    assert copilot["status"] == ClientVerificationStatus.VERIFIED.value
     assert copilot["snippet"] == (
         "copilot mcp add --transport http ai-memory-hub https://memory.example.com/mcp"
     )
 
 
-def test_connect_ui_includes_unverified_new_client_snippets() -> None:
+def test_connect_ui_lists_new_client_snippet_statuses() -> None:
     snippets = client_snippet_models(mcp_url="https://memory.example.com/mcp")
     snippets_by_name = {snippet["name"]: snippet for snippet in snippets}
 
-    assert snippets_by_name["Droid"]["status"] == "Unverified"
+    assert snippets_by_name["Droid"]["status"] == ClientVerificationStatus.VERIFIED.value
     assert snippets_by_name["Droid"]["snippet"] == (
         "droid mcp add ai-memory-hub-local https://memory.example.com/mcp --type http"
     )
-    assert snippets_by_name["DeepSeek Harness"]["status"] == "Unverified"
+    assert (
+        snippets_by_name["DeepSeek Harness"]["status"]
+        == ClientVerificationStatus.UNVERIFIED.value
+    )
     assert "name: '@deepseek-ai/dsh-mcp-client'" in snippets_by_name[
         "DeepSeek Harness"
     ]["snippet"]
@@ -368,7 +375,9 @@ def test_connect_ui_includes_unverified_new_client_snippets() -> None:
     assert "Bearer ${process.env.MCP_TOKEN}" in snippets_by_name[
         "DeepSeek Harness"
     ]["snippet"]
-    assert snippets_by_name["Qwen Code"]["status"] == "Unverified"
+    assert snippets_by_name["Qwen Code"]["status"] == (
+        ClientVerificationStatus.UNVERIFIED.value
+    )
     assert snippets_by_name["Qwen Code"]["snippet"] == (
         "qwen mcp add --transport http ai-memory-hub-local https://memory.example.com/mcp"
     )

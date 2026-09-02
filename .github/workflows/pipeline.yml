@@ -504,8 +504,8 @@ jobs:
           trap cleanup EXIT
 
           example_dir="$(dirname "$COMPOSE_FILE")"
-          sed "s#https://YOUR-NGROK-DOMAIN.ngrok-free.app#${PUBLIC_BASE_URL}#g" \
-            "$example_dir/config.oauth-ngrok.yaml" > "$example_dir/$AMH_CONFIG_FILE"
+          sed "s#https://YOUR-CUSTOM-DOMAIN.app#${PUBLIC_BASE_URL}#g" \
+            "$example_dir/config.oauth-public.yaml" > "$example_dir/$AMH_CONFIG_FILE"
 
           docker compose -f "$COMPOSE_FILE" config
           docker compose -f "$COMPOSE_FILE" up -d --build

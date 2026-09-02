@@ -8,6 +8,7 @@ import os
 import secrets
 import time
 from datetime import UTC, datetime, timedelta
+from enum import Enum
 from typing import Any, TypedDict
 
 from fastapi import HTTPException, Request
@@ -18,40 +19,60 @@ from memory.config import HubConfig
 from memory.ingestion.base_agent import BaseIngestionAgent
 
 SECRET_HASH_ITERATIONS = 210_000
-CLIENT_MATRIX: tuple[dict[str, str], ...] = (
+
+
+class ClientVerificationStatus(str, Enum):
+    VERIFIED = "Verified"
+    UNVERIFIED = "Unverified"
+
+
+class ClientSnippetDefinition(TypedDict):
+    name: str
+    status: ClientVerificationStatus
+    snippet: str
+
+
+class ClientSnippetModel(TypedDict):
+    name: str
+    status: str
+    element_id: str
+    snippet: str
+
+
+CLIENT_MATRIX: tuple[ClientSnippetDefinition, ...] = (
     {
         "name": "Codex",
-        "status": "Verified",
+        "status": ClientVerificationStatus.VERIFIED,
         "snippet": "codex mcp add ai-memory-hub-local --url {mcp_url}",
     },
     {
         "name": "Copilot CLI",
-        "status": "Verified",
+        "status": ClientVerificationStatus.VERIFIED,
         "snippet": 'copilot mcp add --transport http ai-memory-hub {mcp_url}',
     },
     {
         "name": "Pi",
-        "status": "Verified",
+        "status": ClientVerificationStatus.VERIFIED,
         "snippet": "pi install npm:pi-mcp-adapter",
     },
     {
         "name": "OpenCode",
-        "status": "Verified",
+        "status": ClientVerificationStatus.VERIFIED,
         "snippet": "opencode mcp add ai-memory-hub-local --url {mcp_url}",
     },
     {
         "name": "Claude",
-        "status": "Verified",
+        "status": ClientVerificationStatus.VERIFIED,
         "snippet": "claude mcp add --transport http ai-memory-hub-local {mcp_url}",
     },
     {
         "name": "Hermes",
-        "status": "Verified",
+        "status": ClientVerificationStatus.VERIFIED,
         "snippet": "hermes mcp add ai-memory-hub-local --url {mcp_url} --auth oauth",
     },
     {
         "name": "OpenClaw",
-        "status": "Unverified",
+        "status": ClientVerificationStatus.UNVERIFIED,
         "snippet": (
             "openclaw mcp add ai-memory-hub-local --url {mcp_url} "
             "--transport streamable-http --auth oauth\n"
@@ -61,12 +82,12 @@ CLIENT_MATRIX: tuple[dict[str, str], ...] = (
     },
     {
         "name": "Droid",
-        "status": "Unverified",
+        "status": ClientVerificationStatus.VERIFIED,
         "snippet": "droid mcp add ai-memory-hub-local {mcp_url} --type http",
     },
     {
         "name": "DeepSeek Harness",
-        "status": "Unverified",
+        "status": ClientVerificationStatus.UNVERIFIED,
         "snippet": (
             "- id: ai-memory-hub-local\n"
             "  name: '@deepseek-ai/dsh-mcp-client'\n"
@@ -80,12 +101,12 @@ CLIENT_MATRIX: tuple[dict[str, str], ...] = (
     },
     {
         "name": "Qwen Code",
-        "status": "Unverified",
+        "status": ClientVerificationStatus.UNVERIFIED,
         "snippet": "qwen mcp add --transport http ai-memory-hub-local {mcp_url}",
     },
     {
         "name": "Gemini CLI",
-        "status": "Verified",
+        "status": ClientVerificationStatus.VERIFIED,
         "snippet": "gemini mcp add ai-memory-hub-local {mcp_url} -t http",
     },
 )
@@ -297,13 +318,13 @@ def _embedding_label(*, config: HubConfig, health_state: dict[str, Any]) -> str:
     return str(config.providers.embeddings)
 
 
-def client_snippet_models(*, mcp_url: str) -> list[dict[str, str]]:
-    snippets = []
+def client_snippet_models(*, mcp_url: str) -> list[ClientSnippetModel]:
+    snippets: list[ClientSnippetModel] = []
     for client in CLIENT_MATRIX:
         snippets.append(
             {
                 "name": client["name"],
-                "status": client["status"],
+                "status": client["status"].value,
                 "element_id": "snippet-"
                 + hashlib.sha256(client["name"].encode("utf-8")).hexdigest()[:12],
                 "snippet": client["snippet"].format(mcp_url=mcp_url),
