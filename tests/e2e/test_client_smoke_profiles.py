@@ -404,7 +404,7 @@ def test_mcp_client_profile_smoke_with_ollama_embeddings(
             headers,
             request_id=5,
             name="memory_retrieve",
-            arguments={"id": insert["id"]},
+            arguments={"id": insert["id"], "response_format": "detailed"},
         )
         assert retrieve["status"] == "ok"
         assert retrieve["id"] == insert["id"]
@@ -426,7 +426,7 @@ def test_mcp_client_profile_smoke_with_ollama_embeddings(
         assert ask["error_code"] is None
         assert ask["error_message"] is None
         assert ask["answer"]
-        assert ask["results"] == []
+        assert "results" not in ask
         assert ask["memory_result_count"] >= 1
         assert ask["citation_count"] >= 1
         assert "citations" not in ask

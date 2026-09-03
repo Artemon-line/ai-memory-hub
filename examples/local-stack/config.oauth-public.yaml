@@ -1,4 +1,4 @@
-# Replace https://YOUR-NGROK-DOMAIN.ngrok-free.app with your active ngrok HTTPS URL.
+# Replace https://YOUR-CUSTOM-DOMAIN.app with your active HTTPS URL.
 storage:
   dry_run: false
   allow_trusted_appends: false
@@ -64,11 +64,11 @@ api:
   host: 0.0.0.0
   port: 8000
   auth: oauth_resource_server
-  public_base_url: https://YOUR-NGROK-DOMAIN.ngrok-free.app
+  public_base_url: https://YOUR-CUSTOM-DOMAIN.app
   oauth:
     authorization_servers:
-      - https://YOUR-NGROK-DOMAIN.ngrok-free.app
-    resource: https://YOUR-NGROK-DOMAIN.ngrok-free.app/mcp
+      - https://YOUR-CUSTOM-DOMAIN.app
+    resource: https://YOUR-CUSTOM-DOMAIN.app/mcp
     jwt_secret_env: AMH_OAUTH_JWT_SECRET
     client_registration_ttl_seconds: 86400
     refresh_token_ttl_seconds: 2592000
@@ -86,7 +86,7 @@ api:
         enabled: true
         client_id_env: GOOGLE_CLIENT_ID
         client_secret_env: GOOGLE_CLIENT_SECRET
-        callback_url: https://YOUR-NGROK-DOMAIN.ngrok-free.app/auth/google/callback
+        callback_url: https://YOUR-CUSTOM-DOMAIN.app/auth/google/callback
         allowed_domains: []
         allowed_emails: []
 

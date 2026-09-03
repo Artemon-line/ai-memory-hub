@@ -6,7 +6,7 @@ isolated OAuth development.
 
 For the human-facing desktop setup, prefer
 `examples/local-stack` with
-`config.oauth-ngrok.yaml`. That stack combines Postgres metadata, PGVector
+`config.oauth-public.yaml`. That stack combines Postgres metadata, PGVector
 vectors, Ollama embeddings, Google OAuth, observability, and public HTTPS access
 for remote agents.
 
@@ -68,8 +68,8 @@ http://127.0.0.1:8000/connect
 ```
 
 After sign-in, copy the one-time hub token and one of the client setup snippets.
-All client snippets remain labeled `Unverified` until their exact syntax is
-tested against current client releases.
+Client snippets remain labeled `Unverified` until their exact syntax is tested
+against current client releases.
 
 ## Run Locally
 

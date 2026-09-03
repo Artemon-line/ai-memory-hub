@@ -14,7 +14,11 @@ from joserfc import jwt
 from joserfc.jwk import RSAKey
 from starlette.requests import Request
 
-from memory.api.connect_service import client_snippet_models, mcp_url_for_config
+from memory.api.connect_service import (
+    ClientVerificationStatus,
+    client_snippet_models,
+    mcp_url_for_config,
+)
 from memory.api.server import create_app
 from memory.backend.metadata_store import SQLiteMetadataStore
 from memory.backend.vector_store import InMemoryVectorStore
@@ -341,9 +345,41 @@ def test_copilot_cli_snippet_is_verified() -> None:
     snippets = client_snippet_models(mcp_url="https://memory.example.com/mcp")
     copilot = next(snippet for snippet in snippets if snippet["name"] == "Copilot CLI")
 
-    assert copilot["status"] == "Verified"
+    assert copilot["status"] == ClientVerificationStatus.VERIFIED.value
     assert copilot["snippet"] == (
         "copilot mcp add --transport http ai-memory-hub https://memory.example.com/mcp"
+    )
+
+
+def test_connect_ui_lists_new_client_snippet_statuses() -> None:
+    snippets = client_snippet_models(mcp_url="https://memory.example.com/mcp")
+    snippets_by_name = {snippet["name"]: snippet for snippet in snippets}
+
+    assert snippets_by_name["Droid"]["status"] == ClientVerificationStatus.VERIFIED.value
+    assert snippets_by_name["Droid"]["snippet"] == (
+        "droid mcp add ai-memory-hub-local https://memory.example.com/mcp --type http"
+    )
+    assert (
+        snippets_by_name["DeepSeek Harness"]["status"]
+        == ClientVerificationStatus.UNVERIFIED.value
+    )
+    assert "name: '@deepseek-ai/dsh-mcp-client'" in snippets_by_name[
+        "DeepSeek Harness"
+    ]["snippet"]
+    assert "serverName: ai-memory-hub-local" in snippets_by_name[
+        "DeepSeek Harness"
+    ]["snippet"]
+    assert "url: https://memory.example.com/mcp" in snippets_by_name[
+        "DeepSeek Harness"
+    ]["snippet"]
+    assert "Bearer ${process.env.MCP_TOKEN}" in snippets_by_name[
+        "DeepSeek Harness"
+    ]["snippet"]
+    assert snippets_by_name["Qwen Code"]["status"] == (
+        ClientVerificationStatus.UNVERIFIED.value
+    )
+    assert snippets_by_name["Qwen Code"]["snippet"] == (
+        "qwen mcp add --transport http ai-memory-hub-local https://memory.example.com/mcp"
     )
 
 
@@ -375,8 +411,28 @@ def test_connect_routes_are_public_secret_free_and_use_configured_mcp_url(tmp_pa
     assert "openclaw mcp login ai-memory-hub-local" in connect.text
     assert "openclaw mcp login ai-memory-hub-local --code &lt;code&gt;" in connect.text
     assert "copilot mcp add --transport http" in connect.text
+    assert (
+        "droid mcp add ai-memory-hub-local https://memory.example.com/mcp --type http"
+    ) in connect.text
+    assert "@deepseek-ai/dsh-mcp-client" in connect.text
+    assert "serverName: ai-memory-hub-local" in connect.text
+    assert "url: https://memory.example.com/mcp" in connect.text
+    assert (
+        "qwen mcp add --transport http ai-memory-hub-local https://memory.example.com/mcp"
+    ) in connect.text
     assert "--header" not in connect.text
-    for client_name in ("Codex", "Copilot CLI", "Pi", "OpenCode", "Claude", "OpenClaw", "Gemini CLI"):
+    for client_name in (
+        "Codex",
+        "Copilot CLI",
+        "Pi",
+        "OpenCode",
+        "Claude",
+        "OpenClaw",
+        "Droid",
+        "DeepSeek Harness",
+        "Qwen Code",
+        "Gemini CLI",
+    ):
         assert client_name in connect.text
     assert "OpenShell" not in connect.text
     assert "Unverified" in connect.text

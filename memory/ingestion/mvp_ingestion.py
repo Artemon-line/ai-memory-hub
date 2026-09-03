@@ -12,8 +12,9 @@ from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
-from typing import Any, Callable, Iterator, Protocol, Sequence
+from typing import Any, Callable, Iterator, Mapping, Protocol, Sequence, TypeVar
 from uuid import uuid4
 
 from memory.advanced_memory import (
@@ -29,10 +30,15 @@ from memory.backend.metadata_store import (
     LOCAL_DEFAULT_PROJECT_ID,
     PROJECT_ROLE_READER,
     PROJECT_ROLE_WRITER,
+    IndexChunkField,
+    IndexChunkIdentitySet,
+    IndexState,
+    MetadataField,
     SQLiteMetadataStore,
     _default_project_id,
     _validate_owner_id,
     _validate_project_id,
+    index_chunk_ids_by_chunk_index,
 )
 from memory.backend.mongodb_metadata_store import MongoDBMetadataStore
 from memory.backend.postgres_metadata_store import PostgresMetadataStore
@@ -54,6 +60,12 @@ from memory.backend.vector_store import (
     WeaviateVectorStore,
 )
 from memory.config import HubConfig, ensure_token_hash_secret, load_config, parse_config
+from memory.ingestion.fact_timeline import (
+    FactField,
+    FactTimelineProjector,
+    MemoryField,
+    temporal_fact_source_metadata,
+)
 from memory.ingestion.summary_models import (
     GeneratedSummary,
     GeneratedSummaryProvenance,
@@ -272,6 +284,7 @@ class ConversationFilters:
 
 @dataclass(frozen=True)
 class FactFilters:
+    query: str | None = None
     source: str | None = None
     date_from: str | None = None
     date_to: str | None = None
@@ -287,6 +300,7 @@ class FactFilters:
     def from_options(
         cls,
         *,
+        query: str | None = None,
         source: str | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
@@ -302,6 +316,7 @@ class FactFilters:
         if normalized_status not in {"active", "superseded", "all"}:
             raise ValueError("status must be one of: active, superseded, all")
         return cls(
+            query=str(query).strip() if query and str(query).strip() else None,
             source=str(source) if source else None,
             date_from=str(date_from) if date_from else None,
             date_to=str(date_to) if date_to else None,
@@ -317,6 +332,135 @@ class FactFilters:
     @property
     def include_superseded(self) -> bool:
         return self.status in {"superseded", "all"}
+
+
+class _AskResponseKey(StrEnum):
+    STATUS = "status"
+    RESULTS = "results"
+    ANSWER = "answer"
+    CITATIONS = "citations"
+    CONFIDENCE = "confidence"
+    CONFIDENCE_REASON = "confidence_reason"
+    ANSWER_BASIS = "answer_basis"
+    PROVENANCE = "provenance"
+    EVIDENCE = "evidence"
+    STRUCTURED_EVIDENCE = "structured_evidence"
+    FACTS = "facts"
+    LATEST = "latest"
+    FACT_TIMELINE = "fact_timeline"
+    CONTEXT_TOKENS_USED = "context_tokens_used"
+    CHUNKS_SELECTED = "chunks_selected"
+    CHUNKS_DROPPED = "chunks_dropped"
+    CONTEXT_TRUNCATED = "context_truncated"
+    TOKENIZER_USED = "tokenizer_used"
+
+
+class _AskResponseStatus(StrEnum):
+    OK = "ok"
+
+
+class _AskAnswerBasis(StrEnum):
+    DIRECT_MEMORY = "direct_memory"
+    FACT_LAYER = "fact_layer"
+    MIXED = "mixed"
+    CONFLICT = "conflict"
+    NOT_FOUND = "not_found"
+
+
+class _FactQueryKey(StrEnum):
+    TEXT = "query"
+
+
+class _FactQualifierKey(StrEnum):
+    CORRECTS = "corrects"
+    ITEM = "item"
+    NORMALIZATION = "normalization"
+    PREFERENCE = "preference"
+    SAVE_INTENT = "save_intent"
+    SAVE_INTENT_EVIDENCE = "save_intent_evidence"
+    SAVE_INTENT_SOURCE = "save_intent_source"
+    SOURCE_ROLE = "source_role"
+    TOPIC = "topic"
+
+
+class _FactSourceRole(StrEnum):
+    ASSISTANT = "assistant"
+    USER = "user"
+
+
+class _FactEvidenceType(StrEnum):
+    FACT = "fact"
+
+
+class _FactSubject(StrEnum):
+    USER = "user"
+
+
+class _FactPredicate(StrEnum):
+    COMMAND_NAME = "command_name"
+    CREATOR = "creator"
+    DESCRIPTION = "description"
+    INDEXING_STRATEGY = "indexing_strategy"
+    LIKES = "likes"
+    OWNS_GUITAR = "owns_guitar"
+    OWNS_ITEM = "owns_item"
+    PROFILE_IDENTITY = "profile_identity"
+    PROFILE_LOCATION = "profile_location"
+    PROFILE_NAME = "profile_name"
+    PROFILE_ROLE = "profile_role"
+    RECURRING_TOPIC = "recurring_topic"
+
+
+class _FactPredicatePrefix(StrEnum):
+    FAVORITE = "favorite_"
+
+
+class _FactItemPrefix(StrEnum):
+    FAVORITE = "favorite "
+
+
+class _StructuredEvidenceKey(StrEnum):
+    FACTS = "facts"
+    RESULTS = "results"
+
+
+class _FactCorrectionGroup(StrEnum):
+    ITEM = "item"
+    NEW_VALUE = "new"
+    OLD_VALUE = "old"
+
+
+class _FactRuleName(StrEnum):
+    OWN = "own"
+    FAVORITE = "favorite"
+    LIKES = "likes"
+    CREATOR = "creator"
+    SUBJECT_CREATOR = "subject_creator"
+    COMMAND_NAME = "command_name"
+    INDEXING_STRATEGY = "indexing_strategy"
+    PROJECT_ATTRIBUTE = "project_attribute"
+    PROJECT_ATTRIBUTE_CHANGE = "project_attribute_change"
+    PROFILE_NAME = "profile_name"
+    PROFILE_IDENTITY = "profile_identity"
+    PROFILE_ROLE = "profile_role"
+    PROFILE_LOCATION = "profile_location"
+
+
+@dataclass(frozen=True)
+class _FactCorrectionMatch:
+    span: tuple[int, int]
+    item: str
+    new_value: str
+    old_value: str
+
+
+@dataclass(frozen=True)
+class _ProfileSummaryLine:
+    predicate: str
+    value: str
+
+
+_PayloadKey = TypeVar("_PayloadKey", bound=StrEnum)
 
 
 _RUNTIME: RuntimeDependencies | None = None
@@ -354,6 +498,7 @@ _SENSITIVE_SCAN_EXCLUDED_KEYS = {
     "id",
     "conversation_id",
     "chunk_id",
+    "conversation_hash",
     "created_at",
     "embedding_index",
     "hash",
@@ -436,7 +581,7 @@ _SENSITIVE_CONTENT_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
         ),
     ),
 ]
-_PAYMENT_CARD_RE = re.compile(r"\b(?:\d[ -]?){13,19}\b")
+_PAYMENT_CARD_RE = re.compile(r"(?<![A-Za-z0-9_-])(?:\d[ -]?){13,19}(?![A-Za-z0-9_-])")
 _TOPIC_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("python", re.compile(r"\bpython\b", re.IGNORECASE)),
     (
@@ -487,48 +632,162 @@ def _ingestion_stage(stage: str, **attributes: Any) -> Iterator[None]:
                 elapsed_ms,
                 stage=stage,
             )
+_FACT_CORRECTION_ITEM = (
+    rf"(?P<{_FactCorrectionGroup.ITEM.value}>[A-Za-z0-9][A-Za-z0-9 _-]{{1,80}})"
+)
+_FACT_CORRECTION_NEW = rf"(?P<{_FactCorrectionGroup.NEW_VALUE.value}>[^.?!\n,]+?)"
+_FACT_CORRECTION_OLD = rf"(?P<{_FactCorrectionGroup.OLD_VALUE.value}>[^.?!\n]+)"
 _FACT_CORRECTION_RE = re.compile(
-    r"\bactually,\s+my\s+(?P<item>[A-Za-z0-9][A-Za-z0-9 _-]{1,80})\s+is\s+(?P<new>[^,.]+),\s+not\s+(?P<old>[^.]+)",
+    rf"\b(?:(?:actually|no),?\s+|correction:\s+)?my\s+{_FACT_CORRECTION_ITEM}"
+    rf"\s+is\s+{_FACT_CORRECTION_NEW},\s+not\s+{_FACT_CORRECTION_OLD}",
     re.IGNORECASE,
 )
-_FACT_RULES: list[tuple[str, re.Pattern[str]]] = [
-    ("own", re.compile(r"\bI\s+(?:have|own)\s+(?P<object>[^.?!\n]+)", re.IGNORECASE)),
+_FACT_REPLACES_CORRECTION_RE = re.compile(
+    rf"\bcorrection:\s+{_FACT_CORRECTION_NEW}\s+replaces\s+{_FACT_CORRECTION_OLD}"
+    rf"\s+for\s+my\s+{_FACT_CORRECTION_ITEM}",
+    re.IGNORECASE,
+)
+_GENERIC_ATTRIBUTE_QUESTION_RE = re.compile(
+    rf"\bwhat\s+is\s+(?:the\s+)?(?P<{FactField.SUBJECT.value}>[A-Za-z0-9][A-Za-z0-9 _-]{{1,120}})\??\s*$",
+    re.IGNORECASE,
+)
+_GENERIC_ATTRIBUTE_ARTICLE_RE = re.compile(r"^(?:the|a|an)\s+", re.IGNORECASE)
+_FACT_RULES: list[tuple[_FactRuleName, re.Pattern[str]]] = [
     (
-        "favorite",
+        _FactRuleName.OWN,
+        re.compile(r"\bI\s+(?:have|own)\s+(?P<object>[^.?!\n]+)", re.IGNORECASE),
+    ),
+    (
+        _FactRuleName.FAVORITE,
         re.compile(
             r"\bMy\s+favorite\s+(?P<name>[A-Za-z0-9 _-]+?)\s+is\s+(?P<object>[^.?!\n]+)",
             re.IGNORECASE,
         ),
     ),
-    ("creator", re.compile(r"\bThe\s+creator\s+is\s+(?P<object>[^.?!\n]+)", re.IGNORECASE)),
     (
-        "subject_creator",
+        _FactRuleName.LIKES,
+        re.compile(
+            r"\bI\s+(?:really\s+)?(?:like|enjoy|prefer)\s+(?P<object>[^.?!\n]+)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        _FactRuleName.CREATOR,
+        re.compile(r"\bThe\s+creator\s+is\s+(?P<object>[^.?!\n]+)", re.IGNORECASE),
+    ),
+    (
+        _FactRuleName.SUBJECT_CREATOR,
         re.compile(
             r"\b(?P<subject>[A-Z][A-Za-z0-9 _-]{1,80})\s+creator\s+is\s+(?P<object>[^.?!\n]+)",
             re.IGNORECASE,
         ),
     ),
     (
-        "command_name",
+        _FactRuleName.COMMAND_NAME,
         re.compile(r"\bThe\s+command\s+name\s+is\s+(?P<object>[^.?!\n]+)", re.IGNORECASE),
     ),
     (
-        "indexing_strategy",
+        _FactRuleName.INDEXING_STRATEGY,
         re.compile(r"\bThe\s+indexing\s+strategy\s+is\s+(?P<object>[^.?!\n]+)", re.IGNORECASE),
     ),
     (
-        "project_attribute",
+        _FactRuleName.PROJECT_ATTRIBUTE,
         re.compile(
-            r"\b(?P<subject>[A-Z][A-Za-z0-9 _-]{1,80})\s+is\s+(?P<object>[^.?!\n]+)",
+            rf"\b(?P<{FactField.SUBJECT.value}>[A-Z][A-Za-z0-9 _-]{{1,80}})\s+is\s+"
+            rf"(?P<{FactField.OBJECT.value}>[^.?!\n]+)",
             re.IGNORECASE,
         ),
     ),
-    ("profile_name", re.compile(r"\bMy\s+name\s+is\s+(?P<object>[^.?!\n]+)", re.IGNORECASE)),
-    ("profile_identity", re.compile(r"\bI\s+am\s+(?P<object>[^.?!\n]+)", re.IGNORECASE)),
-    ("profile_identity", re.compile(r"\bI'm\s+(?P<object>[^.?!\n]+)", re.IGNORECASE)),
-    ("profile_role", re.compile(r"\bI\s+work\s+as\s+(?P<object>[^.?!\n]+)", re.IGNORECASE)),
-    ("profile_location", re.compile(r"\bI\s+live\s+in\s+(?P<object>[^.?!\n]+)", re.IGNORECASE)),
+    (
+        _FactRuleName.PROJECT_ATTRIBUTE_CHANGE,
+        re.compile(
+            rf"\b(?P<{FactField.SUBJECT.value}>[A-Z][A-Za-z0-9 _-]{{1,80}})\s+"
+            rf"(?:changes|changed)\s+to\s+(?P<{FactField.OBJECT.value}>[^.?!\n]+?)"
+            r"(?:\s+on\s+\d{4}-\d{2}-\d{2})?(?=$|[.?!\n])",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        _FactRuleName.PROFILE_NAME,
+        re.compile(r"\bMy\s+name\s+is\s+(?P<object>[^.?!\n]+)", re.IGNORECASE),
+    ),
+    (
+        _FactRuleName.PROFILE_IDENTITY,
+        re.compile(r"\bI\s+am\s+(?P<object>[^.?!\n]+)", re.IGNORECASE),
+    ),
+    (
+        _FactRuleName.PROFILE_IDENTITY,
+        re.compile(r"\bI'm\s+(?P<object>[^.?!\n]+)", re.IGNORECASE),
+    ),
+    (
+        _FactRuleName.PROFILE_ROLE,
+        re.compile(r"\bI\s+work\s+as\s+(?P<object>[^.?!\n]+)", re.IGNORECASE),
+    ),
+    (
+        _FactRuleName.PROFILE_LOCATION,
+        re.compile(r"\bI\s+live\s+in\s+(?P<object>[^.?!\n]+)", re.IGNORECASE),
+    ),
 ]
+_FACT_INLINE_CORRECTION_RE = re.compile(r",\s+not\s+[^.?!\n]+", re.IGNORECASE)
+_NOISY_PROJECT_ATTRIBUTE_SUBJECT_TOKENS = {
+    "favorite",
+    "favourite",
+    "question",
+    "remember",
+    "remeber",
+}
+_FACT_QUESTION_STOPWORDS = {
+    "about",
+    "answer",
+    "did",
+    "discuss",
+    "do",
+    "does",
+    "favorite",
+    "favourite",
+    "for",
+    "from",
+    "handle",
+    "have",
+    "how",
+    "is",
+    "like",
+    "likes",
+    "me",
+    "memory",
+    "my",
+    "own",
+    "prefer",
+    "preference",
+    "please",
+    "source",
+    "the",
+    "this",
+    "typo",
+    "what",
+    "when",
+    "where",
+    "which",
+    "who",
+    "why",
+}
+_GENERIC_FACT_PROJECTION_QUESTION_PREFIXES = (
+    "are ",
+    "can ",
+    "could ",
+    "did ",
+    "do ",
+    "does ",
+    "is ",
+    "should ",
+    "what ",
+    "which ",
+    "who ",
+    "would ",
+)
+_PROFILE_SUMMARY_FACT_LIMIT = 12
+_PROFILE_SUMMARY_EMPTY_TEXT = "No active profile facts match the requested filters."
+_PROFILE_SUMMARY_FALLBACK_PREDICATE = "fact"
 _COMMON_FACT_SPELLING_CORRECTIONS = {
     "aniversary": "anniversary",
     "anniversery": "anniversary",
@@ -548,8 +807,8 @@ _MONTH_NAMES = {
     "december": "December",
 }
 _NAME_LIKE_PREDICATES = {
-    "creator",
-    "profile_name",
+    _FactPredicate.CREATOR.value,
+    _FactPredicate.PROFILE_NAME.value,
 }
 
 
@@ -1142,15 +1401,17 @@ def chunk_selected_messages(
             chunk_index = start_index + len(chunks)
             chunks.append(
                 {
-                    "chunk_id": f"{conversation_id}:{chunk_index}:{message_hash}",
-                    "chunk_index": chunk_index,
+                    IndexChunkField.CHUNK_ID.value: (
+                        f"{conversation_id}:{chunk_index}:{message_hash}"
+                    ),
+                    IndexChunkField.CHUNK_INDEX.value: chunk_index,
                     "conversation_id": conversation_id,
-                    "message_hash": message_hash,
+                    IndexChunkField.MESSAGE_HASH.value: message_hash,
                     "message_index": start_index + offset,
-                    "token_window_index": token_window_index,
-                    "role": role,
-                    "text": chunk_text,
-                    "index_state": "pending_index",
+                    IndexChunkField.TOKEN_WINDOW_INDEX.value: token_window_index,
+                    IndexChunkField.ROLE.value: role,
+                    IndexChunkField.TEXT.value: chunk_text,
+                    IndexChunkField.INDEX_STATE.value: IndexState.PENDING.value,
                 }
             )
     return chunks
@@ -1181,14 +1442,20 @@ def _attach_index_chunks(obj: dict[str, Any], chunks: list[dict[str, Any]]) -> N
     if not isinstance(metadata, dict):
         metadata = {}
         obj["metadata"] = metadata
-    metadata["index_chunks"] = [
+    metadata[MetadataField.INDEX_CHUNKS.value] = [
         {
-            "chunk_id": str(chunk["chunk_id"]),
-            "chunk_index": int(chunk["chunk_index"]),
-            "message_hash": str(chunk["message_hash"]),
-            "role": str(chunk["role"]),
-            "text": str(chunk["text"]),
-            "index_state": str(chunk.get("index_state", "pending_index")),
+            IndexChunkField.CHUNK_ID.value: str(chunk[IndexChunkField.CHUNK_ID.value]),
+            IndexChunkField.CHUNK_INDEX.value: int(
+                chunk[IndexChunkField.CHUNK_INDEX.value]
+            ),
+            IndexChunkField.MESSAGE_HASH.value: str(
+                chunk[IndexChunkField.MESSAGE_HASH.value]
+            ),
+            IndexChunkField.ROLE.value: str(chunk[IndexChunkField.ROLE.value]),
+            IndexChunkField.TEXT.value: str(chunk[IndexChunkField.TEXT.value]),
+            IndexChunkField.INDEX_STATE.value: str(
+                chunk.get(IndexChunkField.INDEX_STATE.value, IndexState.PENDING.value)
+            ),
         }
         for chunk in chunks
     ]
@@ -1198,7 +1465,7 @@ def embed_chunks(
     chunks: list[dict[str, Any]], *, project_id: str | None = None, owner_id: str | None = None
 ) -> list[dict[str, Any]]:
     runtime = _runtime()
-    texts = [chunk["text"] for chunk in chunks]
+    texts = [chunk[IndexChunkField.TEXT.value] for chunk in chunks]
     provider = str(runtime.health_state.get("embedding", {}).get("provider") or "unknown")
     model = str(runtime.health_state.get("embedding", {}).get("model") or "unknown")
     started = time.perf_counter()
@@ -1226,15 +1493,21 @@ def embed_chunks(
     for chunk, vector in zip(chunks, vectors):
         embeddings.append(
             {
-                "chunk_id": chunk.get("chunk_id"),
-                "chunk_index": chunk["chunk_index"],
+                IndexChunkField.CHUNK_ID.value: chunk.get(
+                    IndexChunkField.CHUNK_ID.value
+                ),
+                IndexChunkField.CHUNK_INDEX.value: chunk[
+                    IndexChunkField.CHUNK_INDEX.value
+                ],
                 "conversation_id": chunk.get("conversation_id"),
                 "project_id": project_id,
                 "owner_id": owner_id,
-                "message_hash": chunk.get("message_hash"),
-                "index_state": "indexed",
-                "role": chunk["role"],
-                "text": chunk["text"],
+                IndexChunkField.MESSAGE_HASH.value: chunk.get(
+                    IndexChunkField.MESSAGE_HASH.value
+                ),
+                IndexChunkField.INDEX_STATE.value: IndexState.INDEXED.value,
+                IndexChunkField.ROLE.value: chunk[IndexChunkField.ROLE.value],
+                IndexChunkField.TEXT.value: chunk[IndexChunkField.TEXT.value],
                 "vector": [float(v) for v in vector],
             }
         )
@@ -2183,9 +2456,9 @@ def ingest_messages(
                 chunks, project_id=effective_project_id, owner_id=owner_id
             )
             store_vectors(str(updated["id"]), embeddings, replace=(start_index == 0))
-            _mark_chunks_indexed(str(updated["id"]), chunks)
+            _mark_chunks_indexed(str(updated["id"]), chunks, updated)
         except Exception:
-            _mark_chunks_indexing_failed(str(updated["id"]), chunks)
+            _mark_chunks_indexing_failed(str(updated["id"]), chunks, updated)
             raise
         if new_messages:
             with _ingestion_stage("fact_extract", message_count=len(new_messages)):
@@ -2247,9 +2520,9 @@ def ingest_messages(
     try:
         embeddings = embed_chunks(chunks, project_id=effective_project_id, owner_id=owner_id)
         store_vectors(metadata_id, embeddings, replace=not inserted)
-        _mark_chunks_indexed(metadata_id, chunks)
+        _mark_chunks_indexed(metadata_id, chunks, conversation_json)
     except Exception:
-        _mark_chunks_indexing_failed(metadata_id, chunks)
+        _mark_chunks_indexing_failed(metadata_id, chunks, conversation_json)
         raise
     if inserted:
         with _ingestion_stage("fact_extract"):
@@ -2544,18 +2817,207 @@ def _is_fully_indexed(metadata_id: str) -> bool:
     return False
 
 
-def _mark_chunks_indexed(metadata_id: str, chunks: list[dict[str, Any]]) -> None:
+def _repair_retrieved_index_chunks(
+    memory_id: str, conversation: dict[str, Any]
+) -> dict[str, Any]:
+    if not _has_pending_index_chunks(conversation):
+        return conversation
+
+    indexed_chunk_ids = _vector_indexed_chunk_ids(memory_id)
+    chunks = (
+        _manifest_chunks_for_index_repair(conversation, indexed_chunk_ids=indexed_chunk_ids)
+        if indexed_chunk_ids
+        else []
+    )
+    if not chunks and _is_fully_indexed(memory_id):
+        chunks = _manifest_chunks_for_index_repair(conversation)
+    if not chunks:
+        return conversation
+
+    _mark_chunks_indexed(memory_id, chunks, conversation)
+    refreshed = _runtime().metadata_store.get(memory_id)
+    return refreshed if isinstance(refreshed, dict) else conversation
+
+
+def _has_pending_index_chunks(conversation: dict[str, Any]) -> bool:
+    return any(
+        chunk.get(IndexChunkField.INDEX_STATE.value) == IndexState.PENDING.value
+        for chunk in _index_chunk_manifest(conversation)
+    )
+
+
+def _vector_indexed_chunk_ids(memory_id: str) -> set[str]:
+    getter = getattr(_runtime().vector_store, "get_indexed_chunk_ids", None)
+    if not callable(getter):
+        return set()
+    try:
+        chunk_ids = getter(memory_id)
+        if not isinstance(chunk_ids, (list, tuple, set)):
+            return set()
+        return {str(chunk_id) for chunk_id in chunk_ids if str(chunk_id)}
+    except Exception as exc:
+        logger.warning(
+            "Unable to inspect indexed vector chunks for memory %s: %s",
+            memory_id,
+            type(exc).__name__,
+        )
+        return set()
+
+
+def _manifest_chunks_for_index_repair(
+    conversation: dict[str, Any], *, indexed_chunk_ids: set[str] | None = None
+) -> list[dict[str, Any]]:
+    chunk_ids = sorted(indexed_chunk_ids) if indexed_chunk_ids else []
+    targets = IndexChunkIdentitySet.from_chunk_ids(chunk_ids)
+    indexed_by_chunk_index = index_chunk_ids_by_chunk_index(chunk_ids)
+    chunks: list[dict[str, Any]] = []
+    memory_id = str(conversation.get("id", ""))
+    for fallback_index, item in enumerate(_index_chunk_manifest(conversation)):
+        if indexed_chunk_ids and not targets.matches(item):
+            continue
+        chunk = _manifest_chunk_for_index_repair(
+            memory_id,
+            item,
+            fallback_index=fallback_index,
+            indexed_by_chunk_index=indexed_by_chunk_index,
+        )
+        if chunk is not None:
+            chunks.append(chunk)
+    return chunks
+
+
+def _index_chunk_manifest(conversation: dict[str, Any]) -> list[dict[str, Any]]:
+    metadata = conversation.get("metadata")
+    index_chunks = (
+        metadata.get(MetadataField.INDEX_CHUNKS.value)
+        if isinstance(metadata, dict)
+        else None
+    )
+    if not isinstance(index_chunks, list):
+        return []
+    return [chunk for chunk in index_chunks if isinstance(chunk, dict)]
+
+
+def _manifest_chunk_for_index_repair(
+    memory_id: str,
+    item: dict[str, Any],
+    *,
+    fallback_index: int,
+    indexed_by_chunk_index: Mapping[int, str],
+) -> dict[str, Any] | None:
+    chunk_index = _manifest_chunk_index(item, fallback_index=fallback_index)
+    if chunk_index is None:
+        return None
+    chunk_id = (
+        str(item.get(IndexChunkField.CHUNK_ID.value) or "")
+        or indexed_by_chunk_index.get(chunk_index)
+        or _legacy_manifest_chunk_id(memory_id, chunk_index, item)
+    )
+    return {
+        IndexChunkField.CHUNK_ID.value: chunk_id,
+        IndexChunkField.CHUNK_INDEX.value: chunk_index,
+        IndexChunkField.MESSAGE_HASH.value: str(
+            item.get(IndexChunkField.MESSAGE_HASH.value, "")
+        ),
+        IndexChunkField.ROLE.value: str(item.get(IndexChunkField.ROLE.value, "")),
+        IndexChunkField.TEXT.value: str(item.get(IndexChunkField.TEXT.value, "")),
+        IndexChunkField.INDEX_STATE.value: str(
+            item.get(IndexChunkField.INDEX_STATE.value, IndexState.PENDING.value)
+        ),
+    }
+
+
+def _manifest_chunk_index(
+    item: Mapping[str, Any], *, fallback_index: int
+) -> int | None:
+    value = item.get(IndexChunkField.CHUNK_INDEX.value, fallback_index)
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _legacy_manifest_chunk_id(
+    memory_id: str, chunk_index: int, item: Mapping[str, Any]
+) -> str:
+    message_hash = str(item.get(IndexChunkField.MESSAGE_HASH.value, "")).strip()
+    if message_hash:
+        return f"{memory_id}:{chunk_index}:{message_hash}"
+    return f"{memory_id}:{chunk_index}"
+
+
+def _mark_chunks_indexed(
+    metadata_id: str, chunks: list[dict[str, Any]], conversation: dict[str, Any] | None = None
+) -> None:
+    if conversation is not None:
+        _set_index_chunks_state(conversation, chunks, IndexState.INDEXED)
     store = _runtime().metadata_store
     if hasattr(store, "mark_chunks_indexed"):
-        store.mark_chunks_indexed(metadata_id, [str(chunk["chunk_id"]) for chunk in chunks])
+        store.mark_chunks_indexed(
+            metadata_id, [str(chunk[IndexChunkField.CHUNK_ID.value]) for chunk in chunks]
+        )
+    elif conversation is not None and hasattr(store, "insert"):
+        store.insert(conversation)
 
 
-def _mark_chunks_indexing_failed(metadata_id: str, chunks: list[dict[str, Any]]) -> None:
+def _mark_chunks_indexing_failed(
+    metadata_id: str, chunks: list[dict[str, Any]], conversation: dict[str, Any] | None = None
+) -> None:
+    if conversation is not None:
+        _set_index_chunks_state(conversation, chunks, IndexState.FAILED)
     store = _runtime().metadata_store
     if hasattr(store, "mark_chunks_indexing_failed"):
         store.mark_chunks_indexing_failed(
-            metadata_id, [str(chunk["chunk_id"]) for chunk in chunks]
+            metadata_id, [str(chunk[IndexChunkField.CHUNK_ID.value]) for chunk in chunks]
         )
+    elif conversation is not None and hasattr(store, "insert"):
+        store.insert(conversation)
+
+
+def _set_index_chunks_state(
+    conversation: dict[str, Any], chunks: list[dict[str, Any]], state: IndexState
+) -> None:
+    for chunk in chunks:
+        chunk[IndexChunkField.INDEX_STATE.value] = state.value
+    metadata = conversation.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+        conversation["metadata"] = metadata
+    existing = metadata.get(MetadataField.INDEX_CHUNKS.value)
+    if not isinstance(existing, list):
+        _attach_index_chunks(conversation, chunks)
+        return
+    target_ids = [str(chunk[IndexChunkField.CHUNK_ID.value]) for chunk in chunks]
+    targets = IndexChunkIdentitySet.from_chunk_ids(target_ids)
+    chunk_id_by_index = index_chunk_ids_by_chunk_index(target_ids)
+    present_ids: set[str] = set()
+    present_indexes: set[int] = set()
+    for item in existing:
+        if not isinstance(item, dict):
+            continue
+        chunk_id = str(item.get(IndexChunkField.CHUNK_ID.value, ""))
+        if targets.matches(item):
+            chunk_index = _manifest_chunk_index(item, fallback_index=-1)
+            if (
+                not chunk_id
+                and chunk_index is not None
+                and chunk_index in chunk_id_by_index
+            ):
+                chunk_id = chunk_id_by_index[chunk_index]
+                item[IndexChunkField.CHUNK_ID.value] = chunk_id
+            item[IndexChunkField.INDEX_STATE.value] = state.value
+            if chunk_id:
+                present_ids.add(chunk_id)
+            if chunk_index is not None:
+                present_indexes.add(chunk_index)
+    missing = [
+        chunk
+        for chunk in chunks
+        if str(chunk[IndexChunkField.CHUNK_ID.value]) not in present_ids
+        and int(chunk[IndexChunkField.CHUNK_INDEX.value]) not in present_indexes
+    ]
+    if missing:
+        _extend_index_chunks(conversation, missing)
 
 
 def reindex_stored_conversations(
@@ -2604,12 +3066,12 @@ def reindex_stored_conversations(
                 owner_id=owner_id,
             )
             store_vectors(memory_id, embeddings, replace=replace_existing)
-            _mark_chunks_indexed(memory_id, chunks)
+            _mark_chunks_indexed(memory_id, chunks, conversation)
             reindexed += 1
             chunks_reindexed += len(chunks)
         except Exception as exc:
             if chunks:
-                _mark_chunks_indexing_failed(memory_id, chunks)
+                _mark_chunks_indexing_failed(memory_id, chunks, conversation)
             failures.append({"id": memory_id, "error": str(exc)})
     return {
         "status": "ok" if not failures else "error",
@@ -3194,12 +3656,13 @@ def _metadata_search_values(metadata: dict[str, Any]) -> list[str]:
     return values
 
 
-def _query_tokens(query: str) -> list[str]:
-    return [
+def _query_tokens(query: str, *, limit: int | None = 8) -> list[str]:
+    tokens = [
         token.lower()
         for token in re.findall(r"[A-Za-z0-9][A-Za-z0-9_-]*", query)
         if len(token) >= 2
-    ][:8]
+    ]
+    return tokens[:limit] if limit is not None else tokens
 
 
 def _unique_strings(values: list[str]) -> list[str]:
@@ -3236,6 +3699,7 @@ def retrieve(
             metadata={"memory_status": status_filter},
         )
         return None
+    conversation = _repair_retrieved_index_chunks(memory_id, conversation)
     result = _with_generated_summary_metadata(conversation)
     _record_audit_event(
         "memory.retrieved",
@@ -3316,27 +3780,34 @@ def ask(
                 "question_hash": _audit_hash(question),
                 "top_k": top_k,
                 "result_count": 0,
-                "answer_basis": "not_found",
+                "answer_basis": _AskAnswerBasis.NOT_FOUND.value,
                 "memory_status": status_filter,
             },
         )
-        return {
-            "status": "ok",
-            "results": [],
-            "answer": "I could not find relevant memory for that question.",
-            "citations": [],
-            "confidence": "none",
-            "confidence_reason": "No matching memory or facts were found.",
-            "answer_basis": "not_found",
-            "provenance": [],
-            "evidence": [],
-            "structured_evidence": {"facts": [], "results": []},
-        }
+        return _enum_keyed_payload(
+            {
+                _AskResponseKey.STATUS: _AskResponseStatus.OK.value,
+                _AskResponseKey.RESULTS: [],
+                _AskResponseKey.ANSWER: "I could not find relevant memory for that question.",
+                _AskResponseKey.CITATIONS: [],
+                _AskResponseKey.CONFIDENCE: "none",
+                _AskResponseKey.CONFIDENCE_REASON: "No matching memory or facts were found.",
+                _AskResponseKey.ANSWER_BASIS: _AskAnswerBasis.NOT_FOUND.value,
+                _AskResponseKey.PROVENANCE: [],
+                _AskResponseKey.EVIDENCE: [],
+                _AskResponseKey.STRUCTURED_EVIDENCE: _enum_keyed_payload(
+                    {
+                        _StructuredEvidenceKey.FACTS: [],
+                        _StructuredEvidenceKey.RESULTS: [],
+                    }
+                ),
+            }
+        )
 
     runtime = _runtime()
     budget_enabled = runtime.tokenizer_enabled or max_context_tokens is not None
     if not budget_enabled:
-        result = _ask_from_matches(matches, top_k=top_k)
+        result = _ask_from_matches(matches, top_k=top_k, question=question)
         _record_audit_event(
             "memory.asked",
             owner_id=owner_id,
@@ -3356,37 +3827,28 @@ def ask(
         if max_context_tokens is not None
         else runtime.ask_max_context_tokens
     )
-    selected_matches, citations, context_lines, tokens_used, chunks_dropped = (
-        _select_ask_context(
-            matches=matches[:top_k],
-            max_context_tokens=token_budget,
-            encoding=runtime.tokenizer_encoding,
-        )
+    (
+        selected_matches,
+        citations,
+        context_lines,
+        tokens_used,
+        chunks_dropped,
+        context_truncated,
+    ) = _select_ask_context(
+        matches=matches[:top_k],
+        max_context_tokens=token_budget,
+        encoding=runtime.tokenizer_encoding,
     )
-    answer = (
-        "Based on stored memory:\n" + "\n".join(context_lines)
-        if context_lines
-        else "I could not fit relevant memory within the context budget."
+    result = _budgeted_direct_memory_ask_result(
+        selected_matches=selected_matches,
+        citations=citations,
+        context_lines=context_lines,
+        question=question,
+        tokens_used=tokens_used,
+        chunks_dropped=chunks_dropped,
+        context_truncated=context_truncated,
+        tokenizer_encoding=runtime.tokenizer_encoding,
     )
-    result = {
-        "status": "ok",
-        "results": selected_matches,
-        "answer": answer,
-        "citations": citations,
-        "confidence": _confidence_from_matches(selected_matches),
-        "confidence_reason": _confidence_reason_from_matches(selected_matches),
-        "answer_basis": "direct_memory",
-        "provenance": _provenance_from_matches(selected_matches, citations),
-        "evidence": _chunk_evidence_from_matches(selected_matches),
-        "structured_evidence": {
-            "facts": [],
-            "results": selected_matches,
-        },
-        "context_tokens_used": tokens_used,
-        "chunks_selected": len(selected_matches),
-        "chunks_dropped": chunks_dropped,
-        "tokenizer_used": tokenizer_used(runtime.tokenizer_encoding),
-    }
     _record_audit_event(
         "memory.asked",
         owner_id=owner_id,
@@ -3439,10 +3901,14 @@ def _next_chunk_index(
     conversation: dict[str, Any], *, fallback_start_index: int
 ) -> int:
     metadata = conversation.get("metadata", {})
-    index_chunks = metadata.get("index_chunks") if isinstance(metadata, dict) else None
+    index_chunks = (
+        metadata.get(MetadataField.INDEX_CHUNKS.value)
+        if isinstance(metadata, dict)
+        else None
+    )
     if isinstance(index_chunks, list):
         indexes = [
-            int(chunk.get("chunk_index", -1))
+            int(chunk.get(IndexChunkField.CHUNK_INDEX.value, -1))
             for chunk in index_chunks
             if isinstance(chunk, dict)
         ]
@@ -3456,50 +3922,171 @@ def _extend_index_chunks(obj: dict[str, Any], chunks: list[dict[str, Any]]) -> N
     if not isinstance(metadata, dict):
         metadata = {}
         obj["metadata"] = metadata
-    existing = metadata.get("index_chunks")
+    existing = metadata.get(MetadataField.INDEX_CHUNKS.value)
     if not isinstance(existing, list):
         existing = []
-    metadata["index_chunks"] = existing + [
+    metadata[MetadataField.INDEX_CHUNKS.value] = existing + [
         {
-            "chunk_id": str(chunk["chunk_id"]),
-            "chunk_index": int(chunk["chunk_index"]),
-            "message_hash": str(chunk["message_hash"]),
-            "role": str(chunk["role"]),
-            "text": str(chunk["text"]),
-            "index_state": str(chunk.get("index_state", "pending_index")),
+            IndexChunkField.CHUNK_ID.value: str(
+                chunk[IndexChunkField.CHUNK_ID.value]
+            ),
+            IndexChunkField.CHUNK_INDEX.value: int(
+                chunk[IndexChunkField.CHUNK_INDEX.value]
+            ),
+            IndexChunkField.MESSAGE_HASH.value: str(
+                chunk[IndexChunkField.MESSAGE_HASH.value]
+            ),
+            IndexChunkField.ROLE.value: str(chunk[IndexChunkField.ROLE.value]),
+            IndexChunkField.TEXT.value: str(chunk[IndexChunkField.TEXT.value]),
+            IndexChunkField.INDEX_STATE.value: str(
+                chunk.get(IndexChunkField.INDEX_STATE.value, IndexState.PENDING.value)
+            ),
         }
         for chunk in chunks
     ]
 
 
-def _ask_from_matches(matches: list[dict[str, Any]], *, top_k: int) -> dict[str, Any]:
+def _ask_from_matches(
+    matches: list[dict[str, Any]], *, top_k: int, question: str
+) -> dict[str, Any]:
     citations: list[dict[str, Any]] = []
-    context_lines: list[str] = []
     for row in matches:
         citation = _citation_from_row(row)
         citations.append(citation)
-        context_lines.append(
-            f"- [{citation['id']}#{citation['chunk_index']}] {citation['text']}"
-        )
 
-    answer = "Based on stored memory:\n" + "\n".join(context_lines[:top_k])
     selected = matches[:top_k]
     selected_citations = citations[:top_k]
-    return {
-        "status": "ok",
-        "results": selected,
-        "answer": answer,
-        "citations": selected_citations,
-        "confidence": _confidence_from_matches(selected),
-        "confidence_reason": _confidence_reason_from_matches(selected),
-        "answer_basis": "direct_memory",
-        "provenance": _provenance_from_matches(selected, selected_citations),
-        "evidence": _chunk_evidence_from_matches(selected),
-        "structured_evidence": {
-            "facts": [],
-            "results": selected,
+    return _direct_memory_ask_result(
+        selected_matches=selected,
+        citations=selected_citations,
+        answer=_direct_memory_answer_text(selected, question=question),
+        confidence=_confidence_from_matches(selected),
+        confidence_reason=_confidence_reason_from_matches(selected),
+    )
+
+
+def _budgeted_direct_memory_ask_result(
+    *,
+    selected_matches: list[dict[str, Any]],
+    citations: list[dict[str, Any]],
+    context_lines: list[str],
+    question: str,
+    tokens_used: int,
+    chunks_dropped: int,
+    context_truncated: bool,
+    tokenizer_encoding: str,
+) -> dict[str, Any]:
+    answer = (
+        _direct_memory_answer_text(selected_matches, question=question)
+        if context_lines
+        else "I could not fit relevant memory within the context budget."
+    )
+    return _direct_memory_ask_result(
+        selected_matches=selected_matches,
+        citations=citations,
+        answer=answer,
+        confidence=_confidence_from_context(
+            selected_matches,
+            context_truncated=context_truncated,
+        ),
+        confidence_reason=_confidence_reason_from_matches(
+            selected_matches,
+            context_truncated=context_truncated,
+        ),
+        extra_fields={
+            _AskResponseKey.CONTEXT_TOKENS_USED: tokens_used,
+            _AskResponseKey.CHUNKS_SELECTED: len(selected_matches),
+            _AskResponseKey.CHUNKS_DROPPED: chunks_dropped,
+            _AskResponseKey.CONTEXT_TRUNCATED: context_truncated,
+            _AskResponseKey.TOKENIZER_USED: tokenizer_used(tokenizer_encoding),
         },
+    )
+
+
+def _direct_memory_ask_result(
+    *,
+    selected_matches: list[dict[str, Any]],
+    citations: list[dict[str, Any]],
+    answer: str,
+    confidence: str,
+    confidence_reason: str,
+    extra_fields: dict[_AskResponseKey, Any] | None = None,
+) -> dict[str, Any]:
+    result = {
+        _AskResponseKey.STATUS: _AskResponseStatus.OK.value,
+        _AskResponseKey.RESULTS: selected_matches,
+        _AskResponseKey.ANSWER: answer,
+        _AskResponseKey.CITATIONS: citations,
+        _AskResponseKey.CONFIDENCE: confidence,
+        _AskResponseKey.CONFIDENCE_REASON: confidence_reason,
+        _AskResponseKey.ANSWER_BASIS: _AskAnswerBasis.DIRECT_MEMORY.value,
+        _AskResponseKey.PROVENANCE: _provenance_from_matches(
+            selected_matches,
+            citations,
+        ),
+        _AskResponseKey.EVIDENCE: _chunk_evidence_from_matches(selected_matches),
+        _AskResponseKey.STRUCTURED_EVIDENCE: _enum_keyed_payload(
+            {
+                _StructuredEvidenceKey.FACTS: [],
+                _StructuredEvidenceKey.RESULTS: selected_matches,
+            }
+        ),
     }
+    if extra_fields:
+        result.update(extra_fields)
+    return _enum_keyed_payload(result)
+
+
+def _direct_memory_answer_text(
+    matches: Sequence[dict[str, Any]], *, question: str | None = None
+) -> str:
+    snippets = [
+        snippet
+        for row in matches
+        for snippet in (_direct_memory_answer_snippet(row),)
+        if snippet
+    ]
+    for snippet in snippets:
+        if not _direct_memory_answer_snippet_is_question_echo(snippet, question):
+            return snippet
+    if snippets:
+        return snippets[0]
+    return "I found relevant memory, but it did not include usable text."
+
+
+def _direct_memory_answer_snippet(row: dict[str, Any]) -> str:
+    text = " ".join(str(row.get("text", "")).strip().split())
+    if not text:
+        return ""
+    return _truncate_summary_text(text, limit=600)
+
+
+def _direct_memory_answer_snippet_is_question_echo(
+    snippet: str, question: str | None
+) -> bool:
+    normalized_snippet = _normalized_question_echo_text(snippet)
+    if question is not None and normalized_snippet == _normalized_question_echo_text(question):
+        return True
+    return snippet.rstrip().endswith("?")
+
+
+def _normalized_question_echo_text(value: str) -> str:
+    return " ".join(_query_tokens(value, limit=None))
+
+
+def _enum_keyed_payload(payload: Mapping[_PayloadKey, Any]) -> dict[str, Any]:
+    return {key.value: value for key, value in payload.items()}
+
+
+def _fact_correction_qualifiers(
+    correction: _FactCorrectionMatch,
+) -> dict[str, str]:
+    return _enum_keyed_payload(
+        {
+            _FactQualifierKey.ITEM: correction.item,
+            _FactQualifierKey.CORRECTS: correction.old_value,
+        }
+    )
 
 
 def _citation_from_row(row: dict[str, Any]) -> dict[str, Any]:
@@ -3516,12 +4103,13 @@ def _select_ask_context(
     matches: list[dict[str, Any]],
     max_context_tokens: int,
     encoding: str,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str], int, int]:
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str], int, int, bool]:
     selected_matches: list[dict[str, Any]] = []
     citations: list[dict[str, Any]] = []
     context_lines: list[str] = []
     tokens_used = 0
     chunks_dropped = 0
+    context_truncated = False
 
     for row in matches:
         citation_id = row.get("id")
@@ -3531,6 +4119,7 @@ def _select_ask_context(
         remaining = max_context_tokens - tokens_used - prefix_tokens
         if remaining <= 0:
             chunks_dropped += 1
+            context_truncated = True
             continue
 
         text = str(row.get("text", ""))
@@ -3539,8 +4128,10 @@ def _select_ask_context(
         if text_tokens > remaining:
             selected_text = truncate_to_tokens(text, remaining, encoding)
             text_tokens = count_tokens(selected_text, encoding)
+            context_truncated = True
         if not selected_text:
             chunks_dropped += 1
+            context_truncated = True
             continue
 
         line = prefix + selected_text
@@ -3553,7 +4144,14 @@ def _select_ask_context(
         context_lines.append(line)
         tokens_used += line_tokens
 
-    return selected_matches, citations, context_lines, tokens_used, chunks_dropped
+    return (
+        selected_matches,
+        citations,
+        context_lines,
+        tokens_used,
+        chunks_dropped,
+        context_truncated,
+    )
 
 
 def _confidence_from_matches(matches: list[dict[str, Any]]) -> str:
@@ -3565,6 +4163,16 @@ def _confidence_from_matches(matches: list[dict[str, Any]]) -> str:
     if best <= 4.0:
         return "medium"
     return "low"
+
+
+def _confidence_from_context(
+    matches: list[dict[str, Any]], *, context_truncated: bool
+) -> str:
+    if not matches:
+        return "none"
+    if context_truncated:
+        return "low"
+    return _confidence_from_matches(matches)
 
 
 def _provenance_from_matches(
@@ -3609,7 +4217,11 @@ def _chunk_evidence_from_matches(matches: list[dict[str, Any]]) -> list[dict[str
     ]
 
 
-def _confidence_reason_from_matches(matches: list[dict[str, Any]]) -> str:
+def _confidence_reason_from_matches(
+    matches: list[dict[str, Any]], *, context_truncated: bool = False
+) -> str:
+    if context_truncated:
+        return "Retrieved memory was truncated by the context budget."
     if not matches:
         return "No retrieved chunks were used."
     return "Answer built from ranked retrieved conversation chunks."
@@ -3752,29 +4364,33 @@ def _extract_message_facts(
     text: str, *, conversation: dict[str, Any], message_index: int, source_role: str
 ) -> list[dict[str, Any]]:
     facts: list[dict[str, Any]] = []
-    correction = _FACT_CORRECTION_RE.search(text)
-    if correction:
-        item = correction.group("item").strip()
-        new_value = correction.group("new").strip()
-        old_value = correction.group("old").strip()
+    correction_spans: list[tuple[int, int]] = []
+    for correction in _fact_correction_matches(text):
+        correction_spans.append(correction.span)
+        predicate, object_value = _corrected_fact_shape(
+            correction.item,
+            correction.new_value,
+        )
         facts.append(
             _fact(
-                subject="user",
-                predicate=_owned_item_predicate(item),
-                object_value=f"{item} is {new_value}",
+                subject=_FactSubject.USER.value,
+                predicate=predicate,
+                object_value=object_value,
                 conversation=conversation,
                 message_index=message_index,
-                qualifiers={"item": item, "corrects": old_value},
+                qualifiers=_fact_correction_qualifiers(correction),
                 source_role=source_role,
             )
         )
     for rule_name, pattern in _FACT_RULES:
         for match in pattern.finditer(text):
-            if rule_name == "own":
-                object_value = _clean_fact_object(match.group("object"))
+            if _span_overlaps(match.span(), correction_spans):
+                continue
+            if rule_name == _FactRuleName.OWN:
+                object_value = _clean_fact_object(match.group(FactField.OBJECT.value))
                 facts.append(
                     _fact(
-                        subject="user",
+                        subject=_FactSubject.USER.value,
                         predicate=_owned_item_predicate(object_value),
                         object_value=object_value,
                         conversation=conversation,
@@ -3783,66 +4399,151 @@ def _extract_message_facts(
                         source_role=source_role,
                     )
                 )
-            elif rule_name == "favorite":
+            elif rule_name == _FactRuleName.FAVORITE:
                 name = _normalize_predicate_part(match.group("name"))
+                object_value = _clean_fact_object(match.group("object"))
+                if _has_inline_correction(object_value):
+                    continue
                 facts.append(
                     _fact(
-                        subject="user",
-                        predicate=f"favorite_{name}",
-                        object_value=_clean_fact_object(match.group("object")),
+                        subject=_FactSubject.USER.value,
+                        predicate=f"{_FactPredicatePrefix.FAVORITE.value}{name}",
+                        object_value=object_value,
                         conversation=conversation,
                         message_index=message_index,
                         source_role=source_role,
                     )
                 )
-            elif rule_name == "subject_creator":
+            elif rule_name == _FactRuleName.LIKES:
+                facts.append(
+                    _fact(
+                        subject=_FactSubject.USER.value,
+                        predicate=_FactPredicate.LIKES.value,
+                        object_value=_clean_fact_object(match.group("object")),
+                        conversation=conversation,
+                        message_index=message_index,
+                        qualifiers={_FactQualifierKey.PREFERENCE.value: "positive"},
+                        source_role=source_role,
+                    )
+                )
+            elif rule_name == _FactRuleName.SUBJECT_CREATOR:
                 facts.append(
                     _fact(
                         subject=match.group("subject").strip(),
-                        predicate="creator",
+                        predicate=_FactPredicate.CREATOR.value,
                         object_value=_clean_fact_object(match.group("object")),
                         conversation=conversation,
                         message_index=message_index,
                         source_role=source_role,
                     )
                 )
-            elif rule_name in {"creator", "command_name", "indexing_strategy"}:
+            elif rule_name in {
+                _FactRuleName.CREATOR,
+                _FactRuleName.COMMAND_NAME,
+                _FactRuleName.INDEXING_STRATEGY,
+            }:
                 facts.append(
                     _fact(
                         subject=_project_subject(conversation),
-                        predicate=rule_name,
+                        predicate=rule_name.value,
                         object_value=_clean_fact_object(match.group("object")),
                         conversation=conversation,
                         message_index=message_index,
                         source_role=source_role,
                     )
                 )
-            elif rule_name in {"profile_name", "profile_identity", "profile_role", "profile_location"}:
+            elif rule_name in {
+                _FactRuleName.PROFILE_NAME,
+                _FactRuleName.PROFILE_IDENTITY,
+                _FactRuleName.PROFILE_ROLE,
+                _FactRuleName.PROFILE_LOCATION,
+            }:
                 facts.append(
                     _fact(
-                        subject="user",
-                        predicate=rule_name,
+                        subject=_FactSubject.USER.value,
+                        predicate=rule_name.value,
                         object_value=_clean_fact_object(match.group("object")),
                         conversation=conversation,
                         message_index=message_index,
                         source_role=source_role,
                     )
                 )
-            elif rule_name == "project_attribute":
-                subject = match.group("subject").strip()
-                if subject.lower() in {"i", "my", "the", "this"}:
+            elif rule_name in {
+                _FactRuleName.PROJECT_ATTRIBUTE,
+                _FactRuleName.PROJECT_ATTRIBUTE_CHANGE,
+            }:
+                subject = match.group(FactField.SUBJECT.value).strip()
+                object_value = _clean_fact_object(match.group(FactField.OBJECT.value))
+                if _should_skip_project_attribute_fact(subject, object_value):
                     continue
                 facts.append(
                     _fact(
                         subject=subject,
-                        predicate="description",
-                        object_value=_clean_fact_object(match.group("object")),
+                        predicate=_FactPredicate.DESCRIPTION.value,
+                        object_value=object_value,
                         conversation=conversation,
                         message_index=message_index,
                         source_role=source_role,
                     )
                 )
     return _dedupe_facts(facts)
+
+
+def _fact_correction_matches(text: str) -> list[_FactCorrectionMatch]:
+    corrections: list[_FactCorrectionMatch] = []
+    for pattern in (_FACT_CORRECTION_RE, _FACT_REPLACES_CORRECTION_RE):
+        for match in pattern.finditer(text):
+            span = match.span()
+            if _span_overlaps(span, [correction.span for correction in corrections]):
+                continue
+            corrections.append(
+                _FactCorrectionMatch(
+                    span=span,
+                    item=_clean_fact_object(
+                        match.group(_FactCorrectionGroup.ITEM.value)
+                    ),
+                    new_value=_clean_fact_object(
+                        match.group(_FactCorrectionGroup.NEW_VALUE.value)
+                    ),
+                    old_value=_clean_fact_object(
+                        match.group(_FactCorrectionGroup.OLD_VALUE.value)
+                    ),
+                )
+            )
+    corrections.sort(key=lambda correction: correction.span[0])
+    return corrections
+
+
+def _span_overlaps(span: tuple[int, int], spans: Sequence[tuple[int, int]]) -> bool:
+    start, end = span
+    return any(start < other_end and other_start < end for other_start, other_end in spans)
+
+
+def _corrected_fact_shape(item: str, new_value: str) -> tuple[str, str]:
+    item = _clean_fact_object(item)
+    new_value = _clean_fact_object(new_value)
+    if item.lower().startswith(_FactItemPrefix.FAVORITE.value):
+        favorite_name = item[len(_FactItemPrefix.FAVORITE.value):].strip()
+        predicate = (
+            f"{_FactPredicatePrefix.FAVORITE.value}"
+            f"{_normalize_predicate_part(favorite_name)}"
+        )
+        return predicate, new_value
+    return _owned_item_predicate(item), f"{item} is {new_value}"
+
+
+def _has_inline_correction(value: str) -> bool:
+    return _FACT_INLINE_CORRECTION_RE.search(value) is not None
+
+
+def _should_skip_project_attribute_fact(subject: str, object_value: str) -> bool:
+    subject_lower = subject.lower()
+    if subject_lower in {"i", "my", "the", "this"}:
+        return True
+    if _has_inline_correction(object_value):
+        return True
+    subject_tokens = set(_query_tokens(subject, limit=None))
+    return bool(subject_tokens.intersection(_NOISY_PROJECT_ATTRIBUTE_SUBJECT_TOKENS))
 
 
 def _topic_facts(
@@ -3856,12 +4557,12 @@ def _topic_facts(
     for topic in topics:
         facts.append(
             _fact(
-                subject="user",
-                predicate="recurring_topic",
+                subject=_FactSubject.USER.value,
+                predicate=_FactPredicate.RECURRING_TOPIC.value,
                 object_value=topic,
                 conversation=conversation,
                 message_index=start_message_index,
-                qualifiers={"topic": topic},
+                qualifiers={_FactQualifierKey.TOPIC.value: topic},
             )
         )
     return facts
@@ -3883,9 +4584,9 @@ def _external_extracted_facts(
     for raw in raw_facts:
         if not isinstance(raw, dict):
             continue
-        subject = str(raw.get("subject", "")).strip()
-        predicate = str(raw.get("predicate", "")).strip()
-        object_value = str(raw.get("object", "")).strip()
+        subject = str(raw.get(FactField.SUBJECT.value, "")).strip()
+        predicate = str(raw.get(FactField.PREDICATE.value, "")).strip()
+        object_value = str(raw.get(FactField.OBJECT.value, "")).strip()
         if not subject or not predicate or not object_value:
             continue
         indexes = raw.get("source_message_indexes")
@@ -3900,7 +4601,9 @@ def _external_extracted_facts(
                 object_value=object_value,
                 conversation=conversation,
                 message_index=message_index,
-                qualifiers=raw.get("qualifiers") if isinstance(raw.get("qualifiers"), dict) else None,
+                qualifiers=raw.get(FactField.QUALIFIERS.value)
+                if isinstance(raw.get(FactField.QUALIFIERS.value), dict)
+                else None,
             )
         )
     return facts
@@ -3921,38 +4624,38 @@ def _fact(
     identity = f"{subject}\n{predicate}\n{object_value}\n{source_id}\n{message_index}"
     fact_id = "fact-" + hashlib.sha256(identity.encode("utf-8")).hexdigest()[:32]
     normalized_qualifiers = dict(qualifiers or {})
-    if source_role in {"user", "assistant"}:
-        normalized_qualifiers.setdefault("source_role", source_role)
+    if source_role in {_FactSourceRole.USER.value, _FactSourceRole.ASSISTANT.value}:
+        normalized_qualifiers.setdefault(_FactQualifierKey.SOURCE_ROLE.value, source_role)
     normalized_qualifiers.update(_save_intent_qualifiers(conversation))
     object_normalized, normalization = _normalize_fact_object(
         predicate=predicate, object_value=object_value
     )
     if normalization:
-        normalized_qualifiers["normalization"] = normalization
+        normalized_qualifiers[_FactQualifierKey.NORMALIZATION.value] = normalization
     fact = {
-        "id": fact_id,
-        "subject": subject,
-        "predicate": predicate,
-        "object": object_value,
-        "qualifiers": normalized_qualifiers,
-        "confidence": "medium"
-        if normalized_qualifiers.get("save_intent") == "client_auto_save"
+        FactField.ID.value: fact_id,
+        FactField.SUBJECT.value: subject,
+        FactField.PREDICATE.value: predicate,
+        FactField.OBJECT.value: object_value,
+        FactField.QUALIFIERS.value: normalized_qualifiers,
+        FactField.CONFIDENCE.value: "medium"
+        if normalized_qualifiers.get(_FactQualifierKey.SAVE_INTENT.value) == "client_auto_save"
         else "high",
-        "last_confirmed_at": now,
-        "source_conversation_id": source_id,
+        FactField.LAST_CONFIRMED_AT.value: now,
+        FactField.SOURCE_CONVERSATION_ID.value: source_id,
         "owner_id": _owner_id_from_conversation(conversation),
         "project_id": _project_id_from_conversation(conversation),
-        "source_message_indexes": [message_index],
-        "created_at": now,
-        "updated_at": now,
-        "superseded_by": None,
-        "superseded_at": None,
-        "deleted_at": None,
+        FactField.SOURCE_MESSAGE_INDEXES.value: [message_index],
+        FactField.CREATED_AT.value: now,
+        FactField.UPDATED_AT.value: now,
+        FactField.SUPERSEDED_BY.value: None,
+        FactField.SUPERSEDED_AT.value: None,
+        FactField.DELETED_AT.value: None,
     }
-    fact["object_raw"] = object_value
-    fact["object_normalized"] = object_normalized
-    fact["source_quality"] = _source_quality_for_fact(fact)
-    fact["confidence_reason"] = _confidence_reason_for_fact(fact)
+    fact[FactField.OBJECT_RAW.value] = object_value
+    fact[FactField.OBJECT_NORMALIZED.value] = object_normalized
+    fact[FactField.SOURCE_QUALITY.value] = _source_quality_for_fact(fact)
+    fact[FactField.CONFIDENCE_REASON.value] = _confidence_reason_for_fact(fact)
     return fact
 
 
@@ -3961,10 +4664,14 @@ def _save_intent_qualifiers(conversation: dict[str, Any]) -> dict[str, str]:
     if not isinstance(metadata, dict):
         return {}
     qualifiers: dict[str, str] = {}
-    for key in ("save_intent", "save_intent_source", "save_intent_evidence"):
-        value = metadata.get(key)
+    for key in (
+        _FactQualifierKey.SAVE_INTENT,
+        _FactQualifierKey.SAVE_INTENT_SOURCE,
+        _FactQualifierKey.SAVE_INTENT_EVIDENCE,
+    ):
+        value = metadata.get(key.value)
         if value is not None and str(value):
-            qualifiers[key] = str(value)
+            qualifiers[key.value] = str(value)
     return qualifiers
 
 
@@ -3972,7 +4679,7 @@ def _fact_qualifier_value(fact: dict[str, Any], key: str) -> str | None:
     direct = fact.get(key)
     if direct is not None and str(direct):
         return str(direct)
-    qualifiers = fact.get("qualifiers")
+    qualifiers = fact.get(FactField.QUALIFIERS.value)
     if not isinstance(qualifiers, dict):
         return None
     value = qualifiers.get(key)
@@ -3981,10 +4688,10 @@ def _fact_qualifier_value(fact: dict[str, Any], key: str) -> str | None:
 
 def _fact_save_intent_fields(fact: dict[str, Any]) -> dict[str, str]:
     fields: dict[str, str] = {}
-    for key in ("save_intent", "save_intent_source"):
-        value = _fact_qualifier_value(fact, key)
+    for key in (_FactQualifierKey.SAVE_INTENT, _FactQualifierKey.SAVE_INTENT_SOURCE):
+        value = _fact_qualifier_value(fact, key.value)
         if value:
-            fields[key] = value
+            fields[key.value] = value
     return fields
 
 
@@ -3998,38 +4705,51 @@ def _answer_from_facts(
     filters: ConversationFilters | None = None,
 ) -> dict[str, Any] | None:
     filters = filters or ConversationFilters()
-    query = _fact_query(question)
-    if query is None:
+    candidates: list[dict[str, Any]] = []
+    for query in _fact_answer_queries(question):
+        candidates = _candidate_facts_for_question(
+            question=question,
+            query=query,
+            owner_id=owner_id,
+            project_id=project_id,
+            filters=filters,
+        )
+        if candidates:
+            break
+    if not candidates:
         return None
-    facts = _search_facts(
-        subject=query.get("subject") if query.get("subject") == "user" else None,
-        predicate=query.get("predicate"),
-        owner_id=owner_id,
-        project_id=project_id,
-        conversation_filters=filters,
-    )
-    facts = _filter_facts_for_question(facts, question, query)
-    active = [fact for fact in facts if not fact.get("superseded_by") and not fact.get("deleted_at")]
-    if not active:
+    public_timeline = [_public_fact(fact) for fact in candidates]
+    projection = FactTimelineProjector().project(public_timeline)
+    selected_entries = list(projection.unique_latest_entries)
+    if not selected_entries:
         return None
-    objects = {str(fact.get("object_normalized") or fact.get("object", "")) for fact in active}
     needs_context = _fact_question_needs_context(question)
-    basis = "conflict" if len(objects) > 1 else ("mixed" if needs_context else "fact_layer")
-    confidence = "low" if basis == "conflict" else str(active[0].get("confidence", "medium"))
-    superseded = _superseded_facts_for_active(active, facts)
-    public_active = [_public_fact(fact) for fact in active]
-    public_superseded = [_public_fact(fact) for fact in superseded]
+    basis = (
+        _AskAnswerBasis.CONFLICT.value
+        if projection.has_latest_conflict
+        else (
+            _AskAnswerBasis.MIXED.value
+            if needs_context
+            else _AskAnswerBasis.FACT_LAYER.value
+        )
+    )
+    public_active = [entry.fact for entry in selected_entries]
+    public_history = [entry.fact for entry in projection.historical_entries]
+    confidence = (
+        "low"
+        if basis == _AskAnswerBasis.CONFLICT.value
+        else str(public_active[0].get(FactField.CONFIDENCE.value, "medium"))
+    )
     fact_evidence = [_fact_evidence(fact, used_in_answer=True) for fact in public_active]
-    fact_evidence.extend(_fact_evidence(fact, used_in_answer=False) for fact in public_superseded)
+    fact_evidence.extend(_fact_evidence(fact, used_in_answer=False) for fact in public_history)
     answer = _fact_answer_text(
         question,
         public_active,
-        superseded=public_superseded,
-        conflict=basis == "conflict",
+        conflict=basis == _AskAnswerBasis.CONFLICT.value,
     )
     citations = [_fact_citation(fact) for fact in public_active]
     results: list[dict[str, Any]] = []
-    if basis == "mixed":
+    if basis == _AskAnswerBasis.MIXED.value:
         search_result = _search_for_ask(
             question=question,
             top_k=top_k,
@@ -4048,61 +4768,199 @@ def _answer_from_facts(
             )
             if context:
                 answer = answer + "\nContext from memory:\n" + context
-    return {
-        "status": "ok",
-        "results": results,
-        "answer": answer,
-        "citations": citations,
-        "confidence": confidence,
-        "confidence_reason": _confidence_reason_for_facts(public_active, basis),
-        "answer_basis": basis,
-        "provenance": _provenance_from_facts(public_active),
-        "facts": public_active,
-        "evidence": fact_evidence,
-        "structured_evidence": {
-            "facts": fact_evidence,
-            "results": results,
-        },
-    }
+    return _enum_keyed_payload(
+        {
+            _AskResponseKey.STATUS: _AskResponseStatus.OK.value,
+            _AskResponseKey.RESULTS: results,
+            _AskResponseKey.ANSWER: answer,
+            _AskResponseKey.CITATIONS: citations,
+            _AskResponseKey.CONFIDENCE: confidence,
+            _AskResponseKey.CONFIDENCE_REASON: _confidence_reason_for_facts(
+                public_active, basis
+            ),
+            _AskResponseKey.ANSWER_BASIS: basis,
+            _AskResponseKey.PROVENANCE: _provenance_from_facts(public_active),
+            _AskResponseKey.FACTS: public_active,
+            _AskResponseKey.LATEST: projection.latest_payload(),
+            _AskResponseKey.FACT_TIMELINE: projection.timeline_payload(),
+            _AskResponseKey.EVIDENCE: fact_evidence,
+            _AskResponseKey.STRUCTURED_EVIDENCE: _enum_keyed_payload(
+                {
+                    _StructuredEvidenceKey.FACTS: fact_evidence,
+                    _StructuredEvidenceKey.RESULTS: results,
+                }
+            ),
+        }
+    )
+
+
+def _fact_answer_queries(question: str) -> list[dict[str, str]]:
+    queries: list[dict[str, str]] = []
+    specific_query = _fact_query(question)
+    if specific_query is not None:
+        queries.append(specific_query)
+    generic_query = _generic_fact_projection_query(question)
+    if generic_query is not None and generic_query not in queries:
+        queries.append(generic_query)
+    return queries
+
+
+def _candidate_facts_for_question(
+    *,
+    question: str,
+    query: dict[str, str],
+    owner_id: str | None,
+    project_id: str | None,
+    filters: ConversationFilters,
+) -> list[dict[str, Any]]:
+    text_query = query.get(_FactQueryKey.TEXT.value)
+    facts = _search_facts(
+        subject=(
+            query.get(FactField.SUBJECT.value)
+            if query.get(FactField.SUBJECT.value) == _FactSubject.USER.value
+            else None
+        ),
+        predicate=query.get(FactField.PREDICATE.value),
+        owner_id=owner_id,
+        project_id=project_id,
+        conversation_filters=filters,
+        fact_filters=FactFilters.from_options(
+            status="all" if text_query is not None else "active"
+        ),
+    )
+    if text_query is not None:
+        return _generic_fact_projection_candidates(facts, text_query)
+    facts = _filter_facts_for_question(facts, question, query)
+    candidates = [fact for fact in facts if fact.get(FactField.DELETED_AT.value) is None]
+    return _narrow_facts_for_question(candidates, question, query)
 
 
 def _fact_query(question: str) -> dict[str, str] | None:
     lowered = question.lower()
     subject = _question_project_subject(question)
     if "guitar" in lowered and any(term in lowered for term in ("own", "have", "my")):
-        return {"subject": "user", "predicate": "owns_guitar"}
+        return {
+            FactField.SUBJECT.value: _FactSubject.USER.value,
+            FactField.PREDICATE.value: _FactPredicate.OWNS_GUITAR.value,
+        }
     if "who am i" in lowered or "what do you know about me" in lowered:
-        return {"subject": "user", "predicate": "profile_identity"}
+        return {
+            FactField.SUBJECT.value: _FactSubject.USER.value,
+            FactField.PREDICATE.value: _FactPredicate.PROFILE_IDENTITY.value,
+        }
     if "my name" in lowered or "what is my name" in lowered:
-        return {"subject": "user", "predicate": "profile_name"}
+        return {
+            FactField.SUBJECT.value: _FactSubject.USER.value,
+            FactField.PREDICATE.value: _FactPredicate.PROFILE_NAME.value,
+        }
     if "where do i live" in lowered:
-        return {"subject": "user", "predicate": "profile_location"}
+        return {
+            FactField.SUBJECT.value: _FactSubject.USER.value,
+            FactField.PREDICATE.value: _FactPredicate.PROFILE_LOCATION.value,
+        }
     if "what do i work as" in lowered or "my job" in lowered:
-        return {"subject": "user", "predicate": "profile_role"}
+        return {
+            FactField.SUBJECT.value: _FactSubject.USER.value,
+            FactField.PREDICATE.value: _FactPredicate.PROFILE_ROLE.value,
+        }
     favorite_match = re.search(r"favorite\s+(?P<name>[A-Za-z0-9 _-]+)", question, re.IGNORECASE)
     if favorite_match:
-        return {"subject": "user", "predicate": f"favorite_{_normalize_predicate_part(favorite_match.group('name'))}"}
+        return {
+            FactField.SUBJECT.value: _FactSubject.USER.value,
+            FactField.PREDICATE.value: (
+                f"{_FactPredicatePrefix.FAVORITE.value}"
+                f"{_normalize_predicate_part(favorite_match.group('name'))}"
+            ),
+        }
+    if any(term in lowered for term in ("do i like", "i like", "prefer", "preference")):
+        return {
+            FactField.SUBJECT.value: _FactSubject.USER.value,
+            FactField.PREDICATE.value: _FactPredicate.LIKES.value,
+        }
     if "topic" in lowered or "recurring" in lowered:
-        return {"subject": "user", "predicate": "recurring_topic"}
+        return {
+            FactField.SUBJECT.value: _FactSubject.USER.value,
+            FactField.PREDICATE.value: _FactPredicate.RECURRING_TOPIC.value,
+        }
     if "command name" in lowered:
-        query = {"predicate": "command_name"}
+        query = {FactField.PREDICATE.value: _FactPredicate.COMMAND_NAME.value}
         if subject:
-            query["subject"] = subject
+            query[FactField.SUBJECT.value] = subject
         return query
     if "indexing strategy" in lowered:
-        query = {"predicate": "indexing_strategy"}
+        query = {FactField.PREDICATE.value: _FactPredicate.INDEXING_STRATEGY.value}
         if subject:
-            query["subject"] = subject
+            query[FactField.SUBJECT.value] = subject
         return query
     favorite = re.search(r"favorite\s+([A-Za-z0-9 _-]+)", lowered)
     if favorite:
-        return {"subject": "user", "predicate": f"favorite_{_normalize_predicate_part(favorite.group(1))}"}
+        return {
+            FactField.SUBJECT.value: _FactSubject.USER.value,
+            FactField.PREDICATE.value: (
+                f"{_FactPredicatePrefix.FAVORITE.value}"
+                f"{_normalize_predicate_part(favorite.group(1))}"
+            ),
+        }
     if "creator" in lowered or "who created" in lowered:
-        query = {"predicate": "creator"}
+        query = {FactField.PREDICATE.value: _FactPredicate.CREATOR.value}
         if subject:
-            query["subject"] = subject
+            query[FactField.SUBJECT.value] = subject
         return query
+    generic_attribute_query = _generic_attribute_query(question)
+    if generic_attribute_query is not None:
+        return generic_attribute_query
     return None
+
+
+def _generic_fact_projection_query(question: str) -> dict[str, str] | None:
+    if not _question_can_use_generic_fact_projection(question):
+        return None
+    return {_FactQueryKey.TEXT.value: question}
+
+
+def _question_can_use_generic_fact_projection(question: str) -> bool:
+    if _fact_question_needs_context(question):
+        return False
+    if not _looks_like_fact_projection_question(question):
+        return False
+    return bool(_fact_text_query_tokens(question))
+
+
+def _looks_like_fact_projection_question(question: str) -> bool:
+    normalized = question.strip().lower()
+    if not normalized:
+        return False
+    return "?" in normalized or normalized.startswith(
+        _GENERIC_FACT_PROJECTION_QUESTION_PREFIXES
+    )
+
+
+def _generic_attribute_query(question: str) -> dict[str, str] | None:
+    match = _GENERIC_ATTRIBUTE_QUESTION_RE.search(question)
+    if match is None:
+        return None
+    subject = _clean_generic_attribute_subject(match.group(FactField.SUBJECT.value))
+    if _should_skip_generic_attribute_question_subject(subject):
+        return None
+    return {
+        FactField.SUBJECT.value: subject,
+        FactField.PREDICATE.value: _FactPredicate.DESCRIPTION.value,
+    }
+
+
+def _clean_generic_attribute_subject(value: str) -> str:
+    stripped = _GENERIC_ATTRIBUTE_ARTICLE_RE.sub("", value.strip())
+    return _clean_fact_object(stripped)
+
+
+def _should_skip_generic_attribute_question_subject(subject: str) -> bool:
+    if not subject:
+        return True
+    subject_lower = subject.lower()
+    if subject_lower in {"i", "my", "the", "this"}:
+        return True
+    subject_tokens = set(_query_tokens(subject, limit=None))
+    return bool(subject_tokens.intersection(_NOISY_PROJECT_ATTRIBUTE_SUBJECT_TOKENS))
 
 
 def _question_project_subject(question: str) -> str | None:
@@ -4120,7 +4978,7 @@ def _question_project_subject(question: str) -> str | None:
 def _filter_facts_for_question(
     facts: list[dict[str, Any]], question: str, query: dict[str, str]
 ) -> list[dict[str, Any]]:
-    subject = query.get("subject")
+    subject = query.get(FactField.SUBJECT.value)
     if not subject:
         return facts
     subject_tokens = set(_query_tokens(subject))
@@ -4129,32 +4987,217 @@ def _filter_facts_for_question(
     filtered = [
         fact
         for fact in facts
-        if subject_tokens.issubset(set(_query_tokens(str(fact.get("subject", "")))))
+        if subject_tokens.issubset(
+            set(_query_tokens(str(fact.get(FactField.SUBJECT.value, ""))))
+        )
     ]
     if filtered:
         return filtered
+    subject_identity_tokens = _fact_identity_tokens(subject)
+    if subject_identity_tokens:
+        return []
     question_tokens = set(_query_tokens(question))
     return [
         fact
         for fact in facts
-        if set(_query_tokens(str(fact.get("subject", "")))).intersection(question_tokens)
+        if set(_query_tokens(str(fact.get(FactField.SUBJECT.value, "")))).intersection(
+            question_tokens
+        )
     ] or facts
+
+
+def _narrow_facts_for_question(
+    facts: list[dict[str, Any]], question: str, query: dict[str, str]
+) -> list[dict[str, Any]]:
+    if len(facts) < 2:
+        return facts
+    question_tokens = _specific_fact_question_tokens(question, query)
+    if not question_tokens:
+        return facts
+    scored = [
+        (_fact_question_overlap_score(fact, question_tokens), index, fact)
+        for index, fact in enumerate(facts)
+    ]
+    best_score = max(score for score, _index, _fact in scored)
+    if best_score <= 0:
+        return facts
+    narrowed = [fact for score, _index, fact in scored if score == best_score]
+    return narrowed if len(narrowed) < len(facts) else facts
+
+
+def _generic_fact_projection_candidates(
+    facts: list[dict[str, Any]], question: str
+) -> list[dict[str, Any]]:
+    active = [fact for fact in facts if fact.get(FactField.DELETED_AT.value) is None]
+    ranked = _rank_facts_by_text_query(
+        active, question, include_source_memory=False
+    )
+    ranked = _with_supersession_successors(ranked, active)
+    if len(ranked) < 2:
+        return ranked
+    return _best_fact_projection_group(
+        ranked, question, include_source_memory=False
+    )
+
+
+def _with_supersession_successors(
+    ranked: list[dict[str, Any]], facts: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    facts_by_id = {
+        str(fact.get(FactField.ID.value)): fact
+        for fact in facts
+        if fact.get(FactField.ID.value)
+    }
+    output: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for fact in ranked:
+        fact_id = str(fact.get(FactField.ID.value, ""))
+        if fact_id and fact_id not in seen:
+            output.append(fact)
+            seen.add(fact_id)
+        successor_id = str(fact.get(FactField.SUPERSEDED_BY.value) or "")
+        successor = facts_by_id.get(successor_id)
+        if successor is None or successor_id in seen:
+            continue
+        output.append(successor)
+        seen.add(successor_id)
+    return output
+
+
+def _best_fact_projection_group(
+    facts: list[dict[str, Any]],
+    question: str,
+    *,
+    include_source_memory: bool = True,
+) -> list[dict[str, Any]]:
+    query_tokens = _fact_text_query_tokens(question)
+    groups: dict[tuple[str, str], list[tuple[int, int, dict[str, Any]]]] = {}
+    for index, fact in enumerate(facts):
+        fact_tokens = set(
+            _query_tokens(
+                _fact_search_text(fact, include_source_memory=include_source_memory),
+                limit=None,
+            )
+        )
+        score = len(query_tokens.intersection(fact_tokens))
+        key = (
+            str(fact.get(FactField.SUBJECT.value, "")),
+            str(fact.get(FactField.PREDICATE.value, "")),
+        )
+        groups.setdefault(key, []).append((score, index, fact))
+    if not groups:
+        return []
+    best_group = min(
+        groups.values(),
+        key=lambda group: (
+            -max(score for score, _index, _fact in group),
+            -sum(score for score, _index, _fact in group),
+            min(index for _score, index, _fact in group),
+        ),
+    )
+    best_score = max(score for score, _index, _fact in best_group)
+    if best_score <= 0:
+        return []
+    return [fact for _score, _index, fact in best_group]
+
+
+def _specific_fact_question_tokens(question: str, query: dict[str, str]) -> set[str]:
+    predicate_tokens = set(
+        _query_tokens(
+            query.get(FactField.PREDICATE.value, "").replace("_", " "),
+            limit=None,
+        )
+    )
+    subject_tokens = set(
+        _query_tokens(query.get(FactField.SUBJECT.value, ""), limit=None)
+    )
+    ignored_tokens = _FACT_QUESTION_STOPWORDS | predicate_tokens | subject_tokens
+    return {
+        token
+        for token in _query_tokens(question, limit=None)
+        if token not in ignored_tokens
+    }
+
+
+def _fact_question_overlap_score(
+    fact: dict[str, Any], question_tokens: set[str]
+) -> int:
+    fact_tokens = set(_query_tokens(_fact_search_text(fact), limit=None))
+    return len(question_tokens.intersection(fact_tokens))
+
+
+def _fact_search_text(
+    fact: dict[str, Any], *, include_source_memory: bool = True
+) -> str:
+    parts = [
+        str(fact.get(FactField.SUBJECT.value, "")),
+        str(fact.get(FactField.PREDICATE.value, "")).replace("_", " "),
+        str(fact.get(FactField.OBJECT.value, "")),
+        str(fact.get(FactField.OBJECT_NORMALIZED.value, "")),
+        str(fact.get(FactField.SOURCE_CONVERSATION_ID.value, "")),
+    ]
+    if include_source_memory:
+        conversation = _source_conversation_for_fact(fact)
+        if isinstance(conversation, dict):
+            parts.append(_conversation_search_text(conversation))
+    return " ".join(parts)
+
+
+def _rank_facts_by_text_query(
+    facts: list[dict[str, Any]],
+    query: str | None,
+    *,
+    include_source_memory: bool = True,
+) -> list[dict[str, Any]]:
+    if not query:
+        return facts
+    query_tokens = _fact_text_query_tokens(query)
+    if not query_tokens:
+        return facts
+    identity_tokens = _fact_identity_tokens(query)
+    minimum_overlap = _minimum_fact_text_query_overlap(query_tokens)
+    scored: list[tuple[int, int, dict[str, Any]]] = []
+    for index, fact in enumerate(facts):
+        fact_text = _fact_search_text(
+            fact, include_source_memory=include_source_memory
+        )
+        fact_tokens = set(_query_tokens(fact_text, limit=None))
+        if identity_tokens and not identity_tokens.issubset(fact_tokens):
+            continue
+        overlap = len(query_tokens.intersection(fact_tokens))
+        if overlap < minimum_overlap:
+            continue
+        scored.append((overlap, index, fact))
+    return [fact for _score, _index, fact in sorted(scored, key=lambda row: (-row[0], row[1]))]
+
+
+def _fact_text_query_tokens(query: str) -> set[str]:
+    tokens = _query_tokens(query, limit=None)
+    meaningful = {token for token in tokens if token not in _FACT_QUESTION_STOPWORDS}
+    return meaningful or set(tokens)
+
+
+def _fact_identity_tokens(query: str) -> set[str]:
+    return {
+        token
+        for token in _query_tokens(query, limit=None)
+        if _is_fact_identity_token(token)
+    }
+
+
+def _is_fact_identity_token(token: str) -> bool:
+    return any(char.isdigit() for char in token) or "-" in token or "_" in token
+
+
+def _minimum_fact_text_query_overlap(query_tokens: set[str]) -> int:
+    if len(query_tokens) <= 2:
+        return 1
+    return max(2, (len(query_tokens) + 1) // 2)
 
 
 def _fact_question_needs_context(question: str) -> bool:
     lowered = question.lower()
     return any(term in lowered for term in ("context", "source", "why", "when", "where did", "discuss"))
-
-
-def _superseded_facts_for_active(
-    active: list[dict[str, Any]], all_facts: list[dict[str, Any]]
-) -> list[dict[str, Any]]:
-    active_ids = {str(fact.get("id")) for fact in active}
-    return [
-        fact
-        for fact in all_facts
-        if str(fact.get("superseded_by")) in active_ids and not fact.get("deleted_at")
-    ]
 
 
 def _search_facts(
@@ -4188,11 +5231,11 @@ def _search_facts(
         fact
         for fact in facts
         if isinstance(fact, dict)
-        and (subject is None or str(fact.get("subject")) == subject)
-        and (predicate is None or str(fact.get("predicate")) == predicate)
+        and (subject is None or str(fact.get(FactField.SUBJECT.value)) == subject)
+        and (predicate is None or str(fact.get(FactField.PREDICATE.value)) == predicate)
         and _fact_allowed(fact, owner_id, project_id)
         and _fact_matches_filters(fact, conversation_filters, fact_filters)
-        and not fact.get("deleted_at")
+        and not fact.get(FactField.DELETED_AT.value)
     ]
 
 
@@ -4201,29 +5244,44 @@ def _fact_matches_filters(
     conversation_filters: ConversationFilters,
     fact_filters: FactFilters,
 ) -> bool:
-    if fact_filters.status == "active" and fact.get("superseded_by"):
+    if fact_filters.status == "active" and fact.get(FactField.SUPERSEDED_BY.value):
         return False
-    if fact_filters.status == "superseded" and not fact.get("superseded_by"):
+    if fact_filters.status == "superseded" and not fact.get(FactField.SUPERSEDED_BY.value):
         return False
-    if fact_filters.confidence and str(fact.get("confidence")) != fact_filters.confidence:
+    if (
+        fact_filters.confidence
+        and str(fact.get(FactField.CONFIDENCE.value)) != fact_filters.confidence
+    ):
         return False
-    if fact_filters.source_quality and str(fact.get("source_quality")) != fact_filters.source_quality:
+    if (
+        fact_filters.source_quality
+        and str(fact.get(FactField.SOURCE_QUALITY.value)) != fact_filters.source_quality
+    ):
         return False
-    if fact_filters.save_intent and _fact_qualifier_value(fact, "save_intent") != fact_filters.save_intent:
+    if (
+        fact_filters.save_intent
+        and _fact_qualifier_value(fact, _FactQualifierKey.SAVE_INTENT.value)
+        != fact_filters.save_intent
+    ):
         return False
     if (
         fact_filters.save_intent_source
-        and _fact_qualifier_value(fact, "save_intent_source") != fact_filters.save_intent_source
+        and _fact_qualifier_value(fact, _FactQualifierKey.SAVE_INTENT_SOURCE.value)
+        != fact_filters.save_intent_source
     ):
         return False
     if not _datetime_in_range(
-        str(fact.get("created_at", "")),
+        str(fact.get(FactField.CREATED_AT.value, "")),
         date_from=fact_filters.date_from,
         date_to=fact_filters.date_to,
         field_name="fact.created_at",
     ):
         return False
-    freshness = fact.get("last_confirmed_at") or fact.get("updated_at") or fact.get("created_at")
+    freshness = (
+        fact.get(FactField.LAST_CONFIRMED_AT.value)
+        or fact.get(FactField.UPDATED_AT.value)
+        or fact.get(FactField.CREATED_AT.value)
+    )
     if not _datetime_in_range(
         str(freshness or ""),
         date_from=fact_filters.freshness_from,
@@ -4241,7 +5299,7 @@ def _fact_matches_filters(
                 tags=conversation_filters.tags,
                 thread_id=conversation_filters.thread_id,
             )
-        conversation = _runtime().metadata_store.get(str(fact.get("source_conversation_id", "")))
+        conversation = _source_conversation_for_fact(fact)
         if not _conversation_matches_filters(conversation, source_filters):
             return False
     return True
@@ -4249,6 +5307,7 @@ def _fact_matches_filters(
 
 def fact_search(
     *,
+    query: str | None = None,
     subject: str | None = None,
     predicate: str | None = None,
     include_superseded: bool = False,
@@ -4266,6 +5325,7 @@ def fact_search(
     freshness_to: str | None = None,
 ) -> dict[str, Any]:
     fact_filters = FactFilters.from_options(
+        query=query,
         source=source,
         date_from=date_from,
         date_to=date_to,
@@ -4301,12 +5361,16 @@ def fact_search(
         facts = [
             fact for fact in facts
             if isinstance(fact, dict)
-            and (subject is None or str(fact.get("subject")) == subject)
-            and (predicate is None or str(fact.get("predicate")) == predicate)
+            and (subject is None or str(fact.get(FactField.SUBJECT.value)) == subject)
+            and (
+                predicate is None
+                or str(fact.get(FactField.PREDICATE.value)) == predicate
+            )
             and _fact_allowed(fact, owner_id, effective_project_id)
             and _fact_matches_filters(fact, ConversationFilters(), fact_filters)
-            and not fact.get("deleted_at")
+            and not fact.get(FactField.DELETED_AT.value)
         ]
+    facts = _rank_facts_by_text_query(facts, fact_filters.query)
     return {"status": "ok", "results": [_public_fact(fact) for fact in facts]}
 
 
@@ -4764,22 +5828,18 @@ def _fact_answer_text(
     question: str,
     facts: list[dict[str, Any]],
     *,
-    superseded: list[dict[str, Any]] | None = None,
     conflict: bool,
 ) -> str:
-    objects = [str(fact.get("object_normalized") or fact.get("object", "")) for fact in facts]
+    _ = question
+    objects = [
+        str(fact.get(FactField.OBJECT_NORMALIZED.value) or fact.get(FactField.OBJECT.value, ""))
+        for fact in facts
+    ]
     if conflict:
         return "Stored facts disagree: " + "; ".join(objects)
-    if "guitar" in question.lower():
-        answer = f"You own {objects[0]}."
-    elif len(objects) > 1:
-        answer = "; ".join(objects)
-    else:
-        answer = objects[0]
-    if superseded:
-        old = "; ".join(str(fact.get("object_normalized") or fact.get("object", "")) for fact in superseded)
-        answer += f" Correction noted: earlier memory said {old}."
-    return answer
+    if len(objects) > 1:
+        return "; ".join(objects)
+    return objects[0]
 
 
 def _profile_summary(
@@ -4790,10 +5850,10 @@ def _profile_summary(
     project_id: str | None,
     filters: dict[str, Any],
 ) -> dict[str, Any]:
-    active_facts = [fact for fact in facts if not fact.get("superseded_by")]
+    active_facts = [fact for fact in facts if not fact.get(FactField.SUPERSEDED_BY.value)]
     freshest_at = _freshest_fact_timestamp(active_facts)
-    source_quality_counts = _count_values(active_facts, "source_quality")
-    confidence_counts = _count_values(active_facts, "confidence")
+    source_quality_counts = _count_values(active_facts, FactField.SOURCE_QUALITY.value)
+    confidence_counts = _count_values(active_facts, FactField.CONFIDENCE.value)
     text = _profile_summary_text(active_facts)
     summary = GeneratedSummary(
         id=_generated_summary_id(
@@ -4817,11 +5877,15 @@ def _profile_summary(
         filters={key: str(value) for key, value in filters.items() if value is not None},
         provenance=[
             GeneratedSummaryProvenance(
-                fact_id=_optional_string(fact.get("id")),
-                predicate=_optional_string(fact.get("predicate")),
-                source_conversation_id=_optional_string(fact.get("source_conversation_id")),
+                fact_id=_optional_string(fact.get(FactField.ID.value)),
+                predicate=_optional_string(fact.get(FactField.PREDICATE.value)),
+                source_conversation_id=_optional_string(
+                    fact.get(FactField.SOURCE_CONVERSATION_ID.value)
+                ),
                 source_message_indexes=_source_message_indexes(fact),
-                last_confirmed_at=_optional_string(fact.get("last_confirmed_at")),
+                last_confirmed_at=_optional_string(
+                    fact.get(FactField.LAST_CONFIRMED_AT.value)
+                ),
             )
             for fact in active_facts
         ],
@@ -5096,24 +6160,61 @@ def _get_conversation_summary(conversation: dict[str, Any]) -> dict[str, Any] | 
 
 def _profile_summary_text(facts: list[dict[str, Any]]) -> str:
     if not facts:
-        return "No active profile facts match the requested filters."
-    lines: list[str] = []
-    for fact in facts[:12]:
-        predicate = str(fact.get("predicate", "fact"))
-        value = str(fact.get("object_normalized") or fact.get("object", ""))
-        if value:
-            lines.append(f"{predicate}: {value}")
-    remaining = len(facts) - len(lines)
+        return _PROFILE_SUMMARY_EMPTY_TEXT
+    summary_lines = _unique_profile_summary_lines(facts)
+    if not summary_lines:
+        return _PROFILE_SUMMARY_EMPTY_TEXT
+    displayed = summary_lines[:_PROFILE_SUMMARY_FACT_LIMIT]
+    lines = [f"{line.predicate}: {line.value}" for line in displayed]
+    remaining = len(summary_lines) - len(displayed)
     if remaining > 0:
         lines.append(f"{remaining} more active fact(s).")
     return "; ".join(lines)
 
 
+def _unique_profile_summary_lines(facts: list[dict[str, Any]]) -> list[_ProfileSummaryLine]:
+    lines: list[_ProfileSummaryLine] = []
+    seen: set[tuple[str, str]] = set()
+    for fact in facts:
+        predicate = str(
+            fact.get(
+                FactField.PREDICATE.value,
+                _PROFILE_SUMMARY_FALLBACK_PREDICATE,
+            )
+        )
+        value = _profile_summary_fact_value(fact)
+        if not value:
+            continue
+        key = (predicate.casefold(), value.casefold())
+        if key in seen:
+            continue
+        seen.add(key)
+        lines.append(_ProfileSummaryLine(predicate=predicate, value=value))
+    return lines
+
+
+def _profile_summary_fact_value(fact: dict[str, Any]) -> str:
+    return str(
+        fact.get(FactField.OBJECT_NORMALIZED.value)
+        or fact.get(FactField.OBJECT.value, "")
+    ).strip()
+
+
 def _freshest_fact_timestamp(facts: list[dict[str, Any]]) -> str | None:
     timestamps = [
-        str(fact.get("last_confirmed_at") or fact.get("updated_at") or fact.get("created_at"))
+        str(
+            fact.get(FactField.STORED_AT.value)
+            or fact.get(FactField.LAST_CONFIRMED_AT.value)
+            or fact.get(FactField.UPDATED_AT.value)
+            or fact.get(FactField.CREATED_AT.value)
+        )
         for fact in facts
-        if fact.get("last_confirmed_at") or fact.get("updated_at") or fact.get("created_at")
+        if (
+            fact.get(FactField.STORED_AT.value)
+            or fact.get(FactField.LAST_CONFIRMED_AT.value)
+            or fact.get(FactField.UPDATED_AT.value)
+            or fact.get(FactField.CREATED_AT.value)
+        )
     ]
     return max(timestamps) if timestamps else None
 
@@ -5136,7 +6237,7 @@ def _optional_string(value: Any) -> str | None:
 
 
 def _source_message_indexes(fact: dict[str, Any]) -> list[int]:
-    indexes = fact.get("source_message_indexes", [])
+    indexes = fact.get(FactField.SOURCE_MESSAGE_INDEXES.value, [])
     if not isinstance(indexes, list):
         return []
     parsed: list[int] = []
@@ -5181,36 +6282,63 @@ def _store_generated_summary(summary: dict[str, Any]) -> None:
 def _public_fact(fact: dict[str, Any]) -> dict[str, Any]:
     public = dict(fact)
     computed_source_quality = _source_quality_for_fact(public)
-    if not public.get("source_quality") or computed_source_quality == "corrected_by_user":
-        public["source_quality"] = computed_source_quality
-    if not public.get("confidence_reason") or computed_source_quality == "corrected_by_user":
-        public["confidence_reason"] = _confidence_reason_for_fact(public)
-    if not public.get("last_confirmed_at"):
-        public["last_confirmed_at"] = public.get("updated_at") or public.get("created_at")
-    if not public.get("object_raw"):
-        public["object_raw"] = public.get("object")
-    if not public.get("object_normalized"):
-        public["object_normalized"] = _normalized_fact_object(public)
+    if (
+        not public.get(FactField.SOURCE_QUALITY.value)
+        or computed_source_quality == "corrected_by_user"
+    ):
+        public[FactField.SOURCE_QUALITY.value] = computed_source_quality
+    if (
+        not public.get(FactField.CONFIDENCE_REASON.value)
+        or computed_source_quality == "corrected_by_user"
+    ):
+        public[FactField.CONFIDENCE_REASON.value] = _confidence_reason_for_fact(public)
+    if not public.get(FactField.LAST_CONFIRMED_AT.value):
+        public[FactField.LAST_CONFIRMED_AT.value] = public.get(
+            FactField.UPDATED_AT.value
+        ) or public.get(FactField.CREATED_AT.value)
+    if not public.get(FactField.OBJECT_RAW.value):
+        public[FactField.OBJECT_RAW.value] = public.get(FactField.OBJECT.value)
+    if not public.get(FactField.OBJECT_NORMALIZED.value):
+        public[FactField.OBJECT_NORMALIZED.value] = _normalized_fact_object(public)
     public.update(_fact_save_intent_fields(public))
-    public.setdefault("superseded_at", None)
+    public.update(temporal_fact_source_metadata(public, _source_conversation_for_fact(public)))
+    public.setdefault(FactField.SUPERSEDED_AT.value, None)
     return public
 
 
+def _source_conversation_for_fact(fact: dict[str, Any]) -> dict[str, Any] | None:
+    conversation_id = fact.get(FactField.SOURCE_CONVERSATION_ID.value)
+    if not isinstance(conversation_id, str) or not conversation_id.strip():
+        return None
+    conversation = _runtime().metadata_store.get(conversation_id)
+    return conversation if isinstance(conversation, dict) else None
+
+
 def _source_quality_for_fact(fact: dict[str, Any]) -> str:
-    qualifiers = fact.get("qualifiers")
-    source_role = qualifiers.get("source_role") if isinstance(qualifiers, dict) else None
-    if isinstance(qualifiers, dict) and qualifiers.get("corrects") and source_role != "assistant":
+    qualifiers = fact.get(FactField.QUALIFIERS.value)
+    source_role = (
+        qualifiers.get(_FactQualifierKey.SOURCE_ROLE.value)
+        if isinstance(qualifiers, dict)
+        else None
+    )
+    if (
+        isinstance(qualifiers, dict)
+        and qualifiers.get(_FactQualifierKey.CORRECTS.value)
+        and source_role != _FactSourceRole.ASSISTANT.value
+    ):
         return "corrected_by_user"
-    if fact.get("predicate") == "recurring_topic":
+    if fact.get(FactField.PREDICATE.value) == "recurring_topic":
         return "inferred_from_conversation"
-    if source_role == "assistant":
+    if source_role == _FactSourceRole.ASSISTANT.value:
         return "assistant_statement"
     return "direct_user_statement"
 
 
 def _confidence_reason_for_fact(fact: dict[str, Any]) -> str:
-    source_quality = str(fact.get("source_quality") or _source_quality_for_fact(fact))
-    if _fact_qualifier_value(fact, "save_intent") == "client_auto_save":
+    source_quality = str(
+        fact.get(FactField.SOURCE_QUALITY.value) or _source_quality_for_fact(fact)
+    )
+    if _fact_qualifier_value(fact, _FactQualifierKey.SAVE_INTENT.value) == "client_auto_save":
         return "Extracted from client auto-save memory, so confidence is reduced."
     if source_quality == "corrected_by_user":
         return "Extracted from a direct user correction."
@@ -5224,8 +6352,8 @@ def _confidence_reason_for_fact(fact: dict[str, Any]) -> str:
 
 
 def _confidence_reason_for_facts(facts: list[dict[str, Any]], basis: str) -> str:
-    if basis == "conflict":
-        return "Multiple active facts match the question but disagree."
+    if basis == _AskAnswerBasis.CONFLICT.value:
+        return "Multiple latest facts match the question at the same timestamp but disagree."
     if not facts:
         return "No matching facts were used."
     reasons = _unique_strings([str(fact.get("confidence_reason", "")) for fact in facts])
@@ -5234,8 +6362,8 @@ def _confidence_reason_for_facts(facts: list[dict[str, Any]], basis: str) -> str
 
 def _normalized_fact_object(fact: dict[str, Any]) -> str:
     normalized, _ = _normalize_fact_object(
-        predicate=str(fact.get("predicate", "")),
-        object_value=str(fact.get("object", "")),
+        predicate=str(fact.get(FactField.PREDICATE.value, "")),
+        object_value=str(fact.get(FactField.OBJECT.value, "")),
     )
     return normalized
 
@@ -5317,23 +6445,33 @@ def _title_case_name(value: str) -> str:
 
 def _fact_evidence(fact: dict[str, Any], *, used_in_answer: bool) -> dict[str, Any]:
     evidence = {
-        "type": "fact",
-        "fact_id": fact.get("id"),
-        "subject": fact.get("subject"),
-        "predicate": fact.get("predicate"),
-        "object_raw": fact.get("object_raw", fact.get("object")),
-        "object_normalized": fact.get("object_normalized", fact.get("object")),
-        "confidence": fact.get("confidence"),
-        "confidence_reason": fact.get("confidence_reason"),
-        "source_quality": fact.get("source_quality"),
-        "source_conversation_id": fact.get("source_conversation_id"),
-        "source_message_indexes": fact.get("source_message_indexes", []),
-        "created_at": fact.get("created_at"),
-        "updated_at": fact.get("updated_at"),
-        "last_confirmed_at": fact.get("last_confirmed_at"),
-        "superseded_by": fact.get("superseded_by"),
-        "superseded_at": fact.get("superseded_at"),
-        "deleted_at": fact.get("deleted_at"),
+        "type": _FactEvidenceType.FACT.value,
+        "fact_id": fact.get(FactField.ID.value),
+        FactField.SUBJECT.value: fact.get(FactField.SUBJECT.value),
+        FactField.PREDICATE.value: fact.get(FactField.PREDICATE.value),
+        FactField.OBJECT_RAW.value: fact.get(
+            FactField.OBJECT_RAW.value, fact.get(FactField.OBJECT.value)
+        ),
+        FactField.OBJECT_NORMALIZED.value: fact.get(
+            FactField.OBJECT_NORMALIZED.value, fact.get(FactField.OBJECT.value)
+        ),
+        FactField.CONFIDENCE.value: fact.get(FactField.CONFIDENCE.value),
+        FactField.CONFIDENCE_REASON.value: fact.get(FactField.CONFIDENCE_REASON.value),
+        FactField.SOURCE_QUALITY.value: fact.get(FactField.SOURCE_QUALITY.value),
+        FactField.SOURCE_CONVERSATION_ID.value: fact.get(
+            FactField.SOURCE_CONVERSATION_ID.value
+        ),
+        FactField.SOURCE_MESSAGE_INDEXES.value: fact.get(
+            FactField.SOURCE_MESSAGE_INDEXES.value, []
+        ),
+        FactField.CREATED_AT.value: fact.get(FactField.CREATED_AT.value),
+        FactField.UPDATED_AT.value: fact.get(FactField.UPDATED_AT.value),
+        FactField.LAST_CONFIRMED_AT.value: fact.get(FactField.LAST_CONFIRMED_AT.value),
+        FactField.STORED_AT.value: fact.get(FactField.STORED_AT.value),
+        FactField.AUTHOR.value: fact.get(FactField.AUTHOR.value),
+        FactField.SUPERSEDED_BY.value: fact.get(FactField.SUPERSEDED_BY.value),
+        FactField.SUPERSEDED_AT.value: fact.get(FactField.SUPERSEDED_AT.value),
+        FactField.DELETED_AT.value: fact.get(FactField.DELETED_AT.value),
         "used_in_answer": used_in_answer,
     }
     evidence.update(_fact_save_intent_fields(fact))
@@ -5342,13 +6480,17 @@ def _fact_evidence(fact: dict[str, Any], *, used_in_answer: bool) -> dict[str, A
 
 def _fact_citation(fact: dict[str, Any]) -> dict[str, Any]:
     citation = {
-        "id": fact.get("source_conversation_id"),
-        "fact_id": fact.get("id"),
-        "predicate": fact.get("predicate"),
-        "text": fact.get("object_normalized", fact.get("object")),
-        "source_quality": fact.get("source_quality"),
-        "confidence_reason": fact.get("confidence_reason"),
-        "last_confirmed_at": fact.get("last_confirmed_at"),
+        "id": fact.get(FactField.SOURCE_CONVERSATION_ID.value),
+        "fact_id": fact.get(FactField.ID.value),
+        FactField.PREDICATE.value: fact.get(FactField.PREDICATE.value),
+        "text": fact.get(
+            FactField.OBJECT_NORMALIZED.value, fact.get(FactField.OBJECT.value)
+        ),
+        FactField.SOURCE_QUALITY.value: fact.get(FactField.SOURCE_QUALITY.value),
+        FactField.CONFIDENCE_REASON.value: fact.get(FactField.CONFIDENCE_REASON.value),
+        FactField.LAST_CONFIRMED_AT.value: fact.get(FactField.LAST_CONFIRMED_AT.value),
+        FactField.STORED_AT.value: fact.get(FactField.STORED_AT.value),
+        FactField.AUTHOR.value: fact.get(FactField.AUTHOR.value),
     }
     citation.update(_fact_save_intent_fields(fact))
     return citation
@@ -5357,40 +6499,56 @@ def _fact_citation(fact: dict[str, Any]) -> dict[str, Any]:
 def _provenance_from_facts(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
     grouped: dict[str, dict[str, Any]] = {}
     for fact in facts:
-        conversation_id = str(fact.get("source_conversation_id", ""))
+        conversation_id = str(fact.get(FactField.SOURCE_CONVERSATION_ID.value, ""))
         item = grouped.setdefault(
             conversation_id,
             {
                 "conversation_id": conversation_id,
-                "source": None,
+                "source": fact.get(FactField.AUTHOR.value),
                 "title": None,
-                "stored_at": None,
+                "stored_at": fact.get(FactField.STORED_AT.value),
                 "matching_chunks": 0,
                 "used_in_answer": True,
                 "save_intents": [],
                 "save_intent_sources": [],
             },
         )
+        conversation = _source_conversation_for_fact(fact)
+        if conversation is not None:
+            item["source"] = conversation.get(MemoryField.SOURCE.value)
+            item["title"] = conversation.get("title")
+            item["stored_at"] = conversation.get(MemoryField.TIMESTAMP.value)
         item["matching_chunks"] += 1
-        save_intent = _fact_qualifier_value(fact, "save_intent")
+        save_intent = _fact_qualifier_value(fact, _FactQualifierKey.SAVE_INTENT.value)
         if save_intent and save_intent not in item["save_intents"]:
             item["save_intents"].append(save_intent)
-        save_intent_source = _fact_qualifier_value(fact, "save_intent_source")
+        save_intent_source = _fact_qualifier_value(
+            fact, _FactQualifierKey.SAVE_INTENT_SOURCE.value
+        )
         if save_intent_source and save_intent_source not in item["save_intent_sources"]:
             item["save_intent_sources"].append(save_intent_source)
     return list(grouped.values())
 
 
 def _apply_in_memory_fact_supersession(active: list[dict[str, Any]], new_fact: dict[str, Any]) -> None:
-    corrects = str(new_fact.get("qualifiers", {}).get("corrects", ""))
+    qualifiers = new_fact.get(FactField.QUALIFIERS.value, {})
+    corrects = (
+        str(qualifiers.get(_FactQualifierKey.CORRECTS.value, ""))
+        if isinstance(qualifiers, dict)
+        else ""
+    )
     for fact in active:
-        if fact.get("subject") != new_fact.get("subject") or fact.get("predicate") != new_fact.get("predicate"):
+        if (
+            fact.get(FactField.SUBJECT.value) != new_fact.get(FactField.SUBJECT.value)
+            or fact.get(FactField.PREDICATE.value)
+            != new_fact.get(FactField.PREDICATE.value)
+        ):
             continue
-        if corrects and corrects.lower() in str(fact.get("object", "")).lower():
+        if corrects and corrects.lower() in str(fact.get(FactField.OBJECT.value, "")).lower():
             now = _utc_now_iso()
-            fact["superseded_by"] = new_fact["id"]
-            fact["superseded_at"] = now
-            fact["updated_at"] = now
+            fact[FactField.SUPERSEDED_BY.value] = new_fact[FactField.ID.value]
+            fact[FactField.SUPERSEDED_AT.value] = now
+            fact[FactField.UPDATED_AT.value] = now
 
 
 def _dedupe_facts(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -5407,8 +6565,8 @@ def _dedupe_facts(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def _owned_item_predicate(object_value: str) -> str:
     lowered = object_value.lower()
     if "guitar" in lowered or "gibson" in lowered:
-        return "owns_guitar"
-    return "owns_item"
+        return _FactPredicate.OWNS_GUITAR.value
+    return _FactPredicate.OWNS_ITEM.value
 
 
 def _owned_item_qualifiers(object_value: str) -> dict[str, Any]:

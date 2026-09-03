@@ -8,8 +8,7 @@ Use three human-facing examples:
 2. **Local stack**: `local-stack`.
    This is the full local-server setup for Postgres metadata, PGVector vectors,
    Ollama embeddings, Google OAuth, and a public HTTPS URL for remote agents.
-   The included OAuth template uses ngrok as a local-host-friendly tunnel
-   example, but any stable HTTPS reverse proxy or tunnel can use the same
+   Any stable HTTPS reverse proxy or tunnel can use the same
    pattern.
 3. **Kubernetes local bearer stack**: `k3s-local`.
    This is the private LAN/VPN-oriented Kubernetes setup for a Raspberry Pi,
@@ -48,10 +47,10 @@ cd examples/local-stack
 docker compose up --build
 ```
 
-For the OAuth path, set `AMH_CONFIG_FILE=config.oauth-ngrok.yaml`, replace the
-placeholder ngrok URL in that config with your active public HTTPS base URL, and
-export the Google/OAuth secrets required by `compose.yaml`. If you use something
-other than ngrok, keep `public_base_url`, callback URLs, and the Google redirect
+For the OAuth path, set `AMH_CONFIG_FILE=config.oauth-public.yaml`, replace the
+placeholder URL in that config with your active public HTTPS base URL, and
+export the Google/OAuth secrets required by `compose.yaml`.
+Keep `public_base_url`, callback URLs, and the Google redirect
 URI pointed at that same HTTPS origin.
 
 ## Kubernetes Local Bearer Stack

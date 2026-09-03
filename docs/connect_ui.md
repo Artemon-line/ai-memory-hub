@@ -260,9 +260,9 @@ export GOOGLE_CLIENT_SECRET="your-google-client-secret"
 export AMH_OAUTH_JWT_SECRET="$(openssl rand -base64 48)"
 export AMH_SESSION_SECRET="$(openssl rand -base64 48)"
 cd examples/local-stack
-export PUBLIC_BASE_URL="https://YOUR-NGROK-DOMAIN.ngrok-free.app"
-sed "s#https://YOUR-NGROK-DOMAIN.ngrok-free.app#${PUBLIC_BASE_URL}#g" \
-  config.oauth-ngrok.yaml > config.oauth-local.yaml
+export PUBLIC_BASE_URL="https://YOUR-CUSTOM-DOMAIN.app"
+sed "s#https://YOUR-CUSTOM-DOMAIN.app#${PUBLIC_BASE_URL}#g" \
+  config.oauth-public.yaml > config.oauth-local.yaml
 export AMH_CONFIG_FILE=config.oauth-local.yaml
 docker compose up --build
 ```
@@ -270,21 +270,20 @@ docker compose up --build
 Open:
 
 ```text {.amh-copy-block}
-https://YOUR-NGROK-DOMAIN.ngrok-free.app/connect
+https://YOUR-CUSTOM-DOMAIN.app/connect
 ```
 
-The included template uses ngrok because it is convenient for a local machine.
 Any stable HTTPS tunnel or reverse proxy works if the public base URL and Google
 redirect URI match. Before starting Compose, generate a local config from
-`examples/local-stack/config.oauth-ngrok.yaml` with the active HTTPS URL and
+`examples/local-stack/config.oauth-public.yaml` with the active HTTPS URL and
 register the matching Google redirect URI:
 
 ```text {.amh-copy-block}
-https://YOUR-NGROK-DOMAIN.ngrok-free.app/auth/google/callback
+https://YOUR-CUSTOM-DOMAIN.app/auth/google/callback
 ```
 
 After startup, `/connect` should display the active public MCP URL, not
-`YOUR-NGROK-DOMAIN`. If the placeholder is still visible, the hub will advertise
+`YOUR-CUSTOM-DOMAIN`. If the placeholder is still visible, the hub will advertise
 the wrong OAuth metadata to clients and Google token exchange can fail because
 the callback URL no longer matches the OAuth client.
 
@@ -299,8 +298,8 @@ Restart behavior:
 ## Client Verification Matrix
 
 The Connect UI can render snippets before every client has been verified
-against the current local release. Keep snippets labeled `Unverified` until the
-exact command or config has been tested.
+against the current local release. Keep untested snippets labeled `Unverified`
+until the exact command or config has been tested.
 
 <div class="amh-client-matrix">
 <article>
@@ -342,6 +341,28 @@ exact command or config has been tested.
 <h3>OpenClaw <span class="pending">Unverified</span></h3>
 <code>openclaw mcp add ai-memory-hub-local --url &lt;mcp-url&gt; --transport streamable-http --auth oauth</code>
 <p>Then run `openclaw mcp login ai-memory-hub-local`. After approval, run `openclaw mcp login ai-memory-hub-local --code &lt;code&gt;`.</p>
+</article>
+<article>
+<h3>Droid <span>Verified</span></h3>
+<code>droid mcp add ai-memory-hub-local &lt;mcp-url&gt; --type http</code>
+<p>Verified locally for streamable HTTP setup with Droid's HTTP MCP add command.</p>
+</article>
+<article>
+<h3>DeepSeek Harness <span class="pending">Unverified</span></h3>
+<pre><code>- id: ai-memory-hub-local
+  name: '@deepseek-ai/dsh-mcp-client'
+  config:
+    serverName: ai-memory-hub-local
+    transport: streamable-http
+    url: &lt;mcp-url&gt;
+    headers:
+      Authorization: !!js '`Bearer ${process.env.MCP_TOKEN}`'</code></pre>
+<p>Use an environment variable for the token if the harness requires a bearer header.</p>
+</article>
+<article>
+<h3>Qwen Code <span class="pending">Unverified</span></h3>
+<code>qwen mcp add --transport http ai-memory-hub-local &lt;mcp-url&gt;</code>
+<p>Based on the <a href="https://qwenlm.github.io/qwen-code-docs/en/users/features/mcp/#adding-a-server-qwen-mcp-add">Qwen Code documented HTTP MCP command form</a>; keep labeled unverified until tested against ai-memory-hub.</p>
 </article>
 </div>
 

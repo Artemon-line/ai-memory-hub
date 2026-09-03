@@ -24,8 +24,12 @@ from memory.backend.errors import (
 from memory.backend.log_safety import redact_secrets
 from memory.backend.metadata_store import (
     LOCAL_DEFAULT_PROJECT_ID,
+    IndexChunkField,
+    IndexState,
+    MetadataField,
     SQLiteMetadataStore,
     _default_project_id,
+    update_index_chunks_payload,
 )
 from memory.backend.mongodb_metadata_store import MongoDBMetadataStore
 from memory.backend.postgres_metadata_store import PostgresMetadataStore
@@ -329,7 +333,7 @@ def test_sqlite_metadata_store_tracks_index_chunk_manifest(tmp_path: Path) -> No
                     "message_hash": "sha256:" + "a" * 64,
                     "role": "user",
                     "text": "alpha beta",
-                    "index_state": "pending_index",
+                    "index_state": IndexState.PENDING.value,
                 },
                 {
                     "chunk_id": "d9fd4c95-9cb3-4fd5-b967-3027f8863210:1:sha256:" + "a" * 64,
@@ -337,7 +341,7 @@ def test_sqlite_metadata_store_tracks_index_chunk_manifest(tmp_path: Path) -> No
                     "message_hash": "sha256:" + "a" * 64,
                     "role": "user",
                     "text": "beta gamma",
-                    "index_state": "pending_index",
+                    "index_state": IndexState.PENDING.value,
                 },
             ],
         },
@@ -348,10 +352,103 @@ def test_sqlite_metadata_store_tracks_index_chunk_manifest(tmp_path: Path) -> No
 
     store.mark_chunks_indexed(
         memory_id,
-        [chunk["chunk_id"] for chunk in conversation["metadata"]["index_chunks"]],
+        [
+            chunk[IndexChunkField.CHUNK_ID.value]
+            for chunk in conversation["metadata"][MetadataField.INDEX_CHUNKS.value]
+        ],
     )
 
     assert store.is_fully_indexed(memory_id) is True
+    stored = store.get(memory_id)
+    assert stored is not None
+    index_chunks = stored["metadata"][MetadataField.INDEX_CHUNKS.value]
+    assert {chunk[IndexChunkField.INDEX_STATE.value] for chunk in index_chunks} == {
+        IndexState.INDEXED.value
+    }
+
+    first_chunk_id = conversation["metadata"][MetadataField.INDEX_CHUNKS.value][0][
+        IndexChunkField.CHUNK_ID.value
+    ]
+    store.mark_chunks_indexing_failed(memory_id, [first_chunk_id])
+
+    stored = store.get(memory_id)
+    assert stored is not None
+    index_chunks = stored["metadata"][MetadataField.INDEX_CHUNKS.value]
+    assert index_chunks[0][IndexChunkField.INDEX_STATE.value] == IndexState.FAILED.value
+    assert index_chunks[1][IndexChunkField.INDEX_STATE.value] == IndexState.INDEXED.value
+
+
+def test_update_index_chunks_payload_matches_legacy_rows_by_chunk_index() -> None:
+    memory_id = "d9fd4c95-9cb3-4fd5-b967-3027f8863210"
+    chunk_id = f"{memory_id}:0:sha256:{'a' * 64}"
+    conversation = {
+        "id": memory_id,
+        "metadata": {
+            "index_chunks": [
+                {
+                    "chunk_index": 0,
+                    "message_hash": "sha256:" + "a" * 64,
+                    "role": "user",
+                    "text": "alpha beta",
+                    "index_state": IndexState.PENDING.value,
+                }
+            ]
+        },
+    }
+
+    updated = update_index_chunks_payload(
+        conversation,
+        chunk_ids=[chunk_id],
+        state=IndexState.INDEXED,
+    )
+
+    index_chunks = updated["metadata"][MetadataField.INDEX_CHUNKS.value]
+    assert index_chunks[0][IndexChunkField.CHUNK_ID.value] == chunk_id
+    assert index_chunks[0][IndexChunkField.INDEX_STATE.value] == IndexState.INDEXED.value
+
+
+def test_mongodb_metadata_store_updates_index_chunk_manifest_state() -> None:
+    store = MongoDBMetadataStore(uri="mongodb://example", client=FakeMongoClient())
+    memory_id = "d9fd4c95-9cb3-4fd5-b967-3027f8863210"
+    conversation = {
+        "id": memory_id,
+        "source": "manual",
+        "timestamp": "2026-01-01T00:00:00Z",
+        "messages": [{"role": "user", "text": "alpha beta gamma", "hash": "sha256:" + "a" * 64}],
+        "metadata": {
+            "imported_at": "2026-01-01T00:00:00Z",
+            "index_chunks": [
+                {
+                    "chunk_id": f"{memory_id}:0:sha256:" + "a" * 64,
+                    "chunk_index": 0,
+                    "message_hash": "sha256:" + "a" * 64,
+                    "role": "user",
+                    "text": "alpha beta",
+                    IndexChunkField.INDEX_STATE.value: IndexState.PENDING.value,
+                }
+            ],
+        },
+    }
+
+    store.insert(conversation)
+    chunk_id = conversation["metadata"][MetadataField.INDEX_CHUNKS.value][0][
+        IndexChunkField.CHUNK_ID.value
+    ]
+    store.mark_chunks_indexed(memory_id, [chunk_id])
+
+    stored = store.get(memory_id)
+    assert stored is not None
+    index_chunks = stored["metadata"][MetadataField.INDEX_CHUNKS.value]
+    assert index_chunks[0][IndexChunkField.INDEX_STATE.value] == IndexState.INDEXED.value
+    assert store.is_fully_indexed(memory_id) is True
+
+    store.mark_chunks_indexing_failed(memory_id, [chunk_id])
+
+    stored = store.get(memory_id)
+    assert stored is not None
+    index_chunks = stored["metadata"][MetadataField.INDEX_CHUNKS.value]
+    assert index_chunks[0][IndexChunkField.INDEX_STATE.value] == IndexState.FAILED.value
+    assert store.is_fully_indexed(memory_id) is False
 
 
 def test_sqlite_fact_storage_persists_freshness_and_source_quality(tmp_path: Path) -> None:

@@ -108,6 +108,8 @@ under `metadata.generated_summary` for search, retrieve, and CLI display.
 The server also writes deterministic `metadata.auto_tags` and
 `metadata.tag_sources` from source, topics, entities, and fact predicates.
 Manual `metadata.tags` remain authoritative and are not overwritten.
+Search and ask `tags` filters match only explicit `metadata.tags`; generated
+`auto_tags` support ranking and inspection, but are not filter values.
 For continuing source threads, clients may send `metadata.upstream_thread_id`
 or `metadata.thread_id`. The server preserves upstream IDs, derives
 `metadata.thread_id` when needed, and accepts optional
@@ -180,6 +182,12 @@ Use `response_format="detailed"` when an MCP client needs the full
 conversation envelope, generated-summary metadata, auto-tag provenance, and
 chunk manifests for audit or diagnostics.
 
+MCP `memory_retrieve` also accepts `response_format`. The default
+`response_format="concise"` returns a compact `memory` object with public recall
+fields, memory status, message count, and a small list of role/text messages.
+Use `response_format="detailed"` for the full redacted stored record. HTTP
+`/memory/retrieve` keeps the detailed administrative shape.
+
 ## Ask Result Shape
 
 `/memory/ask` returns:
@@ -215,8 +223,9 @@ chunks that fit the requested context budget. When budgeting is active, the
 response can include `context_tokens_used`, `chunks_selected`, `chunks_dropped`,
 and `tokenizer_used`.
 
-MCP `memory_ask`, `memory_fact_search`, and `memory_profile_get` support the
-same `response_format` enum as search. Concise ask responses are
+MCP `memory_retrieve`, `memory_ask`, `memory_fact_search`, and
+`memory_profile_get` support the same `response_format` enum as search.
+Concise ask responses are
 answer-centric: they keep `answer`, `confidence`, `confidence_reason`,
 `answer_basis`, and small result/fact/citation counts, but omit full
 `citations`, `evidence`, `structured_evidence`, `provenance`, chunk result
@@ -299,19 +308,19 @@ For user-facing MCP setup, run with `api.auth: oauth_resource_server` and open
 `/connect`. The Connect UI shows the configured MCP resource URL, enabled
 passport providers, sign-in status, hub-issued token workflow, and client setup
 snippets. Google is the current live provider; `meta` and `x` are disabled
-provider slots until their provider-specific flows are implemented. Snippets
-remain marked `Unverified` until checked against current client releases. See
-the [Connect UI and OAuth setup guide](connect_ui.md) for packages, Docker
-setup, provider status, and client verification notes.
+provider slots until their provider-specific flows are implemented. Client
+snippets remain marked `Unverified` until checked against current client
+releases. See the [Connect UI and OAuth setup guide](connect_ui.md) for
+packages, Docker setup, provider status, and client verification notes.
 
 Core tools:
 
 - `memory_validate(conversation_json)`
 - `memory_insert(conversation_json)`
 - `memory_search(query, top_k=5, limit, cursor, result_mode="chunks", response_format="concise", source, date_from, date_to, tags, thread_id)`
-- `memory_retrieve(id)`
+- `memory_retrieve(id, response_format="concise", project_id, memory_status)`
 - `memory_ask(question, top_k=5, max_context_tokens=None, result_mode="chunks", response_format="concise", source, date_from, date_to, tags, thread_id, project_id)`
-- `memory_fact_search(subject=None, predicate=None, include_superseded=False, response_format="concise", limit=None, source, date_from, date_to, confidence, status, source_quality, save_intent, save_intent_source, freshness_from, freshness_to, project_id)`
+- `memory_fact_search(query=None, subject=None, predicate=None, include_superseded=False, response_format="concise", limit=None, source, date_from, date_to, confidence, status, source_quality, save_intent, save_intent_source, freshness_from, freshness_to, project_id)`
 - `memory_profile_get(subject="user", predicate, response_format="concise", limit=None, source, date_from, date_to, confidence, status, source_quality, save_intent, save_intent_source, freshness_from, freshness_to, project_id)`
 - `memory_fact_supersede(fact_id, superseded_by)`
 - `memory_project_list()`
@@ -1029,7 +1038,7 @@ docker compose up --build
 The example binds ai-memory-hub on host port `8000` for LAN clients. Use
 `http://<HOST_LAN_IP>:8000/mcp/` from another PC on the same network. It also
 enables tokenizer budgeting with the optional `tiktoken` extra. For remote
-Ollama embeddings, see `examples/local-stack/config.oauth-ngrok.yaml`.
+Ollama embeddings, see `examples/local-stack/config.oauth-public.yaml`.
 
 Additional checked-in provider examples are under `examples/storage_providers`.
 They cover SQLite/LanceDB, in-memory vectors, Qdrant, MongoDB metadata,

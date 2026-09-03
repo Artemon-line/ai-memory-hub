@@ -5,8 +5,7 @@ The human-facing examples are intentionally small:
 - **Quickstart**: repository root config and root `Containerfile`.
 - **Local stack**: `examples/local-stack`, combining
   Postgres metadata, PGVector vectors, Ollama embeddings, Google OAuth, and
-  public HTTPS access for remote agents. The checked-in OAuth template uses
-  ngrok as the local tunnel example.
+  public HTTPS access for remote agents.
 
 The remaining checked-in provider directories under `examples/storage_providers`
 are maintainer fixtures. They keep adapter behavior testable without making new

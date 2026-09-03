@@ -89,6 +89,7 @@ class BaseIngestionAgent(ABC):
     async def fact_search(
         self,
         *,
+        query: str | None = None,
         subject: str | None = None,
         predicate: str | None = None,
         include_superseded: bool = False,

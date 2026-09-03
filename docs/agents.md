@@ -220,11 +220,17 @@ Retrieve one stored conversation by canonical ID.
 
 ```json
 {
-  "id": "11111111-2222-4333-8444-555555555555"
+  "id": "11111111-2222-4333-8444-555555555555",
+  "response_format": "concise"
 }
 ```
 
-The returned `memory` object redacts internal content hashes from external responses.
+For MCP clients, `response_format` defaults to `concise`. Concise retrieve
+returns public recall fields such as ID, source, title, timestamp, thread ID,
+summary, memory status, message count, and a small list of role/text messages
+without the full metadata object. Use `detailed` when auditing the complete
+stored record. The returned `memory` object redacts internal content hashes from
+external responses.
 
 ### `memory_ask`
 
@@ -253,9 +259,11 @@ Use `response_format: "detailed"` when a client needs the full `results`,
 `citations`, `evidence`, `structured_evidence`, `provenance`, or token-budget
 diagnostics.
 
-`memory_fact_search` and `memory_profile_get` also accept
-`response_format: "concise"` or `"detailed"`, plus an optional `limit`.
-Concise fact/profile reads deduplicate and limit fact rows to 10 by default
+`memory_retrieve`, `memory_fact_search`, and `memory_profile_get` also accept
+`response_format: "concise"` or `"detailed"`; fact/profile reads also accept an
+optional `limit`. `memory_fact_search` accepts `query` for free-text lookup
+across normalized fact text when a client does not know the subject or predicate
+yet. Concise fact/profile reads deduplicate and limit fact rows to 10 by default
 while keeping the subject, predicate, object, normalized object, confidence,
 source quality, freshness, and supersession status. Detailed reads preserve full
 fact provenance such as qualifiers and summary provenance.
@@ -311,7 +319,7 @@ collect relevant user/assistant turns
 -> memory_validate
 -> fix payload if needed
 -> memory_insert
--> memory_retrieve with returned id
+-> memory_retrieve(id, response_format="concise")
 -> confirm saved id to user
 ```
 
@@ -351,7 +359,9 @@ search and retrieve responses expose the conversation summary as
 the row's compact `citation`. The hub may also return server-owned
 `metadata.auto_tags` and `metadata.tag_sources` in detailed payloads; clients
 should keep user/manual tags in `metadata.tags` and let the server refresh
-auto-tags during insert or trusted append.
+auto-tags during insert or trusted append. Search and ask `tags` filters match
+only those explicit `metadata.tags`. Generated `metadata.auto_tags` remain
+returned context and ranking hints, not filterable tag values.
 `metadata.save_intent` is optional under the default `permissive` policy,
 required under `memory.insert_policy: require_save_intent`, and controls whether
 `memory.insert_policy: review_pending` inserts are active immediately or held

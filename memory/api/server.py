@@ -102,6 +102,7 @@ class InsertRequest(BaseModel):
 
 
 class FactSearchRequest(BaseModel):
+    query: str | None = None
     subject: str | None = None
     predicate: str | None = None
     include_superseded: bool = False
@@ -571,6 +572,7 @@ def _register_api_routes(
         try:
             return redact_content_hashes(
                 await agent.fact_search(
+                    query=payload.query,
                     subject=payload.subject,
                     predicate=payload.predicate,
                     include_superseded=payload.include_superseded,

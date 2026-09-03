@@ -7,8 +7,7 @@ in two modes:
 - **Local smoke**: deterministic local embeddings and no auth, bound to
   `127.0.0.1:8000`.
 - **Local server**: Ollama embeddings, Google OAuth, and a public HTTPS URL
-  for agents running on another machine. This README uses ngrok as the tunnel
-  example.
+  for agents running on another machine.
 
 ## Local Smoke
 
@@ -81,33 +80,27 @@ loopback; use `admin` / `admin` if you want to edit the local dashboard.
 ollama pull nomic-embed-text
 ```
 
-2. Start ngrok for the hub port:
+2. Generate a local OAuth config from the checked-in template:
 
 ```bash
-ngrok http 8000
+export PUBLIC_BASE_URL="https://YOUR-CUSTOM-DOMAIN.app"
+sed "s#https://YOUR-CUSTOM-DOMAIN.app#${PUBLIC_BASE_URL}#g" \
+  config.oauth-public.yaml > config.oauth-local.yaml
 ```
 
-3. Generate a local OAuth config from the checked-in template:
-
-```bash
-export PUBLIC_BASE_URL="https://YOUR-NGROK-DOMAIN.ngrok-free.app"
-sed "s#https://YOUR-NGROK-DOMAIN.ngrok-free.app#${PUBLIC_BASE_URL}#g" \
-  config.oauth-ngrok.yaml > config.oauth-local.yaml
-```
-
-4. In Google Cloud Console, register the matching redirect URI:
+3. In Google Cloud Console, register the matching redirect URI:
 
 ```text
-https://YOUR-NGROK-DOMAIN.ngrok-free.app/auth/google/callback
+https://YOUR-CUSTOM-DOMAIN.app/auth/google/callback
 ```
 
 The redirect URI must use the same public base URL as `config.oauth-local.yaml`.
-If the Connect page still shows `YOUR-NGROK-DOMAIN` after startup, stop and fix
-`config.oauth-ngrok.yaml` before starting client auth. MCP clients discover
+If the Connect page still shows `YOUR-CUSTOM-DOMAIN` after startup, stop and fix
+`config.oauth-public.yaml` before starting client auth. MCP clients discover
 OAuth endpoints from the advertised public URL, so a stale placeholder sends
 registration and token flows to the wrong host.
 
-5. Export secrets and start Compose:
+4. Export secrets and start Compose:
 
 ```bash
 export GOOGLE_CLIENT_ID="your-google-client-id"
@@ -121,13 +114,13 @@ docker compose up --build
 Remote agents should use:
 
 ```text
-https://YOUR-NGROK-DOMAIN.ngrok-free.app/mcp
+https://YOUR-CUSTOM-DOMAIN.app/mcp
 ```
 
 The browser setup page is:
 
 ```text
-https://YOUR-NGROK-DOMAIN.ngrok-free.app/connect
+https://YOUR-CUSTOM-DOMAIN.app/connect
 ```
 
 Keep the Compose port binding at `127.0.0.1:8000:8000`; your tunnel or reverse

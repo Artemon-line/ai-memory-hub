@@ -18,7 +18,7 @@ import urllib.request
 from dataclasses import asdict, dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Iterable, Sequence
+from typing import Any, Iterable, Mapping, Sequence
 
 from memory.backend.log_safety import redact_secrets
 
@@ -28,8 +28,18 @@ SMOKE_MARKER = "weekly real-client smoke test marker"
 SMOKE_PROMPT = (
     "Use the ai-memory-hub MCP server. Validate and insert a short conversation "
     f"about the {SMOKE_MARKER}. Then search for it, retrieve it by ID, and ask "
-    "what the conversation was about. Report the inserted ID."
+    "what the conversation was about. Inspect saved facts and report the inserted ID."
 )
+SMOKE_FACT_OBJECT = "real-client smoke checks"
+_CONTENT_TYPE_HEADER = "content-type"
+_CONTENT_LENGTH_HEADER = "content-length"
+_CACHE_CONTROL_HEADER = "cache-control"
+_JSON_CONTENT_TYPE = "application/json"
+_SSE_CONTENT_TYPE = "text/event-stream"
+_SSE_CACHE_CONTROL = "no-cache"
+_SSE_EVENT_TYPE_FIELD = "type"
+_SSE_DEFAULT_EVENT_NAME = "message"
+_SSE_DONE_FRAME = b"data: [DONE]\n\n"
 
 
 @dataclass(frozen=True)
@@ -175,6 +185,16 @@ def run_client(
         )
     _redact_log_file(stdout_log)
     _redact_log_file(stderr_log)
+    dispatch_error = _client_dispatch_error(stderr_log)
+    if dispatch_error is not None:
+        return ClientResult(
+            spec.name,
+            "failed",
+            dispatch_error,
+            command,
+            stdout_log=str(stdout_log),
+            stderr_log=str(stderr_log),
+        )
     verification = verify_memory_created(hub_url=hub_url, marker=SMOKE_MARKER)
     if verification["status"] != "ok":
         return ClientResult(
@@ -215,7 +235,20 @@ def verify_memory_created(*, hub_url: str, marker: str) -> dict[str, Any]:
     answer = ask.get("answer", "") if isinstance(ask, dict) else ""
     if marker not in json.dumps(retrieve).lower() and "real-client" not in str(answer).lower():
         return {"status": "failed", "reason": "retrieve/ask verification did not contain smoke evidence"}
-    return {"status": "ok", "id": memory_id, "search_results": len(results), "answer": answer}
+    facts = _post_json(
+        f"{hub_url.rstrip('/')}/memory/facts/search",
+        {"subject": "user", "predicate": "likes"},
+    )
+    fact_results = facts.get("results", []) if isinstance(facts, dict) else []
+    if not any(SMOKE_FACT_OBJECT in json.dumps(fact).lower() for fact in fact_results):
+        return {"status": "failed", "reason": "fact verification did not find smoke preference"}
+    return {
+        "status": "ok",
+        "id": memory_id,
+        "search_results": len(results),
+        "fact_results": len(fact_results),
+        "answer": answer,
+    }
 
 
 def _client_spec(*, name: str, hub_url: str, gateway_url: str, workspace: Path) -> ClientSpec:
@@ -264,7 +297,7 @@ def _client_spec(*, name: str, hub_url: str, gateway_url: str, workspace: Path) 
                     'name = "local-smoke"',
                     f'base_url = "{gateway_url.rstrip("/")}/v1"',
                     'env_key = "AMH_REAL_CLIENT_TEST_API_KEY"',
-                    'wire_api = "chat"',
+                    'wire_api = "responses"',
                     "",
                     "[mcp_servers.ai_memory_hub]",
                     f'url = "{mcp_url}"',
@@ -439,7 +472,11 @@ def _make_gateway_handler(log_file: Path | None) -> type[BaseHTTPRequestHandler]
                 self._send_json(_openai_chat_response(payload))
                 return
             if self.path.endswith("/responses"):
-                self._send_json(_openai_responses_response(payload))
+                response = _openai_responses_response(payload)
+                if payload.get("stream"):
+                    self._send_sse(_openai_responses_stream_events(response))
+                else:
+                    self._send_json(response)
                 return
             if self.path.endswith("/messages"):
                 self._send_json(_anthropic_messages_response(payload))
@@ -451,13 +488,44 @@ def _make_gateway_handler(log_file: Path | None) -> type[BaseHTTPRequestHandler]
 
         def _send_json(self, payload: dict[str, Any], *, status: int = 200) -> None:
             data = json.dumps(payload).encode("utf-8")
-            self.send_response(status)
-            self.send_header("content-type", "application/json")
-            self.send_header("content-length", str(len(data)))
-            self.end_headers()
+            self._send_headers(
+                status,
+                {
+                    _CONTENT_TYPE_HEADER: _JSON_CONTENT_TYPE,
+                    _CONTENT_LENGTH_HEADER: str(len(data)),
+                },
+            )
             self.wfile.write(data)
 
+        def _send_sse(self, events: Iterable[dict[str, Any]], *, status: int = 200) -> None:
+            self._send_headers(
+                status,
+                {
+                    _CONTENT_TYPE_HEADER: _SSE_CONTENT_TYPE,
+                    _CACHE_CONTROL_HEADER: _SSE_CACHE_CONTROL,
+                },
+            )
+            self.wfile.writelines(_sse_frames(events))
+
+        def _send_headers(self, status: int, headers: Mapping[str, str]) -> None:
+            self.send_response(status)
+            for name, value in headers.items():
+                self.send_header(name, value)
+            self.end_headers()
+
     return GatewayHandler
+
+
+def _sse_frames(events: Iterable[dict[str, Any]]) -> Iterable[bytes]:
+    for event in events:
+        yield _sse_event_frame(event)
+    yield _SSE_DONE_FRAME
+
+
+def _sse_event_frame(event: dict[str, Any]) -> bytes:
+    event_name = str(event.get(_SSE_EVENT_TYPE_FIELD, _SSE_DEFAULT_EVENT_NAME))
+    data = json.dumps(event)
+    return f"event: {event_name}\ndata: {data}\n\n".encode("utf-8")
 
 
 def _openai_chat_response(payload: dict[str, Any]) -> dict[str, Any]:
@@ -493,18 +561,201 @@ def _openai_responses_response(payload: dict[str, Any]) -> dict[str, Any]:
     tool_name = _next_tool_name(payload.get("input", []))
     output: list[dict[str, Any]]
     if tool_name:
+        output = [_openai_responses_tool_call(tool_name, payload)]
+    else:
         output = [
             {
-                "type": "function_call",
-                "id": f"fc_{tool_name}",
-                "call_id": f"call_{tool_name}",
-                "name": tool_name,
-                "arguments": json.dumps(_tool_input(tool_name, payload)),
+                "type": "message",
+                "id": "msg_amh_smoke_done",
+                "status": "completed",
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "output_text",
+                        "text": "Smoke complete.",
+                        "annotations": [],
+                    }
+                ],
             }
         ]
-    else:
-        output = [{"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "Smoke complete."}]}]
-    return {"id": "resp_amh_smoke", "object": "response", "status": "completed", "model": "amh-smoke-model", "output": output}
+    return {
+        "id": "resp_amh_smoke",
+        "object": "response",
+        "created_at": int(time.time()),
+        "status": "completed",
+        "error": None,
+        "incomplete_details": None,
+        "model": payload.get("model", "amh-smoke-model"),
+        "output": output,
+        "parallel_tool_calls": payload.get("parallel_tool_calls", False),
+        "tool_choice": payload.get("tool_choice", "auto"),
+        "tools": payload.get("tools", []),
+        "usage": {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2},
+    }
+
+
+def _openai_responses_tool_call(tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
+    arguments = json.dumps(_tool_input(tool_name, payload))
+    if tool_name.startswith("memory_"):
+        return {
+            "type": "function_call",
+            "id": f"fc_mcp__ai_memory_hub_{tool_name}",
+            "call_id": f"call_mcp__ai_memory_hub_{tool_name}",
+            "name": f"mcp__ai_memory_hub.{tool_name}",
+            "arguments": arguments,
+        }
+    return {
+        "type": "function_call",
+        "id": f"fc_{tool_name}",
+        "call_id": f"call_{tool_name}",
+        "name": tool_name,
+        "arguments": arguments,
+    }
+
+
+def _openai_responses_stream_events(response: dict[str, Any]) -> Iterable[dict[str, Any]]:
+    sequence_number = 0
+
+    def next_event(event: dict[str, Any]) -> dict[str, Any]:
+        nonlocal sequence_number
+        sequence_number += 1
+        return {**event, "sequence_number": sequence_number}
+
+    yield next_event(
+        {
+            "type": "response.created",
+            "response": {**response, "status": "in_progress", "output": []},
+        }
+    )
+    for output_index, item in enumerate(response.get("output", [])):
+        item_id = str(item.get("id", f"item_{output_index}"))
+        if item.get("type") == "function_call":
+            arguments = str(item.get("arguments", ""))
+            yield next_event(
+                {
+                    "type": "response.output_item.added",
+                    "output_index": output_index,
+                    "item": {**item, "status": "in_progress", "arguments": ""},
+                }
+            )
+            if arguments:
+                yield next_event(
+                    {
+                        "type": "response.function_call_arguments.delta",
+                        "item_id": item_id,
+                        "output_index": output_index,
+                        "delta": arguments,
+                    }
+                )
+            yield next_event(
+                {
+                    "type": "response.function_call_arguments.done",
+                    "item_id": item_id,
+                    "output_index": output_index,
+                    "name": item.get("name", ""),
+                    "arguments": arguments,
+                }
+            )
+            yield next_event(
+                {
+                    "type": "response.output_item.done",
+                    "output_index": output_index,
+                    "item": {**item, "status": "completed"},
+                }
+            )
+            continue
+        if item.get("type") == "mcp_call":
+            arguments = str(item.get("arguments", ""))
+            yield next_event(
+                {
+                    "type": "response.output_item.added",
+                    "output_index": output_index,
+                    "item": {**item, "status": "in_progress", "arguments": ""},
+                }
+            )
+            if arguments:
+                yield next_event(
+                    {
+                        "type": "response.mcp_call_arguments.delta",
+                        "item_id": item_id,
+                        "output_index": output_index,
+                        "delta": arguments,
+                    }
+                )
+            yield next_event(
+                {
+                    "type": "response.mcp_call_arguments.done",
+                    "item_id": item_id,
+                    "output_index": output_index,
+                    "arguments": arguments,
+                }
+            )
+            yield next_event(
+                {
+                    "type": "response.output_item.done",
+                    "output_index": output_index,
+                    "item": {**item, "status": "completed"},
+                }
+            )
+            continue
+        if item.get("type") == "message":
+            content = item.get("content", [])
+            part = content[0] if content else {"type": "output_text", "text": "", "annotations": []}
+            text = str(part.get("text", ""))
+            yield next_event(
+                {
+                    "type": "response.output_item.added",
+                    "output_index": output_index,
+                    "item": {**item, "status": "in_progress", "content": []},
+                }
+            )
+            yield next_event(
+                {
+                    "type": "response.content_part.added",
+                    "item_id": item_id,
+                    "output_index": output_index,
+                    "content_index": 0,
+                    "part": {**part, "text": ""},
+                }
+            )
+            if text:
+                yield next_event(
+                    {
+                        "type": "response.output_text.delta",
+                        "item_id": item_id,
+                        "output_index": output_index,
+                        "content_index": 0,
+                        "delta": text,
+                    }
+                )
+            yield next_event(
+                {
+                    "type": "response.output_text.done",
+                    "item_id": item_id,
+                    "output_index": output_index,
+                    "content_index": 0,
+                    "text": text,
+                }
+            )
+            yield next_event(
+                {
+                    "type": "response.content_part.done",
+                    "item_id": item_id,
+                    "output_index": output_index,
+                    "content_index": 0,
+                    "part": part,
+                }
+            )
+            yield next_event(
+                {
+                    "type": "response.output_item.done",
+                    "output_index": output_index,
+                    "item": {**item, "status": "completed"},
+                }
+            )
+            continue
+        yield next_event({"type": "response.output_item.done", "output_index": output_index, "item": item})
+    yield next_event({"type": "response.completed", "response": response})
 
 
 def _anthropic_messages_response(payload: dict[str, Any]) -> dict[str, Any]:
@@ -539,7 +790,14 @@ def _anthropic_messages_response(payload: dict[str, Any]) -> dict[str, Any]:
 
 def _next_tool_name(messages: Any) -> str | None:
     text = json.dumps(messages).lower()
-    sequence = ("memory_validate", "memory_insert", "memory_search", "memory_retrieve", "memory_ask")
+    sequence = (
+        "memory_validate",
+        "memory_insert",
+        "memory_search",
+        "memory_retrieve",
+        "memory_ask",
+        "memory_fact_search",
+    )
     for name in sequence:
         if name not in text:
             return name
@@ -552,7 +810,7 @@ def _tool_input(tool_name: str, context: Any | None = None) -> dict[str, Any]:
         "timestamp": "2026-06-12T00:00:00Z",
         "metadata": {"tags": ["real-client-smoke", "weekly"], "client": "real-client-harness"},
         "messages": [
-            {"role": "user", "text": f"Please remember the {SMOKE_MARKER}."},
+            {"role": "user", "text": f"Please remember the {SMOKE_MARKER}. I like {SMOKE_FACT_OBJECT}."},
             {"role": "assistant", "text": "The weekly real-client smoke test conversation was saved."},
         ],
     }
@@ -566,11 +824,20 @@ def _tool_input(tool_name: str, context: Any | None = None) -> dict[str, Any]:
             "response_format": "concise",
         }
     if tool_name == "memory_retrieve":
-        return {"id": _extract_memory_id(context) or "use-search-result-id"}
+        return {
+            "id": _extract_memory_id(context) or "use-search-result-id",
+            "response_format": "concise",
+        }
     if tool_name == "memory_ask":
         return {
             "question": f"What was the conversation about: {SMOKE_MARKER}?",
             "top_k": 5,
+            "response_format": "concise",
+        }
+    if tool_name == "memory_fact_search":
+        return {
+            "subject": "user",
+            "predicate": "likes",
             "response_format": "concise",
         }
     return {}
@@ -662,6 +929,17 @@ def _redact_log_file(path: Path) -> None:
     if not path.exists():
         return
     path.write_text(redact_secrets(path.read_text(encoding="utf-8")), encoding="utf-8")
+
+
+def _client_dispatch_error(path: Path) -> str | None:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    match = re.search(r"unsupported call:\s*([^\r\n]+)", text)
+    if match is None:
+        return None
+    return f"client did not dispatch MCP tool call: unsupported call {match.group(1)}"
 
 
 def _result_to_dict(result: HarnessResult) -> dict[str, Any]:

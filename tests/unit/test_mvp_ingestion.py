@@ -7,6 +7,7 @@ from typing import Any
 import jsonschema
 import pytest
 
+from memory.backend.metadata_store import IndexChunkField, IndexState, MetadataField
 from memory.ingestion import mvp_ingestion
 from memory.ingestion import validate as ingestion_validate
 from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
@@ -71,6 +72,13 @@ class StubVectorStore:
                 "score": float(index),
             }
             for index, row in enumerate(self.rows[:top_k])
+        ]
+
+    def get_indexed_chunk_ids(self, memory_id: str) -> list[str]:
+        return [
+            str(row["chunk_id"])
+            for row in self.rows
+            if str(row["memory_id"]) == str(memory_id) and row.get("chunk_id")
         ]
 
 
@@ -297,6 +305,26 @@ def test_ingest_messages_allows_secret_topic_without_secret_value() -> None:
             "text": "We should rotate the API key label, but no credential value was shared.",
         }
     ]
+
+    result = mvp_ingestion.ingest_messages(conversation)
+
+    assert result["status"] == "ok"
+    assert metadata.by_id[result["id"]]["metadata"].get("memory_status") is None
+    assert len(vectors.rows) == 1
+
+
+def test_ingest_messages_allows_numeric_run_id_in_text() -> None:
+    metadata, vectors = _configure_stubs()
+    conversation = _valid_conversation()
+    run_id = "local-1788013783047"
+    conversation["messages"] = [
+        {
+            "role": "user",
+            "text": f"Bruno API integration memory {run_id} stores contract coverage.",
+        }
+    ]
+    conversation["metadata"]["summary"] = f"Bruno smoke conversation {run_id}."
+    conversation["metadata"]["run_id"] = run_id
 
     result = mvp_ingestion.ingest_messages(conversation)
 
@@ -818,10 +846,14 @@ def test_token_chunking_splits_long_messages_with_overlap() -> None:
         "gamma delta epsilon",
     ]
     stored = metadata.by_id["d9fd4c95-9cb3-4fd5-b967-3027f8863210"]
-    assert [chunk["chunk_index"] for chunk in stored["metadata"]["index_chunks"]] == [
+    index_chunks = stored["metadata"][MetadataField.INDEX_CHUNKS.value]
+    assert [chunk["chunk_index"] for chunk in index_chunks] == [
         0,
         1,
     ]
+    assert {chunk[IndexChunkField.INDEX_STATE.value] for chunk in index_chunks} == {
+        IndexState.INDEXED.value
+    }
 
 
 def test_token_chunking_append_continues_chunk_indexes() -> None:
@@ -847,11 +879,75 @@ def test_token_chunking_append_continues_chunk_indexes() -> None:
     assert result["embedded_chunks"] == 2
     assert [row["chunk_index"] for row in vectors.rows] == [0, 1, 2, 3]
     stored = metadata.by_id["d9fd4c95-9cb3-4fd5-b967-3027f8863210"]
-    assert [chunk["chunk_index"] for chunk in stored["metadata"]["index_chunks"]] == [
+    index_chunks = stored["metadata"][MetadataField.INDEX_CHUNKS.value]
+    assert [chunk["chunk_index"] for chunk in index_chunks] == [
         0,
         1,
         2,
         3,
+    ]
+    assert {chunk[IndexChunkField.INDEX_STATE.value] for chunk in index_chunks} == {
+        IndexState.INDEXED.value
+    }
+
+
+def test_retrieve_returns_indexed_chunk_state_after_insert() -> None:
+    _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["messages"] = [
+        {"role": "user", "text": "QA_INDEX_STATE retrieve should show indexed chunks."}
+    ]
+
+    result = mvp_ingestion.ingest_messages(conversation)
+    retrieved = mvp_ingestion.retrieve(result["id"])
+
+    assert retrieved is not None
+    index_chunks = retrieved["metadata"][MetadataField.INDEX_CHUNKS.value]
+    assert index_chunks
+    assert {chunk[IndexChunkField.INDEX_STATE.value] for chunk in index_chunks} == {
+        IndexState.INDEXED.value
+    }
+
+
+def test_retrieve_repairs_legacy_pending_index_manifest_from_vector_rows() -> None:
+    metadata, vectors = _configure_stubs()
+    conversation = _valid_conversation()
+    memory_id = str(conversation["id"])
+    chunk_id = f"{memory_id}:0:sha256:{'a' * 64}"
+    conversation["metadata"][MetadataField.INDEX_CHUNKS.value] = [
+        {
+            IndexChunkField.CHUNK_INDEX.value: 0,
+            IndexChunkField.MESSAGE_HASH.value: "sha256:" + "a" * 64,
+            IndexChunkField.ROLE.value: "user",
+            IndexChunkField.TEXT.value: "Legacy indexed chunk text.",
+            IndexChunkField.INDEX_STATE.value: IndexState.PENDING.value,
+        }
+    ]
+    metadata.insert(conversation)
+    vectors.rows = [
+        {
+            "memory_id": memory_id,
+            "chunk_id": chunk_id,
+            "chunk_index": 0,
+            "role": "user",
+            "text": "Legacy indexed chunk text.",
+            "vector": [1.0, 0.0],
+        }
+    ]
+
+    retrieved = mvp_ingestion.retrieve(memory_id)
+
+    assert retrieved is not None
+    index_chunks = retrieved["metadata"][MetadataField.INDEX_CHUNKS.value]
+    assert index_chunks == [
+        {
+            IndexChunkField.CHUNK_INDEX.value: 0,
+            IndexChunkField.MESSAGE_HASH.value: "sha256:" + "a" * 64,
+            IndexChunkField.ROLE.value: "user",
+            IndexChunkField.TEXT.value: "Legacy indexed chunk text.",
+            IndexChunkField.INDEX_STATE.value: IndexState.INDEXED.value,
+            IndexChunkField.CHUNK_ID.value: chunk_id,
+        }
     ]
 
 
@@ -1176,7 +1272,10 @@ def test_ask_applies_conversation_filters_before_answering() -> None:
     )
 
     assert result["status"] == "ok"
-    assert [row["id"] for row in result["results"]] == [opencode["id"]]
+    assert result["results"] == []
+    assert result["answer_basis"] == "fact_layer"
+    assert result["latest"]["value"] == "Cobalt"
+    assert result["latest"]["author"] == "opencode"
     assert "Cobalt" in result["answer"]
     assert "Amber" not in result["answer"]
 
@@ -1251,11 +1350,34 @@ def test_ask_direct_memory_returns_structured_chunk_evidence() -> None:
     result = mvp_ingestion.ask("rareterm", top_k=1)
 
     assert result["answer_basis"] == "direct_memory"
+    assert result["answer"] == "rareterm deployment note"
+    assert "Based on stored memory" not in result["answer"]
+    assert "- [" not in result["answer"]
     assert result["confidence_reason"] == "Answer built from ranked retrieved conversation chunks."
     assert result["evidence"][0]["type"] == "chunk"
     assert result["evidence"][0]["conversation_id"] == conversation["id"]
     assert result["structured_evidence"]["facts"] == []
     assert result["structured_evidence"]["results"] == result["results"]
+
+
+def test_ask_direct_memory_uses_best_snippet() -> None:
+    _configure_stubs()
+    first = _valid_conversation()
+    first["id"] = "11111111-1111-4111-8111-111111111111"
+    first["messages"] = [{"role": "user", "text": "rareterm clean answer"}]
+    second = _valid_conversation()
+    second["id"] = "22222222-2222-4222-8222-222222222222"
+    second["messages"] = [
+        {"role": "user", "text": "rareterm extra evidence should stay in results only"}
+    ]
+    mvp_ingestion.ingest_messages(first)
+    mvp_ingestion.ingest_messages(second)
+
+    result = mvp_ingestion.ask("rareterm", top_k=2)
+
+    assert result["answer_basis"] == "direct_memory"
+    assert result["answer"] == "rareterm clean answer"
+    assert len(result["results"]) == 2
 
 
 def test_ask_no_hit_returns_empty_structured_evidence() -> None:
@@ -1306,6 +1428,84 @@ def test_ask_answers_direct_guitar_question_from_fact_layer() -> None:
     assert result["citations"][0]["last_confirmed_at"] == result["facts"][0]["last_confirmed_at"]
     assert result["provenance"][0]["save_intents"] == ["explicit_user_request"]
     assert result["provenance"][0]["save_intent_sources"] == ["codex"]
+
+
+@pytest.mark.parametrize(
+    ("attribute", "older_value", "newer_value", "question"),
+    [
+        (
+            "QA_GENERIC_ASK hardware adapter",
+            "alpha dock",
+            "beta dock",
+            "Which hardware adapter should QA_GENERIC_ASK use?",
+        ),
+        (
+            "QA_GENERIC_ASK food option",
+            "apple tart",
+            "miso soup",
+            "What food option is stored for QA_GENERIC_ASK?",
+        ),
+    ],
+)
+def test_ask_uses_generic_fact_projection_for_unclassified_questions(
+    attribute: str,
+    older_value: str,
+    newer_value: str,
+    question: str,
+) -> None:
+    _configure_stubs()
+    older = _valid_conversation()
+    older["id"] = "11111111-1111-4111-8111-111111111111"
+    older["source"] = "agent-a"
+    older["timestamp"] = "2026-01-15T10:00:00Z"
+    older["messages"] = [{"role": "user", "text": f"{attribute} is {older_value}."}]
+    newer = _valid_conversation()
+    newer["id"] = "22222222-2222-4222-8222-222222222222"
+    newer["source"] = "agent-b"
+    newer["timestamp"] = "2026-06-20T14:30:00Z"
+    newer["messages"] = [
+        {"role": "user", "text": f"{attribute} changes to {newer_value} on 2026-06-20."}
+    ]
+    distractor = _valid_conversation()
+    distractor["id"] = "33333333-3333-4333-8333-333333333333"
+    distractor["timestamp"] = "2026-07-01T00:00:00Z"
+    distractor["messages"] = [
+        {"role": "user", "text": "QA_GENERIC_ASK unrelated setting is copper."}
+    ]
+    for payload in (older, newer, distractor):
+        mvp_ingestion.ingest_messages(payload)
+
+    result = mvp_ingestion.ask(question, top_k=5)
+
+    assert result["answer_basis"] == "fact_layer"
+    assert result["answer"] == newer_value
+    assert result["results"] == []
+    assert result["latest"]["value"] == newer_value
+    assert result["latest"]["stored_at"] == newer["timestamp"]
+    assert result["latest"]["author"] == "agent-b"
+    assert [entry["value"] for entry in result["fact_timeline"]] == [
+        newer_value,
+        older_value,
+    ]
+    assert {fact["subject"] for fact in result["facts"]} == {attribute}
+    assert {fact["predicate"] for fact in result["facts"]} == {"description"}
+
+
+def test_ask_plain_keyword_query_uses_direct_memory() -> None:
+    _configure_stubs()
+    payload = _valid_conversation()
+    payload["source"] = "agent-a"
+    payload["messages"] = [
+        {"role": "user", "text": "Agent smoke memory: pytest should use MCP tools."}
+    ]
+    inserted = mvp_ingestion.ingest_messages(payload)
+
+    result = mvp_ingestion.ask("pytest MCP", top_k=5)
+
+    assert inserted["status"] == "ok"
+    assert result["answer_basis"] == "direct_memory"
+    assert result["results"]
+    assert result["results"][0]["id"] == payload["id"]
 
 
 def test_fact_from_assistant_statement_exposes_source_quality() -> None:
@@ -1386,6 +1586,7 @@ def test_fact_correction_supersedes_old_fact() -> None:
     ]
     second = _valid_conversation()
     second["id"] = "22222222-2222-4222-8222-222222222222"
+    second["timestamp"] = "2026-01-02T00:00:00Z"
     second["messages"] = [
         {"role": "user", "text": "Actually, my Gibson Special is TV yellow, not cherry."}
     ]
@@ -1405,6 +1606,40 @@ def test_fact_correction_supersedes_old_fact() -> None:
     assert result["facts"][0]["source_quality"] == "corrected_by_user"
     assert result["facts"][0]["confidence_reason"] == "Extracted from a direct user correction."
     assert result["evidence"][0]["source_quality"] == "corrected_by_user"
+
+
+def test_plain_favorite_correction_supersedes_old_food() -> None:
+    _configure_stubs()
+    first = _valid_conversation()
+    first["id"] = "11111111-1111-4111-8111-111111111111"
+    first["messages"] = [{"role": "user", "text": "My favorite food is QA green curry."}]
+    second = _valid_conversation()
+    second["id"] = "22222222-2222-4222-8222-222222222222"
+    second["timestamp"] = "2026-01-02T00:00:00Z"
+    second["messages"] = [
+        {"role": "user", "text": "My favorite food is QA mushroom ramen, not QA green curry."}
+    ]
+    mvp_ingestion.ingest_messages(first)
+    mvp_ingestion.ingest_messages(second)
+
+    result = mvp_ingestion.ask("What is my favorite food?", top_k=5)
+    stale_value_question = mvp_ingestion.ask("Do I prefer QA green curry?", top_k=5)
+    active = mvp_ingestion.fact_search(subject="user", predicate="favorite_food")
+    audit = mvp_ingestion.fact_search(
+        subject="user",
+        predicate="favorite_food",
+        include_superseded=True,
+    )
+    descriptions = mvp_ingestion.fact_search(predicate="description")
+
+    assert result["answer"] == "QA mushroom ramen"
+    assert stale_value_question["answer_basis"] == "fact_layer"
+    assert stale_value_question["answer"] == "QA mushroom ramen"
+    assert stale_value_question["latest"]["value"] == "QA mushroom ramen"
+    assert [fact["object"] for fact in active["results"]] == ["QA mushroom ramen"]
+    assert any(fact["superseded_by"] for fact in audit["results"])
+    assert all(", not " not in fact["object"] for fact in audit["results"])
+    assert descriptions["results"] == []
 
 
 def test_fact_and_profile_filters_cover_status_quality_and_freshness() -> None:
@@ -1480,6 +1715,78 @@ def test_fact_save_intent_filters_and_auto_save_confidence() -> None:
     )
 
 
+def test_fact_search_query_filters_across_fact_text() -> None:
+    _configure_stubs()
+    first = _valid_conversation()
+    first["id"] = "11111111-1111-4111-8111-111111111111"
+    first["messages"] = [{"role": "user", "text": "I own a silver field recorder."}]
+    second = _valid_conversation()
+    second["id"] = "22222222-2222-4222-8222-222222222222"
+    second["messages"] = [{"role": "user", "text": "I own a teal macro lens."}]
+    mvp_ingestion.ingest_messages(first)
+    mvp_ingestion.ingest_messages(second)
+
+    result = mvp_ingestion.fact_search(query="teal macro lens")
+
+    assert [fact["object"] for fact in result["results"]] == ["a teal macro lens"]
+
+
+def test_fact_search_query_requires_identifier_match() -> None:
+    _configure_stubs()
+    marker = "QA_MARKER_SCOPELESS"
+    first = _valid_conversation()
+    first["id"] = "11111111-1111-4111-8111-111111111111"
+    first["messages"] = [
+        {"role": "user", "text": f"{marker} hardware adapter is beta dock."}
+    ]
+    second = _valid_conversation()
+    second["id"] = "22222222-2222-4222-8222-222222222222"
+    second["messages"] = [
+        {"role": "user", "text": "QA_OTHER_SCOPELESS hardware adapter is carbon sled."}
+    ]
+    mvp_ingestion.ingest_messages(first)
+    mvp_ingestion.ingest_messages(second)
+
+    result = mvp_ingestion.fact_search(query=f"{marker} hardware adapter")
+
+    assert [fact["object"] for fact in result["results"]] == ["beta dock"]
+
+
+def test_ask_ignores_unrelated_recent_facts_for_identifier_question() -> None:
+    _configure_stubs()
+    marker = "QA_MARKER_SCOPELESS_ASK"
+    older = _valid_conversation()
+    older["id"] = "11111111-1111-4111-8111-111111111111"
+    older["timestamp"] = "2026-01-01T00:00:00Z"
+    older["messages"] = [
+        {"role": "user", "text": f"{marker} hardware adapter is alpha dock."}
+    ]
+    newer = _valid_conversation()
+    newer["id"] = "22222222-2222-4222-8222-222222222222"
+    newer["timestamp"] = "2026-02-01T00:00:00Z"
+    newer["messages"] = [
+        {"role": "user", "text": f"{marker} hardware adapter changes to beta dock."}
+    ]
+    distractor = _valid_conversation()
+    distractor["id"] = "33333333-3333-4333-8333-333333333333"
+    distractor["timestamp"] = "2026-03-01T00:00:00Z"
+    distractor["messages"] = [
+        {"role": "user", "text": "QA_OTHER_SCOPELESS_ASK hardware adapter is carbon sled."}
+    ]
+    mvp_ingestion.ingest_messages(older)
+    mvp_ingestion.ingest_messages(newer)
+    mvp_ingestion.ingest_messages(distractor)
+
+    result = mvp_ingestion.ask(f"Which hardware adapter should {marker} use?", top_k=5)
+
+    assert result["answer_basis"] == "fact_layer"
+    assert result["answer"] == "beta dock"
+    assert result["latest"]["value"] == "beta dock"
+    assert {fact["subject"] for fact in result["facts"]} == {
+        f"{marker} hardware adapter"
+    }
+
+
 def test_conflicting_active_facts_return_conflict_basis() -> None:
     _configure_stubs()
     first = _valid_conversation()
@@ -1495,9 +1802,91 @@ def test_conflicting_active_facts_return_conflict_basis() -> None:
 
     assert result["answer_basis"] == "conflict"
     assert result["confidence"] == "low"
-    assert result["confidence_reason"] == "Multiple active facts match the question but disagree."
+    assert result["confidence_reason"] == (
+        "Multiple latest facts match the question at the same timestamp but disagree."
+    )
     assert "red Gibson" in result["answer"]
     assert "black Fender" in result["answer"]
+
+
+def test_ask_returns_latest_fact_by_memory_timestamp() -> None:
+    _configure_stubs()
+    first = _valid_conversation()
+    first["id"] = "11111111-1111-4111-8111-111111111111"
+    first["source"] = "codex"
+    first["timestamp"] = "2026-08-12T00:00:00Z"
+    first["messages"] = [{"role": "user", "text": "The command name is alpha runner."}]
+    second = _valid_conversation()
+    second["id"] = "22222222-2222-4222-8222-222222222222"
+    second["source"] = "hermes"
+    second["timestamp"] = "2026-12-12T00:00:00Z"
+    second["messages"] = [{"role": "user", "text": "The command name is beta runner."}]
+    mvp_ingestion.ingest_messages(first)
+    mvp_ingestion.ingest_messages(second)
+
+    result = mvp_ingestion.ask("What is the command name?", top_k=5)
+
+    assert result["answer_basis"] == "fact_layer"
+    assert result["answer"] == "beta runner"
+    assert result["latest"] == {
+        "value": "beta runner",
+        "stored_at": "2026-12-12T00:00:00Z",
+        "author": "hermes",
+        "fact_id": result["facts"][0]["id"],
+        "subject": "project",
+        "predicate": "command_name",
+        "source_conversation_id": "22222222-2222-4222-8222-222222222222",
+    }
+    assert [entry["value"] for entry in result["fact_timeline"]] == [
+        "beta runner",
+        "alpha runner",
+    ]
+    assert result["facts"][0]["stored_at"] == "2026-12-12T00:00:00Z"
+    assert result["facts"][0]["author"] == "hermes"
+    assert result["evidence"][1]["used_in_answer"] is False
+
+
+def test_ask_reports_conflict_for_latest_same_timestamp_values() -> None:
+    _configure_stubs()
+    first = _valid_conversation()
+    first["id"] = "11111111-1111-4111-8111-111111111111"
+    first["source"] = "codex"
+    first["timestamp"] = "2026-08-12T00:00:00Z"
+    first["messages"] = [{"role": "user", "text": "The indexing strategy is lexical windows."}]
+    second = _valid_conversation()
+    second["id"] = "22222222-2222-4222-8222-222222222222"
+    second["source"] = "hermes"
+    second["timestamp"] = "2026-08-12T00:00:00Z"
+    second["messages"] = [{"role": "user", "text": "The indexing strategy is semantic chunks."}]
+    mvp_ingestion.ingest_messages(first)
+    mvp_ingestion.ingest_messages(second)
+
+    result = mvp_ingestion.ask("What is the indexing strategy?", top_k=5)
+
+    assert result["answer_basis"] == "conflict"
+    assert result["confidence"] == "low"
+    assert set(result["latest"]["values"]) == {"semantic chunks", "lexical windows"}
+    assert result["latest"]["stored_at"] == "2026-08-12T00:00:00Z"
+    assert "semantic chunks" in result["answer"]
+    assert "lexical windows" in result["answer"]
+
+
+def test_fact_answer_uses_specific_question_tokens() -> None:
+    _configure_stubs()
+    first = _valid_conversation()
+    first["id"] = "11111111-1111-4111-8111-111111111111"
+    first["messages"] = [{"role": "user", "text": "I like QA red beacon potato chips."}]
+    second = _valid_conversation()
+    second["id"] = "22222222-2222-4222-8222-222222222222"
+    second["messages"] = [{"role": "user", "text": "I like QA blue beacon corn chips."}]
+    mvp_ingestion.ingest_messages(first)
+    mvp_ingestion.ingest_messages(second)
+
+    result = mvp_ingestion.ask("What QA snack do I like with blue beacon?", top_k=5)
+
+    assert result["answer_basis"] == "fact_layer"
+    assert result["answer"] == "QA blue beacon corn chips"
+    assert [fact["object"] for fact in result["facts"]] == ["QA blue beacon corn chips"]
 
 
 def test_fact_answer_can_include_retrieval_context_as_mixed() -> None:
@@ -1543,6 +1932,30 @@ def test_profile_and_recurring_topic_facts_are_extracted() -> None:
     stored = getattr(mvp_ingestion._runtime().metadata_store, "_generated_summaries")
     assert stored[profile["summary"]["id"]]["type"] == "profile"
     assert stored[profile["summary"]["id"]]["provenance_status"] == "fact_ids"
+
+
+def test_profile_summary_text_deduplicates_repeated_topic_lines() -> None:
+    _configure_stubs()
+    first = _valid_conversation()
+    first["id"] = "11111111-1111-4111-8111-111111111111"
+    first["messages"] = [
+        {"role": "assistant", "text": "We discussed FastAPI, MCP, SQLite, and pytest."}
+    ]
+    second = _valid_conversation()
+    second["id"] = "22222222-2222-4222-8222-222222222222"
+    second["messages"] = [
+        {"role": "assistant", "text": "Again we discussed FastAPI, MCP, SQLite, and pytest."}
+    ]
+    mvp_ingestion.ingest_messages(first)
+    mvp_ingestion.ingest_messages(second)
+
+    profile = mvp_ingestion.profile_get("user", predicate="recurring_topic")
+    summary_text = profile["summary"]["text"]
+
+    assert len(profile["facts"]) == 8
+    for topic in ("backend", "mcp", "sql", "testing"):
+        assert summary_text.count(f"recurring_topic: {topic}") == 1
+    assert "more active fact" not in summary_text
 
 
 def test_profile_summary_handles_empty_filtered_view() -> None:

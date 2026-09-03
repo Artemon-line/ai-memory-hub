@@ -190,10 +190,20 @@ def test_mcp_fact_and_profile_concise_response_format_reduces_fact_payloads(
                 "limit": 1,
             },
         )
-        detailed_facts = _call_tool(
+        query_facts = _call_tool(
             client,
             mcp_headers,
             request_id=3,
+            name="memory_fact_search",
+            arguments={
+                "query": "blue Jazzmaster",
+                "project_id": "fact-shared",
+            },
+        )
+        detailed_facts = _call_tool(
+            client,
+            mcp_headers,
+            request_id=4,
             name="memory_fact_search",
             arguments={
                 "subject": "user",
@@ -205,7 +215,7 @@ def test_mcp_fact_and_profile_concise_response_format_reduces_fact_payloads(
         concise_profile = _call_tool(
             client,
             mcp_headers,
-            request_id=4,
+            request_id=5,
             name="memory_profile_get",
             arguments={
                 "subject": "user",
@@ -229,6 +239,8 @@ def test_mcp_fact_and_profile_concise_response_format_reduces_fact_payloads(
     assert concise_facts["returned_results"] == 1
     assert concise_facts["omitted_results"] == 1
     assert concise_facts["result_limit"] == 1
+    assert "a blue Jazzmaster guitar" in _fact_objects(query_facts)
+    assert "a green Gibson guitar" not in _fact_objects(query_facts)
     assert "qualifiers" in detailed_facts["results"][0]
     assert len(detailed_facts["results"]) == 3
 
@@ -239,6 +251,9 @@ def test_mcp_fact_and_profile_concise_response_format_reduces_fact_payloads(
         "confidence_counts",
         "source_quality_counts",
     }
+    summary_text = concise_profile["summary"]["text"]
+    assert summary_text.count("owns_guitar: a green Gibson guitar") == 1
+    assert summary_text.count("owns_guitar: a blue Jazzmaster guitar") == 1
     assert "provenance" not in concise_profile["summary"]
     assert "qualifiers" not in concise_profile["facts"][0]
     assert concise_profile["total_facts"] == 3

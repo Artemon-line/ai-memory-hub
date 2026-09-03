@@ -8,9 +8,11 @@ import re
 import secrets
 import sqlite3
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping, Sequence
 
 from memory.backend.contracts import ProviderCapabilities
 from memory.backend.errors import NotSupportedError
@@ -28,6 +30,123 @@ _PROJECT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 _AUDIT_EVENT_RE = re.compile(r"^[a-z][a-z0-9_.:-]{0,127}$")
 _PBKDF2_SHA256_ITERATIONS = 210_000
 _MAX_AUDIT_METADATA_BYTES = 8192
+
+
+class ConversationPayloadField(StrEnum):
+    METADATA = "metadata"
+
+
+class MetadataField(StrEnum):
+    INDEX_CHUNKS = "index_chunks"
+
+
+class IndexChunkField(StrEnum):
+    CHUNK_ID = "chunk_id"
+    CHUNK_INDEX = "chunk_index"
+    TOKEN_WINDOW_INDEX = "token_window_index"
+    MESSAGE_HASH = "message_hash"
+    ROLE = "role"
+    TEXT = "text"
+    INDEX_STATE = "index_state"
+
+
+class IndexState(StrEnum):
+    PENDING = "pending_index"
+    INDEXED = "indexed"
+    FAILED = "indexing_failed"
+
+
+@dataclass(frozen=True, slots=True)
+class IndexChunkIdentitySet:
+    chunk_ids: frozenset[str]
+    chunk_indexes: frozenset[int]
+
+    @classmethod
+    def from_chunk_ids(cls, chunk_ids: Sequence[str]) -> "IndexChunkIdentitySet":
+        ids = frozenset(str(chunk_id) for chunk_id in chunk_ids if str(chunk_id))
+        indexes = frozenset(
+            index for chunk_id in ids if (index := _chunk_index_from_chunk_id(chunk_id)) is not None
+        )
+        return cls(chunk_ids=ids, chunk_indexes=indexes)
+
+    def matches(self, chunk: Mapping[str, Any]) -> bool:
+        chunk_id = str(chunk.get(IndexChunkField.CHUNK_ID.value, ""))
+        if chunk_id:
+            return chunk_id in self.chunk_ids
+        chunk_index = _chunk_index_from_payload(chunk)
+        return chunk_index is not None and chunk_index in self.chunk_indexes
+
+
+def index_chunk_ids_by_chunk_index(chunk_ids: Sequence[str]) -> dict[int, str]:
+    output: dict[int, str] = {}
+    for chunk_id in chunk_ids:
+        normalized = str(chunk_id)
+        index = _chunk_index_from_chunk_id(normalized)
+        if index is not None and index not in output:
+            output[index] = normalized
+    return output
+
+
+def normalize_index_state(state: IndexState | str) -> IndexState:
+    if isinstance(state, IndexState):
+        return state
+    return IndexState(str(state))
+
+
+def update_index_chunks_payload(
+    conversation_json: dict[str, Any],
+    *,
+    chunk_ids: list[str],
+    state: IndexState | str,
+) -> dict[str, Any]:
+    updated = dict(conversation_json)
+    metadata_obj = updated.get(ConversationPayloadField.METADATA.value)
+    metadata = dict(metadata_obj) if isinstance(metadata_obj, dict) else {}
+    chunks = metadata.get(MetadataField.INDEX_CHUNKS.value)
+    if not isinstance(chunks, list):
+        updated[ConversationPayloadField.METADATA.value] = metadata
+        return updated
+
+    targets = IndexChunkIdentitySet.from_chunk_ids(chunk_ids)
+    chunk_id_by_index = index_chunk_ids_by_chunk_index(chunk_ids)
+    normalized_state = normalize_index_state(state).value
+    updated_chunks: list[Any] = []
+    for item in chunks:
+        if not isinstance(item, dict):
+            updated_chunks.append(item)
+            continue
+        chunk = dict(item)
+        if targets.matches(chunk):
+            chunk_index = _chunk_index_from_payload(chunk)
+            if (
+                not chunk.get(IndexChunkField.CHUNK_ID.value)
+                and chunk_index in chunk_id_by_index
+            ):
+                chunk[IndexChunkField.CHUNK_ID.value] = chunk_id_by_index[chunk_index]
+            chunk[IndexChunkField.INDEX_STATE.value] = normalized_state
+        updated_chunks.append(chunk)
+    metadata[MetadataField.INDEX_CHUNKS.value] = updated_chunks
+    updated[ConversationPayloadField.METADATA.value] = metadata
+    return updated
+
+
+def _chunk_index_from_chunk_id(chunk_id: str) -> int | None:
+    parts = chunk_id.split(":")
+    if len(parts) >= 2 and parts[1].isdigit():
+        return int(parts[1])
+    if len(parts) == 2 and parts[-1].isdigit():
+        return int(parts[-1])
+    return None
+
+
+def _chunk_index_from_payload(chunk: Mapping[str, Any]) -> int | None:
+    value = chunk.get(IndexChunkField.CHUNK_INDEX.value)
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 class SQLiteMetadataStore:
@@ -1297,25 +1416,54 @@ class SQLiteMetadataStore:
         return row["total"] == row["indexed"]
 
     def mark_chunks_indexed(self, memory_id: str, chunk_ids: list[str]) -> None:
-        self._mark_chunks_state(memory_id, chunk_ids, "indexed")
+        self._mark_chunks_state(memory_id, chunk_ids, IndexState.INDEXED)
 
     def mark_chunks_indexing_failed(self, memory_id: str, chunk_ids: list[str]) -> None:
-        self._mark_chunks_state(memory_id, chunk_ids, "indexing_failed")
+        self._mark_chunks_state(memory_id, chunk_ids, IndexState.FAILED)
 
     def _mark_chunks_state(
-        self, memory_id: str, chunk_ids: list[str], state: str
+        self, memory_id: str, chunk_ids: list[str], state: IndexState | str
     ) -> None:
         validated_id = self._validate_memory_id(memory_id)
+        normalized_state = normalize_index_state(state).value
+        normalized_chunk_ids = [str(chunk_id) for chunk_id in chunk_ids]
         with self._connect() as conn:
-            for chunk_id in chunk_ids:
+            for chunk_id in normalized_chunk_ids:
                 conn.execute(
                     """
                     UPDATE chunks
                     SET index_state = ?
                     WHERE conversation_id = ? AND chunk_id = ?
                     """,
-                    (state, validated_id, chunk_id),
+                    (normalized_state, validated_id, chunk_id),
                 )
+            self._sync_index_chunk_payload_state(
+                conn, validated_id, normalized_chunk_ids, normalized_state
+            )
+
+    def _sync_index_chunk_payload_state(
+        self,
+        conn: sqlite3.Connection,
+        memory_id: str,
+        chunk_ids: list[str],
+        state: IndexState | str,
+    ) -> None:
+        row = conn.execute(
+            "SELECT payload FROM conversations WHERE id = ?",
+            (memory_id,),
+        ).fetchone()
+        if row is None:
+            return
+        payload = json.loads(str(row["payload"]))
+        updated = update_index_chunks_payload(
+            payload,
+            chunk_ids=chunk_ids,
+            state=state,
+        )
+        conn.execute(
+            "UPDATE conversations SET payload = ? WHERE id = ?",
+            (json.dumps(updated, separators=(",", ":"), ensure_ascii=False), memory_id),
+        )
 
     def get(self, memory_id: str) -> dict[str, Any] | None:
         validated_id = self._validate_memory_id(memory_id)
@@ -2066,13 +2214,18 @@ class SQLiteMetadataStore:
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    str(chunk["chunk_id"]),
+                    str(chunk[IndexChunkField.CHUNK_ID.value]),
                     conversation_id,
-                    int(chunk["chunk_index"]),
-                    str(chunk["message_hash"]),
-                    str(chunk["role"]),
-                    str(chunk["text"]),
-                    str(chunk.get("index_state", "pending_index")),
+                    int(chunk[IndexChunkField.CHUNK_INDEX.value]),
+                    str(chunk[IndexChunkField.MESSAGE_HASH.value]),
+                    str(chunk[IndexChunkField.ROLE.value]),
+                    str(chunk[IndexChunkField.TEXT.value]),
+                    str(
+                        chunk.get(
+                            IndexChunkField.INDEX_STATE.value,
+                            IndexState.PENDING.value,
+                        )
+                    ),
                 ),
             )
 
@@ -2297,12 +2450,14 @@ class SQLiteMetadataStore:
             message_hash = str(message["hash"])
             fallback_chunks.append(
                 {
-                    "chunk_id": f"{conversation_json['id']}:{index}:{message_hash}",
-                    "chunk_index": index,
-                    "message_hash": message_hash,
-                    "role": str(message["role"]),
-                    "text": str(message["text"]),
-                    "index_state": "pending_index",
+                    IndexChunkField.CHUNK_ID.value: (
+                        f"{conversation_json['id']}:{index}:{message_hash}"
+                    ),
+                    IndexChunkField.CHUNK_INDEX.value: index,
+                    IndexChunkField.MESSAGE_HASH.value: message_hash,
+                    IndexChunkField.ROLE.value: str(message["role"]),
+                    IndexChunkField.TEXT.value: str(message["text"]),
+                    IndexChunkField.INDEX_STATE.value: IndexState.PENDING.value,
                 }
             )
         return fallback_chunks
