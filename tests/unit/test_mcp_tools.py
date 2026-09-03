@@ -4,6 +4,7 @@ import asyncio
 import json
 import threading
 import time
+from typing import Any
 
 import pytest
 
@@ -260,18 +261,32 @@ async def test_mcp_tool_handlers_insert_search_retrieve() -> None:
     )
     assert retrieve_result["status"] == "ok"
     assert retrieve_result["memory"]["id"] == "d9fd4c95-9cb3-4fd5-b967-3027f8863210"
-    assert "hash" not in retrieve_result["memory"]["messages"][0]
-    assert "conversation_hash" not in retrieve_result["memory"]["metadata"]
-    assert "message_hashes" not in retrieve_result["memory"]["metadata"]
+    assert retrieve_result["memory"]["source"] == "claude"
+    assert retrieve_result["memory"]["memory_status"] == "active"
+    assert retrieve_result["memory"]["message_count"] == 1
+    assert retrieve_result["memory"]["messages"] == [
+        {"role": "user", "text": "hello mcp"}
+    ]
+    assert "metadata" not in retrieve_result["memory"]
     assert "results" in retrieve_result
     assert "cursor" in retrieve_result
     assert "error_code" in retrieve_result
     assert "error_message" in retrieve_result
 
+    detailed_retrieve_result = await handlers["memory_retrieve"](
+        "d9fd4c95-9cb3-4fd5-b967-3027f8863210",
+        response_format="detailed",
+        ctx=ctx,
+    )
+    assert detailed_retrieve_result["status"] == "ok"
+    assert "hash" not in detailed_retrieve_result["memory"]["messages"][0]
+    assert "conversation_hash" not in detailed_retrieve_result["memory"]["metadata"]
+    assert "message_hashes" not in detailed_retrieve_result["memory"]["metadata"]
+
     ask_result = await handlers["memory_ask"]("what was stored?", 3, ctx=ctx)
     assert ask_result["status"] == "ok"
     assert "answer" in ask_result
-    assert ask_result["results"] == []
+    assert "results" not in ask_result
     assert ask_result["memory_result_count"] == 1
     assert ask_result["citation_count"] == 1
     for verbose_key in (
@@ -336,6 +351,27 @@ async def test_mcp_search_response_format_controls_conversation_payloads() -> No
     assert "conversation" in detailed_row
     assert "index_chunks" in detailed_row["conversation"]["metadata"]
     assert "tag_sources" in detailed_row["conversation"]["metadata"]
+
+
+@pytest.mark.asyncio
+async def test_mcp_concise_search_truncates_large_chunk_text() -> None:
+    runtime = _runtime()
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=runtime)
+    handlers = build_tool_handlers(agent)
+    long_text = "hello " + ("large evidence text " * 80)
+    payload = _conversation()
+    payload["messages"] = [{"role": "user", "text": long_text}]
+
+    await handlers["memory_insert"](payload)
+    concise = await handlers["memory_search"]("hello", 5)
+    detailed = await handlers["memory_search"](
+        "hello", 5, response_format="detailed"
+    )
+
+    concise_text = concise["results"][0]["text"]
+    assert len(concise_text) <= 800
+    assert concise_text.endswith("...")
+    assert detailed["results"][0]["text"] == long_text
 
 
 @pytest.mark.asyncio
@@ -497,11 +533,43 @@ async def test_mcp_fact_and_profile_concise_format_reduces_fact_payloads() -> No
 
 
 @pytest.mark.asyncio
+async def test_mcp_concise_ask_includes_latest_value_metadata() -> None:
+    runtime = _runtime()
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=runtime)
+    handlers = build_tool_handlers(agent)
+    older = _conversation()
+    older["id"] = "11111111-1111-4111-8111-111111111111"
+    older["source"] = "codex"
+    older["timestamp"] = "2026-08-12T00:00:00Z"
+    older["messages"] = [{"role": "user", "text": "The command name is alpha runner."}]
+    newer = _conversation_two()
+    newer["id"] = "22222222-2222-4222-8222-222222222222"
+    newer["source"] = "hermes"
+    newer["timestamp"] = "2026-12-12T00:00:00Z"
+    newer["messages"] = [{"role": "user", "text": "The command name is beta runner."}]
+
+    await handlers["memory_insert"](older)
+    await handlers["memory_insert"](newer)
+    ask = await handlers["memory_ask"]("What is the command name?", 5)
+
+    assert ask["answer"] == "beta runner"
+    assert ask["answer_basis"] == "fact_layer"
+    assert ask["latest"]["value"] == "beta runner"
+    assert ask["latest"]["stored_at"] == "2026-12-12T00:00:00Z"
+    assert ask["latest"]["author"] == "hermes"
+    assert ask["fact_count"] == 1
+    assert "fact_timeline" not in ask
+    assert "facts" not in ask
+    assert "evidence" not in ask
+
+
+@pytest.mark.asyncio
 async def test_mcp_fact_and_profile_concise_deduplicates_and_limits_rows(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
     handlers = build_tool_handlers(agent)
+    fact_search_kwargs: list[dict[str, Any]] = []
     facts = [
         {
             "id": "fact-a",
@@ -532,7 +600,8 @@ async def test_mcp_fact_and_profile_concise_deduplicates_and_limits_rows(
         },
     ]
 
-    async def fake_fact_search(**_kwargs):
+    async def fake_fact_search(**kwargs):
+        fact_search_kwargs.append(kwargs)
         return {"status": "ok", "results": facts}
 
     async def fake_profile_get(**_kwargs):
@@ -546,11 +615,22 @@ async def test_mcp_fact_and_profile_concise_deduplicates_and_limits_rows(
     monkeypatch.setattr(agent, "fact_search", fake_fact_search)
     monkeypatch.setattr(agent, "profile_get", fake_profile_get)
 
+    query_facts = await handlers["memory_fact_search"](query="cherry Gibson")
+    default_facts = await handlers["memory_fact_search"](subject="user")
     concise_facts = await handlers["memory_fact_search"](subject="user", limit=1)
     detailed_facts = await handlers["memory_fact_search"](
         subject="user", response_format="detailed", limit=1
     )
     concise_profile = await handlers["memory_profile_get"](subject="user", limit=1)
+
+    assert fact_search_kwargs[0]["query"] == "cherry Gibson"
+    assert [row["id"] for row in query_facts["results"]] == ["fact-a", "fact-c"]
+    assert [row["id"] for row in default_facts["results"]] == ["fact-a", "fact-c"]
+    assert default_facts["total_results"] == 3
+    assert default_facts["unique_results"] == 2
+    assert default_facts["returned_results"] == 2
+    assert default_facts["omitted_results"] == 0
+    assert default_facts["result_limit"] == 10
 
     assert [row["id"] for row in concise_facts["results"]] == ["fact-a"]
     assert concise_facts["total_results"] == 3

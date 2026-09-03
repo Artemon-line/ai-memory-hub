@@ -2587,6 +2587,13 @@ class InMemoryVectorStore:
         id_set = {str(item) for item in ids}
         self._rows = [row for row in self._rows if str(row["memory_id"]) not in id_set]
 
+    def get_indexed_chunk_ids(self, memory_id: str) -> list[str]:
+        return [
+            str(row["chunk_id"])
+            for row in self._rows
+            if str(row["memory_id"]) == str(memory_id)
+        ]
+
     def get_stats(self) -> dict[str, Any]:
         return {
             "provider": "memory",
@@ -2837,6 +2844,16 @@ class PGVectorStore:
                     f"DELETE FROM {self.table_name} WHERE memory_id = ANY(%s)",
                     ([str(item) for item in ids],),
                 )
+
+    def get_indexed_chunk_ids(self, memory_id: str) -> list[str]:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"SELECT chunk_id FROM {self.table_name} WHERE memory_id = %s ORDER BY chunk_index",
+                    (str(memory_id),),
+                )
+                rows = cur.fetchall()
+        return [str(row[0]) for row in rows]
 
     def get_stats(self) -> dict[str, Any]:
         with self._connect() as conn:

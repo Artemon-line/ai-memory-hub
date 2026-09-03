@@ -50,6 +50,22 @@ def test_command_template_writes_prompt_file(tmp_path: Path, monkeypatch) -> Non
     assert real_client_smoke.SMOKE_MARKER in (tmp_path / "claude.prompt.txt").read_text(encoding="utf-8")
 
 
+def test_responses_provider_config_is_written_for_codex(tmp_path: Path) -> None:
+    spec = real_client_smoke._client_spec(
+        name="codex",
+        hub_url="http://127.0.0.1:8000",
+        gateway_url="http://127.0.0.1:9000",
+        workspace=tmp_path,
+    )
+
+    config = (tmp_path / "codex-home" / "config.toml").read_text(encoding="utf-8")
+
+    assert spec.executable == "codex"
+    assert 'wire_api = "responses"' in config
+    assert 'base_url = "http://127.0.0.1:9000/v1"' in config
+    assert 'url = "http://127.0.0.1:8000/mcp/"' in config
+
+
 def test_gateway_chat_completion_requests_tool_call() -> None:
     response = real_client_smoke._openai_chat_response({"model": "m", "messages": [{"role": "user", "content": "go"}]})
 
@@ -68,6 +84,77 @@ def test_gateway_moves_to_next_tool_after_prior_tool_result() -> None:
 
     tool_call = response["choices"][0]["message"]["tool_calls"][0]
     assert tool_call["function"]["name"] == "memory_insert"
+
+
+def test_responses_gateway_requests_fact_search_after_ask() -> None:
+    response = real_client_smoke._openai_responses_response(
+        {
+            "input": [
+                {"type": "function_call", "name": "memory_validate"},
+                {"type": "function_call", "name": "memory_insert"},
+                {"type": "function_call", "name": "memory_search"},
+                {"type": "function_call", "name": "memory_retrieve"},
+                {"type": "function_call", "name": "memory_ask"},
+            ]
+        }
+    )
+
+    output = response["output"][0]
+    arguments = json.loads(output["arguments"])
+    assert output["name"] == "mcp__ai_memory_hub.memory_fact_search"
+    assert arguments == {"subject": "user", "predicate": "likes", "response_format": "concise"}
+    assert real_client_smoke.SMOKE_FACT_OBJECT in json.dumps(
+        real_client_smoke._tool_input("memory_insert")
+    )
+
+
+def test_real_client_smoke_retrieve_uses_concise_response_format() -> None:
+    arguments = real_client_smoke._tool_input(
+        "memory_retrieve",
+        {"insert_result": {"id": "11111111-2222-4333-8444-555555555555"}},
+    )
+
+    assert arguments == {
+        "id": "11111111-2222-4333-8444-555555555555",
+        "response_format": "concise",
+    }
+
+
+def test_responses_stream_emits_tool_arguments_and_completed_event() -> None:
+    response = real_client_smoke._openai_responses_response(
+        {"model": "amh-smoke-model", "input": [{"type": "message", "content": "go"}]}
+    )
+
+    events = list(real_client_smoke._openai_responses_stream_events(response))
+    event_types = [event["type"] for event in events]
+
+    assert response["output"][0]["type"] == "function_call"
+    assert response["output"][0]["name"] == "mcp__ai_memory_hub.memory_validate"
+    assert "response.function_call_arguments.done" in event_types
+    assert event_types[-1] == "response.completed"
+    assert events[-1]["response"]["status"] == "completed"
+
+
+def test_sse_frames_encode_events_and_done_marker() -> None:
+    frames = list(
+        real_client_smoke._sse_frames([{"type": "response.completed", "ok": True}])
+    )
+
+    assert frames[0].startswith(b"event: response.completed\n")
+    assert b'data: {"type": "response.completed", "ok": true}\n\n' in frames[0]
+    assert frames[-1] == b"data: [DONE]\n\n"
+
+
+def test_unsupported_tool_call_is_reported_as_dispatch_error(tmp_path: Path) -> None:
+    log = tmp_path / "codex.stderr.log"
+    log.write_text("ERROR router: unsupported call: mcp__ai_memory_hub.memory_insert\n", encoding="utf-8")
+
+    reason = real_client_smoke._client_dispatch_error(log)
+
+    assert reason == (
+        "client did not dispatch MCP tool call: unsupported call "
+        "mcp__ai_memory_hub.memory_insert"
+    )
 
 
 def test_summary_is_written_for_all_skipped_clients(tmp_path: Path, monkeypatch) -> None:

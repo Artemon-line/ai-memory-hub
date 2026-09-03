@@ -9,6 +9,7 @@ from memory.backend.contracts import ProviderCapabilities
 from memory.backend.errors import NotSupportedError
 from memory.backend.metadata_store import (
     LOCAL_DEFAULT_PROJECT_ID,
+    IndexState,
     _default_project_id,
     _prepare_audit_event,
     _validate_audit_limit,
@@ -16,6 +17,8 @@ from memory.backend.metadata_store import (
     _validate_optional_audit_field,
     _validate_owner_id,
     _validate_project_id,
+    normalize_index_state,
+    update_index_chunks_payload,
 )
 from memory.provider_models import MetadataProviderName, MongoCollectionName
 
@@ -163,9 +166,40 @@ class MongoDBMetadataStore:
         return _payload(row)
 
     def mark_chunks_indexed(self, memory_id: str, chunk_ids: list[str]) -> None:
+        self._mark_chunks_state(memory_id, chunk_ids, IndexState.INDEXED)
+
+    def mark_chunks_indexing_failed(self, memory_id: str, chunk_ids: list[str]) -> None:
+        self._mark_chunks_state(memory_id, chunk_ids, IndexState.FAILED)
+
+    def _mark_chunks_state(
+        self, memory_id: str, chunk_ids: list[str], state: IndexState | str
+    ) -> None:
+        validated_id = self._validate_memory_id(memory_id)
+        normalized_state = normalize_index_state(state)
+        normalized_chunk_ids = [str(item) for item in chunk_ids]
+        row = self._conversations.find_one({"id": validated_id})
+        if row is None:
+            return
+        payload = _payload(row) or {}
+        indexed_ids = [str(item) for item in row.get("indexed_chunk_ids", [])]
+        if normalized_state == IndexState.INDEXED:
+            seen = set(indexed_ids)
+            indexed_ids.extend(item for item in normalized_chunk_ids if item not in seen)
+        else:
+            failed_ids = set(normalized_chunk_ids)
+            indexed_ids = [item for item in indexed_ids if item not in failed_ids]
         self._conversations.update_one(
-            {"id": self._validate_memory_id(memory_id)},
-            {"$addToSet": {"indexed_chunk_ids": {"$each": [str(item) for item in chunk_ids]}}},
+            {"id": validated_id},
+            {
+                "$set": {
+                    "payload": update_index_chunks_payload(
+                        payload,
+                        chunk_ids=normalized_chunk_ids,
+                        state=normalized_state,
+                    ),
+                    "indexed_chunk_ids": indexed_ids,
+                }
+            },
         )
 
     def is_fully_indexed(self, memory_id: str) -> bool:

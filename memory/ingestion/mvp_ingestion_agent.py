@@ -165,6 +165,7 @@ class MVPIngestionAgent(BaseIngestionAgent):
     async def fact_search(
         self,
         *,
+        query: str | None = None,
         subject: str | None = None,
         predicate: str | None = None,
         include_superseded: bool = False,
@@ -183,6 +184,7 @@ class MVPIngestionAgent(BaseIngestionAgent):
     ) -> Dict[str, Any]:
         return await self._call_service(
             self._service.fact_search,
+            query=query,
             subject=subject,
             predicate=predicate,
             include_superseded=include_superseded,

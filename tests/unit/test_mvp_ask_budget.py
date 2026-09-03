@@ -37,10 +37,12 @@ def test_select_ask_context_prefers_ranked_chunks_and_drops_overflow(monkeypatch
         },
     ]
 
-    selected, citations, lines, tokens_used, dropped = mvp_ingestion._select_ask_context(
-        matches=matches,
-        max_context_tokens=5,
-        encoding="test",
+    selected, citations, lines, tokens_used, dropped, context_truncated = (
+        mvp_ingestion._select_ask_context(
+            matches=matches,
+            max_context_tokens=5,
+            encoding="test",
+        )
     )
 
     assert len(selected) == 1
@@ -57,6 +59,7 @@ def test_select_ask_context_prefers_ranked_chunks_and_drops_overflow(monkeypatch
     assert lines == ["- [memory-a#0] alpha beta gamma"]
     assert tokens_used == 5
     assert dropped == 1
+    assert context_truncated is True
 
 
 def test_ask_uses_config_budget_when_tokenizer_enabled(monkeypatch) -> None:
@@ -98,6 +101,11 @@ def test_ask_uses_config_budget_when_tokenizer_enabled(monkeypatch) -> None:
     assert result["context_tokens_used"] <= 5
     assert result["chunks_selected"] == 1
     assert result["citations"][0]["text"] == "alpha beta gamma"
+    assert result["answer"] == "alpha beta gamma"
+    assert "Based on stored memory" not in result["answer"]
+    assert "- [" not in result["answer"]
+    assert result["context_truncated"] is True
+    assert result["confidence"] == "low"
 
 
 def test_ask_handles_empty_results_with_request_budget(monkeypatch) -> None:
@@ -157,3 +165,5 @@ def test_ask_handles_tight_budget_without_selected_context(monkeypatch) -> None:
     assert result["context_tokens_used"] == 0
     assert result["chunks_selected"] == 0
     assert result["chunks_dropped"] == 1
+    assert result["context_truncated"] is True
+    assert result["confidence_reason"] == "Retrieved memory was truncated by the context budget."

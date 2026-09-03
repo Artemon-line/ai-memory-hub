@@ -7,6 +7,12 @@ should describe the supported public behavior for each tagged release.
 ## Unreleased
 
 - Added first-release governance, support, and release automation scaffolding.
+- Fixed detailed `memory_retrieve` index manifests so successfully embedded
+  chunks report `indexed` instead of stale `pending_index`.
+- Fixed `memory_ask` routing so active latest fact projections are preferred
+  before direct chunk fallback, including corrected temporal facts.
+- Fixed `memory_profile_get` summary text so duplicate active fact rows are
+  collapsed into canonical human-readable lines without mutating the timeline.
 
 ## 0.1.0
 

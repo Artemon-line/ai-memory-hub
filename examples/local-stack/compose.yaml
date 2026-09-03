@@ -47,7 +47,7 @@ services:
       otel-collector:
         condition: service_started
     ports:
-      # Keep the hub on loopback. Use ngrok, a reverse proxy, VPN, or another
+      # Keep the hub on loopback. Use a reverse proxy, VPN, or another
       # protected boundary for remote clients.
       - "127.0.0.1:8000:8000"
     volumes:

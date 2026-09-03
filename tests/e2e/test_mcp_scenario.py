@@ -32,7 +32,7 @@ async def test_memory_scenario_e2e():
     1. Insert "Hello from SQLite!"
     2. Insert "I love VRAM and GPUs"
     3. Insert "I enjoy cooking pasta"
-    4. Ask "GPU" and verify results.
+    4. Ask "GPU" and verify the compact answer.
 
     Note: This test expects Ollama to be running with nomic-embed-text model
     as configured in tests/mcp_server_entry.py.
@@ -94,7 +94,7 @@ async def _run_memory_scenario(session: ClientSession) -> None:
 
     assert ask_res["status"] == "ok"
     assert "answer" in ask_res
-    assert ask_res["results"] == []
+    assert "results" not in ask_res
     assert ask_res["memory_result_count"] >= 1
     assert ask_res["citation_count"] >= 1
     assert "citations" not in ask_res

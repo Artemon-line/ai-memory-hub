@@ -11,6 +11,7 @@ This plan captures unimplemented or partial features found while reconciling `do
 | P0 | Retrieval precision: threshold, hybrid search, metadata rerank | Implemented | `improvements/retrieval_precision_plan.md` |
 | P0 | MCP protocol compliance: initialize instructions, schemas, pagination, logging, completion when client UX needs it | Partial | `mcp_utility_compliance_plan.md`, `mcp_plan.md` |
 | P0 | MCP response formats for token-efficient agent recall before release | Planned | `improvements/mcp_response_format_plan.md` |
+| P0 | Live MCP retest follow-up for noisy real hubs and fact canonicalization | Planned | `improvements/p0_live_mcp_retest_followup_plan.md` |
 | P0 | Agent/model footprint provenance for saved conversations before release | Planned | `improvements/agent_model_footprint_plan.md` |
 | P0 | Bearer-token auth and per-user memory isolation | Partial | `bearer_api_key_auth_plan.md`, `improvements/google_oauth_connect_ui_plan.md` |
 | P0 | Project workspaces and shared collaboration boundaries | Partial | `project_workspace_collaboration_plan.md` |

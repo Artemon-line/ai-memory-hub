@@ -7,7 +7,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from memory.api.server import create_app
-from memory.backend.metadata_store import PROJECT_ROLE_WRITER, SQLiteMetadataStore
+from memory.backend.metadata_store import (
+    PROJECT_ROLE_WRITER,
+    IndexChunkField,
+    IndexState,
+    MetadataField,
+    SQLiteMetadataStore,
+)
 from memory.backend.vector_store import InMemoryVectorStore
 from memory.ingestion import mvp_ingestion
 from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
@@ -200,13 +206,17 @@ def _assert_search_shape(
 
 def _assert_ask_shape(result: dict[str, Any], expected_id: str) -> None:
     assert result["status"] == "ok"
-    assert result["results"]
-    assert result["results"][0]["id"] == expected_id
     assert result["citations"]
     assert result["citations"][0]["id"] == expected_id
     assert result["answer"]
     assert result["confidence"] in {"high", "medium", "low"}
     assert result["answer_basis"] in {"direct_memory", "mixed", "fact_layer", "conflict"}
+    if result["answer_basis"] == "fact_layer":
+        assert result["results"] == []
+        assert result["latest"]["source_conversation_id"] == expected_id
+    else:
+        assert result["results"]
+        assert result["results"][0]["id"] == expected_id
 
 
 def _assert_mcp_concise_ask_shape(result: dict[str, Any]) -> None:
@@ -214,9 +224,14 @@ def _assert_mcp_concise_ask_shape(result: dict[str, Any]) -> None:
     assert result["answer"]
     assert result["confidence"] in {"high", "medium", "low"}
     assert result["answer_basis"] in {"direct_memory", "mixed", "fact_layer", "conflict"}
-    assert result["results"] == []
-    assert result["memory_result_count"] >= 1
     assert result["citation_count"] >= 1
+    assert "results" not in result
+    if result["answer_basis"] == "fact_layer":
+        assert result["fact_count"] >= 1
+        assert result["memory_result_count"] == 0
+        assert result["latest"]
+    else:
+        assert result["memory_result_count"] >= 1
     for verbose_key in (
         "citations",
         "evidence",
@@ -290,7 +305,7 @@ def test_api_insert_can_be_read_through_mcp(tmp_path: Path) -> None:
             headers,
             request_id=3,
             name="memory_retrieve",
-            arguments={"id": payload["id"]},
+            arguments={"id": payload["id"], "response_format": "detailed"},
         )
         ask = _call_tool(
             client,
@@ -366,7 +381,11 @@ def test_api_project_insert_can_be_read_through_mcp_with_same_project(
             headers,
             request_id=3,
             name="memory_retrieve",
-            arguments={"id": payload["id"], "project_id": "shared-interop"},
+            arguments={
+                "id": payload["id"],
+                "project_id": "shared-interop",
+                "response_format": "detailed",
+            },
         )
         ask = _call_tool(
             client,
@@ -570,14 +589,14 @@ def test_mcp_codex_and_opencode_sessions_share_same_bearer_token(
             opencode_headers,
             request_id=4,
             name="memory_retrieve",
-            arguments={"id": codex_payload["id"]},
+            arguments={"id": codex_payload["id"], "response_format": "detailed"},
         )
         codex_reads_opencode = _call_tool(
             client,
             codex_headers,
             request_id=5,
             name="memory_retrieve",
-            arguments={"id": opencode_payload["id"]},
+            arguments={"id": opencode_payload["id"], "response_format": "detailed"},
         )
         opencode_searches_codex = _call_tool(
             client,
@@ -648,14 +667,14 @@ def test_mcp_codex_and_opencode_sessions_isolate_different_bearer_tokens(
             codex_headers,
             request_id=4,
             name="memory_retrieve",
-            arguments={"id": codex_payload["id"]},
+            arguments={"id": codex_payload["id"], "response_format": "detailed"},
         )
         opencode_reads_own = _call_tool(
             client,
             opencode_headers,
             request_id=5,
             name="memory_retrieve",
-            arguments={"id": opencode_payload["id"]},
+            arguments={"id": opencode_payload["id"], "response_format": "detailed"},
         )
         opencode_reads_codex = _call_tool(
             client,
@@ -749,11 +768,9 @@ def test_api_and_mcp_response_shapes_share_public_fields(tmp_path: Path) -> None
     assert set(api_ask).issuperset(
         {"status", "results", "answer", "citations", "confidence", "answer_basis"}
     )
-    assert api_ask["results"][0]["id"] == payload["id"]
-    assert set(mcp_ask).issuperset(
-        {"status", "results", "answer", "confidence", "answer_basis"}
-    )
-    assert mcp_ask["results"] == []
+    assert api_ask["latest"]["source_conversation_id"] == payload["id"]
+    assert set(mcp_ask).issuperset({"status", "answer", "confidence", "answer_basis"})
+    assert "results" not in mcp_ask
     assert "citations" not in mcp_ask
 
 
@@ -788,10 +805,24 @@ def test_mcp_concise_response_format_strips_heavy_search_and_ask_payloads(
                 "response_format": "detailed",
             },
         )
-        concise_ask = _call_tool(
+        concise_retrieve = _call_tool(
             client,
             headers,
             request_id=4,
+            name="memory_retrieve",
+            arguments={"id": payload["id"]},
+        )
+        detailed_retrieve = _call_tool(
+            client,
+            headers,
+            request_id=5,
+            name="memory_retrieve",
+            arguments={"id": payload["id"], "response_format": "detailed"},
+        )
+        concise_ask = _call_tool(
+            client,
+            headers,
+            request_id=6,
             name="memory_ask",
             arguments={
                 "question": "What is the concise MCP response phrase?",
@@ -814,10 +845,33 @@ def test_mcp_concise_response_format_strips_heavy_search_and_ask_payloads(
     assert "index_chunks" in detailed_row["conversation"]["metadata"]
     assert "tag_sources" in detailed_row["conversation"]["metadata"]
 
+    assert concise_retrieve["memory"]["id"] == payload["id"]
+    assert concise_retrieve["memory"]["thread_id"] == "thread-concise-response"
+    assert concise_retrieve["memory"]["memory_status"] == "active"
+    assert concise_retrieve["memory"]["message_count"] == 1
+    assert concise_retrieve["memory"]["messages"] == payload["messages"]
+    assert "metadata" not in concise_retrieve["memory"]
+    assert "index_chunks" not in json.dumps(concise_retrieve)
+    assert "tag_sources" not in json.dumps(concise_retrieve)
+
+    assert detailed_retrieve["memory"]["id"] == payload["id"]
+    assert "index_chunks" in detailed_retrieve["memory"]["metadata"]
+    index_chunks = detailed_retrieve["memory"]["metadata"][MetadataField.INDEX_CHUNKS.value]
+    assert {
+        chunk[IndexChunkField.INDEX_STATE.value]
+        for chunk in index_chunks
+    } == {IndexState.INDEXED.value}
+    assert "tag_sources" in detailed_retrieve["memory"]["metadata"]
+
     assert concise_ask["status"] == "ok"
-    assert concise_ask["results"] == []
-    assert concise_ask["memory_result_count"] == 1
+    assert concise_ask["answer"] == "teal lantern"
+    assert concise_ask["answer_basis"] == "fact_layer"
+    assert "Based on stored memory" not in concise_ask["answer"]
+    assert "results" not in concise_ask
+    assert concise_ask["memory_result_count"] == 0
+    assert concise_ask["fact_count"] == 1
     assert concise_ask["citation_count"] == 1
+    assert concise_ask["latest"]["value"] == "teal lantern"
     assert "citations" not in concise_ask
     assert "evidence" not in concise_ask
     assert "structured_evidence" not in concise_ask
