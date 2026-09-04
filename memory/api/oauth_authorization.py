@@ -4,6 +4,7 @@ import base64
 import hashlib
 import hmac
 import ipaddress
+import logging
 import re
 import secrets
 import time
@@ -35,6 +36,7 @@ PKCE_VERIFIER_PATTERN = re.compile(r"^[A-Za-z0-9._~-]{43,128}$")
 PKCE_CHALLENGE_PATTERN = re.compile(r"^[A-Za-z0-9_-]{43}$")
 LOCALHOST_NAMES = {"localhost"}
 REDIRECT_URI_SCHEMES = {"http", "https"}
+logger = logging.getLogger(__name__)
 
 
 def register_oauth_authorization_routes(
@@ -348,6 +350,7 @@ async def _refresh_token_response(
         raise _oauth_error("invalid_grant", "Refresh token is expired")
     consumed = await service.agent.consume_oauth_refresh_token(refresh_token)
     if consumed is None or consumed.get("consumed_at") is None:
+        await service.agent.revoke_oauth_refresh_token_family(str(record["token_family_id"]))
         raise _oauth_error("invalid_grant", "Refresh token is invalid")
     scopes = record.get("scopes")
     return await _issue_access_and_refresh_tokens(
@@ -389,16 +392,20 @@ async def _issue_access_and_refresh_tokens(
     )
     refresh_token = "amh_refresh_" + secrets.token_urlsafe(32)
     family_id = token_family_id or "amh_family_" + secrets.token_urlsafe(24)
-    await service.agent.create_oauth_refresh_token(
-        refresh_token=refresh_token,
-        token_family_id=family_id,
-        client_id=client_id,
-        owner_id=owner_id,
-        scopes=normalized_scopes,
-        resource=resource,
-        access_token_id=access_token_id,
-        expires_at=utc_after(config.api.oauth.refresh_token_ttl_seconds),
-    )
+    try:
+        await service.agent.create_oauth_refresh_token(
+            refresh_token=refresh_token,
+            token_family_id=family_id,
+            client_id=client_id,
+            owner_id=owner_id,
+            scopes=normalized_scopes,
+            resource=resource,
+            access_token_id=access_token_id,
+            expires_at=utc_after(config.api.oauth.refresh_token_ttl_seconds),
+        )
+    except Exception:
+        await _revoke_failed_access_token(service, access_token_id)
+        raise
     return JSONResponse(
         {
             "access_token": issued_token,
@@ -411,6 +418,16 @@ async def _issue_access_and_refresh_tokens(
             "jti": access_token_id,
         }
     )
+
+
+async def _revoke_failed_access_token(service: ConnectService, token_id: str) -> None:
+    try:
+        await service.agent.revoke_auth_token(token_id)
+    except Exception:
+        logger.exception(
+            "OAuth access-token compensation failed",
+            extra={"event": "oauth_access_token_compensation_failed"},
+        )
 
 
 def _scopes_from_scope_value(value: str) -> list[str]:

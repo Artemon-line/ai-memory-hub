@@ -5,7 +5,9 @@ import hashlib
 import re
 import sqlite3
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Barrier
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
@@ -1119,6 +1121,72 @@ def test_oauth_refresh_token_rotates_and_reuse_revokes_family(tmp_path, monkeypa
     assert replay.status_code == 400
     assert replay.json()["error"] == "invalid_grant"
     assert revoked_access.status_code == 401
+
+
+def test_concurrent_oauth_refresh_reuse_revokes_winning_credentials(tmp_path, monkeypatch) -> None:
+    client = _client(tmp_path, monkeypatch)
+    flow = _mcp_oauth_token_response(client, state="refresh-race")
+    token = flow["token"]
+    assert isinstance(token, dict)
+    refresh_token = str(token["refresh_token"])
+    client_id = str(flow["client_id"])
+    barrier = Barrier(2)
+    original_consume = MVPIngestionAgent.consume_oauth_refresh_token
+
+    async def coordinated_consume(self, value: str):
+        barrier.wait(timeout=10)
+        return await original_consume(self, value)
+
+    monkeypatch.setattr(MVPIngestionAgent, "consume_oauth_refresh_token", coordinated_consume)
+    form = {
+        "grant_type": "refresh_token",
+        "refresh_token": refresh_token,
+        "client_id": client_id,
+    }
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        responses = list(executor.map(lambda _: client.post("/oauth/token", data=form), range(2)))
+
+    assert sorted(response.status_code for response in responses) == [200, 400]
+    winner = next(response.json() for response in responses if response.status_code == 200)
+    access = client.post(
+        "/memory/search",
+        headers={"Authorization": f"Bearer {winner['access_token']}"},
+        json={"query": "anything"},
+    )
+    assert access.status_code == 401
+
+
+def test_refresh_persistence_failure_revokes_new_access_token(tmp_path, monkeypatch) -> None:
+    client = _client(tmp_path, monkeypatch)
+    flow = _mcp_oauth_token_response(client, state="refresh-failure")
+    token = flow["token"]
+    assert isinstance(token, dict)
+    with sqlite3.connect(tmp_path / "metadata.sqlite3") as conn:
+        active_before = conn.execute(
+            "SELECT COUNT(*) FROM auth_tokens WHERE revoked_at IS NULL"
+        ).fetchone()[0]
+
+    async def fail_refresh_persistence(_self: object, **_kwargs: object) -> None:
+        raise RuntimeError("injected refresh persistence failure")
+
+    monkeypatch.setattr(MVPIngestionAgent, "create_oauth_refresh_token", fail_refresh_persistence)
+
+    with pytest.raises(RuntimeError, match="injected refresh persistence failure"):
+        client.post(
+            "/oauth/token",
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": token["refresh_token"],
+                "client_id": flow["client_id"],
+            },
+        )
+
+    with sqlite3.connect(tmp_path / "metadata.sqlite3") as conn:
+        active_after = conn.execute(
+            "SELECT COUNT(*) FROM auth_tokens WHERE revoked_at IS NULL"
+        ).fetchone()[0]
+    assert active_after == active_before
 
 
 def test_oauth_revoke_refresh_token_revokes_family_and_access_token(tmp_path, monkeypatch) -> None:
