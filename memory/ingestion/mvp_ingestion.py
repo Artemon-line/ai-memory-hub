@@ -128,9 +128,7 @@ class HttpEmbeddingProvider:
     ):
         key = api_key or os.getenv("EMBEDDING_ENDPOINT_API_KEY")
         if not key:
-            logger.warning(
-                "EMBEDDING_ENDPOINT_API_KEY is required when providers.embeddings=http"
-            )
+            logger.warning("EMBEDDING_ENDPOINT_API_KEY is required when providers.embeddings=http")
 
         self.base_url = base_url.rstrip("/")
         self.api_key = key or ""
@@ -277,9 +275,7 @@ class ConversationFilters:
 
     @property
     def has_filters(self) -> bool:
-        return bool(
-            self.source or self.date_from or self.date_to or self.tags or self.thread_id
-        )
+        return bool(self.source or self.date_from or self.date_to or self.tags or self.thread_id)
 
 
 @dataclass(frozen=True)
@@ -467,17 +463,13 @@ _RUNTIME: RuntimeDependencies | None = None
 _RUNTIME_OVERRIDE: ContextVar[RuntimeDependencies | None] = ContextVar(
     "amh_mvp_runtime_override", default=None
 )
-_AUDIT_CONTEXT: ContextVar[AuditContext] = ContextVar(
-    "amh_audit_context", default=AuditContext()
-)
+_AUDIT_CONTEXT: ContextVar[AuditContext] = ContextVar("amh_audit_context", default=AuditContext())
 
 
 def set_audit_context(
     *, source_surface: str = "service", request_id: str | None = None
 ) -> Token[AuditContext]:
-    return _AUDIT_CONTEXT.set(
-        AuditContext(source_surface=source_surface, request_id=request_id)
-    )
+    return _AUDIT_CONTEXT.set(AuditContext(source_surface=source_surface, request_id=request_id))
 
 
 def reset_audit_context(token: Token[AuditContext]) -> None:
@@ -594,9 +586,7 @@ _TOPIC_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("docker", re.compile(r"\b(docker|container|kubernetes|k8s)\b", re.IGNORECASE)),
     (
         "testing",
-        re.compile(
-            r"\b(test|tests|pytest|unit test|integration test)\b", re.IGNORECASE
-        ),
+        re.compile(r"\b(test|tests|pytest|unit test|integration test)\b", re.IGNORECASE),
     ),
     (
         "machine-learning",
@@ -632,9 +622,9 @@ def _ingestion_stage(stage: str, **attributes: Any) -> Iterator[None]:
                 elapsed_ms,
                 stage=stage,
             )
-_FACT_CORRECTION_ITEM = (
-    rf"(?P<{_FactCorrectionGroup.ITEM.value}>[A-Za-z0-9][A-Za-z0-9 _-]{{1,80}})"
-)
+
+
+_FACT_CORRECTION_ITEM = rf"(?P<{_FactCorrectionGroup.ITEM.value}>[A-Za-z0-9][A-Za-z0-9 _-]{{1,80}})"
 _FACT_CORRECTION_NEW = rf"(?P<{_FactCorrectionGroup.NEW_VALUE.value}>[^.?!\n,]+?)"
 _FACT_CORRECTION_OLD = rf"(?P<{_FactCorrectionGroup.OLD_VALUE.value}>[^.?!\n]+)"
 _FACT_CORRECTION_RE = re.compile(
@@ -820,9 +810,7 @@ def _redacted_startup_error(component: str, exc: Exception) -> RuntimeError:
 def build_runtime(
     config: HubConfig | dict[str, Any] | None = None,
 ) -> RuntimeDependencies:
-    cfg = (
-        parse_config(config) if isinstance(config, dict) else (config or load_config())
-    )
+    cfg = parse_config(config) if isinstance(config, dict) else (config or load_config())
     ensure_token_hash_secret(cfg)
     schema_path = Path(cfg.schema_config.file) if cfg.schema_config.file else SCHEMA_PATH
     conversation_schema = load_schema(schema_path)
@@ -830,9 +818,7 @@ def build_runtime(
     data_dir = Path(cfg.paths.data_dir)
     try:
         if cfg.providers.metadata_db == "postgres":
-            metadata_store = PostgresMetadataStore(
-                cfg.storage.metadata_providers.postgres.url
-            )
+            metadata_store = PostgresMetadataStore(cfg.storage.metadata_providers.postgres.url)
         elif cfg.providers.metadata_db == "mongodb":
             mongodb_config = cfg.storage.metadata_providers.mongodb
             metadata_store = MongoDBMetadataStore(
@@ -898,9 +884,7 @@ def build_runtime(
             vector_fallback_active = True
             fallback_reasons.append(type(exc).__name__)
 
-    _validate_vector_dimension(
-        embedding_dimension=expected_dimension, vector_store=vector_store
-    )
+    _validate_vector_dimension(embedding_dimension=expected_dimension, vector_store=vector_store)
     actual_vector_provider = (
         VectorProviderName.MEMORY.value if vector_fallback_active else requested_vector_provider
     )
@@ -988,9 +972,7 @@ def _build_vector_store(
     expected_dimension: int,
 ) -> Any:
     if provider == VectorProviderName.LANCEDB.value:
-        return LanceDBVectorStore(
-            data_dir / "lancedb", dimension=expected_dimension
-        )
+        return LanceDBVectorStore(data_dir / "lancedb", dimension=expected_dimension)
     if provider == VectorProviderName.CHROMADB.value:
         chroma_config = cfg.storage.vector_providers.chromadb
         return ChromaDBVectorStore(
@@ -1173,9 +1155,7 @@ class MVPIngestionService:
     def profile_get(self, subject: str = "user", **kwargs: Any) -> dict[str, Any]:
         return self._call(profile_get, subject, **kwargs)
 
-    def fact_supersede(
-        self, fact_id: str, superseded_by: str, **kwargs: Any
-    ) -> dict[str, Any]:
+    def fact_supersede(self, fact_id: str, superseded_by: str, **kwargs: Any) -> dict[str, Any]:
         return self._call(fact_supersede, fact_id, superseded_by, **kwargs)
 
     def approve_pending_memory(self, memory_id: str, **kwargs: Any) -> dict[str, Any]:
@@ -1222,6 +1202,12 @@ class MVPIngestionService:
 
     def oauth_client(self, client_id: str) -> dict[str, object] | None:
         return self._call(oauth_client, client_id)
+
+    def create_oauth_authorization_code(self, **kwargs: Any) -> None:
+        return self._call(create_oauth_authorization_code, **kwargs)
+
+    def consume_oauth_authorization_code(self, code: str) -> dict[str, object] | None:
+        return self._call(consume_oauth_authorization_code, code)
 
     def create_oauth_refresh_token(self, **kwargs: Any) -> dict[str, object]:
         return self._call(create_oauth_refresh_token, **kwargs)
@@ -1304,16 +1290,9 @@ def enrich_auto_tags(obj: dict[str, Any]) -> None:
         _add_auto_tag(tag_sources, tag, "fact_predicate")
 
     manual_tags = _manual_tag_set(metadata)
-    auto_tags = [
-        tag
-        for tag in tag_sources
-        if tag not in manual_tags
-    ][:_MAX_AUTO_TAGS]
+    auto_tags = [tag for tag in tag_sources if tag not in manual_tags][:_MAX_AUTO_TAGS]
     metadata["auto_tags"] = auto_tags
-    metadata["tag_sources"] = {
-        tag: tag_sources[tag]
-        for tag in auto_tags
-    }
+    metadata["tag_sources"] = {tag: tag_sources[tag] for tag in auto_tags}
 
 
 def _add_auto_tag(tag_sources: dict[str, list[str]], tag: str, source: str) -> None:
@@ -1348,7 +1327,10 @@ def _auto_tags_from_entities(obj: dict[str, Any]) -> list[str]:
         text = message.get("text")
         if not isinstance(text, str):
             continue
-        candidates.extend(match.group(0) for match in re.finditer(r"\b[A-Z][A-Za-z0-9]+(?:\s+[A-Z][A-Za-z0-9]+){1,4}\b", text))
+        candidates.extend(
+            match.group(0)
+            for match in re.finditer(r"\b[A-Z][A-Za-z0-9]+(?:\s+[A-Z][A-Za-z0-9]+){1,4}\b", text)
+        )
     return candidates
 
 
@@ -1445,12 +1427,8 @@ def _attach_index_chunks(obj: dict[str, Any], chunks: list[dict[str, Any]]) -> N
     metadata[MetadataField.INDEX_CHUNKS.value] = [
         {
             IndexChunkField.CHUNK_ID.value: str(chunk[IndexChunkField.CHUNK_ID.value]),
-            IndexChunkField.CHUNK_INDEX.value: int(
-                chunk[IndexChunkField.CHUNK_INDEX.value]
-            ),
-            IndexChunkField.MESSAGE_HASH.value: str(
-                chunk[IndexChunkField.MESSAGE_HASH.value]
-            ),
+            IndexChunkField.CHUNK_INDEX.value: int(chunk[IndexChunkField.CHUNK_INDEX.value]),
+            IndexChunkField.MESSAGE_HASH.value: str(chunk[IndexChunkField.MESSAGE_HASH.value]),
             IndexChunkField.ROLE.value: str(chunk[IndexChunkField.ROLE.value]),
             IndexChunkField.TEXT.value: str(chunk[IndexChunkField.TEXT.value]),
             IndexChunkField.INDEX_STATE.value: str(
@@ -1493,18 +1471,12 @@ def embed_chunks(
     for chunk, vector in zip(chunks, vectors):
         embeddings.append(
             {
-                IndexChunkField.CHUNK_ID.value: chunk.get(
-                    IndexChunkField.CHUNK_ID.value
-                ),
-                IndexChunkField.CHUNK_INDEX.value: chunk[
-                    IndexChunkField.CHUNK_INDEX.value
-                ],
+                IndexChunkField.CHUNK_ID.value: chunk.get(IndexChunkField.CHUNK_ID.value),
+                IndexChunkField.CHUNK_INDEX.value: chunk[IndexChunkField.CHUNK_INDEX.value],
                 "conversation_id": chunk.get("conversation_id"),
                 "project_id": project_id,
                 "owner_id": owner_id,
-                IndexChunkField.MESSAGE_HASH.value: chunk.get(
-                    IndexChunkField.MESSAGE_HASH.value
-                ),
+                IndexChunkField.MESSAGE_HASH.value: chunk.get(IndexChunkField.MESSAGE_HASH.value),
                 IndexChunkField.INDEX_STATE.value: IndexState.INDEXED.value,
                 IndexChunkField.ROLE.value: chunk[IndexChunkField.ROLE.value],
                 IndexChunkField.TEXT.value: chunk[IndexChunkField.TEXT.value],
@@ -1519,7 +1491,9 @@ def store_metadata(obj: dict[str, Any]) -> str:
     return runtime.metadata_store.insert(obj)
 
 
-def store_vectors(metadata_id: str, embeddings: list[dict[str, Any]], replace: bool = False) -> None:
+def store_vectors(
+    metadata_id: str, embeddings: list[dict[str, Any]], replace: bool = False
+) -> None:
     runtime = _runtime()
     provider = str(runtime.health_state.get("vector_provider") or "unknown")
     with _ingestion_stage(
@@ -1543,10 +1517,9 @@ def _lookup_by_conversation_hash(
         rows = getattr(store, attr, None)
         if isinstance(rows, dict):
             for conversation in rows.values():
-                if (
-                    _conversation_hash(conversation) == conversation_hash
-                    and _conversation_project_matches(conversation, project_id)
-                ):
+                if _conversation_hash(
+                    conversation
+                ) == conversation_hash and _conversation_project_matches(conversation, project_id):
                     return conversation
     return None
 
@@ -1570,8 +1543,12 @@ def _lookup_same_thread(
     if isinstance(upstream_thread_id, str) and upstream_thread_id:
         source = str(incoming.get("source", ""))
         if hasattr(store, "get_by_upstream_thread"):
-            candidate = store.get_by_upstream_thread(source, upstream_thread_id, project_id=project_id)
-            if isinstance(candidate, dict) and _conversation_allowed(candidate, owner_id, project_id):
+            candidate = store.get_by_upstream_thread(
+                source, upstream_thread_id, project_id=project_id
+            )
+            if isinstance(candidate, dict) and _conversation_allowed(
+                candidate, owner_id, project_id
+            ):
                 return candidate
             return None
         for attr in ("by_id", "rows"):
@@ -1657,9 +1634,7 @@ def _stamp_project(conversation: dict[str, Any], *, project_id: str) -> None:
     metadata["project_id"] = _validate_project_id(project_id)
 
 
-def _scope_conversation_hash(
-    conversation: dict[str, Any], *, project_id: str | None
-) -> None:
+def _scope_conversation_hash(conversation: dict[str, Any], *, project_id: str | None) -> None:
     if project_id is None:
         return
     metadata = conversation.get("metadata", {})
@@ -1778,12 +1753,10 @@ def _conversation_authorized(
     )
 
 
-def _conversation_allowed(
-    conversation: Any, owner_id: str | None, project_id: str | None
-) -> bool:
-    return _conversation_authorized(
-        conversation, owner_id, project_id
-    ) and _conversation_is_active(conversation)
+def _conversation_allowed(conversation: Any, owner_id: str | None, project_id: str | None) -> bool:
+    return _conversation_authorized(conversation, owner_id, project_id) and _conversation_is_active(
+        conversation
+    )
 
 
 def _conversation_visible(
@@ -1911,7 +1884,9 @@ def _detect_new_messages(
         return []
     seen = set(existing_hashes)
     new_messages: list[dict[str, Any]] = []
-    suffix_start = len(existing_hashes) if shared_prefix_len == common_prefix_len else shared_prefix_len
+    suffix_start = (
+        len(existing_hashes) if shared_prefix_len == common_prefix_len else shared_prefix_len
+    )
     for message in incoming_messages[suffix_start:]:
         message_hash = str(message["hash"])
         if message_hash not in seen:
@@ -1951,9 +1926,7 @@ def normalize_conversation_json(
     if top_level_tags is not None and "tags" not in metadata:
         metadata["tags"] = top_level_tags
 
-    if "messages" not in normalized and isinstance(
-        normalized.get("conversation"), list
-    ):
+    if "messages" not in normalized and isinstance(normalized.get("conversation"), list):
         normalized["messages"] = normalized["conversation"]
     normalized.pop("conversation", None)
 
@@ -1978,9 +1951,7 @@ def normalize_conversation_json(
     metadata["updated_at"] = now
     if not isinstance(normalized.get("messages"), list):
         raise ValueError("ambiguous input: messages must be an array")
-    metadata["message_hashes"] = [
-        str(message["hash"]) for message in normalized["messages"]
-    ]
+    metadata["message_hashes"] = [str(message["hash"]) for message in normalized["messages"]]
     metadata["conversation_hash"] = hash_ordered_messages(normalized["messages"])
     normalized["metadata"] = metadata
     _normalize_thread_metadata(normalized)
@@ -1999,7 +1970,9 @@ def _coerce_payload(payload: Any, *, strict_transcript: bool) -> dict[str, Any]:
                     normalized.pop("content", None)
                     return normalized
             return payload
-        raise ValueError("ambiguous input: object must include messages, conversation, content, or tags")
+        raise ValueError(
+            "ambiguous input: object must include messages, conversation, content, or tags"
+        )
     if isinstance(payload, str):
         if not strict_transcript:
             raise ValueError("raw transcript input requires strict_transcript=True")
@@ -2244,7 +2217,9 @@ def _detect_sensitive_content(conversation_json: dict[str, Any]) -> list[dict[st
     return findings
 
 
-def _sensitive_scan_strings(value: Any, *, location: str = "conversation") -> Iterator[tuple[str, str]]:
+def _sensitive_scan_strings(
+    value: Any, *, location: str = "conversation"
+) -> Iterator[tuple[str, str]]:
     if isinstance(value, str):
         yield location, value
         return
@@ -2378,9 +2353,7 @@ def ingest_messages(
 
     with _ingestion_stage("dedupe_lookup"):
         conversation_hash = conversation_json["metadata"]["conversation_hash"]
-        duplicate = _lookup_by_conversation_hash(
-            conversation_hash, project_id=effective_project_id
-        )
+        duplicate = _lookup_by_conversation_hash(conversation_hash, project_id=effective_project_id)
         duplicate_metadata_id = None
         if duplicate is not None and _conversation_allowed(
             duplicate, owner_id, effective_project_id
@@ -2417,7 +2390,7 @@ def ingest_messages(
         new_messages = _detect_new_messages(same_thread, conversation_json)
         if not new_messages:
             # Re-index check for same_thread
-            # If it's already fully indexed, we COULD skip, 
+            # If it's already fully indexed, we COULD skip,
             # but for consistency we fall through to ensure vectors are there.
             start_index = 0
             updated = same_thread
@@ -2431,13 +2404,11 @@ def ingest_messages(
                 owner_id=owner_id,
                 project_id=effective_project_id,
             )
-        
+
         # If we are here, we either have new messages or we are re-indexing existing
         indexing_messages = new_messages if new_messages else updated.get("messages", [])
         chunk_start_index = (
-            _next_chunk_index(updated, fallback_start_index=start_index)
-            if new_messages
-            else 0
+            _next_chunk_index(updated, fallback_start_index=start_index) if new_messages else 0
         )
         with _ingestion_stage("chunk", message_count=len(indexing_messages)):
             chunks = chunk_selected_messages(
@@ -2452,9 +2423,7 @@ def ingest_messages(
             with _ingestion_stage("metadata_insert", metadata_provider=provider):
                 store.insert(updated)
         try:
-            embeddings = embed_chunks(
-                chunks, project_id=effective_project_id, owner_id=owner_id
-            )
+            embeddings = embed_chunks(chunks, project_id=effective_project_id, owner_id=owner_id)
             store_vectors(str(updated["id"]), embeddings, replace=(start_index == 0))
             _mark_chunks_indexed(str(updated["id"]), chunks, updated)
         except Exception:
@@ -2584,12 +2553,17 @@ def _store_review_memory(
     metadata[received_at_key] = _utc_now_iso()
 
     store = _runtime().metadata_store
-    existing_by_id = store.get(str(conversation_json.get("id", ""))) if hasattr(store, "get") else None
+    existing_by_id = (
+        store.get(str(conversation_json.get("id", ""))) if hasattr(store, "get") else None
+    )
     if existing_by_id is not None and not _conversation_authorized(
         existing_by_id, owner_id, project_id
     ):
         raise ValueError("unauthorized_update: conversation id already exists")
-    if existing_by_id is not None and _conversation_hash(existing_by_id) != metadata["conversation_hash"]:
+    if (
+        existing_by_id is not None
+        and _conversation_hash(existing_by_id) != metadata["conversation_hash"]
+    ):
         raise ValueError("unauthorized_update: conversation id already exists")
 
     memory_id, inserted = _insert_new_conversation(conversation_json)
@@ -2817,9 +2791,7 @@ def _is_fully_indexed(metadata_id: str) -> bool:
     return False
 
 
-def _repair_retrieved_index_chunks(
-    memory_id: str, conversation: dict[str, Any]
-) -> dict[str, Any]:
+def _repair_retrieved_index_chunks(memory_id: str, conversation: dict[str, Any]) -> dict[str, Any]:
     if not _has_pending_index_chunks(conversation):
         return conversation
 
@@ -2889,9 +2861,7 @@ def _manifest_chunks_for_index_repair(
 def _index_chunk_manifest(conversation: dict[str, Any]) -> list[dict[str, Any]]:
     metadata = conversation.get("metadata")
     index_chunks = (
-        metadata.get(MetadataField.INDEX_CHUNKS.value)
-        if isinstance(metadata, dict)
-        else None
+        metadata.get(MetadataField.INDEX_CHUNKS.value) if isinstance(metadata, dict) else None
     )
     if not isinstance(index_chunks, list):
         return []
@@ -2916,9 +2886,7 @@ def _manifest_chunk_for_index_repair(
     return {
         IndexChunkField.CHUNK_ID.value: chunk_id,
         IndexChunkField.CHUNK_INDEX.value: chunk_index,
-        IndexChunkField.MESSAGE_HASH.value: str(
-            item.get(IndexChunkField.MESSAGE_HASH.value, "")
-        ),
+        IndexChunkField.MESSAGE_HASH.value: str(item.get(IndexChunkField.MESSAGE_HASH.value, "")),
         IndexChunkField.ROLE.value: str(item.get(IndexChunkField.ROLE.value, "")),
         IndexChunkField.TEXT.value: str(item.get(IndexChunkField.TEXT.value, "")),
         IndexChunkField.INDEX_STATE.value: str(
@@ -2927,19 +2895,15 @@ def _manifest_chunk_for_index_repair(
     }
 
 
-def _manifest_chunk_index(
-    item: Mapping[str, Any], *, fallback_index: int
-) -> int | None:
+def _manifest_chunk_index(item: Mapping[str, Any], *, fallback_index: int) -> int | None:
     value = item.get(IndexChunkField.CHUNK_INDEX.value, fallback_index)
     try:
         return int(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 
-def _legacy_manifest_chunk_id(
-    memory_id: str, chunk_index: int, item: Mapping[str, Any]
-) -> str:
+def _legacy_manifest_chunk_id(memory_id: str, chunk_index: int, item: Mapping[str, Any]) -> str:
     message_hash = str(item.get(IndexChunkField.MESSAGE_HASH.value, "")).strip()
     if message_hash:
         return f"{memory_id}:{chunk_index}:{message_hash}"
@@ -2998,11 +2962,7 @@ def _set_index_chunks_state(
         chunk_id = str(item.get(IndexChunkField.CHUNK_ID.value, ""))
         if targets.matches(item):
             chunk_index = _manifest_chunk_index(item, fallback_index=-1)
-            if (
-                not chunk_id
-                and chunk_index is not None
-                and chunk_index in chunk_id_by_index
-            ):
+            if not chunk_id and chunk_index is not None and chunk_index in chunk_id_by_index:
                 chunk_id = chunk_id_by_index[chunk_index]
                 item[IndexChunkField.CHUNK_ID.value] = chunk_id
             item[IndexChunkField.INDEX_STATE.value] = state.value
@@ -3033,10 +2993,13 @@ def reindex_stored_conversations(
 
     runtime = _runtime()
     vector_health = runtime.vector_store.health() if hasattr(runtime.vector_store, "health") else {}
-    replace_existing = _vector_row_count(
-        vector_store=runtime.vector_store,
-        vector_health=vector_health,
-    ) != 0
+    replace_existing = (
+        _vector_row_count(
+            vector_store=runtime.vector_store,
+            vector_health=vector_health,
+        )
+        != 0
+    )
     conversations = store.list_conversations(limit=limit, project_id=project_id)
     reindexed = 0
     chunks_reindexed = 0
@@ -3049,7 +3012,9 @@ def reindex_stored_conversations(
             if not include_inactive and not _conversation_is_active(conversation):
                 skipped += 1
                 continue
-            if project_id is not None and not _conversation_project_matches(conversation, project_id):
+            if project_id is not None and not _conversation_project_matches(
+                conversation, project_id
+            ):
                 skipped += 1
                 continue
             owner_id = _owner_id_from_conversation(conversation)
@@ -3135,7 +3100,9 @@ def search(
         memory_status=status_filter,
         filters=filters,
     )
-    ids.extend(str(conversation["id"]) for conversation in keyword_conversations if "id" in conversation)
+    ids.extend(
+        str(conversation["id"]) for conversation in keyword_conversations if "id" in conversation
+    )
     ids = _unique_strings(ids)
     conversations = runtime.metadata_store.get_many(ids)
     conversations = {
@@ -3146,7 +3113,9 @@ def search(
     for conversation in keyword_conversations:
         memory_id = str(conversation.get("id", ""))
         if memory_id and memory_id not in conversations:
-            conversations[memory_id] = _with_generated_summary_metadata(conversation) or conversation
+            conversations[memory_id] = (
+                _with_generated_summary_metadata(conversation) or conversation
+            )
 
     results: list[dict[str, Any]] = []
     for match in matches:
@@ -3172,9 +3141,7 @@ def search(
         ):
             results.append(row)
 
-    existing_keys = {
-        (str(row["id"]), int(row["chunk_index"]), str(row["text"])) for row in results
-    }
+    existing_keys = {(str(row["id"]), int(row["chunk_index"]), str(row["text"])) for row in results}
     for conversation in keyword_conversations:
         memory_id = str(conversation.get("id", ""))
         if not memory_id:
@@ -3209,7 +3176,10 @@ def search(
         metadata_weight=runtime.retrieval_metadata_weight,
     )
     grouped = group_conversation_results(ranked)
-    payload: dict[str, Any] = {"status": "ok", "results": _apply_result_mode(grouped, result_mode)[:top_k]}
+    payload: dict[str, Any] = {
+        "status": "ok",
+        "results": _apply_result_mode(grouped, result_mode)[:top_k],
+    }
     if graph_diagnostics["enabled"] and graph_diagnostics["candidate_count"]:
         payload["diagnostics"] = {"graph": graph_diagnostics}
     _record_audit_event(
@@ -3335,7 +3305,9 @@ def _strip_internal_ranking_fields(row: dict[str, Any]) -> dict[str, Any]:
 
 def _conversation_result_text(conversation: Any, evidence: list[dict[str, Any]]) -> str:
     if isinstance(conversation, dict):
-        title = str(conversation.get("title") or conversation.get("source") or conversation.get("id"))
+        title = str(
+            conversation.get("title") or conversation.get("source") or conversation.get("id")
+        )
         return f"{title}: {len(evidence)} matching chunk(s)"
     return f"{len(evidence)} matching chunk(s)"
 
@@ -3614,7 +3586,10 @@ def _metadata_overlap(query: str, conversation: Any) -> int:
     if not tokens:
         return 0
     metadata = conversation.get("metadata", {})
-    metadata_values: list[str] = [str(conversation.get("source", "")), str(conversation.get("title", ""))]
+    metadata_values: list[str] = [
+        str(conversation.get("source", "")),
+        str(conversation.get("title", "")),
+    ]
     if isinstance(metadata, dict):
         metadata_values.extend(_metadata_search_values(metadata))
     text = " ".join(metadata_values).lower()
@@ -3823,9 +3798,7 @@ def ask(
         return result
 
     token_budget = (
-        max_context_tokens
-        if max_context_tokens is not None
-        else runtime.ask_max_context_tokens
+        max_context_tokens if max_context_tokens is not None else runtime.ask_max_context_tokens
     )
     (
         selected_matches,
@@ -3897,14 +3870,10 @@ def _search_for_ask(
         return search(query=question, top_k=top_k)
 
 
-def _next_chunk_index(
-    conversation: dict[str, Any], *, fallback_start_index: int
-) -> int:
+def _next_chunk_index(conversation: dict[str, Any], *, fallback_start_index: int) -> int:
     metadata = conversation.get("metadata", {})
     index_chunks = (
-        metadata.get(MetadataField.INDEX_CHUNKS.value)
-        if isinstance(metadata, dict)
-        else None
+        metadata.get(MetadataField.INDEX_CHUNKS.value) if isinstance(metadata, dict) else None
     )
     if isinstance(index_chunks, list):
         indexes = [
@@ -3927,15 +3896,9 @@ def _extend_index_chunks(obj: dict[str, Any], chunks: list[dict[str, Any]]) -> N
         existing = []
     metadata[MetadataField.INDEX_CHUNKS.value] = existing + [
         {
-            IndexChunkField.CHUNK_ID.value: str(
-                chunk[IndexChunkField.CHUNK_ID.value]
-            ),
-            IndexChunkField.CHUNK_INDEX.value: int(
-                chunk[IndexChunkField.CHUNK_INDEX.value]
-            ),
-            IndexChunkField.MESSAGE_HASH.value: str(
-                chunk[IndexChunkField.MESSAGE_HASH.value]
-            ),
+            IndexChunkField.CHUNK_ID.value: str(chunk[IndexChunkField.CHUNK_ID.value]),
+            IndexChunkField.CHUNK_INDEX.value: int(chunk[IndexChunkField.CHUNK_INDEX.value]),
+            IndexChunkField.MESSAGE_HASH.value: str(chunk[IndexChunkField.MESSAGE_HASH.value]),
             IndexChunkField.ROLE.value: str(chunk[IndexChunkField.ROLE.value]),
             IndexChunkField.TEXT.value: str(chunk[IndexChunkField.TEXT.value]),
             IndexChunkField.INDEX_STATE.value: str(
@@ -4041,10 +4004,7 @@ def _direct_memory_answer_text(
     matches: Sequence[dict[str, Any]], *, question: str | None = None
 ) -> str:
     snippets = [
-        snippet
-        for row in matches
-        for snippet in (_direct_memory_answer_snippet(row),)
-        if snippet
+        snippet for row in matches for snippet in (_direct_memory_answer_snippet(row),) if snippet
     ]
     for snippet in snippets:
         if not _direct_memory_answer_snippet_is_question_echo(snippet, question):
@@ -4061,9 +4021,7 @@ def _direct_memory_answer_snippet(row: dict[str, Any]) -> str:
     return _truncate_summary_text(text, limit=600)
 
 
-def _direct_memory_answer_snippet_is_question_echo(
-    snippet: str, question: str | None
-) -> bool:
+def _direct_memory_answer_snippet_is_question_echo(snippet: str, question: str | None) -> bool:
     normalized_snippet = _normalized_question_echo_text(snippet)
     if question is not None and normalized_snippet == _normalized_question_echo_text(question):
         return True
@@ -4165,9 +4123,7 @@ def _confidence_from_matches(matches: list[dict[str, Any]]) -> str:
     return "low"
 
 
-def _confidence_from_context(
-    matches: list[dict[str, Any]], *, context_truncated: bool
-) -> str:
+def _confidence_from_context(matches: list[dict[str, Any]], *, context_truncated: bool) -> str:
     if not matches:
         return "none"
     if context_truncated:
@@ -4191,7 +4147,9 @@ def _provenance_from_matches(
                 "conversation_id": memory_id,
                 "source": conversation.get("source") if isinstance(conversation, dict) else None,
                 "title": conversation.get("title") if isinstance(conversation, dict) else None,
-                "stored_at": conversation.get("timestamp") if isinstance(conversation, dict) else None,
+                "stored_at": conversation.get("timestamp")
+                if isinstance(conversation, dict)
+                else None,
                 "matching_chunks": 0,
                 "used_in_answer": False,
             },
@@ -4356,7 +4314,9 @@ def extract_facts_from_messages(
         ):
             facts.append(fact)
     facts.extend(_topic_facts(conversation, messages, start_message_index=start_message_index))
-    facts.extend(_external_extracted_facts(conversation, messages, start_message_index=start_message_index))
+    facts.extend(
+        _external_extracted_facts(conversation, messages, start_message_index=start_message_index)
+    )
     return _dedupe_facts(facts)
 
 
@@ -4499,15 +4459,9 @@ def _fact_correction_matches(text: str) -> list[_FactCorrectionMatch]:
             corrections.append(
                 _FactCorrectionMatch(
                     span=span,
-                    item=_clean_fact_object(
-                        match.group(_FactCorrectionGroup.ITEM.value)
-                    ),
-                    new_value=_clean_fact_object(
-                        match.group(_FactCorrectionGroup.NEW_VALUE.value)
-                    ),
-                    old_value=_clean_fact_object(
-                        match.group(_FactCorrectionGroup.OLD_VALUE.value)
-                    ),
+                    item=_clean_fact_object(match.group(_FactCorrectionGroup.ITEM.value)),
+                    new_value=_clean_fact_object(match.group(_FactCorrectionGroup.NEW_VALUE.value)),
+                    old_value=_clean_fact_object(match.group(_FactCorrectionGroup.OLD_VALUE.value)),
                 )
             )
     corrections.sort(key=lambda correction: correction.span[0])
@@ -4523,10 +4477,9 @@ def _corrected_fact_shape(item: str, new_value: str) -> tuple[str, str]:
     item = _clean_fact_object(item)
     new_value = _clean_fact_object(new_value)
     if item.lower().startswith(_FactItemPrefix.FAVORITE.value):
-        favorite_name = item[len(_FactItemPrefix.FAVORITE.value):].strip()
+        favorite_name = item[len(_FactItemPrefix.FAVORITE.value) :].strip()
         predicate = (
-            f"{_FactPredicatePrefix.FAVORITE.value}"
-            f"{_normalize_predicate_part(favorite_name)}"
+            f"{_FactPredicatePrefix.FAVORITE.value}{_normalize_predicate_part(favorite_name)}"
         )
         return predicate, new_value
     return _owned_item_predicate(item), f"{item} is {new_value}"
@@ -4727,11 +4680,7 @@ def _answer_from_facts(
     basis = (
         _AskAnswerBasis.CONFLICT.value
         if projection.has_latest_conflict
-        else (
-            _AskAnswerBasis.MIXED.value
-            if needs_context
-            else _AskAnswerBasis.FACT_LAYER.value
-        )
+        else (_AskAnswerBasis.MIXED.value if needs_context else _AskAnswerBasis.FACT_LAYER.value)
     )
     public_active = [entry.fact for entry in selected_entries]
     public_history = [entry.fact for entry in projection.historical_entries]
@@ -4760,7 +4709,9 @@ def _answer_from_facts(
         )
         results = search_result.get("results", [])
         if isinstance(results, list):
-            citations.extend(_citation_from_row(row) for row in results[:top_k] if isinstance(row, dict))
+            citations.extend(
+                _citation_from_row(row) for row in results[:top_k] if isinstance(row, dict)
+            )
             context = "\n".join(
                 f"- [{row.get('id')}#{int(row.get('chunk_index', 0))}] {row.get('text', '')}"
                 for row in results[:top_k]
@@ -4775,9 +4726,7 @@ def _answer_from_facts(
             _AskResponseKey.ANSWER: answer,
             _AskResponseKey.CITATIONS: citations,
             _AskResponseKey.CONFIDENCE: confidence,
-            _AskResponseKey.CONFIDENCE_REASON: _confidence_reason_for_facts(
-                public_active, basis
-            ),
+            _AskResponseKey.CONFIDENCE_REASON: _confidence_reason_for_facts(public_active, basis),
             _AskResponseKey.ANSWER_BASIS: basis,
             _AskResponseKey.PROVENANCE: _provenance_from_facts(public_active),
             _AskResponseKey.FACTS: public_active,
@@ -4824,9 +4773,7 @@ def _candidate_facts_for_question(
         owner_id=owner_id,
         project_id=project_id,
         conversation_filters=filters,
-        fact_filters=FactFilters.from_options(
-            status="all" if text_query is not None else "active"
-        ),
+        fact_filters=FactFilters.from_options(status="all" if text_query is not None else "active"),
     )
     if text_query is not None:
         return _generic_fact_projection_candidates(facts, text_query)
@@ -4930,9 +4877,7 @@ def _looks_like_fact_projection_question(question: str) -> bool:
     normalized = question.strip().lower()
     if not normalized:
         return False
-    return "?" in normalized or normalized.startswith(
-        _GENERIC_FACT_PROJECTION_QUESTION_PREFIXES
-    )
+    return "?" in normalized or normalized.startswith(_GENERIC_FACT_PROJECTION_QUESTION_PREFIXES)
 
 
 def _generic_attribute_query(question: str) -> dict[str, str] | None:
@@ -4987,9 +4932,7 @@ def _filter_facts_for_question(
     filtered = [
         fact
         for fact in facts
-        if subject_tokens.issubset(
-            set(_query_tokens(str(fact.get(FactField.SUBJECT.value, ""))))
-        )
+        if subject_tokens.issubset(set(_query_tokens(str(fact.get(FactField.SUBJECT.value, "")))))
     ]
     if filtered:
         return filtered
@@ -5029,24 +4972,18 @@ def _generic_fact_projection_candidates(
     facts: list[dict[str, Any]], question: str
 ) -> list[dict[str, Any]]:
     active = [fact for fact in facts if fact.get(FactField.DELETED_AT.value) is None]
-    ranked = _rank_facts_by_text_query(
-        active, question, include_source_memory=False
-    )
+    ranked = _rank_facts_by_text_query(active, question, include_source_memory=False)
     ranked = _with_supersession_successors(ranked, active)
     if len(ranked) < 2:
         return ranked
-    return _best_fact_projection_group(
-        ranked, question, include_source_memory=False
-    )
+    return _best_fact_projection_group(ranked, question, include_source_memory=False)
 
 
 def _with_supersession_successors(
     ranked: list[dict[str, Any]], facts: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
     facts_by_id = {
-        str(fact.get(FactField.ID.value)): fact
-        for fact in facts
-        if fact.get(FactField.ID.value)
+        str(fact.get(FactField.ID.value)): fact for fact in facts if fact.get(FactField.ID.value)
     }
     output: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -5108,27 +5045,17 @@ def _specific_fact_question_tokens(question: str, query: dict[str, str]) -> set[
             limit=None,
         )
     )
-    subject_tokens = set(
-        _query_tokens(query.get(FactField.SUBJECT.value, ""), limit=None)
-    )
+    subject_tokens = set(_query_tokens(query.get(FactField.SUBJECT.value, ""), limit=None))
     ignored_tokens = _FACT_QUESTION_STOPWORDS | predicate_tokens | subject_tokens
-    return {
-        token
-        for token in _query_tokens(question, limit=None)
-        if token not in ignored_tokens
-    }
+    return {token for token in _query_tokens(question, limit=None) if token not in ignored_tokens}
 
 
-def _fact_question_overlap_score(
-    fact: dict[str, Any], question_tokens: set[str]
-) -> int:
+def _fact_question_overlap_score(fact: dict[str, Any], question_tokens: set[str]) -> int:
     fact_tokens = set(_query_tokens(_fact_search_text(fact), limit=None))
     return len(question_tokens.intersection(fact_tokens))
 
 
-def _fact_search_text(
-    fact: dict[str, Any], *, include_source_memory: bool = True
-) -> str:
+def _fact_search_text(fact: dict[str, Any], *, include_source_memory: bool = True) -> str:
     parts = [
         str(fact.get(FactField.SUBJECT.value, "")),
         str(fact.get(FactField.PREDICATE.value, "")).replace("_", " "),
@@ -5158,9 +5085,7 @@ def _rank_facts_by_text_query(
     minimum_overlap = _minimum_fact_text_query_overlap(query_tokens)
     scored: list[tuple[int, int, dict[str, Any]]] = []
     for index, fact in enumerate(facts):
-        fact_text = _fact_search_text(
-            fact, include_source_memory=include_source_memory
-        )
+        fact_text = _fact_search_text(fact, include_source_memory=include_source_memory)
         fact_tokens = set(_query_tokens(fact_text, limit=None))
         if identity_tokens and not identity_tokens.issubset(fact_tokens):
             continue
@@ -5178,11 +5103,7 @@ def _fact_text_query_tokens(query: str) -> set[str]:
 
 
 def _fact_identity_tokens(query: str) -> set[str]:
-    return {
-        token
-        for token in _query_tokens(query, limit=None)
-        if _is_fact_identity_token(token)
-    }
+    return {token for token in _query_tokens(query, limit=None) if _is_fact_identity_token(token)}
 
 
 def _is_fact_identity_token(token: str) -> bool:
@@ -5197,7 +5118,9 @@ def _minimum_fact_text_query_overlap(query_tokens: set[str]) -> int:
 
 def _fact_question_needs_context(question: str) -> bool:
     lowered = question.lower()
-    return any(term in lowered for term in ("context", "source", "why", "when", "where did", "discuss"))
+    return any(
+        term in lowered for term in ("context", "source", "why", "when", "where did", "discuss")
+    )
 
 
 def _search_facts(
@@ -5359,13 +5282,11 @@ def fact_search(
         if not isinstance(facts, list):
             facts = []
         facts = [
-            fact for fact in facts
+            fact
+            for fact in facts
             if isinstance(fact, dict)
             and (subject is None or str(fact.get(FactField.SUBJECT.value)) == subject)
-            and (
-                predicate is None
-                or str(fact.get(FactField.PREDICATE.value)) == predicate
-            )
+            and (predicate is None or str(fact.get(FactField.PREDICATE.value)) == predicate)
             and _fact_allowed(fact, owner_id, effective_project_id)
             and _fact_matches_filters(fact, ConversationFilters(), fact_filters)
             and not fact.get(FactField.DELETED_AT.value)
@@ -5400,9 +5321,15 @@ def graph_entity_search(
             for entity in getattr(store, "_graph_entities", [])
             if isinstance(entity, dict)
             and (entity_type is None or str(entity.get("entity_type")) == entity_type)
-            and (name is None or str(entity.get("normalized_name")) == " ".join(name.strip().casefold().split()))
+            and (
+                name is None
+                or str(entity.get("normalized_name")) == " ".join(name.strip().casefold().split())
+            )
             and _record_allowed(entity, owner_id, effective_project_id)
-            and (include_inactive or str(entity.get("review_status")) in {"active", "approved", "needs_review"})
+            and (
+                include_inactive
+                or str(entity.get("review_status")) in {"active", "approved", "needs_review"}
+            )
         ]
     return {"status": "ok", "results": entities}
 
@@ -5543,7 +5470,11 @@ def fact_supersede(
         reason_code=None if updated else "fact_not_found",
         metadata={"superseded_by": superseded_by},
     )
-    return {"status": "ok" if updated else "not_found", "id": fact_id, "superseded_by": superseded_by}
+    return {
+        "status": "ok" if updated else "not_found",
+        "id": fact_id,
+        "superseded_by": superseded_by,
+    }
 
 
 def _record_allowed(record: dict[str, Any], owner_id: str | None, project_id: str | None) -> bool:
@@ -5564,7 +5495,9 @@ def project_list(*, owner_id: str | None = None) -> dict[str, Any]:
 def project_default_get(*, owner_id: str | None = None) -> dict[str, Any]:
     store = _runtime().metadata_store
     if hasattr(store, "ensure_default_project"):
-        project = _normalize_project_record(store.ensure_default_project(owner_id), owner_id=owner_id)
+        project = _normalize_project_record(
+            store.ensure_default_project(owner_id), owner_id=owner_id
+        )
     else:
         project = _fallback_project(owner_id)
     return {"status": "ok", "project": project}
@@ -5606,6 +5539,7 @@ def _normalize_project_record(project: Any, *, owner_id: str | None) -> dict[str
         "id": _validate_project_id(project_id),
     }
 
+
 def authenticate_bearer_token(token: str) -> str | None:
     context = authenticate_bearer_token_context(token)
     return str(context["owner_id"]) if context is not None else None
@@ -5633,7 +5567,7 @@ def authenticate_bearer_token_context(token: str) -> dict[str, object] | None:
                 "owner_id": str(owner_id),
                 "token_id": None,
                 "scopes": ["memory:read", "memory:write"],
-        }
+            }
     return None
 
 
@@ -5713,9 +5647,7 @@ def create_auth_token(
         metadata={
             "token_id": result.get("token_id") if isinstance(result, dict) else None,
             "scope_count": len(result_scopes) if isinstance(result_scopes, list) else 0,
-            "expires": result.get("expires_at") is not None
-            if isinstance(result, dict)
-            else False,
+            "expires": result.get("expires_at") is not None if isinstance(result, dict) else False,
         },
     )
     return result
@@ -5744,6 +5676,7 @@ def create_oauth_client(
     client_name: str,
     redirect_uris: list[str],
     expires_at: str,
+    max_active_clients: int,
 ) -> dict[str, object]:
     store = _runtime().metadata_store
     if not hasattr(store, "create_oauth_client"):
@@ -5753,6 +5686,7 @@ def create_oauth_client(
         client_name=client_name,
         redirect_uris=redirect_uris,
         expires_at=expires_at,
+        max_active_clients=max_active_clients,
     )
 
 
@@ -5761,6 +5695,20 @@ def oauth_client(client_id: str) -> dict[str, object] | None:
     if not hasattr(store, "oauth_client"):
         return None
     return store.oauth_client(client_id)
+
+
+def create_oauth_authorization_code(**kwargs: object) -> None:
+    store = _runtime().metadata_store
+    if not hasattr(store, "create_oauth_authorization_code"):
+        raise NotImplementedError("metadata store does not support oauth authorization codes")
+    store.create_oauth_authorization_code(**kwargs)
+
+
+def consume_oauth_authorization_code(code: str) -> dict[str, object] | None:
+    store = _runtime().metadata_store
+    if not hasattr(store, "consume_oauth_authorization_code"):
+        raise NotImplementedError("metadata store does not support oauth authorization codes")
+    return store.consume_oauth_authorization_code(code)
 
 
 def create_oauth_refresh_token(
@@ -5883,9 +5831,7 @@ def _profile_summary(
                     fact.get(FactField.SOURCE_CONVERSATION_ID.value)
                 ),
                 source_message_indexes=_source_message_indexes(fact),
-                last_confirmed_at=_optional_string(
-                    fact.get(FactField.LAST_CONFIRMED_AT.value)
-                ),
+                last_confirmed_at=_optional_string(fact.get(FactField.LAST_CONFIRMED_AT.value)),
             )
             for fact in active_facts
         ],
@@ -6195,8 +6141,7 @@ def _unique_profile_summary_lines(facts: list[dict[str, Any]]) -> list[_ProfileS
 
 def _profile_summary_fact_value(fact: dict[str, Any]) -> str:
     return str(
-        fact.get(FactField.OBJECT_NORMALIZED.value)
-        or fact.get(FactField.OBJECT.value, "")
+        fact.get(FactField.OBJECT_NORMALIZED.value) or fact.get(FactField.OBJECT.value, "")
     ).strip()
 
 
@@ -6244,7 +6189,7 @@ def _source_message_indexes(fact: dict[str, Any]) -> list[int]:
     for index in indexes:
         try:
             parsed.append(int(index))
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             continue
     return parsed
 
@@ -6335,9 +6280,7 @@ def _source_quality_for_fact(fact: dict[str, Any]) -> str:
 
 
 def _confidence_reason_for_fact(fact: dict[str, Any]) -> str:
-    source_quality = str(
-        fact.get(FactField.SOURCE_QUALITY.value) or _source_quality_for_fact(fact)
-    )
+    source_quality = str(fact.get(FactField.SOURCE_QUALITY.value) or _source_quality_for_fact(fact))
     if _fact_qualifier_value(fact, _FactQualifierKey.SAVE_INTENT.value) == "client_auto_save":
         return "Extracted from client auto-save memory, so confidence is reduced."
     if source_quality == "corrected_by_user":
@@ -6458,9 +6401,7 @@ def _fact_evidence(fact: dict[str, Any], *, used_in_answer: bool) -> dict[str, A
         FactField.CONFIDENCE.value: fact.get(FactField.CONFIDENCE.value),
         FactField.CONFIDENCE_REASON.value: fact.get(FactField.CONFIDENCE_REASON.value),
         FactField.SOURCE_QUALITY.value: fact.get(FactField.SOURCE_QUALITY.value),
-        FactField.SOURCE_CONVERSATION_ID.value: fact.get(
-            FactField.SOURCE_CONVERSATION_ID.value
-        ),
+        FactField.SOURCE_CONVERSATION_ID.value: fact.get(FactField.SOURCE_CONVERSATION_ID.value),
         FactField.SOURCE_MESSAGE_INDEXES.value: fact.get(
             FactField.SOURCE_MESSAGE_INDEXES.value, []
         ),
@@ -6483,9 +6424,7 @@ def _fact_citation(fact: dict[str, Any]) -> dict[str, Any]:
         "id": fact.get(FactField.SOURCE_CONVERSATION_ID.value),
         "fact_id": fact.get(FactField.ID.value),
         FactField.PREDICATE.value: fact.get(FactField.PREDICATE.value),
-        "text": fact.get(
-            FactField.OBJECT_NORMALIZED.value, fact.get(FactField.OBJECT.value)
-        ),
+        "text": fact.get(FactField.OBJECT_NORMALIZED.value, fact.get(FactField.OBJECT.value)),
         FactField.SOURCE_QUALITY.value: fact.get(FactField.SOURCE_QUALITY.value),
         FactField.CONFIDENCE_REASON.value: fact.get(FactField.CONFIDENCE_REASON.value),
         FactField.LAST_CONFIRMED_AT.value: fact.get(FactField.LAST_CONFIRMED_AT.value),
@@ -6522,15 +6461,15 @@ def _provenance_from_facts(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
         save_intent = _fact_qualifier_value(fact, _FactQualifierKey.SAVE_INTENT.value)
         if save_intent and save_intent not in item["save_intents"]:
             item["save_intents"].append(save_intent)
-        save_intent_source = _fact_qualifier_value(
-            fact, _FactQualifierKey.SAVE_INTENT_SOURCE.value
-        )
+        save_intent_source = _fact_qualifier_value(fact, _FactQualifierKey.SAVE_INTENT_SOURCE.value)
         if save_intent_source and save_intent_source not in item["save_intent_sources"]:
             item["save_intent_sources"].append(save_intent_source)
     return list(grouped.values())
 
 
-def _apply_in_memory_fact_supersession(active: list[dict[str, Any]], new_fact: dict[str, Any]) -> None:
+def _apply_in_memory_fact_supersession(
+    active: list[dict[str, Any]], new_fact: dict[str, Any]
+) -> None:
     qualifiers = new_fact.get(FactField.QUALIFIERS.value, {})
     corrects = (
         str(qualifiers.get(_FactQualifierKey.CORRECTS.value, ""))
@@ -6538,11 +6477,9 @@ def _apply_in_memory_fact_supersession(active: list[dict[str, Any]], new_fact: d
         else ""
     )
     for fact in active:
-        if (
-            fact.get(FactField.SUBJECT.value) != new_fact.get(FactField.SUBJECT.value)
-            or fact.get(FactField.PREDICATE.value)
-            != new_fact.get(FactField.PREDICATE.value)
-        ):
+        if fact.get(FactField.SUBJECT.value) != new_fact.get(FactField.SUBJECT.value) or fact.get(
+            FactField.PREDICATE.value
+        ) != new_fact.get(FactField.PREDICATE.value):
             continue
         if corrects and corrects.lower() in str(fact.get(FactField.OBJECT.value, "")).lower():
             now = _utc_now_iso()
@@ -6599,13 +6536,9 @@ def _project_subject(conversation: dict[str, Any]) -> str:
 def runtime_health() -> dict[str, Any]:
     runtime = _runtime()
     metadata_health = (
-        runtime.metadata_store.health()
-        if hasattr(runtime.metadata_store, "health")
-        else {}
+        runtime.metadata_store.health() if hasattr(runtime.metadata_store, "health") else {}
     )
-    vector_health = (
-        runtime.vector_store.health() if hasattr(runtime.vector_store, "health") else {}
-    )
+    vector_health = runtime.vector_store.health() if hasattr(runtime.vector_store, "health") else {}
     return {
         **runtime.health_state,
         "metadata_health": metadata_health,
@@ -6654,9 +6587,7 @@ def _hash_to_vector(text: str, dimensions: int) -> list[float]:
     return [(values[index] / 255.0) for index in range(dimensions)]
 
 
-def _validate_metadata_schema(
-    *, metadata_store: Any, supported_versions: Sequence[int]
-) -> None:
+def _validate_metadata_schema(*, metadata_store: Any, supported_versions: Sequence[int]) -> None:
     version = int(getattr(metadata_store, "schema_version", 0))
     if version not in supported_versions:
         supported = ",".join(str(item) for item in supported_versions)
@@ -6789,6 +6720,7 @@ def _embedding_options(*, cfg: HubConfig, embedding_provider_name: str) -> dict[
         return {"base_url": redact_secrets(cfg.embedding_endpoint.base_url)}
     return {}
 
+
 def _vector_index_id(*, provider: str, vector_store: Any, vector_health: dict[str, Any]) -> str:
     candidates = {
         "provider": provider,
@@ -6797,11 +6729,15 @@ def _vector_index_id(*, provider: str, vector_store: Any, vector_health: dict[st
         "collection": _optional_string(
             vector_health.get("collection") or getattr(vector_store, "collection_name", None)
         ),
-        "index": _optional_string(vector_health.get("index") or getattr(vector_store, "index_name", None)),
+        "index": _optional_string(
+            vector_health.get("index") or getattr(vector_store, "index_name", None)
+        ),
         "namespace": _optional_string(
             vector_health.get("namespace") or getattr(vector_store, "namespace", None)
         ),
-        "schema": _optional_string(vector_health.get("schema") or getattr(vector_store, "schema", None)),
+        "schema": _optional_string(
+            vector_health.get("schema") or getattr(vector_store, "schema", None)
+        ),
     }
     material = {key: value for key, value in candidates.items() if value}
     return "sha256:" + hashlib.sha256(json_dumps(material).encode("utf-8")).hexdigest()
@@ -6825,7 +6761,7 @@ def _vector_row_count(*, vector_store: Any, vector_health: dict[str, Any]) -> in
         return None
     try:
         return int(rows)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 

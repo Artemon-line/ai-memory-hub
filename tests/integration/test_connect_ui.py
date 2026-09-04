@@ -246,6 +246,7 @@ def _mcp_oauth_token_response(
     *,
     state: str = "test-state",
     redirect_uri: str = "http://127.0.0.1:49152/oauth/callback",
+    redeem_client: TestClient | None = None,
 ) -> dict[str, object]:
     verifier = f"{state}-pkce-verifier-abcdefghijklmnopqrstuvwxyz0123456789"
     register = client.post(
@@ -286,7 +287,7 @@ def _mcp_oauth_token_response(
     approval = _approve_pending_authorization(browser, callback)
     redirect = urlparse(approval.headers["location"])
     params = parse_qs(redirect.query)
-    token = client.post(
+    token = (redeem_client or client).post(
         "/oauth/token",
         data={
             "grant_type": "authorization_code",
@@ -890,6 +891,50 @@ def test_oauth_register_accepts_loopback_redirect_uris(
     assert response.json()["redirect_uris"] == [redirect_uri]
 
 
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"client_name": "x" * 101, "redirect_uris": ["http://127.0.0.1/callback"]},
+        {
+            "client_name": "too-many-redirects",
+            "redirect_uris": [f"http://127.0.0.1:{49000 + index}/callback" for index in range(11)],
+        },
+        {
+            "client_name": "long-redirect",
+            "redirect_uris": ["http://127.0.0.1/" + "x" * 2048],
+        },
+    ],
+)
+def test_oauth_register_rejects_oversized_metadata(
+    tmp_path, monkeypatch, payload: dict[str, object]
+) -> None:
+    client = _client(tmp_path, monkeypatch)
+
+    response = client.post("/oauth/register", json=payload)
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["error"] == "invalid_client_metadata"
+
+
+def test_failed_oauth_client_persistence_publishes_no_fallback_client(
+    tmp_path, monkeypatch
+) -> None:
+    client = _client(tmp_path, monkeypatch)
+
+    async def fail_create(_self: object, **_kwargs: object) -> None:
+        raise RuntimeError("storage unavailable")
+
+    monkeypatch.setattr(MVPIngestionAgent, "create_oauth_client", fail_create)
+
+    with pytest.raises(RuntimeError, match="storage unavailable"):
+        client.post(
+            "/oauth/register",
+            json={"client_name": "ghost", "redirect_uris": ["http://127.0.0.1/ghost"]},
+        )
+
+    assert not hasattr(client.app.state, "oauth_registered_clients")
+
+
 def test_logged_in_user_mcp_reauth_prompts_google_account_selection(tmp_path, monkeypatch) -> None:
     client = _client(tmp_path, monkeypatch, allowed_domains=["example.com"])
     login = client.get("/auth/google", follow_redirects=False)
@@ -1022,6 +1067,18 @@ def test_oauth_registered_client_survives_app_restart(tmp_path, monkeypatch) -> 
     assert callback_params["state"] == ["restart-state"]
     assert token.status_code == 200
     assert token.json()["refresh_token"].startswith("amh_refresh_")
+
+
+def test_oauth_authorization_code_can_be_redeemed_by_another_app_instance(
+    tmp_path, monkeypatch
+) -> None:
+    issuer = _client(tmp_path, monkeypatch)
+    redeemer = _client(tmp_path, monkeypatch)
+
+    flow = _mcp_oauth_token_response(issuer, state="cross-worker", redeem_client=redeemer)
+
+    assert isinstance(flow["token"], dict)
+    assert str(flow["token"]["access_token"])
 
 
 def test_oauth_refresh_token_rotates_and_reuse_revokes_family(tmp_path, monkeypatch) -> None:
@@ -1280,24 +1337,6 @@ def test_oauth_token_rejects_non_ascii_pkce_verifier_as_invalid_grant(
     assert response.json()["error"] == "invalid_grant"
 
 
-def test_oauth_token_sweeps_expired_authorization_codes(tmp_path, monkeypatch) -> None:
-    client = _client(tmp_path, monkeypatch)
-    client.app.state.oauth_authorization_codes = {
-        "amh_code_expired": {"expires_at": int(time.time()) - 1},
-        "amh_code_live": {"expires_at": int(time.time()) + 300},
-    }
-
-    response = client.post(
-        "/oauth/token",
-        data={"grant_type": "authorization_code", "code": "amh_code_expired"},
-    )
-
-    assert response.status_code == 400
-    assert response.json()["error"] == "invalid_grant"
-    assert "amh_code_expired" not in client.app.state.oauth_authorization_codes
-    assert "amh_code_live" in client.app.state.oauth_authorization_codes
-
-
 def test_google_callback_rejects_invalid_state_and_denied_domain(tmp_path, monkeypatch) -> None:
     client = _client(tmp_path, monkeypatch, allowed_domains=["example.org"])
     start = client.get("/auth/google", follow_redirects=False)
@@ -1447,18 +1486,11 @@ def test_google_oauth_state_store_is_capped(tmp_path, monkeypatch) -> None:
     assert len(client.app.state.oauth_provider_states) <= 128
 
 
-def test_oauth_registered_client_store_is_capped_and_expires_records(tmp_path, monkeypatch) -> None:
+def test_oauth_registered_client_quota_is_enforced_in_durable_storage(
+    tmp_path, monkeypatch
+) -> None:
     client = _client(tmp_path, monkeypatch)
-
-    expired = client.post(
-        "/oauth/register",
-        json={"client_name": "expired", "redirect_uris": ["http://127.0.0.1/expired"]},
-    )
-    expired_client_id = expired.json()["client_id"]
-    client.app.state.oauth_registered_clients[expired_client_id]["expires_at"] = (
-        int(time.time()) - 1
-    )
-    for index in range(140):
+    for index in range(128):
         response = client.post(
             "/oauth/register",
             json={
@@ -1468,33 +1500,16 @@ def test_oauth_registered_client_store_is_capped_and_expires_records(tmp_path, m
         )
         assert response.status_code == 201
 
-    assert expired_client_id not in client.app.state.oauth_registered_clients
-    assert len(client.app.state.oauth_registered_clients) <= 128
+    rejected = client.post(
+        "/oauth/register",
+        json={"client_name": "overflow", "redirect_uris": ["http://127.0.0.1/overflow"]},
+    )
+    with sqlite3.connect(tmp_path / "metadata.sqlite3") as conn:
+        durable_count = conn.execute("SELECT COUNT(*) FROM oauth_clients").fetchone()[0]
 
-
-def test_oauth_authorization_code_store_is_capped(tmp_path, monkeypatch) -> None:
-    client = _client(tmp_path, monkeypatch)
-    redirect_uri = "http://127.0.0.1:49152/oauth/callback"
-    client.app.state.oauth_registered_clients = {
-        "amh_client_test": {
-            "client_id": "amh_client_test",
-            "client_name": "Test MCP client",
-            "redirect_uris": [redirect_uri],
-            "created_at": int(time.time()),
-            "expires_at": int(time.time()) + 300,
-        }
-    }
-    client.app.state.oauth_authorization_codes = {}
-    for index in range(140):
-        client.app.state.oauth_authorization_codes[f"amh_code_old_{index}"] = {
-            "created_at": index,
-            "expires_at": int(time.time()) + 300,
-        }
-
-    token = _mcp_oauth_token(client, state="cap-state")
-
-    assert token
-    assert len(client.app.state.oauth_authorization_codes) <= 128
+    assert rejected.status_code == 400
+    assert rejected.json()["detail"]["error"] == "invalid_client_metadata"
+    assert durable_count == 128
 
 
 def test_oauth_authorization_code_is_single_use(tmp_path, monkeypatch) -> None:

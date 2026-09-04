@@ -23,11 +23,14 @@ from memory.api.connect_service import (
     utc_after,
 )
 from memory.auth import READ_SCOPE, WRITE_SCOPE
+from memory.backend.errors import OAuthClientQuotaExceeded
 from memory.config import HubConfig
 
 AUTHORIZATION_CODE_TTL_SECONDS = 300
-AUTHORIZATION_CODE_MAX_RECORDS = 128
 OAUTH_CLIENT_MAX_RECORDS = 128
+OAUTH_CLIENT_NAME_MAX_LENGTH = 100
+OAUTH_REDIRECT_URI_MAX_COUNT = 10
+OAUTH_REDIRECT_URI_MAX_LENGTH = 2048
 PKCE_VERIFIER_PATTERN = re.compile(r"^[A-Za-z0-9._~-]{43,128}$")
 PKCE_CHALLENGE_PATTERN = re.compile(r"^[A-Za-z0-9_-]{43}$")
 LOCALHOST_NAMES = {"localhost"}
@@ -51,26 +54,24 @@ def register_oauth_authorization_routes(
                 "invalid_client_metadata", "Request body must be a JSON object"
             ) from exc
         redirect_uris = _redirect_uris_from_payload(payload)
+        client_name = str(payload.get("client_name") or "MCP client")
+        if len(client_name) > OAUTH_CLIENT_NAME_MAX_LENGTH:
+            raise _oauth_error("invalid_client_metadata", "client_name is too long")
         client_id = "amh_client_" + secrets.token_urlsafe(24)
-        clients = _registered_clients(request)
-        _sweep_expired_registered_clients(request)
-        while len(clients) >= OAUTH_CLIENT_MAX_RECORDS:
-            _drop_oldest_record(clients)
         issued_at = int(time.time())
         ttl_seconds = config.api.oauth.client_registration_ttl_seconds
-        clients[client_id] = {
-            "client_id": client_id,
-            "redirect_uris": redirect_uris,
-            "client_name": str(payload.get("client_name") or "MCP client"),
-            "created_at": issued_at,
-            "expires_at": issued_at + ttl_seconds,
-        }
-        await service.agent.create_oauth_client(
-            client_id=client_id,
-            client_name=str(payload.get("client_name") or "MCP client"),
-            redirect_uris=redirect_uris,
-            expires_at=utc_after(ttl_seconds),
-        )
+        try:
+            await service.agent.create_oauth_client(
+                client_id=client_id,
+                client_name=client_name,
+                redirect_uris=redirect_uris,
+                expires_at=utc_after(ttl_seconds),
+                max_active_clients=OAUTH_CLIENT_MAX_RECORDS,
+            )
+        except OAuthClientQuotaExceeded as exc:
+            raise _oauth_error(
+                "invalid_client_metadata", "Active OAuth client quota is exhausted"
+            ) from exc
         return JSONResponse(
             {
                 "client_id": client_id,
@@ -123,7 +124,9 @@ def register_oauth_authorization_routes(
         auth_request = await _validated_pending_authorization_request(
             service=service, request=request, pending=pending, config=config
         )
-        return _authorization_code_redirect(request, auth_request, owner_id=str(session["user_id"]))
+        return await _authorization_code_redirect(
+            service, auth_request, owner_id=str(session["user_id"])
+        )
 
     @app.post("/oauth/authorize/deny", include_in_schema=False)
     async def oauth_authorize_deny(request: Request) -> Response:
@@ -157,12 +160,8 @@ def register_oauth_authorization_routes(
                     "Only authorization_code and refresh_token are supported",
                 )
             code = str(form.get("code") or "")
-            _sweep_expired_authorization_codes(request)
-            record = _authorization_codes(request).pop(code, None)
+            record = await service.agent.consume_oauth_authorization_code(code)
             if record is None:
-                raise _oauth_error("invalid_grant", "Authorization code is invalid or expired")
-            expires_at = record.get("expires_at")
-            if not isinstance(expires_at, int) or expires_at <= int(time.time()):
                 raise _oauth_error("invalid_grant", "Authorization code is invalid or expired")
             if form.get("client_id") != record["client_id"]:
                 raise _oauth_error("invalid_grant", "client_id does not match authorization code")
@@ -306,8 +305,7 @@ async def _oauth_client_for_request(
             client = None
         if client is not None:
             return client
-    _sweep_expired_registered_clients(request)
-    return _registered_clients(request).get(client_id)
+    return None
 
 
 async def _trusted_authorization_redirect_uri(
@@ -439,21 +437,20 @@ def _timestamp_is_expired(value: object) -> bool:
     return parsed <= datetime.now(UTC)
 
 
-def _authorization_code_redirect(
-    request: Request, auth_request: dict[str, str], *, owner_id: str
+async def _authorization_code_redirect(
+    service: ConnectService, auth_request: dict[str, str], *, owner_id: str
 ) -> RedirectResponse:
-    _sweep_expired_authorization_codes(request)
-    codes = _authorization_codes(request)
-    while len(codes) >= AUTHORIZATION_CODE_MAX_RECORDS:
-        _drop_oldest_record(codes)
     code = "amh_code_" + secrets.token_urlsafe(32)
-    codes[code] = {
-        **auth_request,
-        "code": code,
-        "owner_id": owner_id,
-        "created_at": int(time.time()),
-        "expires_at": int(time.time()) + AUTHORIZATION_CODE_TTL_SECONDS,
-    }
+    await service.agent.create_oauth_authorization_code(
+        code=code,
+        client_id=auth_request["client_id"],
+        owner_id=owner_id,
+        redirect_uri=auth_request["redirect_uri"],
+        code_challenge=auth_request["code_challenge"],
+        resource=auth_request["resource"],
+        scope=auth_request["scope"],
+        expires_at=utc_after(AUTHORIZATION_CODE_TTL_SECONDS),
+    )
     query = {"code": code}
     if auth_request.get("state"):
         query["state"] = auth_request["state"]
@@ -493,6 +490,8 @@ def _redirect_uris_from_payload(payload: Any) -> list[str]:
     values = payload.get("redirect_uris")
     if not isinstance(values, list) or not values:
         raise _oauth_error("invalid_client_metadata", "redirect_uris is required")
+    if len(values) > OAUTH_REDIRECT_URI_MAX_COUNT:
+        raise _oauth_error("invalid_client_metadata", "too many redirect_uris")
     redirect_uris = [_validated_redirect_uri(value) for value in values]
     if not redirect_uris:
         raise _oauth_error("invalid_client_metadata", "redirect_uris contains invalid values")
@@ -504,6 +503,8 @@ def _validated_redirect_uri(value: object) -> str:
         raise _oauth_error("invalid_client_metadata", "redirect_uris contains invalid values")
     if "\r" in value or "\n" in value:
         raise _oauth_error("invalid_client_metadata", "redirect_uris contains invalid values")
+    if len(value) > OAUTH_REDIRECT_URI_MAX_LENGTH:
+        raise _oauth_error("invalid_client_metadata", "redirect_uri is too long")
     try:
         parsed = urlparse(value)
         _ = parsed.port
@@ -541,51 +542,6 @@ def _pkce_verifier_matches(verifier: str, record: dict[str, object]) -> bool:
     challenge = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
     expected = str(record["code_challenge"])
     return hmac.compare_digest(challenge, expected)
-
-
-def _registered_clients(request: Request) -> dict[str, dict[str, Any]]:
-    if not hasattr(request.app.state, "oauth_registered_clients"):
-        request.app.state.oauth_registered_clients = {}
-    return request.app.state.oauth_registered_clients
-
-
-def _authorization_codes(request: Request) -> dict[str, dict[str, object]]:
-    if not hasattr(request.app.state, "oauth_authorization_codes"):
-        request.app.state.oauth_authorization_codes = {}
-    return request.app.state.oauth_authorization_codes
-
-
-def _sweep_expired_authorization_codes(request: Request) -> None:
-    now = int(time.time())
-    codes = _authorization_codes(request)
-    expired = []
-    for code, record in codes.items():
-        expires_at = record.get("expires_at")
-        if not isinstance(expires_at, int) or expires_at <= now:
-            expired.append(code)
-    for code in expired:
-        codes.pop(code, None)
-
-
-def _sweep_expired_registered_clients(request: Request) -> None:
-    now = int(time.time())
-    clients = _registered_clients(request)
-    expired = []
-    for client_id, record in clients.items():
-        expires_at = record.get("expires_at")
-        if not isinstance(expires_at, int) or expires_at <= now:
-            expired.append(client_id)
-    for client_id in expired:
-        clients.pop(client_id, None)
-
-
-def _drop_oldest_record(records: dict[str, dict[str, object]]) -> None:
-    def created_at_for(key: str) -> int:
-        created_at = records[key].get("created_at")
-        return created_at if isinstance(created_at, int) else 0
-
-    if records:
-        records.pop(min(records, key=created_at_for), None)
 
 
 def _session(request: Request) -> dict[str, Any]:
