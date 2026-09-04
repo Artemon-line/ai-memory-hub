@@ -64,7 +64,9 @@ def register_connect_routes(app: FastAPI, *, agent: BaseIngestionAgent, config: 
     @app.get("/connect", include_in_schema=False)
     async def connect(request: Request) -> Response:
         model = await service.page_model(request)
-        model["pending_oauth_authorization"] = pending_authorization_model(request)
+        model["pending_oauth_authorization"] = await pending_authorization_model(
+            request, service=service, config=config
+        )
         return templates.TemplateResponse(
             request,
             "connect.html.j2",
@@ -98,14 +100,20 @@ def register_connect_routes(app: FastAPI, *, agent: BaseIngestionAgent, config: 
                 "owner_id": login["identity"]["user_id"],
             },
         )
-        authorization_redirect = pending_authorization_redirect(
-            request, owner_id=str(login["identity"]["user_id"])
-        )
+        authorization_redirect = pending_authorization_redirect(request)
         if authorization_redirect is not None:
             authorization_redirect.set_cookie(
                 config.api.connect.session_cookie_name,
                 str(login["session_id"]),
                 httponly=True,
+                secure=secure_cookie(config),
+                samesite="lax",
+                max_age=config.api.connect.session_ttl_seconds,
+            )
+            authorization_redirect.set_cookie(
+                "amh_csrf",
+                str(login["csrf_token"]),
+                httponly=False,
                 secure=secure_cookie(config),
                 samesite="lax",
                 max_age=config.api.connect.session_ttl_seconds,
