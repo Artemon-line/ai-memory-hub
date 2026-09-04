@@ -415,6 +415,14 @@ async def _emit_mcp_tool_log(
 async def _mcp_permission_denied_response(
     ctx: FastMCPContext | None, *, tool_name: str, exc: Exception
 ) -> dict[str, Any]:
+    logger.warning(
+        "MCP tool permission denied",
+        extra={
+            "event": "mcp_permission_denied",
+            "tool": tool_name,
+            "exception_type": type(exc).__name__,
+        },
+    )
     await _emit_mcp_tool_log(
         ctx,
         tool_name=tool_name,
@@ -424,7 +432,7 @@ async def _mcp_permission_denied_response(
     return _envelope(
         status="error",
         error_code="permission_denied",
-        error_message=str(exc),
+        error_message="Access to the requested project was denied",
     )
 
 

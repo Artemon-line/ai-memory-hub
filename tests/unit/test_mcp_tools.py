@@ -11,6 +11,7 @@ import pytest
 from memory.ingestion import mvp_ingestion
 from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
 from memory.interfaces import mcp_server
+from memory.interfaces.mcp_response_format import format_search_response
 from memory.interfaces.mcp_server import (
     _deterministic_sort,
     _emit_mcp_tool_log,
@@ -337,6 +338,14 @@ async def test_mcp_search_response_format_controls_conversation_payloads() -> No
     concise_row = concise["results"][0]
     detailed_row = detailed["results"][0]
     assert concise["status"] == "ok"
+    assert set(concise) == {
+        "status",
+        "id",
+        "results",
+        "cursor",
+        "error_code",
+        "error_message",
+    }
     assert "conversation" not in concise_row
     assert concise_row["citation"]["id"] == payload["id"]
     assert concise_row["citation"]["source"] == "claude"
@@ -351,6 +360,26 @@ async def test_mcp_search_response_format_controls_conversation_payloads() -> No
     assert "conversation" in detailed_row
     assert "index_chunks" in detailed_row["conversation"]["metadata"]
     assert "tag_sources" in detailed_row["conversation"]["metadata"]
+
+
+def test_mcp_concise_search_drops_undocumented_top_level_fields() -> None:
+    payload = {
+        "status": "ok",
+        "cursor": "next-page",
+        "total": 3,
+        "results": [{"id": "memory-a", "text": "safe result"}],
+        "conversation": {"private": "top-level-sentinel"},
+        "audit": {"path": "D:/private/backend.db"},
+    }
+
+    concise = format_search_response(payload, "concise")
+
+    assert concise["status"] == "ok"
+    assert concise["cursor"] == "next-page"
+    assert concise["total"] == 3
+    assert concise["results"][0]["id"] == "memory-a"
+    assert "conversation" not in concise
+    assert "audit" not in concise
 
 
 @pytest.mark.asyncio
@@ -432,6 +461,27 @@ async def test_mcp_tool_handlers_expose_project_helpers() -> None:
     assert project_get["project"]["id"] == "local-default"
     assert denied_project["status"] == "error"
     assert denied_project["error_code"] == "permission_denied"
+
+
+@pytest.mark.asyncio
+async def test_mcp_permission_denied_response_does_not_echo_exception_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
+    handlers = build_tool_handlers(agent)
+    sentinel = "D:/private/backend.db::sensitive-identifier"
+
+    async def deny(*_args: object, **_kwargs: object) -> dict[str, object]:
+        raise PermissionError(sentinel)
+
+    monkeypatch.setattr(agent, "project_get", deny)
+
+    response = await handlers["memory_project_get"]("shared-project")
+
+    assert response["status"] == "error"
+    assert response["error_code"] == "permission_denied"
+    assert response["error_message"] == "Access to the requested project was denied"
+    assert sentinel not in json.dumps(response)
 
 
 @pytest.mark.asyncio

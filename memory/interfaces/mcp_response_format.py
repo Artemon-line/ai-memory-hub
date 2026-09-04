@@ -98,6 +98,15 @@ _DEFAULT_MEMORY_STATUS = "active"
 _MEMORY_STATUS_KEY = "memory_status"
 _CONCISE_SEARCH_TEXT_LIMIT = 800
 _CONCISE_SEARCH_EVIDENCE_TEXT_LIMIT = 500
+_CONCISE_SEARCH_KEYS: tuple[str | StrEnum, ...] = (
+    MCPPayloadKey.STATUS,
+    "cursor",
+    MCPPayloadKey.TOTAL,
+    MCPPayloadKey.UNIQUE,
+    MCPPayloadKey.RETURNED,
+    MCPPayloadKey.OMITTED,
+    MCPPayloadKey.LIMIT,
+)
 _CONCISE_ASK_KEYS: tuple[str | StrEnum, ...] = (
     MCPPayloadKey.STATUS,
     MCPPayloadKey.ANSWER,
@@ -116,7 +125,7 @@ def format_search_response(
 ) -> dict[str, Any]:
     if response_format == MCPResponseFormat.DETAILED.value:
         return payload
-    formatted = dict(payload)
+    formatted = _compact_mapping(payload, _CONCISE_SEARCH_KEYS)
     results = payload.get("results", [])
     formatted["results"] = [
         _concise_search_row(row) for row in results if isinstance(row, dict)
