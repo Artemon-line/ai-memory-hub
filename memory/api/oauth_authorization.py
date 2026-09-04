@@ -29,6 +29,7 @@ AUTHORIZATION_CODE_TTL_SECONDS = 300
 AUTHORIZATION_CODE_MAX_RECORDS = 128
 OAUTH_CLIENT_MAX_RECORDS = 128
 PKCE_VERIFIER_PATTERN = re.compile(r"^[A-Za-z0-9._~-]{43,128}$")
+PKCE_CHALLENGE_PATTERN = re.compile(r"^[A-Za-z0-9_-]{43}$")
 LOCALHOST_NAMES = {"localhost"}
 REDIRECT_URI_SCHEMES = {"http", "https"}
 
@@ -87,9 +88,21 @@ def register_oauth_authorization_routes(
     @app.get("/oauth/authorize", include_in_schema=False)
     async def oauth_authorize(request: Request) -> Response:
         params = dict(request.query_params)
-        auth_request = await _validated_authorization_request(
-            service=service, request=request, params=params
-        )
+        try:
+            auth_request = await _validated_authorization_request(
+                service=service, request=request, params=params, config=config
+            )
+        except HTTPException as exc:
+            redirect_uri = await _trusted_authorization_redirect_uri(
+                service=service, request=request, params=params
+            )
+            if redirect_uri is None:
+                raise
+            return _authorization_error_redirect(
+                redirect_uri,
+                exc,
+                state=str(params.get("state") or ""),
+            )
         _session(request)["pending_oauth_authorization"] = auth_request
         provider = _first_enabled_provider(config)
         return await oauth.authorize_redirect(
@@ -108,7 +121,7 @@ def register_oauth_authorization_routes(
             raise HTTPException(status_code=403, detail="Invalid CSRF token")
         pending = _session(request).pop("pending_oauth_authorization", None)
         auth_request = await _validated_pending_authorization_request(
-            service=service, request=request, pending=pending
+            service=service, request=request, pending=pending, config=config
         )
         return _authorization_code_redirect(request, auth_request, owner_id=str(session["user_id"]))
 
@@ -120,44 +133,56 @@ def register_oauth_authorization_routes(
             raise HTTPException(status_code=403, detail="Connect session is required")
         if not csrf_matches(session, str(form.get("csrf_token") or ""), config=config):
             raise HTTPException(status_code=403, detail="Invalid CSRF token")
-        _session(request).pop("pending_oauth_authorization", None)
-        return RedirectResponse("/connect", status_code=303)
+        pending = _session(request).pop("pending_oauth_authorization", None)
+        auth_request = await _validated_pending_authorization_request(
+            service=service, request=request, pending=pending, config=config
+        )
+        return _authorization_error_redirect(
+            auth_request["redirect_uri"],
+            _oauth_error("access_denied", "The resource owner denied the request"),
+            state=auth_request["state"],
+        )
 
     @app.post("/token", include_in_schema=False)
     @app.post("/oauth/token", include_in_schema=False)
     async def oauth_token(request: Request) -> JSONResponse:
         form = dict((await request.form()).items())
-        grant_type = form.get("grant_type")
-        if grant_type == "refresh_token":
-            return await _refresh_token_response(service=service, config=config, form=form)
-        if grant_type != "authorization_code":
-            raise _oauth_error(
-                "unsupported_grant_type",
-                "Only authorization_code and refresh_token are supported",
-            )
-        code = str(form.get("code") or "")
-        _sweep_expired_authorization_codes(request)
-        record = _authorization_codes(request).pop(code, None)
-        if record is None:
-            raise _oauth_error("invalid_grant", "Authorization code is invalid or expired")
-        expires_at = record.get("expires_at")
-        if not isinstance(expires_at, int) or expires_at <= int(time.time()):
-            raise _oauth_error("invalid_grant", "Authorization code is invalid or expired")
-        if form.get("client_id") != record["client_id"]:
-            raise _oauth_error("invalid_grant", "client_id does not match authorization code")
-        if form.get("redirect_uri") != record["redirect_uri"]:
-            raise _oauth_error("invalid_grant", "redirect_uri does not match authorization code")
-        if not _pkce_verifier_matches(str(form.get("code_verifier") or ""), record):
-            raise _oauth_error("invalid_grant", "PKCE verification failed")
+        try:
+            grant_type = form.get("grant_type")
+            if grant_type == "refresh_token":
+                return await _refresh_token_response(service=service, config=config, form=form)
+            if grant_type != "authorization_code":
+                raise _oauth_error(
+                    "unsupported_grant_type",
+                    "Only authorization_code and refresh_token are supported",
+                )
+            code = str(form.get("code") or "")
+            _sweep_expired_authorization_codes(request)
+            record = _authorization_codes(request).pop(code, None)
+            if record is None:
+                raise _oauth_error("invalid_grant", "Authorization code is invalid or expired")
+            expires_at = record.get("expires_at")
+            if not isinstance(expires_at, int) or expires_at <= int(time.time()):
+                raise _oauth_error("invalid_grant", "Authorization code is invalid or expired")
+            if form.get("client_id") != record["client_id"]:
+                raise _oauth_error("invalid_grant", "client_id does not match authorization code")
+            if form.get("redirect_uri") != record["redirect_uri"]:
+                raise _oauth_error(
+                    "invalid_grant", "redirect_uri does not match authorization code"
+                )
+            if not _pkce_verifier_matches(str(form.get("code_verifier") or ""), record):
+                raise _oauth_error("invalid_grant", "PKCE verification failed")
 
-        return await _issue_access_and_refresh_tokens(
-            service=service,
-            config=config,
-            client_id=str(record["client_id"]),
-            owner_id=str(record["owner_id"]),
-            resource=str(record["resource"]),
-            scopes=_scopes_from_scope_value(str(record.get("scope") or "")),
-        )
+            return await _issue_access_and_refresh_tokens(
+                service=service,
+                config=config,
+                client_id=str(record["client_id"]),
+                owner_id=str(record["owner_id"]),
+                resource=str(record["resource"]),
+                scopes=_scopes_from_scope_value(str(record.get("scope") or "")),
+            )
+        except HTTPException as exc:
+            return _oauth_error_response(exc)
 
     @app.post("/oauth/revoke", include_in_schema=False)
     async def oauth_revoke(request: Request) -> JSONResponse:
@@ -177,22 +202,23 @@ def register_oauth_authorization_routes(
         return JSONResponse({})
 
 
-def pending_authorization_redirect(request: Request, *, owner_id: str) -> RedirectResponse | None:
+def pending_authorization_redirect(request: Request) -> RedirectResponse | None:
     state_data = getattr(request.state, "oauth_provider_state_data", None)
     pending = (
-        state_data.get("pending_oauth_authorization")
-        if isinstance(state_data, dict)
-        else None
+        state_data.get("pending_oauth_authorization") if isinstance(state_data, dict) else None
     )
-    session_pending = _session(request).pop("pending_oauth_authorization", None)
+    session_pending = _session(request).get("pending_oauth_authorization")
     if not isinstance(pending, dict):
         pending = session_pending
     if not isinstance(pending, dict):
         return None
-    return _authorization_code_redirect(request, pending, owner_id=owner_id)
+    _session(request)["pending_oauth_authorization"] = pending
+    return RedirectResponse("/connect", status_code=303)
 
 
-def pending_authorization_model(request: Request) -> dict[str, str] | None:
+async def pending_authorization_model(
+    request: Request, *, service: ConnectService, config: HubConfig
+) -> dict[str, str] | None:
     try:
         pending = request.session.get("pending_oauth_authorization")
     except AssertionError:
@@ -200,10 +226,17 @@ def pending_authorization_model(request: Request) -> dict[str, str] | None:
     if not isinstance(pending, dict):
         return None
     try:
-        auth_request = _validated_pending_authorization_request_from_session(request, pending)
+        auth_request = await _validated_pending_authorization_request(
+            service=service, request=request, pending=pending, config=config
+        )
     except HTTPException:
         return None
-    client = _registered_clients(request).get(auth_request["client_id"]) or {}
+    client = (
+        await _oauth_client_for_request(
+            service=service, request=request, client_id=auth_request["client_id"]
+        )
+        or {}
+    )
     return {
         "client_name": str(client.get("client_name") or "MCP client"),
         "redirect_uri": auth_request["redirect_uri"],
@@ -213,10 +246,8 @@ def pending_authorization_model(request: Request) -> dict[str, str] | None:
 
 
 async def _validated_authorization_request(
-    *, service: ConnectService, request: Request, params: dict[str, str]
+    *, service: ConnectService, request: Request, params: dict[str, str], config: HubConfig
 ) -> dict[str, str]:
-    if params.get("response_type") != "code":
-        raise _oauth_error("unsupported_response_type", "Only response_type=code is supported")
     client_id = str(params.get("client_id") or "")
     client = await _oauth_client_for_request(service=service, request=request, client_id=client_id)
     if client is None:
@@ -224,24 +255,28 @@ async def _validated_authorization_request(
     redirect_uri = str(params.get("redirect_uri") or "")
     if redirect_uri not in client["redirect_uris"]:
         raise _oauth_error("invalid_request", "redirect_uri is not registered")
+    if params.get("response_type") != "code":
+        raise _oauth_error("unsupported_response_type", "Only response_type=code is supported")
     if params.get("code_challenge_method") != "S256":
         raise _oauth_error("invalid_request", "PKCE S256 is required")
     code_challenge = str(params.get("code_challenge") or "")
-    if not code_challenge:
-        raise _oauth_error("invalid_request", "code_challenge is required")
+    if not PKCE_CHALLENGE_PATTERN.fullmatch(code_challenge):
+        raise _oauth_error("invalid_request", "code_challenge must be 43 base64url characters")
+    scope = str(params.get("scope") or "")
+    _validate_requested_scopes(scope, config=config)
     return {
         "client_id": client_id,
         "redirect_uri": redirect_uri,
         "code_challenge": code_challenge,
         "code_challenge_method": "S256",
         "resource": str(params.get("resource") or ""),
-        "scope": str(params.get("scope") or ""),
+        "scope": scope,
         "state": str(params.get("state") or ""),
     }
 
 
 async def _validated_pending_authorization_request(
-    *, service: ConnectService, request: Request, pending: object
+    *, service: ConnectService, request: Request, pending: object, config: HubConfig
 ) -> dict[str, str]:
     if not isinstance(pending, dict):
         raise _oauth_error("invalid_request", "No pending authorization request")
@@ -253,25 +288,11 @@ async def _validated_pending_authorization_request(
         raise _oauth_error("invalid_client", "Unknown OAuth client_id")
     if values["redirect_uri"] not in client["redirect_uris"]:
         raise _oauth_error("invalid_request", "redirect_uri is not registered")
-    if values["code_challenge_method"] != "S256" or not values["code_challenge"]:
+    if values["code_challenge_method"] != "S256" or not PKCE_CHALLENGE_PATTERN.fullmatch(
+        values["code_challenge"]
+    ):
         raise _oauth_error("invalid_request", "PKCE S256 is required")
-    return values
-
-
-def _validated_pending_authorization_request_from_session(
-    request: Request, pending: object
-) -> dict[str, str]:
-    if not isinstance(pending, dict):
-        raise _oauth_error("invalid_request", "No pending authorization request")
-    _sweep_expired_registered_clients(request)
-    values = {key: str(pending.get(key) or "") for key in _AUTH_REQUEST_FIELDS}
-    client = _registered_clients(request).get(values["client_id"])
-    if client is None:
-        raise _oauth_error("invalid_client", "Unknown OAuth client_id")
-    if values["redirect_uri"] not in client["redirect_uris"]:
-        raise _oauth_error("invalid_request", "redirect_uri is not registered")
-    if values["code_challenge_method"] != "S256" or not values["code_challenge"]:
-        raise _oauth_error("invalid_request", "PKCE S256 is required")
+    _validate_requested_scopes(values["scope"], config=config)
     return values
 
 
@@ -287,6 +308,24 @@ async def _oauth_client_for_request(
             return client
     _sweep_expired_registered_clients(request)
     return _registered_clients(request).get(client_id)
+
+
+async def _trusted_authorization_redirect_uri(
+    *, service: ConnectService, request: Request, params: dict[str, str]
+) -> str | None:
+    client_id = str(params.get("client_id") or "")
+    client = await _oauth_client_for_request(service=service, request=request, client_id=client_id)
+    redirect_uri = str(params.get("redirect_uri") or "")
+    if client is None or redirect_uri not in client["redirect_uris"]:
+        return None
+    return redirect_uri
+
+
+def _validate_requested_scopes(value: str, *, config: HubConfig) -> None:
+    requested = value.split()
+    supported = set(config.api.oauth.scopes_supported)
+    if any(scope not in supported for scope in requested):
+        raise _oauth_error("invalid_scope", "One or more requested scopes are not supported")
 
 
 async def _refresh_token_response(
@@ -425,6 +464,29 @@ def _authorization_code_redirect(
     )
 
 
+def _authorization_error_redirect(
+    redirect_uri: str, exc: HTTPException, *, state: str
+) -> RedirectResponse:
+    detail = exc.detail if isinstance(exc.detail, dict) else {}
+    query = {
+        "error": str(detail.get("error") or "invalid_request"),
+        "error_description": str(detail.get("error_description") or "Authorization failed"),
+    }
+    if state:
+        query["state"] = state
+    separator = "&" if "?" in redirect_uri else "?"
+    return RedirectResponse(f"{redirect_uri}{separator}{urlencode(query)}", status_code=303)
+
+
+def _oauth_error_response(exc: HTTPException) -> JSONResponse:
+    detail = exc.detail if isinstance(exc.detail, dict) else {"error": "invalid_request"}
+    return JSONResponse(
+        detail,
+        status_code=exc.status_code,
+        headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
+    )
+
+
 def _redirect_uris_from_payload(payload: Any) -> list[str]:
     if not isinstance(payload, dict):
         raise _oauth_error("invalid_client_metadata", "Request body must be a JSON object")
@@ -530,7 +592,9 @@ def _session(request: Request) -> dict[str, Any]:
     try:
         return request.session
     except AssertionError as exc:
-        raise HTTPException(status_code=503, detail="OAuth session middleware is not configured") from exc
+        raise HTTPException(
+            status_code=503, detail="OAuth session middleware is not configured"
+        ) from exc
 
 
 def _first_enabled_provider(config: HubConfig) -> str:
