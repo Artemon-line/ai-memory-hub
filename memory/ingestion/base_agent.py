@@ -154,9 +154,7 @@ class BaseIngestionAgent(ABC):
     async def project_default_get(self, *, owner_id: str | None = None) -> Dict[str, Any]:
         raise NotImplementedError("project_default_get is not implemented")
 
-    async def project_get(
-        self, project_id: str, *, owner_id: str | None = None
-    ) -> Dict[str, Any]:
+    async def project_get(self, project_id: str, *, owner_id: str | None = None) -> Dict[str, Any]:
         raise NotImplementedError("project_get is not implemented")
 
     async def authenticate_bearer_token(self, token: str) -> str | None:
@@ -219,11 +217,29 @@ class BaseIngestionAgent(ABC):
         client_name: str,
         redirect_uris: list[str],
         expires_at: str,
+        max_active_clients: int,
     ) -> dict[str, object]:
         raise NotImplementedError("create_oauth_client is not implemented")
 
     async def oauth_client(self, client_id: str) -> dict[str, object] | None:
         raise NotImplementedError("oauth_client is not implemented")
+
+    async def create_oauth_authorization_code(
+        self,
+        *,
+        code: str,
+        client_id: str,
+        owner_id: str,
+        redirect_uri: str,
+        code_challenge: str,
+        resource: str,
+        scope: str,
+        expires_at: str,
+    ) -> None:
+        raise NotImplementedError("create_oauth_authorization_code is not implemented")
+
+    async def consume_oauth_authorization_code(self, code: str) -> dict[str, object] | None:
+        raise NotImplementedError("consume_oauth_authorization_code is not implemented")
 
     async def create_oauth_refresh_token(
         self,
@@ -242,9 +258,7 @@ class BaseIngestionAgent(ABC):
     async def oauth_refresh_token(self, refresh_token: str) -> dict[str, object] | None:
         raise NotImplementedError("oauth_refresh_token is not implemented")
 
-    async def consume_oauth_refresh_token(
-        self, refresh_token: str
-    ) -> dict[str, object] | None:
+    async def consume_oauth_refresh_token(self, refresh_token: str) -> dict[str, object] | None:
         raise NotImplementedError("consume_oauth_refresh_token is not implemented")
 
     async def revoke_oauth_refresh_token(self, refresh_token: str) -> bool:
@@ -254,6 +268,4 @@ class BaseIngestionAgent(ABC):
         raise NotImplementedError("revoke_oauth_refresh_token_family is not implemented")
 
     async def revoke_oauth_authorization_for_access_token(self, access_token: str) -> bool:
-        raise NotImplementedError(
-            "revoke_oauth_authorization_for_access_token is not implemented"
-        )
+        raise NotImplementedError("revoke_oauth_authorization_for_access_token is not implemented")

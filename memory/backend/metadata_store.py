@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from memory.backend.contracts import ProviderCapabilities
-from memory.backend.errors import NotSupportedError
+from memory.backend.errors import NotSupportedError, OAuthClientQuotaExceeded
 
 LOCAL_DEFAULT_PROJECT_ID = "local-default"
 PROJECT_ROLE_ADMIN = "admin"
@@ -118,10 +118,7 @@ def update_index_chunks_payload(
         chunk = dict(item)
         if targets.matches(chunk):
             chunk_index = _chunk_index_from_payload(chunk)
-            if (
-                not chunk.get(IndexChunkField.CHUNK_ID.value)
-                and chunk_index in chunk_id_by_index
-            ):
+            if not chunk.get(IndexChunkField.CHUNK_ID.value) and chunk_index in chunk_id_by_index:
                 chunk[IndexChunkField.CHUNK_ID.value] = chunk_id_by_index[chunk_index]
             chunk[IndexChunkField.INDEX_STATE.value] = normalized_state
         updated_chunks.append(chunk)
@@ -145,7 +142,7 @@ def _chunk_index_from_payload(chunk: Mapping[str, Any]) -> int | None:
         return None
     try:
         return int(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 
@@ -311,6 +308,24 @@ class SQLiteMetadataStore:
                     expires_at TEXT NOT NULL,
                     consumed_at TEXT,
                     revoked_at TEXT,
+                    FOREIGN KEY(client_id) REFERENCES oauth_clients(client_id),
+                    FOREIGN KEY(owner_id) REFERENCES users(id)
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS oauth_authorization_codes (
+                    code_hash TEXT PRIMARY KEY,
+                    client_id TEXT NOT NULL,
+                    owner_id TEXT NOT NULL,
+                    redirect_uri TEXT NOT NULL,
+                    code_challenge TEXT NOT NULL,
+                    resource TEXT NOT NULL,
+                    scope TEXT NOT NULL,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TEXT NOT NULL,
+                    consumed_at TEXT,
                     FOREIGN KEY(client_id) REFERENCES oauth_clients(client_id),
                     FOREIGN KEY(owner_id) REFERENCES users(id)
                 )
@@ -937,10 +952,20 @@ class SQLiteMetadataStore:
         client_name: str,
         redirect_uris: list[str],
         expires_at: str,
+        max_active_clients: int = 128,
     ) -> dict[str, Any]:
         handle = _validate_token_lookup(client_id)
         uris_json = json.dumps([str(uri) for uri in redirect_uris], separators=(",", ":"))
         with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            active_count = conn.execute(
+                """
+                SELECT COUNT(*) FROM oauth_clients
+                WHERE revoked_at IS NULL AND expires_at > CURRENT_TIMESTAMP
+                """
+            ).fetchone()[0]
+            if int(active_count) >= max_active_clients:
+                raise OAuthClientQuotaExceeded("active OAuth client quota exceeded")
             conn.execute(
                 """
                 INSERT INTO oauth_clients
@@ -980,6 +1005,56 @@ class SQLiteMetadataStore:
                 (handle,),
             ).fetchone()
         return self._oauth_client_from_row(row) if row is not None else None
+
+    def create_oauth_authorization_code(
+        self,
+        *,
+        code: str,
+        client_id: str,
+        owner_id: str,
+        redirect_uri: str,
+        code_challenge: str,
+        resource: str,
+        scope: str,
+        expires_at: str,
+    ) -> None:
+        code_hash = _hash_bearer_token(code)
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO oauth_authorization_codes
+                    (code_hash, client_id, owner_id, redirect_uri, code_challenge,
+                     resource, scope, expires_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    code_hash,
+                    _validate_token_lookup(client_id),
+                    _validate_owner_id(owner_id),
+                    str(redirect_uri),
+                    str(code_challenge),
+                    str(resource),
+                    str(scope),
+                    expires_at,
+                ),
+            )
+
+    def consume_oauth_authorization_code(self, code: str) -> dict[str, Any] | None:
+        code_hash = _hash_bearer_token(code)
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                UPDATE oauth_authorization_codes
+                SET consumed_at = CURRENT_TIMESTAMP
+                WHERE code_hash = ?
+                  AND consumed_at IS NULL
+                  AND expires_at > CURRENT_TIMESTAMP
+                RETURNING client_id, owner_id, redirect_uri, code_challenge,
+                          resource, scope, created_at, expires_at
+                """,
+                (code_hash,),
+            ).fetchone()
+        return dict(row) if row is not None else None
 
     def create_oauth_refresh_token(
         self,
@@ -1387,7 +1462,7 @@ class SQLiteMetadataStore:
             row = conn.execute(
                 f"""
                 SELECT payload FROM conversations
-                WHERE {' AND '.join(clauses)}
+                WHERE {" AND ".join(clauses)}
                 ORDER BY created_at ASC
                 LIMIT 1
                 """,
@@ -1526,7 +1601,7 @@ class SQLiteMetadataStore:
             rows = conn.execute(
                 f"""
                 SELECT payload FROM conversations
-                WHERE {' AND '.join(clauses)}
+                WHERE {" AND ".join(clauses)}
                 ORDER BY created_at DESC
                 LIMIT ?
                 """,
@@ -1599,17 +1674,18 @@ class SQLiteMetadataStore:
             rows = conn.execute(
                 f"""
                 SELECT * FROM facts
-                WHERE {' AND '.join(clauses)}
+                WHERE {" AND ".join(clauses)}
                 ORDER BY updated_at DESC, id ASC
                 """,
                 params,
             ).fetchall()
         return [self._fact_from_row(row) for row in rows]
 
-    def profile_get(
-        self, subject: str = "user", project_id: str | None = None
-    ) -> dict[str, Any]:
-        return {"subject": subject, "facts": self.search_facts(subject=subject, project_id=project_id)}
+    def profile_get(self, subject: str = "user", project_id: str | None = None) -> dict[str, Any]:
+        return {
+            "subject": subject,
+            "facts": self.search_facts(subject=subject, project_id=project_id),
+        }
 
     def upsert_graph_records(
         self, *, entities: list[dict[str, Any]], relationships: list[dict[str, Any]]
@@ -1811,7 +1887,7 @@ class SQLiteMetadataStore:
                 f"""
                 UPDATE facts
                 SET superseded_by = ?, superseded_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-                WHERE {' AND '.join(clauses)}
+                WHERE {" AND ".join(clauses)}
                 """,
                 params,
             )
@@ -1862,9 +1938,7 @@ class SQLiteMetadataStore:
 
     def append_audit_event(self, event: dict[str, Any]) -> dict[str, Any]:
         normalized = _prepare_audit_event(event)
-        metadata = json.dumps(
-            normalized["metadata"], separators=(",", ":"), ensure_ascii=False
-        )
+        metadata = json.dumps(normalized["metadata"], separators=(",", ":"), ensure_ascii=False)
         with self._connect() as conn:
             conn.execute(
                 """
@@ -2042,9 +2116,7 @@ class SQLiteMetadataStore:
             raise ValueError("unauthorized_update: conversation id already exists")
         return str(existing["id"]), False
 
-    def _supersede_corrected_facts(
-        self, conn: sqlite3.Connection, fact: dict[str, Any]
-    ) -> None:
+    def _supersede_corrected_facts(self, conn: sqlite3.Connection, fact: dict[str, Any]) -> None:
         qualifiers = fact.get("qualifiers", {})
         corrects = qualifiers.get("corrects") if isinstance(qualifiers, dict) else None
         if not corrects:
@@ -2205,7 +2277,7 @@ class SQLiteMetadataStore:
                 VALUES (?, ?, ?, ?, ?)
                 """,
                 (conversation_id, index, role, text, message_hash),
-        )
+            )
         for chunk in self._index_chunks(conversation_json):
             conn.execute(
                 """
@@ -2287,9 +2359,7 @@ class SQLiteMetadataStore:
             (project_id, user_id, role),
         )
 
-    def _get_project_row(
-        self, conn: sqlite3.Connection, project_id: str
-    ) -> dict[str, Any] | None:
+    def _get_project_row(self, conn: sqlite3.Connection, project_id: str) -> dict[str, Any] | None:
         row = conn.execute(
             "SELECT * FROM projects WHERE id = ? AND archived_at IS NULL",
             (project_id,),
@@ -2495,7 +2565,7 @@ def _token_id_from_bearer_token(token: str) -> str | None:
         return None
     try:
         payload = json.loads(base64.urlsafe_b64decode((parts[1] + "=" * (-len(parts[1]) % 4))))
-    except (ValueError, json.JSONDecodeError):
+    except ValueError, json.JSONDecodeError:
         return None
     if not isinstance(payload, dict):
         return None

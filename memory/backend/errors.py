@@ -16,3 +16,6 @@ class SchemaVersionError(StorageError):
 class VectorDimensionError(StorageError):
     """Raised when vector dimensionality does not match expected value."""
 
+
+class OAuthClientQuotaExceeded(StorageError):
+    """Raised when the active dynamic OAuth client quota is exhausted."""

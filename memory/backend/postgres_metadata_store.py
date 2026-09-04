@@ -6,7 +6,7 @@ import uuid
 from typing import Any, Callable
 
 from memory.backend.contracts import ProviderCapabilities
-from memory.backend.errors import SchemaVersionError
+from memory.backend.errors import OAuthClientQuotaExceeded, SchemaVersionError
 from memory.backend.metadata_store import (
     LOCAL_DEFAULT_PROJECT_ID,
     PROJECT_ROLE_ADMIN,
@@ -186,6 +186,20 @@ CREATE TABLE IF NOT EXISTS oauth_refresh_tokens (
 CREATE_OAUTH_REFRESH_TOKENS_FAMILY_INDEX_SQL = """
 CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_family
 ON oauth_refresh_tokens(token_family_id)
+"""
+CREATE_OAUTH_AUTHORIZATION_CODES_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS oauth_authorization_codes (
+    code_hash TEXT PRIMARY KEY,
+    client_id TEXT NOT NULL REFERENCES oauth_clients(client_id),
+    owner_id TEXT NOT NULL REFERENCES users(id),
+    redirect_uri TEXT NOT NULL,
+    code_challenge TEXT NOT NULL,
+    resource TEXT NOT NULL,
+    scope TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL,
+    consumed_at TIMESTAMPTZ NULL
+)
 """
 CREATE_PROJECTS_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS projects (
@@ -388,19 +402,30 @@ class PostgresMetadataStore:
             return self._connect_fn(self._dsn)
         try:
             import importlib
+
             psycopg = importlib.import_module("psycopg")
         except ImportError as exc:
-            raise RuntimeError("psycopg package is required for providers.metadata_db=postgres") from exc
+            raise RuntimeError(
+                "psycopg package is required for providers.metadata_db=postgres"
+            ) from exc
         return psycopg.connect(self._dsn)
 
     def _init_db(self) -> None:
         with self._connect() as conn:
             with conn.cursor() as cur:
                 cur.execute(CREATE_CONVERSATIONS_TABLE_SQL)
-                cur.execute("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS conversation_hash TEXT NULL")
-                cur.execute("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS project_id TEXT NULL")
-                cur.execute("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS upstream_thread_id TEXT NULL")
-                cur.execute("ALTER TABLE conversations DROP CONSTRAINT IF EXISTS conversations_conversation_hash_key")
+                cur.execute(
+                    "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS conversation_hash TEXT NULL"
+                )
+                cur.execute(
+                    "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS project_id TEXT NULL"
+                )
+                cur.execute(
+                    "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS upstream_thread_id TEXT NULL"
+                )
+                cur.execute(
+                    "ALTER TABLE conversations DROP CONSTRAINT IF EXISTS conversations_conversation_hash_key"
+                )
                 cur.execute("DROP INDEX IF EXISTS idx_conversations_conversation_hash")
                 cur.execute(CREATE_CONVERSATION_PROJECT_HASH_INDEX_SQL)
                 cur.execute(CREATE_UPSTREAM_THREAD_INDEX_SQL)
@@ -410,10 +435,16 @@ class PostgresMetadataStore:
                 cur.execute(CREATE_USERS_TABLE_SQL)
                 cur.execute(CREATE_AUTH_TOKENS_TABLE_SQL)
                 cur.execute("ALTER TABLE auth_tokens ADD COLUMN IF NOT EXISTS token_id TEXT NULL")
-                cur.execute("ALTER TABLE auth_tokens ADD COLUMN IF NOT EXISTS display_name TEXT NULL")
-                cur.execute("ALTER TABLE auth_tokens ADD COLUMN IF NOT EXISTS token_prefix TEXT NULL")
+                cur.execute(
+                    "ALTER TABLE auth_tokens ADD COLUMN IF NOT EXISTS display_name TEXT NULL"
+                )
+                cur.execute(
+                    "ALTER TABLE auth_tokens ADD COLUMN IF NOT EXISTS token_prefix TEXT NULL"
+                )
                 cur.execute("ALTER TABLE auth_tokens ADD COLUMN IF NOT EXISTS scopes JSONB NULL")
-                cur.execute("ALTER TABLE auth_tokens ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMPTZ NULL")
+                cur.execute(
+                    "ALTER TABLE auth_tokens ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMPTZ NULL"
+                )
                 cur.execute(CREATE_AUTH_TOKENS_OWNER_INDEX_SQL)
                 cur.execute(CREATE_AUTH_TOKENS_TOKEN_ID_INDEX_SQL)
                 cur.execute(CREATE_OAUTH_IDENTITIES_TABLE_SQL)
@@ -424,6 +455,7 @@ class PostgresMetadataStore:
                 cur.execute(CREATE_OAUTH_CLIENTS_LIVE_INDEX_SQL)
                 cur.execute(CREATE_OAUTH_REFRESH_TOKENS_TABLE_SQL)
                 cur.execute(CREATE_OAUTH_REFRESH_TOKENS_FAMILY_INDEX_SQL)
+                cur.execute(CREATE_OAUTH_AUTHORIZATION_CODES_TABLE_SQL)
                 cur.execute(CREATE_PROJECTS_TABLE_SQL)
                 cur.execute(CREATE_PROJECT_MEMBERSHIPS_TABLE_SQL)
                 cur.execute(CREATE_DEFAULT_PROJECT_OWNER_INDEX_SQL)
@@ -439,12 +471,20 @@ class PostgresMetadataStore:
                 cur.execute(CREATE_GRAPH_RELATIONSHIPS_TABLE_SQL)
                 cur.execute(CREATE_GRAPH_ENTITIES_INDEX_SQL)
                 cur.execute(CREATE_GRAPH_RELATIONSHIPS_INDEX_SQL)
-                cur.execute("ALTER TABLE facts ADD COLUMN IF NOT EXISTS superseded_at TIMESTAMPTZ NULL")
+                cur.execute(
+                    "ALTER TABLE facts ADD COLUMN IF NOT EXISTS superseded_at TIMESTAMPTZ NULL"
+                )
                 cur.execute("ALTER TABLE facts ADD COLUMN IF NOT EXISTS source_quality TEXT NULL")
-                cur.execute("ALTER TABLE facts ADD COLUMN IF NOT EXISTS confidence_reason TEXT NULL")
-                cur.execute("ALTER TABLE facts ADD COLUMN IF NOT EXISTS last_confirmed_at TIMESTAMPTZ NULL")
+                cur.execute(
+                    "ALTER TABLE facts ADD COLUMN IF NOT EXISTS confidence_reason TEXT NULL"
+                )
+                cur.execute(
+                    "ALTER TABLE facts ADD COLUMN IF NOT EXISTS last_confirmed_at TIMESTAMPTZ NULL"
+                )
                 cur.execute("ALTER TABLE facts ADD COLUMN IF NOT EXISTS object_raw TEXT NULL")
-                cur.execute("ALTER TABLE facts ADD COLUMN IF NOT EXISTS object_normalized TEXT NULL")
+                cur.execute(
+                    "ALTER TABLE facts ADD COLUMN IF NOT EXISTS object_normalized TEXT NULL"
+                )
                 cur.execute("ALTER TABLE facts ADD COLUMN IF NOT EXISTS owner_id TEXT NULL")
                 cur.execute("ALTER TABLE facts ADD COLUMN IF NOT EXISTS project_id TEXT NULL")
                 cur.execute(CREATE_FACTS_INDEX_SQL)
@@ -573,7 +613,15 @@ class PostgresMetadataStore:
                         expires_at = EXCLUDED.expires_at,
                         revoked_at = NULL
                     """,
-                    (token_hash, token_id, owner, token_name, token_prefix, scopes_json, expires_at),
+                    (
+                        token_hash,
+                        token_id,
+                        owner,
+                        token_name,
+                        token_prefix,
+                        scopes_json,
+                        expires_at,
+                    ),
                 )
                 cur.execute(
                     """
@@ -815,11 +863,22 @@ class PostgresMetadataStore:
         client_name: str,
         redirect_uris: list[str],
         expires_at: str,
+        max_active_clients: int = 128,
     ) -> dict[str, Any]:
         handle = _validate_token_lookup(client_id)
         uris_json = json.dumps([str(uri) for uri in redirect_uris], separators=(",", ":"))
         with self._connect() as conn:
             with conn.cursor() as cur:
+                cur.execute("SELECT pg_advisory_xact_lock(hashtext('oauth_client_registration'))")
+                cur.execute(
+                    """
+                    SELECT COUNT(*) FROM oauth_clients
+                    WHERE revoked_at IS NULL AND expires_at > NOW()
+                    """
+                )
+                count_row = cur.fetchone()
+                if count_row is None or int(count_row[0]) >= max_active_clients:
+                    raise OAuthClientQuotaExceeded("active OAuth client quota exceeded")
                 cur.execute(
                     """
                     INSERT INTO oauth_clients
@@ -864,6 +923,71 @@ class PostgresMetadataStore:
                 )
                 row = cur.fetchone()
         return self._oauth_client_from_row(row) if row is not None else None
+
+    def create_oauth_authorization_code(
+        self,
+        *,
+        code: str,
+        client_id: str,
+        owner_id: str,
+        redirect_uri: str,
+        code_challenge: str,
+        resource: str,
+        scope: str,
+        expires_at: str,
+    ) -> None:
+        code_hash = _hash_bearer_token(code)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO oauth_authorization_codes
+                        (code_hash, client_id, owner_id, redirect_uri, code_challenge,
+                         resource, scope, expires_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        code_hash,
+                        _validate_token_lookup(client_id),
+                        _validate_owner_id(owner_id),
+                        str(redirect_uri),
+                        str(code_challenge),
+                        str(resource),
+                        str(scope),
+                        expires_at,
+                    ),
+                )
+
+    def consume_oauth_authorization_code(self, code: str) -> dict[str, Any] | None:
+        code_hash = _hash_bearer_token(code)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE oauth_authorization_codes
+                    SET consumed_at = NOW()
+                    WHERE code_hash = %s
+                      AND consumed_at IS NULL
+                      AND expires_at > NOW()
+                    RETURNING client_id, owner_id, redirect_uri, code_challenge,
+                              resource, scope, created_at::text, expires_at::text
+                    """,
+                    (code_hash,),
+                )
+                row = cur.fetchone()
+        if row is None:
+            return None
+        keys = (
+            "client_id",
+            "owner_id",
+            "redirect_uri",
+            "code_challenge",
+            "resource",
+            "scope",
+            "created_at",
+            "expires_at",
+        )
+        return dict(zip(keys, row, strict=True))
 
     def create_oauth_refresh_token(
         self,
@@ -1318,7 +1442,7 @@ class PostgresMetadataStore:
                 cur.execute(
                     f"""
                     SELECT payload::text FROM conversations
-                    WHERE {' AND '.join(clauses)}
+                    WHERE {" AND ".join(clauses)}
                     ORDER BY created_at DESC
                     LIMIT %s
                     """,
@@ -1403,7 +1527,7 @@ class PostgresMetadataStore:
                            last_confirmed_at::text, object_raw, object_normalized,
                            deleted_at::text
                     FROM facts
-                    WHERE {' AND '.join(clauses)}
+                    WHERE {" AND ".join(clauses)}
                     ORDER BY updated_at DESC, id ASC
                     """,
                     tuple(params),
@@ -1411,10 +1535,11 @@ class PostgresMetadataStore:
                 rows = cur.fetchall()
         return [self._fact_from_row(row) for row in rows]
 
-    def profile_get(
-        self, subject: str = "user", project_id: str | None = None
-    ) -> dict[str, Any]:
-        return {"subject": subject, "facts": self.search_facts(subject=subject, project_id=project_id)}
+    def profile_get(self, subject: str = "user", project_id: str | None = None) -> dict[str, Any]:
+        return {
+            "subject": subject,
+            "facts": self.search_facts(subject=subject, project_id=project_id),
+        }
 
     def upsert_graph_records(
         self, *, entities: list[dict[str, Any]], relationships: list[dict[str, Any]]
@@ -1558,7 +1683,9 @@ class PostgresMetadataStore:
         summary_id = str(summary["id"])
         payload = json.dumps(summary, separators=(",", ":"), ensure_ascii=False)
         filters = json.dumps(summary.get("filters", {}), separators=(",", ":"), ensure_ascii=False)
-        provenance = json.dumps(summary.get("provenance", []), separators=(",", ":"), ensure_ascii=False)
+        provenance = json.dumps(
+            summary.get("provenance", []), separators=(",", ":"), ensure_ascii=False
+        )
         with self._connect() as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -1624,7 +1751,7 @@ class PostgresMetadataStore:
                     f"""
                     UPDATE facts
                     SET superseded_by = %s, superseded_at = NOW(), updated_at = NOW()
-                    WHERE {' AND '.join(clauses)}
+                    WHERE {" AND ".join(clauses)}
                     """,
                     tuple(params),
                 )
@@ -1668,7 +1795,7 @@ class PostgresMetadataStore:
                 cur.execute(
                     f"""
                     SELECT payload::text FROM conversations
-                    WHERE {' AND '.join(clauses)}
+                    WHERE {" AND ".join(clauses)}
                     ORDER BY created_at ASC
                     LIMIT 1
                     """,
@@ -2289,7 +2416,11 @@ class PostgresMetadataStore:
             _stamp_project_id(payload, project_id)
             cur.execute(
                 "UPDATE conversations SET project_id = %s, payload = %s::jsonb WHERE id = %s",
-                (project_id, json.dumps(payload, separators=(",", ":"), ensure_ascii=False), str(row[0])),
+                (
+                    project_id,
+                    json.dumps(payload, separators=(",", ":"), ensure_ascii=False),
+                    str(row[0]),
+                ),
             )
 
         cur.execute("SELECT id, owner_id FROM facts WHERE project_id IS NULL")

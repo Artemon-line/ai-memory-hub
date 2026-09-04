@@ -283,12 +283,8 @@ class MVPIngestionAgent(BaseIngestionAgent):
     async def project_default_get(self, *, owner_id: str | None = None) -> Dict[str, Any]:
         return await self._call_service(self._service.project_default_get, owner_id=owner_id)
 
-    async def project_get(
-        self, project_id: str, *, owner_id: str | None = None
-    ) -> Dict[str, Any]:
-        return await self._call_service(
-            self._service.project_get, project_id, owner_id=owner_id
-        )
+    async def project_get(self, project_id: str, *, owner_id: str | None = None) -> Dict[str, Any]:
+        return await self._call_service(self._service.project_get, project_id, owner_id=owner_id)
 
     async def authenticate_bearer_token(self, token: str) -> str | None:
         return self._service.authenticate_bearer_token(token)
@@ -359,16 +355,24 @@ class MVPIngestionAgent(BaseIngestionAgent):
         client_name: str,
         redirect_uris: list[str],
         expires_at: str,
+        max_active_clients: int,
     ) -> dict[str, object]:
         return self._service.create_oauth_client(
             client_id=client_id,
             client_name=client_name,
             redirect_uris=redirect_uris,
             expires_at=expires_at,
+            max_active_clients=max_active_clients,
         )
 
     async def oauth_client(self, client_id: str) -> dict[str, object] | None:
         return self._service.oauth_client(client_id)
+
+    async def create_oauth_authorization_code(self, **kwargs: object) -> None:
+        self._service.create_oauth_authorization_code(**kwargs)
+
+    async def consume_oauth_authorization_code(self, code: str) -> dict[str, object] | None:
+        return self._service.consume_oauth_authorization_code(code)
 
     async def create_oauth_refresh_token(
         self,
@@ -396,9 +400,7 @@ class MVPIngestionAgent(BaseIngestionAgent):
     async def oauth_refresh_token(self, refresh_token: str) -> dict[str, object] | None:
         return self._service.oauth_refresh_token(refresh_token)
 
-    async def consume_oauth_refresh_token(
-        self, refresh_token: str
-    ) -> dict[str, object] | None:
+    async def consume_oauth_refresh_token(self, refresh_token: str) -> dict[str, object] | None:
         return self._service.consume_oauth_refresh_token(refresh_token)
 
     async def revoke_oauth_refresh_token(self, refresh_token: str) -> bool:

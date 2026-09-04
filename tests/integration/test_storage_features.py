@@ -9,6 +9,7 @@ import struct
 import sys
 import types
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -18,6 +19,7 @@ import pytest
 from memory.backend.contracts import ProviderCapabilities
 from memory.backend.errors import (
     NotSupportedError,
+    OAuthClientQuotaExceeded,
     SchemaVersionError,
     VectorDimensionError,
 )
@@ -186,10 +188,7 @@ def test_mongodb_supersede_fact_marks_target_fact() -> None:
     }
     assert by_id["fact-old"]["superseded_by"] == "fact-new"
     assert by_id["fact-new"]["superseded_by"] is None
-    active_ids = {
-        fact["id"]
-        for fact in store.search_facts(subject="user", project_id="project-a")
-    }
+    active_ids = {fact["id"] for fact in store.search_facts(subject="user", project_id="project-a")}
     assert active_ids == {"fact-new"}
 
 
@@ -207,9 +206,7 @@ def test_mongodb_insert_new_resolves_duplicate_key_race() -> None:
             if not self.raced:
                 return FakeMongoCursor([])
             return FakeMongoCursor(
-                [dict(self.existing_doc)]
-                if _matches_query(self.existing_doc, query or {})
-                else []
+                [dict(self.existing_doc)] if _matches_query(self.existing_doc, query or {}) else []
             )
 
         def insert_one(self, doc: dict[str, Any]) -> None:
@@ -643,6 +640,67 @@ def test_sqlite_oauth_clients_and_refresh_token_family_revocation(tmp_path: Path
     assert fetched_refresh is not None
     assert fetched_refresh["revoked_at"] is not None
     assert store.owner_for_token("amh_access_secret") is None
+
+
+def test_sqlite_oauth_authorization_code_is_shared_and_atomically_consumed(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "metadata.sqlite3"
+    issuer = SQLiteMetadataStore(database)
+    redeemer = SQLiteMetadataStore(database)
+    issuer.create_user(user_id="jane", display_name="Jane")
+    issuer.create_oauth_client(
+        client_id="amh_client_code",
+        client_name="Code client",
+        redirect_uris=["http://127.0.0.1/callback"],
+        expires_at="2999-01-01T00:00:00+00:00",
+    )
+    issuer.create_oauth_authorization_code(
+        code="amh_code_shared_secret",
+        client_id="amh_client_code",
+        owner_id="jane",
+        redirect_uri="http://127.0.0.1/callback",
+        code_challenge="a" * 43,
+        resource="https://memory.example.com/mcp",
+        scope="memory:read",
+        expires_at="2999-01-01T00:00:00+00:00",
+    )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(
+            executor.map(
+                lambda store: store.consume_oauth_authorization_code("amh_code_shared_secret"),
+                (issuer, redeemer),
+            )
+        )
+
+    assert sum(result is not None for result in results) == 1
+    record = next(result for result in results if result is not None)
+    assert record["client_id"] == "amh_client_code"
+    assert record["owner_id"] == "jane"
+
+
+def test_sqlite_oauth_client_quota_is_atomic(tmp_path: Path) -> None:
+    database = tmp_path / "metadata.sqlite3"
+    stores = [SQLiteMetadataStore(database), SQLiteMetadataStore(database)]
+
+    def register(index: int) -> bool:
+        try:
+            stores[index].create_oauth_client(
+                client_id=f"amh_client_quota_{index}",
+                client_name="Quota client",
+                redirect_uris=[f"http://127.0.0.1:{49000 + index}/callback"],
+                expires_at="2999-01-01T00:00:00+00:00",
+                max_active_clients=1,
+            )
+        except OAuthClientQuotaExceeded:
+            return False
+        return True
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(register, range(2)))
+
+    assert sum(results) == 1
 
 
 def test_sqlite_oauth_access_token_revocation_revokes_refresh_family(tmp_path: Path) -> None:
