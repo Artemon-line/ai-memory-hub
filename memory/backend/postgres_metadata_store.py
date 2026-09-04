@@ -187,6 +187,12 @@ CREATE_OAUTH_REFRESH_TOKENS_FAMILY_INDEX_SQL = """
 CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_family
 ON oauth_refresh_tokens(token_family_id)
 """
+CREATE_OAUTH_REFRESH_TOKEN_FAMILIES_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS oauth_refresh_token_families (
+    token_family_id TEXT PRIMARY KEY,
+    revoked_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)
+"""
 CREATE_OAUTH_AUTHORIZATION_CODES_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS oauth_authorization_codes (
     code_hash TEXT PRIMARY KEY,
@@ -455,6 +461,7 @@ class PostgresMetadataStore:
                 cur.execute(CREATE_OAUTH_CLIENTS_LIVE_INDEX_SQL)
                 cur.execute(CREATE_OAUTH_REFRESH_TOKENS_TABLE_SQL)
                 cur.execute(CREATE_OAUTH_REFRESH_TOKENS_FAMILY_INDEX_SQL)
+                cur.execute(CREATE_OAUTH_REFRESH_TOKEN_FAMILIES_TABLE_SQL)
                 cur.execute(CREATE_OAUTH_AUTHORIZATION_CODES_TABLE_SQL)
                 cur.execute(CREATE_PROJECTS_TABLE_SQL)
                 cur.execute(CREATE_PROJECT_MEMBERSHIPS_TABLE_SQL)
@@ -1018,11 +1025,17 @@ class PostgresMetadataStore:
                 )
                 self._ensure_default_project(cur, owner)
                 cur.execute(
+                    "SELECT 1 FROM oauth_refresh_token_families WHERE token_family_id = %s",
+                    (family_id,),
+                )
+                family_revoked = cur.fetchone() is not None
+                cur.execute(
                     """
                     INSERT INTO oauth_refresh_tokens
                         (refresh_token_hash, token_family_id, client_id, owner_id, scopes,
-                         resource, access_token_id, expires_at)
-                    VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s, %s)
+                         resource, access_token_id, expires_at, revoked_at)
+                    VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s, %s,
+                            CASE WHEN %s THEN NOW() ELSE NULL END)
                     """,
                     (
                         token_hash,
@@ -1033,8 +1046,14 @@ class PostgresMetadataStore:
                         str(resource),
                         access_token_id,
                         expires_at,
+                        family_revoked,
                     ),
                 )
+                if family_revoked and access_token_id:
+                    cur.execute(
+                        "UPDATE auth_tokens SET revoked_at = NOW() WHERE token_id = %s",
+                        (access_token_id,),
+                    )
                 cur.execute(
                     """
                     SELECT refresh_token_hash, token_family_id, client_id, owner_id,
@@ -1079,16 +1098,9 @@ class PostgresMetadataStore:
                       AND consumed_at IS NULL
                       AND revoked_at IS NULL
                       AND expires_at > NOW()
-                    """,
-                    (token_hash,),
-                )
-                cur.execute(
-                    """
-                    SELECT refresh_token_hash, token_family_id, client_id, owner_id,
-                           scopes::text, resource, access_token_id, created_at::text,
-                           expires_at::text, consumed_at::text, revoked_at::text
-                    FROM oauth_refresh_tokens
-                    WHERE refresh_token_hash = %s
+                    RETURNING refresh_token_hash, token_family_id, client_id, owner_id,
+                              scopes::text, resource, access_token_id, created_at::text,
+                              expires_at::text, consumed_at::text, revoked_at::text
                     """,
                     (token_hash,),
                 )
@@ -1099,6 +1111,13 @@ class PostgresMetadataStore:
         family_id = _validate_token_lookup(token_family_id)
         with self._connect() as conn:
             with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO oauth_refresh_token_families (token_family_id)
+                    VALUES (%s) ON CONFLICT (token_family_id) DO NOTHING
+                    """,
+                    (family_id,),
+                )
                 cur.execute(
                     """
                     UPDATE auth_tokens

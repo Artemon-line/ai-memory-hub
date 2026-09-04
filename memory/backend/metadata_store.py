@@ -315,6 +315,14 @@ class SQLiteMetadataStore:
             )
             conn.execute(
                 """
+                CREATE TABLE IF NOT EXISTS oauth_refresh_token_families (
+                    token_family_id TEXT PRIMARY KEY,
+                    revoked_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS oauth_authorization_codes (
                     code_hash TEXT PRIMARY KEY,
                     client_id TEXT NOT NULL,
@@ -705,6 +713,7 @@ class SQLiteMetadataStore:
         token_prefix = _token_prefix(token)
         scopes_json = json.dumps(_normalize_token_scopes(scopes), separators=(",", ":"))
         with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
             conn.execute(
                 """
                 INSERT INTO users (id, display_name)
@@ -1083,12 +1092,19 @@ class SQLiteMetadataStore:
                 (owner, owner),
             )
             self._ensure_default_project(conn, owner)
+            family_revoked = (
+                conn.execute(
+                    "SELECT 1 FROM oauth_refresh_token_families WHERE token_family_id = ?",
+                    (family_id,),
+                ).fetchone()
+                is not None
+            )
             conn.execute(
                 """
                 INSERT INTO oauth_refresh_tokens
                     (refresh_token_hash, token_family_id, client_id, owner_id, scopes,
-                     resource, access_token_id, expires_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                     resource, access_token_id, expires_at, revoked_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     token_hash,
@@ -1099,8 +1115,14 @@ class SQLiteMetadataStore:
                     str(resource),
                     access_token_id,
                     expires_at,
+                    datetime.now(UTC).isoformat() if family_revoked else None,
                 ),
             )
+            if family_revoked and access_token_id:
+                conn.execute(
+                    "UPDATE auth_tokens SET revoked_at = CURRENT_TIMESTAMP WHERE token_id = ?",
+                    (access_token_id,),
+                )
             row = conn.execute(
                 """
                 SELECT refresh_token_hash, token_family_id, client_id, owner_id, scopes,
@@ -1131,7 +1153,7 @@ class SQLiteMetadataStore:
     def consume_oauth_refresh_token(self, refresh_token: str) -> dict[str, Any] | None:
         token_hash = _hash_bearer_token(refresh_token)
         with self._connect() as conn:
-            conn.execute(
+            row = conn.execute(
                 """
                 UPDATE oauth_refresh_tokens
                 SET consumed_at = CURRENT_TIMESTAMP
@@ -1139,15 +1161,8 @@ class SQLiteMetadataStore:
                   AND consumed_at IS NULL
                   AND revoked_at IS NULL
                   AND expires_at > CURRENT_TIMESTAMP
-                """,
-                (token_hash,),
-            )
-            row = conn.execute(
-                """
-                SELECT refresh_token_hash, token_family_id, client_id, owner_id, scopes,
-                       resource, access_token_id, created_at, expires_at, consumed_at, revoked_at
-                FROM oauth_refresh_tokens
-                WHERE refresh_token_hash = ?
+                RETURNING refresh_token_hash, token_family_id, client_id, owner_id, scopes,
+                          resource, access_token_id, created_at, expires_at, consumed_at, revoked_at
                 """,
                 (token_hash,),
             ).fetchone()
@@ -1156,6 +1171,14 @@ class SQLiteMetadataStore:
     def revoke_oauth_refresh_token_family(self, token_family_id: str) -> bool:
         family_id = _validate_token_lookup(token_family_id)
         with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute(
+                """
+                INSERT INTO oauth_refresh_token_families (token_family_id)
+                VALUES (?) ON CONFLICT(token_family_id) DO NOTHING
+                """,
+                (family_id,),
+            )
             conn.execute(
                 """
                 UPDATE auth_tokens
