@@ -20,7 +20,7 @@ dependencies = [
 
 [project.optional-dependencies]
 elasticsearch = [
-    "elasticsearch>=8.15.0",
+    "elasticsearch>=9.5.0",
 ]
 milvus = [
     "pymilvus>=3.0.1",
