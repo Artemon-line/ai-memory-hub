@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
+
+import pytest
+
 from memory.ingestion import mvp_ingestion
 
 
@@ -8,6 +12,15 @@ class _Embedder:
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         return [[1.0] for _ in texts]
+
+
+@pytest.fixture(autouse=True)
+def _restore_runtime() -> Iterator[None]:
+    original_runtime = mvp_ingestion._RUNTIME
+    try:
+        yield
+    finally:
+        mvp_ingestion._RUNTIME = original_runtime
 
 
 def test_select_ask_context_prefers_ranked_chunks_and_drops_overflow(monkeypatch) -> None:

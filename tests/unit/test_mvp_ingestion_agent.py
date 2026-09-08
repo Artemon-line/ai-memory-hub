@@ -39,7 +39,9 @@ class StubVectorStore:
     def __init__(self):
         self.rows: list[dict[str, object]] = []
 
-    def insert(self, metadata_id: str, embeddings: list[dict[str, object]], replace: bool = False) -> None:
+    def insert(
+        self, metadata_id: str, embeddings: list[dict[str, object]], replace: bool = False
+    ) -> None:
         if replace:
             self.rows = [row for row in self.rows if row["memory_id"] != metadata_id]
         for item in embeddings:
@@ -61,7 +63,7 @@ class StubVectorStore:
 
 def _runtime() -> mvp_ingestion.RuntimeDependencies:
     return mvp_ingestion.RuntimeDependencies(
-        embedding_provider=StubEmbedder(), # type: ignore
+        embedding_provider=StubEmbedder(),  # type: ignore
         metadata_store=StubMetadataStore(),
         vector_store=StubVectorStore(),
         health_state={"mode": "ok", "vector_fallback_active": False},
@@ -89,7 +91,9 @@ async def test_mvp_ingestion_agent_ingest_messages() -> None:
 
 
 @pytest.mark.asyncio
-async def test_mvp_ingestion_agent_offloads_blocking_insert(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_mvp_ingestion_agent_offloads_blocking_insert(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
     insert_started = threading.Event()
     release_insert = threading.Event()
@@ -119,7 +123,9 @@ async def test_mvp_ingestion_agent_offloads_blocking_insert(monkeypatch: pytest.
 
 
 @pytest.mark.asyncio
-async def test_mvp_ingestion_agent_serializes_memory_writes(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_mvp_ingestion_agent_serializes_memory_writes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
     first_entered = threading.Event()
     second_attempted = threading.Event()

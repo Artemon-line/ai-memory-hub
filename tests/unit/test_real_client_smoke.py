@@ -187,19 +187,22 @@ def test_run_harness_removes_temporary_workspace(tmp_path: Path, monkeypatch) ->
     artifact_dir = tmp_path / "artifacts"
     workspace = tmp_path / "workspace"
     created_paths = [str(artifact_dir), str(workspace)]
+    hub_process = object()
+    gateway_process = object()
+    terminated: list[object] = []
 
     monkeypatch.setattr(real_client_smoke.tempfile, "mkdtemp", lambda prefix: created_paths.pop(0))
-    monkeypatch.setattr(real_client_smoke, "_start_hub", lambda **kwargs: None)
-    monkeypatch.setattr(real_client_smoke, "_start_gateway", lambda **kwargs: None)
+    monkeypatch.setattr(real_client_smoke, "_start_hub", lambda **kwargs: hub_process)
+    monkeypatch.setattr(real_client_smoke, "_start_gateway", lambda **kwargs: gateway_process)
     monkeypatch.setattr(real_client_smoke, "_wait_for_hub", lambda *args, **kwargs: None)
     monkeypatch.setattr(real_client_smoke, "_wait_for_gateway", lambda *args, **kwargs: None)
-    monkeypatch.setattr(real_client_smoke, "_terminate_process", lambda process: None)
+    monkeypatch.setattr(real_client_smoke, "_terminate_process", terminated.append)
     monkeypatch.delenv("AMH_REAL_CLIENT_CLAUDE_COMMAND", raising=False)
     args = argparse.Namespace(
         artifact_dir=None,
         client=["claude"],
-        hub_url="http://127.0.0.1:8000",
-        gateway_url="http://127.0.0.1:9000",
+        hub_url=None,
+        gateway_url=None,
         startup_timeout=1,
         client_timeout=1,
         require_configured=False,
@@ -211,6 +214,7 @@ def test_run_harness_removes_temporary_workspace(tmp_path: Path, monkeypatch) ->
     assert result.status == "ok"
     assert artifact_dir.exists()
     assert not workspace.exists()
+    assert terminated == [gateway_process, hub_process]
 
 
 def test_run_harness_removes_temporary_workspace_after_startup_failure(
@@ -219,23 +223,23 @@ def test_run_harness_removes_temporary_workspace_after_startup_failure(
     artifact_dir = tmp_path / "artifacts"
     workspace = tmp_path / "workspace"
     created_paths = [str(artifact_dir), str(workspace)]
+    hub_process = object()
+    terminated: list[object | None] = []
 
     monkeypatch.setattr(real_client_smoke.tempfile, "mkdtemp", lambda prefix: created_paths.pop(0))
-    monkeypatch.setattr(real_client_smoke, "_start_hub", lambda **kwargs: None)
-    monkeypatch.setattr(real_client_smoke, "_start_gateway", lambda **kwargs: None)
-    monkeypatch.setattr(real_client_smoke, "_wait_for_hub", lambda *args, **kwargs: None)
+    monkeypatch.setattr(real_client_smoke, "_start_hub", lambda **kwargs: hub_process)
 
-    def fail_gateway(*args, **kwargs) -> None:
-        _ = args, kwargs
+    def fail_gateway(**kwargs) -> None:
+        _ = kwargs
         raise RuntimeError("gateway failed")
 
-    monkeypatch.setattr(real_client_smoke, "_wait_for_gateway", fail_gateway)
-    monkeypatch.setattr(real_client_smoke, "_terminate_process", lambda process: None)
+    monkeypatch.setattr(real_client_smoke, "_start_gateway", fail_gateway)
+    monkeypatch.setattr(real_client_smoke, "_terminate_process", terminated.append)
     args = argparse.Namespace(
         artifact_dir=None,
         client=["claude"],
-        hub_url="http://127.0.0.1:8000",
-        gateway_url="http://127.0.0.1:9000",
+        hub_url=None,
+        gateway_url=None,
         startup_timeout=1,
         client_timeout=1,
         require_configured=False,
@@ -247,3 +251,4 @@ def test_run_harness_removes_temporary_workspace_after_startup_failure(
 
     assert artifact_dir.exists()
     assert not workspace.exists()
+    assert terminated == [None, hub_process]
