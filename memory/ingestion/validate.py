@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -13,12 +14,17 @@ _REQUIRED_SCHEMA_FIELDS = ("id", "source", "timestamp", "messages", "metadata")
 _REQUIRED_MESSAGE_FIELDS = ("role", "text", "hash")
 _REQUIRED_METADATA_FIELDS = ("imported_at", "updated_at", "conversation_hash")
 _FORMAT_CHECKER = jsonschema.FormatChecker()
+_RFC3339_DATE_TIME = re.compile(
+    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$"
+)
 
 
 @_FORMAT_CHECKER.checks("date-time", raises=ValueError)
 def _is_date_time(value: object) -> bool:
     if not isinstance(value, str):
         return True
+    if _RFC3339_DATE_TIME.fullmatch(value) is None:
+        return False
     datetime.fromisoformat(value.replace("Z", "+00:00"))
     return True
 

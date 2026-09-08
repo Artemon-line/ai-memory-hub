@@ -787,6 +787,24 @@ def test_http_embedding_provider_redacts_http_errors(
     assert "***" in message
 
 
+@pytest.mark.parametrize("component", [float("nan"), float("inf"), float("-inf"), True])
+def test_http_embedding_provider_rejects_invalid_vector_components(
+    monkeypatch: pytest.MonkeyPatch,
+    component: object,
+) -> None:
+    def fake_urlopen(_request: Any, timeout: int) -> FakeEmbeddingHTTPResponse:
+        _ = timeout
+        return FakeEmbeddingHTTPResponse({"data": [{"embedding": [1, component, 3]}]})
+
+    monkeypatch.setattr(mvp_ingestion.urllib.request, "urlopen", fake_urlopen)
+    provider = mvp_ingestion.HttpEmbeddingProvider(dimension=3, api_key="test-key")
+
+    with pytest.raises(
+        RuntimeError, match="Embedding endpoint returned an invalid vector component"
+    ):
+        provider.embed_texts(["alpha"])
+
+
 def test_validate_conversation_enforces_schema_formats() -> None:
     conversation = _valid_conversation()
     normalized = mvp_ingestion.normalize_conversation_json(conversation)
@@ -799,6 +817,29 @@ def test_validate_conversation_enforces_schema_formats() -> None:
     normalized["metadata"]["updated_at"] = "not-a-date"
     with pytest.raises(jsonschema.ValidationError, match="is not a 'date-time'"):
         ingestion_validate.validate_conversation(normalized)
+
+
+@pytest.mark.parametrize(
+    "timestamp",
+    ["2026-01-01", "2026-01-01 00:00:00Z", "2026-01-01T00:00:00"],
+)
+def test_validate_conversation_rejects_non_rfc3339_datetimes(timestamp: str) -> None:
+    normalized = mvp_ingestion.normalize_conversation_json(_valid_conversation())
+    normalized["metadata"]["updated_at"] = timestamp
+
+    with pytest.raises(jsonschema.ValidationError, match="is not a 'date-time'"):
+        ingestion_validate.validate_conversation(normalized)
+
+
+@pytest.mark.parametrize(
+    "timestamp",
+    ["2026-01-01T00:00:00Z", "2026-01-01T00:00:00+01:30"],
+)
+def test_validate_conversation_accepts_rfc3339_datetimes(timestamp: str) -> None:
+    normalized = mvp_ingestion.normalize_conversation_json(_valid_conversation())
+    normalized["metadata"]["updated_at"] = timestamp
+
+    ingestion_validate.validate_conversation(normalized)
 
 
 def test_ingest_messages_rejects_non_string_source() -> None:

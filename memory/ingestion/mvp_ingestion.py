@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 import os
 import re
 import time
@@ -179,12 +180,29 @@ class HttpEmbeddingProvider:
                     "Embedding endpoint returned vector dimensionality "
                     f"{len(vector)}; expected {self.dimension}"
                 )
-            embeddings.append([float(value) for value in vector])
+            embeddings.append(_parse_embedding_vector(vector))
         if len(embeddings) != len(texts):
             raise RuntimeError(
                 f"Embedding endpoint returned {len(embeddings)} vectors for {len(texts)} inputs"
             )
         return embeddings
+
+
+def _parse_embedding_vector(vector: list[Any]) -> list[float]:
+    parsed: list[float] = []
+    for value in vector:
+        if isinstance(value, bool):
+            raise RuntimeError("Embedding endpoint returned an invalid vector component")
+        try:
+            component = float(value)
+        except (TypeError, ValueError) as exc:
+            raise RuntimeError(
+                "Embedding endpoint returned an invalid vector component"
+            ) from exc
+        if not math.isfinite(component):
+            raise RuntimeError("Embedding endpoint returned an invalid vector component")
+        parsed.append(component)
+    return parsed
 
 
 @dataclass

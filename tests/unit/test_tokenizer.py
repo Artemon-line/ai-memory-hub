@@ -25,6 +25,20 @@ def test_tokenizer_fallback_splits_overlapping_windows(monkeypatch) -> None:
     )
 
     assert windows == ["alpha beta gamma", "gamma delta epsilon"]
+    assert all(tokenizer.count_tokens(window, "missing") <= 3 for window in windows)
+
+
+def test_tokenizer_fallback_windows_honor_punctuation_budget(monkeypatch) -> None:
+    monkeypatch.setattr(tokenizer, "_get_encoding", lambda encoding: None)
+
+    windows = tokenizer.split_token_windows(
+        "alpha,beta gamma!delta",
+        max_tokens=4,
+        overlap_tokens=1,
+        encoding="missing",
+    )
+
+    assert all(tokenizer.count_tokens(window, "missing") <= 4 for window in windows)
 
 
 def test_tokenizer_diagnostics_reports_tiktoken(monkeypatch) -> None:
