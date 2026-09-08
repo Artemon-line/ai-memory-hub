@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from memory.api.server import create_app
 from memory.backend.metadata_store import SQLiteMetadataStore
 from memory.config import ensure_token_hash_secret, parse_config
+from memory.ingestion.validate import SCHEMA_PATH
 
 
 def _config(
@@ -44,7 +45,7 @@ def _client(tmp_path: Path) -> TestClient:
 
 def _custom_schema_client(tmp_path: Path) -> TestClient:
     schema_path = tmp_path / "conversation.custom.schema.json"
-    schema = json.loads(Path("memory/schema/conversation.schema.json").read_text(encoding="utf-8"))
+    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
     schema["properties"]["must_exist"] = {"type": "string"}
     schema["required"] = [*schema["required"], "must_exist"]
     schema_path.write_text(json.dumps(schema), encoding="utf-8")

@@ -3,8 +3,11 @@ from __future__ import annotations
 import gc
 import json
 import shutil
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
+
+import pytest
 
 from memory import cli
 from memory.ingestion import mvp_ingestion
@@ -19,6 +22,15 @@ def _run_json(args: list[str], capsys: Any) -> tuple[int, dict[str, Any]]:
 def _release_runtime_handles() -> None:
     mvp_ingestion._RUNTIME = None
     gc.collect()
+
+
+@pytest.fixture(autouse=True)
+def _restore_runtime() -> Iterator[None]:
+    original_runtime = mvp_ingestion._RUNTIME
+    try:
+        yield
+    finally:
+        mvp_ingestion._RUNTIME = original_runtime
 
 
 def test_cli_reindex_rebuilds_lancedb_vectors_from_sqlite_metadata(

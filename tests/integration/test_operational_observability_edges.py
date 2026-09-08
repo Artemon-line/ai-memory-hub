@@ -212,7 +212,7 @@ def test_allow_fallback_true_for_persistent_vectors_warns_once(
             raise RuntimeError("lancedb unavailable password=vector-secret")
 
     monkeypatch.setattr(mvp_ingestion, "LanceDBVectorStore", BrokenLanceDB)
-    mvp_ingestion._FALLBACK_POLICY_WARNED.clear()
+    monkeypatch.setattr(mvp_ingestion, "_FALLBACK_POLICY_WARNED", set())
     config = {
         "providers": {"embeddings": "local", "vector_db": "lancedb"},
         "paths": {"data_dir": str(tmp_path)},
@@ -253,8 +253,8 @@ def test_production_profile_with_vector_fallback_warns_once(
             raise RuntimeError("lancedb unavailable password=vector-secret")
 
     monkeypatch.setattr(mvp_ingestion, "LanceDBVectorStore", BrokenLanceDB)
-    mvp_ingestion._FALLBACK_POLICY_WARNED.clear()
-    mvp_ingestion._PRODUCTION_FALLBACK_POLICY_WARNED.clear()
+    monkeypatch.setattr(mvp_ingestion, "_FALLBACK_POLICY_WARNED", set())
+    monkeypatch.setattr(mvp_ingestion, "_PRODUCTION_FALLBACK_POLICY_WARNED", set())
     config = {
         "providers": {"embeddings": "local", "vector_db": "lancedb"},
         "paths": {"data_dir": str(tmp_path)},

@@ -93,3 +93,4 @@ def test_mcp_prompts_list_and_get() -> None:
         ask_text = ask_messages[0]["content"]["text"]
         assert "memory_ask" in ask_text
         assert "question=\"what changed?\"" in ask_text
+        assert "top_k=3" in ask_text
