@@ -30,10 +30,10 @@ def truncate_to_tokens(text: str, max_tokens: int, encoding: str) -> str:
             return text
         return tokenizer.decode(token_ids[:max_tokens]).rstrip()
 
-    tokens = _fallback_tokens(text)
-    if len(tokens) <= max_tokens:
+    matches = _fallback_token_matches(text)
+    if len(matches) <= max_tokens:
         return text
-    return "".join(tokens[:max_tokens]).rstrip()
+    return text[: matches[max_tokens - 1].end()].rstrip()
 
 
 def split_token_windows(
@@ -61,16 +61,17 @@ def split_token_windows(
                 break
         return windows
 
-    tokens = re.findall(r"\S+", text)
-    if len(tokens) <= max_tokens:
+    matches = _fallback_token_matches(text)
+    if len(matches) <= max_tokens:
         return [text]
     windows = []
     step = max_tokens - overlap_tokens
-    for start in range(0, len(tokens), step):
-        window = " ".join(tokens[start : start + max_tokens]).strip()
+    for start in range(0, len(matches), step):
+        end = min(start + max_tokens, len(matches))
+        window = text[matches[start].start() : matches[end - 1].end()].strip()
         if window:
             windows.append(window)
-        if start + max_tokens >= len(tokens):
+        if end >= len(matches):
             break
     return windows
 
@@ -119,13 +120,8 @@ def _get_encoding(encoding: str) -> Any | None:
 
 
 def _fallback_tokens(text: str) -> list[str]:
-    tokens: list[str] = []
-    cursor = 0
-    for match in _FALLBACK_PATTERN.finditer(text):
-        if match.start() > cursor:
-            tokens.append(text[cursor : match.start()])
-        tokens.append(match.group(0))
-        cursor = match.end()
-    if cursor < len(text):
-        tokens.append(text[cursor:])
-    return [token for token in tokens if token]
+    return [match.group(0) for match in _fallback_token_matches(text)]
+
+
+def _fallback_token_matches(text: str) -> list[re.Match[str]]:
+    return list(_FALLBACK_PATTERN.finditer(text))
