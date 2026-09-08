@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import threading
-import time
 
 import jsonschema
 import pytest
@@ -93,10 +92,11 @@ async def test_mvp_ingestion_agent_ingest_messages() -> None:
 async def test_mvp_ingestion_agent_offloads_blocking_insert(monkeypatch: pytest.MonkeyPatch) -> None:
     agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
     insert_started = threading.Event()
+    release_insert = threading.Event()
 
     def slow_ingest_messages(*_args, **_kwargs) -> dict[str, object]:
         insert_started.set()
-        time.sleep(0.25)
+        assert release_insert.wait(timeout=5.0)
         return {"status": "ok", "id": "slow-memory", "chunks": 1}
 
     def search(*_args, **_kwargs) -> dict[str, object]:
@@ -105,47 +105,70 @@ async def test_mvp_ingestion_agent_offloads_blocking_insert(monkeypatch: pytest.
     monkeypatch.setattr(agent._service, "ingest_messages", slow_ingest_messages)
     monkeypatch.setattr(agent._service, "search", search)
 
-    started_at = time.perf_counter()
     insert_task = asyncio.create_task(agent.ingest_messages(_valid_conversation()))
-    await asyncio.sleep(0)
-
-    assert insert_started.is_set()
-    assert time.perf_counter() - started_at < 0.1
-    assert await asyncio.wait_for(agent.search("hello"), timeout=0.2) == {
-        "status": "ok",
-        "results": [],
-    }
+    assert await asyncio.wait_for(asyncio.to_thread(insert_started.wait), timeout=5.0)
+    try:
+        assert await asyncio.wait_for(agent.search("hello"), timeout=5.0) == {
+            "status": "ok",
+            "results": [],
+        }
+        assert not insert_task.done()
+    finally:
+        release_insert.set()
     assert await insert_task == {"status": "ok", "id": "slow-memory", "chunks": 1}
 
 
 @pytest.mark.asyncio
 async def test_mvp_ingestion_agent_serializes_memory_writes(monkeypatch: pytest.MonkeyPatch) -> None:
     agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
-    state_lock = threading.Lock()
-    active_writes = 0
-    max_active_writes = 0
+    first_entered = threading.Event()
+    second_attempted = threading.Event()
+    second_entered = threading.Event()
+    release_first = threading.Event()
+    write_lock = threading.Lock()
+    counter_lock = threading.Lock()
+    acquisition_count = 0
 
-    def slow_ingest_messages(conversation_json, **_kwargs) -> dict[str, object]:
-        nonlocal active_writes, max_active_writes
-        with state_lock:
-            active_writes += 1
-            max_active_writes = max(max_active_writes, active_writes)
-        time.sleep(0.05)
-        with state_lock:
-            active_writes -= 1
+    class ObservedWriteLock:
+        def __enter__(self) -> None:
+            nonlocal acquisition_count
+            with counter_lock:
+                acquisition_count += 1
+                if acquisition_count == 2:
+                    second_attempted.set()
+            write_lock.acquire()
+
+        def __exit__(self, *_args: object) -> None:
+            write_lock.release()
+
+    def coordinated_ingest_messages(conversation_json, **_kwargs) -> dict[str, object]:
+        if conversation_json["id"] == first["id"]:
+            first_entered.set()
+            assert release_first.wait(timeout=5.0)
+        else:
+            second_entered.set()
         return {"status": "ok", "id": conversation_json["id"], "chunks": 1}
 
-    monkeypatch.setattr(agent._service, "ingest_messages", slow_ingest_messages)
     first = _valid_conversation()
     second = {**_valid_conversation(), "id": "2f39f5cc-6256-4ca9-a9b2-6211bc6e3702"}
+    monkeypatch.setattr(agent, "_memory_write_lock", ObservedWriteLock())
+    monkeypatch.setattr(agent._service, "ingest_messages", coordinated_ingest_messages)
 
-    results = await asyncio.gather(
-        agent.ingest_messages(first),
-        agent.ingest_messages(second),
+    first_task = asyncio.create_task(agent.ingest_messages(first))
+    assert await asyncio.wait_for(asyncio.to_thread(first_entered.wait), timeout=5.0)
+    second_task = asyncio.create_task(agent.ingest_messages(second))
+    try:
+        assert await asyncio.wait_for(asyncio.to_thread(second_attempted.wait), timeout=5.0)
+        assert not second_entered.is_set()
+    finally:
+        release_first.set()
+    results = await asyncio.wait_for(
+        asyncio.gather(first_task, second_task),
+        timeout=5.0,
     )
 
     assert [result["id"] for result in results] == [first["id"], second["id"]]
-    assert max_active_writes == 1
+    assert second_entered.is_set()
 
 
 @pytest.mark.asyncio

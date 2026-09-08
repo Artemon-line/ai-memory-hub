@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import json
 import threading
-import time
 from typing import Any
 
 import pytest
@@ -410,10 +409,11 @@ async def test_mcp_tool_handlers_keep_reads_responsive_during_slow_insert(
     agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
     handlers = build_tool_handlers(agent)
     insert_started = threading.Event()
+    release_insert = threading.Event()
 
     def slow_ingest_messages(*_args, **_kwargs) -> dict[str, object]:
         insert_started.set()
-        time.sleep(0.25)
+        assert release_insert.wait(timeout=5.0)
         return {"status": "ok", "id": "d9fd4c95-9cb3-4fd5-b967-3027f8863210"}
 
     def search(*_args, **_kwargs) -> dict[str, object]:
@@ -422,18 +422,18 @@ async def test_mcp_tool_handlers_keep_reads_responsive_during_slow_insert(
     monkeypatch.setattr(agent._service, "ingest_messages", slow_ingest_messages)
     monkeypatch.setattr(agent._service, "search", search)
 
-    started_at = time.perf_counter()
     insert_task = asyncio.create_task(handlers["memory_insert"](_conversation()))
-    await asyncio.sleep(0)
-
-    assert insert_started.is_set()
-    assert time.perf_counter() - started_at < 0.1
-    search_result = await asyncio.wait_for(
-        handlers["memory_search"]("hello", top_k=5),
-        timeout=0.2,
-    )
-    assert search_result["status"] == "ok"
-    assert search_result["results"] == []
+    assert await asyncio.wait_for(asyncio.to_thread(insert_started.wait), timeout=5.0)
+    try:
+        search_result = await asyncio.wait_for(
+            handlers["memory_search"]("hello", top_k=5),
+            timeout=5.0,
+        )
+        assert not insert_task.done()
+        assert search_result["status"] == "ok"
+        assert search_result["results"] == []
+    finally:
+        release_insert.set()
     assert await insert_task == {
         "status": "ok",
         "id": "d9fd4c95-9cb3-4fd5-b967-3027f8863210",
