@@ -3,7 +3,6 @@ from __future__ import annotations
 import concurrent.futures
 import json
 import threading
-import time
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -208,10 +207,11 @@ def test_mcp_transport_keeps_read_session_responsive_during_slow_insert(
     )
     agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=runtime)
     insert_started = threading.Event()
+    release_insert = threading.Event()
 
     def slow_ingest_messages(*_args: object, **_kwargs: object) -> dict[str, object]:
         insert_started.set()
-        time.sleep(0.3)
+        assert release_insert.wait(timeout=5.0)
         return {"status": "ok", "id": "d9fd4c95-9cb3-4fd5-b967-3027f8863210"}
 
     def fast_search(*_args: object, **_kwargs: object) -> dict[str, object]:
@@ -224,7 +224,7 @@ def test_mcp_transport_keeps_read_session_responsive_during_slow_insert(
         insert_headers = _initialize_mcp(client)
         read_headers = _initialize_mcp(client)
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
             insert_future = executor.submit(
                 _call_tool,
                 client,
@@ -233,21 +233,22 @@ def test_mcp_transport_keeps_read_session_responsive_during_slow_insert(
                 name="memory_insert",
                 arguments={"conversation_json": _conversation(text="slow mcp insert")},
             )
-            assert insert_started.wait(timeout=1.0)
-
-            started_at = time.perf_counter()
-            search_result = _call_tool(
+            assert insert_started.wait(timeout=5.0)
+            search_future = executor.submit(
+                _call_tool,
                 client,
                 read_headers,
                 request_id=2,
                 name="memory_search",
                 arguments={"query": "anything", "top_k": 5},
             )
-            elapsed = time.perf_counter() - started_at
+            try:
+                search_result = search_future.result(timeout=5.0)
+                assert not insert_future.done()
+            finally:
+                release_insert.set()
+            insert_result = insert_future.result(timeout=5.0)
 
-            insert_result = insert_future.result(timeout=1.0)
-
-    assert elapsed < 0.2
     assert search_result["status"] == "ok"
     assert search_result["results"] == []
     assert insert_result["status"] == "ok"
