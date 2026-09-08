@@ -1683,6 +1683,45 @@ def test_plain_favorite_correction_supersedes_old_food() -> None:
     assert descriptions["results"] == []
 
 
+def test_preferred_item_correction_in_one_conversation_supersedes_old_value() -> None:
+    _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["id"] = "8c844ccd-9123-4f6a-bf60-7f29ae7e4e12"
+    conversation["messages"] = [
+        {
+            "role": "user",
+            "text": "For this QA fixture only, my preferred test beverage is QA amber lime tea.",
+        },
+        {
+            "role": "user",
+            "text": (
+                "Correction: my preferred test beverage is QA violet pear soda, "
+                "not QA amber lime tea."
+            ),
+        },
+    ]
+
+    mvp_ingestion.ingest_messages(conversation)
+    active = mvp_ingestion.fact_search(subject="user", predicate="favorite_test_beverage")
+    audit = mvp_ingestion.fact_search(
+        subject="user",
+        predicate="favorite_test_beverage",
+        include_superseded=True,
+    )
+
+    assert [fact["object"] for fact in active["results"]] == ["QA violet pear soda"]
+    assert {fact["object"] for fact in audit["results"]} == {
+        "QA amber lime tea",
+        "QA violet pear soda",
+    }
+    assert next(
+        fact for fact in audit["results"] if fact["object"] == "QA amber lime tea"
+    )["superseded_by"] == active["results"][0]["id"]
+    assert active["results"][0]["source_quality"] == "corrected_by_user"
+    assert mvp_ingestion.fact_search(predicate="description")["results"] == []
+    assert mvp_ingestion.fact_search(predicate="owns_item")["results"] == []
+
+
 def test_fact_and_profile_filters_cover_status_quality_and_freshness() -> None:
     _configure_stubs()
     first = _valid_conversation()

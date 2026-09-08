@@ -431,6 +431,7 @@ class _FactPredicatePrefix(StrEnum):
 
 class _FactItemPrefix(StrEnum):
     FAVORITE = "favorite "
+    PREFERRED = "preferred "
 
 
 class _StructuredEvidenceKey(StrEnum):
@@ -668,7 +669,8 @@ _FACT_RULES: list[tuple[_FactRuleName, re.Pattern[str]]] = [
     (
         _FactRuleName.FAVORITE,
         re.compile(
-            r"\bMy\s+favorite\s+(?P<name>[A-Za-z0-9 _-]+?)\s+is\s+(?P<object>[^.?!\n]+)",
+            r"\bMy\s+(?:favorite|preferred)\s+"
+            r"(?P<name>[A-Za-z0-9 _-]+?)\s+is\s+(?P<object>[^.?!\n]+)",
             re.IGNORECASE,
         ),
     ),
@@ -740,6 +742,7 @@ _FACT_INLINE_CORRECTION_RE = re.compile(r",\s+not\s+[^.?!\n]+", re.IGNORECASE)
 _NOISY_PROJECT_ATTRIBUTE_SUBJECT_TOKENS = {
     "favorite",
     "favourite",
+    "preferred",
     "question",
     "remember",
     "remeber",
@@ -4494,8 +4497,16 @@ def _span_overlaps(span: tuple[int, int], spans: Sequence[tuple[int, int]]) -> b
 def _corrected_fact_shape(item: str, new_value: str) -> tuple[str, str]:
     item = _clean_fact_object(item)
     new_value = _clean_fact_object(new_value)
-    if item.lower().startswith(_FactItemPrefix.FAVORITE.value):
-        favorite_name = item[len(_FactItemPrefix.FAVORITE.value) :].strip()
+    preference_prefix = next(
+        (
+            prefix.value
+            for prefix in (_FactItemPrefix.FAVORITE, _FactItemPrefix.PREFERRED)
+            if item.lower().startswith(prefix.value)
+        ),
+        None,
+    )
+    if preference_prefix is not None:
+        favorite_name = item[len(preference_prefix) :].strip()
         predicate = (
             f"{_FactPredicatePrefix.FAVORITE.value}{_normalize_predicate_part(favorite_name)}"
         )
