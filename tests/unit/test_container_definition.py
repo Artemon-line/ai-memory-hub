@@ -2,19 +2,96 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import tomllib
 from pathlib import Path
 
+import pytest
 import yaml
 
 from memory.config import parse_config
 
-PINNED_UV_IMAGE = "FROM ghcr.io/astral-sh/uv:0.11.32-python3.14-trixie-slim"
+PINNED_UV_IMAGE = (
+    "FROM ghcr.io/astral-sh/uv:0.11.32-python3.14-trixie-slim"
+    "@sha256:c2971e36c3f826c5d0c59f009ecc5c2c5e90fe2ad2087d258b711cb7a453697f"
+)
 PINNED_PGVECTOR_IMAGE = (
     "pgvector/pgvector:pg16"
     "@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b"
 )
 LOCAL_STACK_PUBLIC_URL_PLACEHOLDER = "https://YOUR-CUSTOM-DOMAIN.app"
+_COMMIT_SHA = re.compile(r"^[^/@\s]+/[^@\s]+@[0-9a-f]{40}$")
+_CONTAINER_DIGEST = re.compile(r"^docker://[^@\s]+@sha256:[0-9a-f]{64}$")
+_LOCAL_ACTION = re.compile(r"^\./[^@\s]+$")
+
+
+def _uses_immutable_reference(reference: str) -> bool:
+    if reference.startswith("./"):
+        return _LOCAL_ACTION.fullmatch(reference) is not None
+    if reference.startswith("docker://"):
+        return _CONTAINER_DIGEST.fullmatch(reference) is not None
+    return _COMMIT_SHA.fullmatch(reference) is not None
+
+
+def _workflow_uses(value: object) -> list[object]:
+    if isinstance(value, dict):
+        references = [item for key, item in value.items() if key == "uses"]
+        return references + [
+            reference
+            for item in value.values()
+            for reference in _workflow_uses(item)
+        ]
+    if isinstance(value, list):
+        return [reference for item in value for reference in _workflow_uses(item)]
+    return []
+
+
+def _container_definition_paths() -> list[Path]:
+    tracked_files = subprocess.run(
+        ["git", "ls-files"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
+    return [
+        Path(path)
+        for path in tracked_files
+        if Path(path).name.startswith(("Containerfile", "Dockerfile"))
+    ]
+
+
+def _from_images(containerfile: Path) -> list[str]:
+    images: list[str] = []
+    for line in containerfile.read_text(encoding="utf-8").splitlines():
+        tokens = line.strip().split()
+        if not tokens or tokens[0].upper() != "FROM":
+            continue
+        image_tokens = [token for token in tokens[1:] if not token.startswith("--")]
+        if image_tokens:
+            images.append(image_tokens[0])
+    return images
+
+
+def test_all_uv_base_images_use_the_verified_digest() -> None:
+    uv_images = [
+        image
+        for path in _container_definition_paths()
+        for image in _from_images(path)
+        if image.startswith("ghcr.io/astral-sh/uv:")
+    ]
+
+    assert uv_images
+    assert set(uv_images) == {PINNED_UV_IMAGE.removeprefix("FROM ")}
+
+
+def test_container_from_parser_handles_options_and_whitespace(tmp_path: Path) -> None:
+    containerfile = tmp_path / "Containerfile"
+    containerfile.write_text(
+        "  FROM --platform=linux/amd64 ghcr.io/astral-sh/uv:mutable AS runtime\n",
+        encoding="utf-8",
+    )
+
+    assert _from_images(containerfile) == ["ghcr.io/astral-sh/uv:mutable"]
 
 
 def test_containerfile_installs_project_after_copying_package() -> None:
@@ -398,9 +475,41 @@ def test_release_readiness_and_codeql_workflows_exist() -> None:
 
 
 def test_workflows_pin_third_party_actions_to_shas() -> None:
-    for workflow_path in Path(".github/workflows").glob("*.yml"):
-        workflow = workflow_path.read_text(encoding="utf-8")
-        assert not re.search(r"uses:\s+[^#\s]+@v[0-9]", workflow), workflow_path
+    workflow_paths = [
+        *Path(".github/workflows").glob("*.yml"),
+        *Path(".github/workflows").glob("*.yaml"),
+        *Path(".github/actions").glob("**/action.yml"),
+        *Path(".github/actions").glob("**/action.yaml"),
+    ]
+    for workflow_path in workflow_paths:
+        workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+        for reference in _workflow_uses(workflow):
+            assert isinstance(reference, str), f"{workflow_path}: non-string uses value"
+            assert _uses_immutable_reference(reference), f"{workflow_path}: {reference}"
+
+
+@pytest.mark.parametrize(
+    "ref",
+    [
+        "owner/action@main",
+        "owner/action@master",
+        "owner/action@stable",
+        "owner/action@vNext",
+        "owner/action@v4",
+        "owner/action@0123456",
+        "owner/action@${{ github.ref }}",
+    ],
+)
+def test_external_action_references_reject_mutable_refs(ref: str) -> None:
+    assert not _uses_immutable_reference(ref)
+
+
+def test_workflow_reference_rules_allow_immutable_and_local_actions() -> None:
+    assert _uses_immutable_reference("owner/action@0123456789abcdef0123456789abcdef01234567")
+    assert _uses_immutable_reference("./.github/actions/local-action")
+    assert _uses_immutable_reference(f"docker://alpine@sha256:{'a' * 64}")
+    assert not _uses_immutable_reference("./.github/actions/local-action@main")
+    assert not _uses_immutable_reference("docker://alpine:latest")
 
 
 def test_e2e_ollama_uses_pinned_container_instead_of_install_script() -> None:

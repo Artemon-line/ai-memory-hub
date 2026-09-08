@@ -151,7 +151,11 @@ def test_release_security_scan_notes_track_fixed_and_remaining_findings() -> Non
     assert "best-effort release security scan" in security_notes
     assert "MCP write tools now require `memory:write`" in security_notes
     assert "LanceDB delete/replace filters" in security_notes
-    assert "ghcr.io/astral-sh/uv:0.11.32-python3.14-trixie-slim" in security_notes
+    assert (
+        "ghcr.io/astral-sh/uv:0.11.32-python3.14-trixie-slim"
+        "@sha256:c2971e36c3f826c5d0c59f009ecc5c2c5e90fe2ad2087d258b711cb7a453697f"
+        in security_notes
+    )
     assert "GitHub Actions are commit-SHA pinned" in security_notes
     assert "JSON schema validation now enforces declared formats" in security_notes
     assert "Release security scan notes" in readme
