@@ -47,7 +47,7 @@ Implemented:
 
 - MCP tools: `memory_validate`, `memory_insert`, `memory_search`,
   `memory_retrieve`, `memory_ask`, `memory_fact_search`,
-  `memory_profile_get`, `memory_fact_supersede`,
+  `memory_profile_get`, `memory_lookup`, `memory_fact_supersede`,
   `memory_pending_approve`, `memory_pending_reject`, `memory_project_list`,
   `memory_project_default_get`, and `memory_project_get`.
 - MCP resources: `memory://conversation/example`, `memory://conversation/{id}`,
@@ -263,7 +263,9 @@ diagnostics.
 `response_format: "concise"` or `"detailed"`; fact/profile reads also accept an
 optional `limit`. `memory_fact_search` accepts `query` for free-text lookup
 across normalized fact text when a client does not know the subject or predicate
-yet. Concise fact/profile reads deduplicate and limit fact rows to 10 by default
+yet. `memory_lookup` combines compact ask, search, fact, and profile results in a
+single agent-oriented read operation. Concise fact/profile reads collapse exact
+duplicates and older values for single-value predicates, and limit fact rows to 10 by default
 while keeping the subject, predicate, object, normalized object, confidence,
 source quality, freshness, and supersession status. Detailed reads preserve full
 fact provenance such as qualifiers and summary provenance.
@@ -387,6 +389,8 @@ Use `memory_profile_get` when you need a compact profile view. It returns
 filtered normalized facts plus a `summary` object generated from active facts,
 freshness, source-quality counts, and compact fact provenance; the generated
 summary is stored separately from raw messages, chunks, and normalized facts.
+Use `memory_lookup` for general recall when the client should not need to choose
+between ask, search, fact search, and profile retrieval first.
 
 ## Storage Awareness For Agents
 

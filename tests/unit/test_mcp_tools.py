@@ -717,6 +717,22 @@ def test_mcp_tool_policies_cover_registered_handlers() -> None:
 
 
 @pytest.mark.asyncio
+async def test_memory_lookup_combines_compact_read_operations() -> None:
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
+    handlers = build_tool_handlers(agent)
+
+    result = await handlers["memory_lookup"]("hello", top_k=2)
+
+    assert result["status"] == "ok"
+    assert result["query"] == "hello"
+    assert set(result) >= {"answer", "memories", "facts", "profile"}
+    assert result["answer"]["status"] == "ok"
+    assert result["memories"]["status"] == "ok"
+    assert result["facts"]["status"] == "ok"
+    assert result["profile"]["status"] == "ok"
+
+
+@pytest.mark.asyncio
 async def test_mcp_tool_handlers_accept_codex_style_payload() -> None:
     runtime = _runtime()
     agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=runtime)

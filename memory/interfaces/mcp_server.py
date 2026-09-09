@@ -160,6 +160,11 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "response_format=concise for deduplicated, limited facts and summary counts or detailed "
         "for full fact provenance."
     ),
+    "memory_lookup": (
+        "Unified read-only lookup across answer synthesis, conversation search, facts, and profile "
+        "context. Use this as the default agent-facing recall operation when one compact response "
+        "is preferable to choosing among separate read tools."
+    ),
     "memory_fact_supersede": "Write fact state by marking one normalized fact as superseded by another fact within a project_id. Requires the `memory:write` auth scope when MCP auth is enabled.",
     "memory_pending_approve": "Write reviewable memory state by approving a pending or quarantined insert so it becomes searchable and can create facts. Requires the `memory:write` auth scope when MCP auth is enabled.",
     "memory_pending_reject": "Write reviewable memory state by rejecting a pending or quarantined insert so it remains excluded from default reads. Requires the `memory:write` auth scope when MCP auth is enabled.",
@@ -238,6 +243,7 @@ MCP_TOOL_POLICIES: dict[str, MCPToolPolicy] = {
     "memory_ask": READ_ONLY_TOOL_POLICY,
     "memory_fact_search": READ_ONLY_TOOL_POLICY,
     "memory_profile_get": READ_ONLY_WITH_INTERNAL_WRITES_POLICY,
+    "memory_lookup": READ_ONLY_WITH_INTERNAL_WRITES_POLICY,
     "memory_fact_supersede": NON_DESTRUCTIVE_WRITE_POLICY,
     "memory_pending_approve": NON_DESTRUCTIVE_WRITE_POLICY,
     "memory_pending_reject": NON_DESTRUCTIVE_WRITE_POLICY,
@@ -1495,6 +1501,55 @@ def build_tool_handlers(
             format_profile_response(result, response_format, limit=limit)
         )
 
+    async def memory_lookup(
+        query: str,
+        subject: str = "user",
+        top_k: int = 5,
+        project_id: str | None = None,
+        ctx: FastMCPContext | None = None,
+    ) -> dict[str, Any]:
+        if not isinstance(query, str) or not query.strip():
+            return _envelope(
+                status="error",
+                error_code="invalid_input",
+                error_message="query must be a non-empty string",
+            )
+        try:
+            ask_result = await agent.ask(
+                question=query, top_k=top_k, owner_id=owner_id(), project_id=project_id
+            )
+            search_result = await agent.search(
+                query=query, top_k=top_k, owner_id=owner_id(), project_id=project_id
+            )
+            fact_result = await agent.fact_search(
+                query=query, owner_id=owner_id(), project_id=project_id
+            )
+            profile_result = await agent.profile_get(
+                subject=subject, owner_id=owner_id(), project_id=project_id
+            )
+        except PermissionError as exc:
+            return await _mcp_permission_denied_response(ctx, tool_name="memory_lookup", exc=exc)
+        except ValueError as exc:
+            return _envelope(
+                status="error", error_code="invalid_input", error_message=str(exc)
+            )
+        return _with_envelope_defaults(
+            {
+                "status": "ok",
+                "query": query,
+                "answer": format_ask_response(ask_result, MCPResponseFormat.CONCISE.value),
+                "memories": format_search_response(
+                    search_result, MCPResponseFormat.CONCISE.value
+                ),
+                "facts": format_fact_search_response(
+                    fact_result, MCPResponseFormat.CONCISE.value
+                ),
+                "profile": format_profile_response(
+                    profile_result, MCPResponseFormat.CONCISE.value
+                ),
+            }
+        )
+
     async def memory_fact_supersede(
         fact_id: str,
         superseded_by: str,
@@ -1674,6 +1729,7 @@ def build_tool_handlers(
         "memory_ask": memory_ask,
         "memory_fact_search": memory_fact_search,
         "memory_profile_get": memory_profile_get,
+        "memory_lookup": memory_lookup,
         "memory_fact_supersede": memory_fact_supersede,
         "memory_pending_approve": memory_pending_approve,
         "memory_pending_reject": memory_pending_reject,

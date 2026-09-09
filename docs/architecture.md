@@ -161,6 +161,7 @@ MCP tools:
 - `memory_ask`
 - `memory_fact_search`
 - `memory_profile_get`
+- `memory_lookup`
 - `memory_fact_supersede`
 - `memory_pending_approve`
 - `memory_pending_reject`

@@ -5834,7 +5834,9 @@ def _profile_summary(
     project_id: str | None,
     filters: dict[str, Any],
 ) -> dict[str, Any]:
-    active_facts = [fact for fact in facts if not fact.get(FactField.SUPERSEDED_BY.value)]
+    active_facts = _canonical_profile_facts(
+        [fact for fact in facts if not fact.get(FactField.SUPERSEDED_BY.value)]
+    )
     freshest_at = _freshest_fact_timestamp(active_facts)
     source_quality_counts = _count_values(active_facts, FactField.SOURCE_QUALITY.value)
     confidence_counts = _count_values(active_facts, FactField.CONFIDENCE.value)
@@ -6152,6 +6154,42 @@ def _profile_summary_text(facts: list[dict[str, Any]]) -> str:
     if remaining > 0:
         lines.append(f"{remaining} more active fact(s).")
     return "; ".join(lines)
+
+
+def _canonical_profile_facts(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen_values: set[tuple[str, str, str]] = set()
+    seen_single_value: set[tuple[str, str]] = set()
+    canonical: list[dict[str, Any]] = []
+    ordered = sorted(facts, key=_fact_recency_key, reverse=True)
+    for fact in ordered:
+        subject = str(fact.get(FactField.SUBJECT.value, "")).casefold()
+        predicate = str(fact.get(FactField.PREDICATE.value, "")).casefold()
+        value = _profile_summary_fact_value(fact).casefold()
+        value_key = (subject, predicate, value)
+        if value_key in seen_values:
+            continue
+        predicate_key = (subject, predicate)
+        if _profile_single_value_predicate(predicate) and predicate_key in seen_single_value:
+            continue
+        seen_values.add(value_key)
+        if _profile_single_value_predicate(predicate):
+            seen_single_value.add(predicate_key)
+        canonical.append(fact)
+    return canonical
+
+
+def _profile_single_value_predicate(predicate: str) -> bool:
+    return predicate not in {"likes", "owns_guitar", "owns_item", "recurring_topic"}
+
+
+def _fact_recency_key(fact: dict[str, Any]) -> str:
+    return str(
+        fact.get(FactField.STORED_AT.value)
+        or fact.get(FactField.LAST_CONFIRMED_AT.value)
+        or fact.get(FactField.UPDATED_AT.value)
+        or fact.get(FactField.CREATED_AT.value)
+        or ""
+    )
 
 
 def _unique_profile_summary_lines(facts: list[dict[str, Any]]) -> list[_ProfileSummaryLine]:
