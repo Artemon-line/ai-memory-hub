@@ -2016,7 +2016,7 @@ def test_profile_and_recurring_topic_facts_are_extracted() -> None:
     assert topic_fact["confidence_reason"] == "Inferred from recurring conversation topics."
     assert profile["summary"]["basis"] == "active_facts"
     assert "profile_name: Tyran" in profile["summary"]["text"]
-    assert profile["summary"]["active_fact_count"] == len(profile["facts"])
+    assert profile["summary"]["active_fact_count"] <= len(profile["facts"])
     assert profile["summary"]["source_quality_counts"]["direct_user_statement"] == 2
     assert profile["summary"]["source_quality_counts"]["inferred_from_conversation"] == 4
     stored = getattr(mvp_ingestion._runtime().metadata_store, "_generated_summaries")
@@ -2046,6 +2046,26 @@ def test_profile_summary_text_deduplicates_repeated_topic_lines() -> None:
     for topic in ("backend", "mcp", "sql", "testing"):
         assert summary_text.count(f"recurring_topic: {topic}") == 1
     assert "more active fact" not in summary_text
+
+
+def test_profile_summary_keeps_only_latest_single_value_predicate() -> None:
+    _configure_stubs()
+    first = _valid_conversation()
+    first["id"] = "11111111-1111-4111-8111-111111111111"
+    first["timestamp"] = "2026-01-01T00:00:00Z"
+    first["messages"] = [{"role": "user", "text": "My favorite food is old curry."}]
+    second = _valid_conversation()
+    second["id"] = "22222222-2222-4222-8222-222222222222"
+    second["timestamp"] = "2026-01-02T00:00:00Z"
+    second["messages"] = [{"role": "user", "text": "My favorite food is new ramen."}]
+    mvp_ingestion.ingest_messages(first)
+    mvp_ingestion.ingest_messages(second)
+
+    profile = mvp_ingestion.profile_get("user", predicate="favorite_food")
+
+    assert len(profile["facts"]) == 2
+    assert profile["summary"]["active_fact_count"] == 1
+    assert profile["summary"]["text"] == "favorite_food: new ramen"
 
 
 def test_profile_summary_handles_empty_filtered_view() -> None:
