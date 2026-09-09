@@ -1947,6 +1947,10 @@ def normalize_conversation_json(
     if top_level_tags is not None and "tags" not in metadata:
         metadata["tags"] = top_level_tags
 
+    top_level_thread_id = normalized.pop(ThreadMetadataKey.THREAD_ID.value, None)
+    if top_level_thread_id is not None and ThreadMetadataKey.THREAD_ID.value not in metadata:
+        metadata[ThreadMetadataKey.THREAD_ID.value] = top_level_thread_id
+
     if "messages" not in normalized and isinstance(normalized.get("conversation"), list):
         normalized["messages"] = normalized["conversation"]
     normalized.pop("conversation", None)
@@ -4439,11 +4443,14 @@ def _extract_message_facts(
                 _FactRuleName.PROFILE_ROLE,
                 _FactRuleName.PROFILE_LOCATION,
             }:
+                object_value = _clean_fact_object(match.group("object"))
+                if rule_name == _FactRuleName.PROFILE_NAME:
+                    object_value = _clean_profile_name(object_value)
                 facts.append(
                     _fact(
                         subject=_FactSubject.USER.value,
                         predicate=rule_name.value,
-                        object_value=_clean_fact_object(match.group("object")),
+                        object_value=object_value,
                         conversation=conversation,
                         message_index=message_index,
                         source_role=source_role,
@@ -6551,6 +6558,15 @@ def _owned_item_qualifiers(object_value: str) -> dict[str, Any]:
 
 def _clean_fact_object(value: str) -> str:
     return value.strip(" .?!\n\t\"'")
+
+
+def _clean_profile_name(value: str) -> str:
+    return re.split(
+        r",\s*(?:save|remember|store|record)(?:\s+(?:it|this))?\b",
+        value,
+        maxsplit=1,
+        flags=re.IGNORECASE,
+    )[0].strip()
 
 
 def _normalize_predicate_part(value: str) -> str:
