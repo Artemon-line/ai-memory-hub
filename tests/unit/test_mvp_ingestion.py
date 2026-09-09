@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,15 @@ from memory.ingestion.thread_models import (
     ThreadMetadataKey,
 )
 from memory.observability.metrics import metrics
+
+
+@pytest.fixture(autouse=True)
+def _restore_runtime() -> Iterator[None]:
+    original_runtime = mvp_ingestion._RUNTIME
+    try:
+        yield
+    finally:
+        mvp_ingestion._RUNTIME = original_runtime
 
 
 class StubEmbedder:
