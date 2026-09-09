@@ -2238,6 +2238,28 @@ def test_ingest_messages_preserves_existing_topics() -> None:
     assert topics.count("mcp") == 1
 
 
+def test_ingest_accepts_top_level_thread_id_as_metadata_alias() -> None:
+    metadata, _ = _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["thread_id"] = "thread-top-level"
+
+    mvp_ingestion.ingest_messages(conversation)
+
+    stored = metadata.by_id[conversation["id"]]
+    assert stored["metadata"]["thread_id"] == "thread-top-level"
+
+
+def test_profile_name_extraction_removes_trailing_save_command() -> None:
+    _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["messages"] = [{"role": "user", "text": "My name is Artemy, save it."}]
+
+    mvp_ingestion.ingest_messages(conversation)
+
+    result = mvp_ingestion.fact_search(subject="user", predicate="profile_name")
+    assert [fact["object"] for fact in result["results"]] == ["Artemy"]
+
+
 def test_schema_file_from_config_is_used(tmp_path: Path) -> None:
     schema_path = tmp_path / "conversation.custom.schema.json"
     schema = {
