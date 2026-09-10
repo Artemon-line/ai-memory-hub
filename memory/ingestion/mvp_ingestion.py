@@ -416,7 +416,6 @@ class _FactPredicate(StrEnum):
     DESCRIPTION = "description"
     INDEXING_STRATEGY = "indexing_strategy"
     LIKES = "likes"
-    OWNS_GUITAR = "owns_guitar"
     OWNS_ITEM = "owns_item"
     PROFILE_IDENTITY = "profile_identity"
     PROFILE_LOCATION = "profile_location"
@@ -4821,10 +4820,10 @@ def _candidate_facts_for_question(
 def _fact_query(question: str) -> dict[str, str] | None:
     lowered = question.lower()
     subject = _question_project_subject(question)
-    if "guitar" in lowered and any(term in lowered for term in ("own", "have", "my")):
+    if re.search(r"\b(?:what|which)\b.*\b(?:do i own|do i have|is mine)\b", lowered):
         return {
             FactField.SUBJECT.value: _FactSubject.USER.value,
-            FactField.PREDICATE.value: _FactPredicate.OWNS_GUITAR.value,
+            FactField.PREDICATE.value: _FactPredicate.OWNS_ITEM.value,
         }
     if "who am i" in lowered or "what do you know about me" in lowered:
         return {
@@ -5458,11 +5457,15 @@ def profile_get(
             "freshness_to": freshness_to,
         },
     )
+    include_non_profile_facts = predicate is not None or source_quality is not None
     return {
         "status": "ok",
         "subject": subject,
         "summary": summary,
         "facts": facts,
+        "profile_facts": _profile_projection_facts(
+            facts, include_non_profile_facts=include_non_profile_facts
+        ),
     }
 
 
@@ -5834,8 +5837,11 @@ def _profile_summary(
     project_id: str | None,
     filters: dict[str, Any],
 ) -> dict[str, Any]:
-    active_facts = _canonical_profile_facts(
-        [fact for fact in facts if not fact.get(FactField.SUPERSEDED_BY.value)]
+    include_non_profile_facts = any(
+        filters.get(key) is not None for key in ("predicate", "source_quality")
+    )
+    active_facts = _profile_projection_facts(
+        facts, include_non_profile_facts=include_non_profile_facts
     )
     freshest_at = _freshest_fact_timestamp(active_facts)
     source_quality_counts = _count_values(active_facts, FactField.SOURCE_QUALITY.value)
@@ -6158,7 +6164,6 @@ def _profile_summary_text(facts: list[dict[str, Any]]) -> str:
 
 def _canonical_profile_facts(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
     seen_values: set[tuple[str, str, str]] = set()
-    seen_single_value: set[tuple[str, str]] = set()
     canonical: list[dict[str, Any]] = []
     ordered = sorted(facts, key=_fact_recency_key, reverse=True)
     for fact in ordered:
@@ -6168,23 +6173,27 @@ def _canonical_profile_facts(facts: list[dict[str, Any]]) -> list[dict[str, Any]
         value_key = (subject, predicate, value)
         if value_key in seen_values:
             continue
-        predicate_key = (subject, predicate)
-        if _profile_single_value_predicate(predicate) and predicate_key in seen_single_value:
-            continue
         seen_values.add(value_key)
-        if _profile_single_value_predicate(predicate):
-            seen_single_value.add(predicate_key)
         canonical.append(fact)
     return canonical
 
 
-def _profile_single_value_predicate(predicate: str) -> bool:
-    return _canonical_fact_component(predicate) not in {
-        "likes",
-        "owns_guitar",
-        "owns_item",
-        "recurring_topic",
-    }
+def _profile_projection_facts(
+    facts: list[dict[str, Any]], *, include_non_profile_facts: bool
+) -> list[dict[str, Any]]:
+    active_facts = [
+        fact for fact in facts if not fact.get(FactField.SUPERSEDED_BY.value)
+    ]
+    if not include_non_profile_facts:
+        active_facts = [fact for fact in active_facts if _is_profile_fact(fact)]
+    return _canonical_profile_facts(active_facts)
+
+
+def _is_profile_fact(fact: dict[str, Any]) -> bool:
+    source_quality = str(
+        fact.get(FactField.SOURCE_QUALITY.value) or _source_quality_for_fact(fact)
+    )
+    return source_quality in {"direct_user_statement", "corrected_by_user"}
 
 
 def _canonical_fact_component(value: Any) -> str:
@@ -6586,19 +6595,13 @@ def _dedupe_facts(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _owned_item_predicate(object_value: str) -> str:
-    lowered = object_value.lower()
-    if "guitar" in lowered or "gibson" in lowered:
-        return _FactPredicate.OWNS_GUITAR.value
+    _ = object_value
     return _FactPredicate.OWNS_ITEM.value
 
 
 def _owned_item_qualifiers(object_value: str) -> dict[str, Any]:
     qualifiers: dict[str, Any] = {}
     lowered = object_value.lower()
-    if "guitar" in lowered or "gibson" in lowered:
-        qualifiers["instrument"] = "guitar"
-    if "p90" in lowered:
-        qualifiers["pickup"] = "P90"
     for color in ("cherry", "tv yellow", "black", "white", "blue", "red"):
         if color in lowered:
             qualifiers["color"] = color

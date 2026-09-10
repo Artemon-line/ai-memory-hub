@@ -267,12 +267,12 @@ CONVERSATION_JSON_TOOL_META: dict[str, Any] = {
             "minimal_example": {
                 "source": "opencode",
                 "messages": [
-                    {"role": "user", "content": "I own a Gibson Special."},
+                    {"role": "user", "content": "I own a compact camera."},
                     {"role": "assistant", "content": "Noted."},
                 ],
                 "metadata": {
-                    "tags": ["guitar", "opencode"],
-                    "summary": "User said they own a Gibson Special.",
+                    "tags": ["equipment", "opencode"],
+                    "summary": "User said they own a compact camera.",
                     "save_intent": "explicit_user_request",
                 },
             },

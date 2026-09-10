@@ -385,9 +385,11 @@ For thread continuity, clients may send `metadata.upstream_thread_id` or
 on `memory_search` and `memory_ask`. Use `result_mode="threads"` when a client
 wants grouped thread-level search results.
 
-Use `memory_profile_get` when you need a compact profile view. It returns
-filtered normalized facts plus a `summary` object generated from active facts,
-freshness, source-quality counts, and compact fact provenance; the generated
+Use `memory_profile_get` when you need a compact profile view. Its default
+concise view keeps canonical active direct-user and user-correction facts, so
+assistant statements and inferred topics do not crowd out profile evidence.
+Request a predicate or `source_quality` explicitly when those supporting facts
+are needed. Detailed reads preserve the full timestamped fact history. The
 summary is stored separately from raw messages, chunks, and normalized facts.
 Use `memory_lookup` for general recall when the client should not need to choose
 between ask, search, fact search, and profile retrieval first.

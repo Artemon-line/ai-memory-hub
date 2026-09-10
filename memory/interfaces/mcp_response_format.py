@@ -188,7 +188,9 @@ def format_profile_response(
     summary = payload.get("summary")
     if isinstance(summary, dict):
         formatted["summary"] = _compact_mapping(summary, _PROFILE_SUMMARY_KEYS)
-    facts, counts = _limited_concise_facts(payload.get("facts"), limit=limit)
+    profile_facts = payload.get("profile_facts")
+    fact_source = profile_facts if isinstance(profile_facts, list) else payload.get("facts")
+    facts, counts = _limited_concise_facts(fact_source, limit=limit)
     formatted["facts"] = facts
     formatted.update(
         {
@@ -400,7 +402,6 @@ def _limited_concise_facts(
 
 def _dedupe_concise_facts(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
     seen: set[tuple[str, str, str]] = set()
-    seen_single_value: set[tuple[str, str]] = set()
     deduped: list[dict[str, Any]] = []
     for fact in facts:
         subject = str(fact.get(FactField.SUBJECT.value, ""))
@@ -415,23 +416,9 @@ def _dedupe_concise_facts(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
         )
         if key in seen:
             continue
-        predicate_key = key[:2]
-        if _single_value_predicate(predicate) and predicate_key in seen_single_value:
-            continue
         seen.add(key)
-        if _single_value_predicate(predicate):
-            seen_single_value.add(predicate_key)
         deduped.append(fact)
     return deduped
-
-
-def _single_value_predicate(predicate: str) -> bool:
-    return _canonical_fact_component(predicate) not in {
-        "likes",
-        "owns_guitar",
-        "owns_item",
-        "recurring_topic",
-    }
 
 
 def _canonical_fact_component(value: Any) -> str:

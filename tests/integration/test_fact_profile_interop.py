@@ -124,7 +124,7 @@ def _fact_objects(payload: dict[str, Any]) -> list[str]:
 def test_api_inserted_facts_are_readable_through_mcp_same_owner_and_project(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    payload = _conversation(text="My name is Alex Prism. I own a cherry Gibson guitar.")
+    payload = _conversation(text="My name is Alex Prism. I own a cherry compact camera.")
     headers = {"Authorization": "Bearer token-a"}
 
     with _auth_client(tmp_path, monkeypatch) as client:
@@ -141,7 +141,7 @@ def test_api_inserted_facts_are_readable_through_mcp_same_owner_and_project(
             name="memory_fact_search",
             arguments={
                 "subject": "user",
-                "predicate": "owns_guitar",
+                "predicate": "owns_item",
                 "project_id": "fact-shared",
             },
         )
@@ -155,17 +155,17 @@ def test_api_inserted_facts_are_readable_through_mcp_same_owner_and_project(
 
     assert insert.status_code == 200, insert.text
     assert facts["status"] == "ok"
-    assert _fact_objects(facts) == ["a cherry Gibson guitar"]
-    assert {fact["predicate"] for fact in profile["facts"]} >= {"profile_name", "owns_guitar"}
+    assert _fact_objects(facts) == ["a cherry compact camera"]
+    assert {fact["predicate"] for fact in profile["facts"]} >= {"profile_name", "owns_item"}
 
 
 def test_mcp_fact_and_profile_concise_response_format_reduces_fact_payloads(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     payloads = [
-        _conversation(text="I own a green Gibson guitar."),
-        _conversation(text="Also, I own a green Gibson guitar."),
-        _conversation(text="I own a blue Jazzmaster guitar."),
+        _conversation(text="I own a green compact camera."),
+        _conversation(text="Also, I own a green compact camera."),
+        _conversation(text="I own a blue mirrorless camera."),
     ]
 
     with _auth_client(tmp_path, monkeypatch) as client:
@@ -185,7 +185,7 @@ def test_mcp_fact_and_profile_concise_response_format_reduces_fact_payloads(
             name="memory_fact_search",
             arguments={
                 "subject": "user",
-                "predicate": "owns_guitar",
+                "predicate": "owns_item",
                 "project_id": "fact-shared",
                 "limit": 1,
             },
@@ -196,7 +196,7 @@ def test_mcp_fact_and_profile_concise_response_format_reduces_fact_payloads(
             request_id=3,
             name="memory_fact_search",
             arguments={
-                "query": "blue Jazzmaster",
+                "query": "blue mirrorless camera",
                 "project_id": "fact-shared",
             },
         )
@@ -207,7 +207,7 @@ def test_mcp_fact_and_profile_concise_response_format_reduces_fact_payloads(
             name="memory_fact_search",
             arguments={
                 "subject": "user",
-                "predicate": "owns_guitar",
+                "predicate": "owns_item",
                 "project_id": "fact-shared",
                 "response_format": "detailed",
             },
@@ -219,7 +219,7 @@ def test_mcp_fact_and_profile_concise_response_format_reduces_fact_payloads(
             name="memory_profile_get",
             arguments={
                 "subject": "user",
-                "predicate": "owns_guitar",
+                "predicate": "owns_item",
                 "project_id": "fact-shared",
                 "limit": 1,
             },
@@ -228,8 +228,8 @@ def test_mcp_fact_and_profile_concise_response_format_reduces_fact_payloads(
     assert all(insert.status_code == 200 for insert in inserts)
     concise_fact = concise_facts["results"][0]
     assert concise_fact["object_normalized"] in {
-        "a green Gibson guitar",
-        "a blue Jazzmaster guitar",
+        "a green compact camera",
+        "a blue mirrorless camera",
     }
     assert concise_fact["superseded"] is False
     assert "qualifiers" not in concise_fact
@@ -239,8 +239,8 @@ def test_mcp_fact_and_profile_concise_response_format_reduces_fact_payloads(
     assert concise_facts["returned_results"] == 1
     assert concise_facts["omitted_results"] == 1
     assert concise_facts["result_limit"] == 1
-    assert "a blue Jazzmaster guitar" in _fact_objects(query_facts)
-    assert "a green Gibson guitar" not in _fact_objects(query_facts)
+    assert "a blue mirrorless camera" in _fact_objects(query_facts)
+    assert "a green compact camera" not in _fact_objects(query_facts)
     assert "qualifiers" in detailed_facts["results"][0]
     assert len(detailed_facts["results"]) == 3
 
@@ -252,11 +252,11 @@ def test_mcp_fact_and_profile_concise_response_format_reduces_fact_payloads(
         "source_quality_counts",
     }
     summary_text = concise_profile["summary"]["text"]
-    assert summary_text.count("owns_guitar: a green Gibson guitar") == 1
-    assert summary_text.count("owns_guitar: a blue Jazzmaster guitar") == 1
+    assert summary_text.count("owns_item: a green compact camera") == 1
+    assert summary_text.count("owns_item: a blue mirrorless camera") == 1
     assert "provenance" not in concise_profile["summary"]
     assert "qualifiers" not in concise_profile["facts"][0]
-    assert concise_profile["total_facts"] == 3
+    assert concise_profile["total_facts"] == 2
     assert concise_profile["unique_facts"] == 2
     assert concise_profile["returned_facts"] == 1
     assert concise_profile["omitted_facts"] == 1
@@ -266,7 +266,7 @@ def test_mcp_fact_and_profile_concise_response_format_reduces_fact_payloads(
 def test_mcp_inserted_facts_are_readable_through_api_same_owner_and_project(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    payload = _conversation(text="My name is Morgan Slate. I own a blue Jazzmaster guitar.")
+    payload = _conversation(text="My name is Morgan Slate. I own a blue mirrorless camera.")
     headers = {"Authorization": "Bearer token-a"}
 
     with _auth_client(tmp_path, monkeypatch) as client:
@@ -282,7 +282,7 @@ def test_mcp_inserted_facts_are_readable_through_api_same_owner_and_project(
             "/memory/facts/search",
             json={
                 "subject": "user",
-                "predicate": "owns_guitar",
+                "predicate": "owns_item",
                 "project_id": "fact-shared",
             },
             headers=headers,
@@ -295,18 +295,18 @@ def test_mcp_inserted_facts_are_readable_through_api_same_owner_and_project(
 
     assert insert["status"] == "ok"
     assert facts.status_code == 200, facts.text
-    assert _fact_objects(facts.json()) == ["a blue Jazzmaster guitar"]
+    assert _fact_objects(facts.json()) == ["a blue mirrorless camera"]
     assert profile.status_code == 200, profile.text
     assert {fact["predicate"] for fact in profile.json()["facts"]} >= {
         "profile_name",
-        "owns_guitar",
+        "owns_item",
     }
 
 
 def test_cross_owner_fact_and_profile_queries_do_not_leak(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    payload = _conversation(text="My name is Ada Cipher. I own a silver Gibson guitar.")
+    payload = _conversation(text="My name is Ada Cipher. I own a silver compact camera.")
     owner_a_headers = {"Authorization": "Bearer token-a"}
     owner_b_headers = {"Authorization": "Bearer token-b"}
 
@@ -314,12 +314,12 @@ def test_cross_owner_fact_and_profile_queries_do_not_leak(
         insert = client.post("/memory/insert", json=payload, headers=owner_a_headers)
         facts_a = client.post(
             "/memory/facts/search",
-            json={"subject": "user", "predicate": "owns_guitar"},
+            json={"subject": "user", "predicate": "owns_item"},
             headers=owner_a_headers,
         )
         facts_b = client.post(
             "/memory/facts/search",
-            json={"subject": "user", "predicate": "owns_guitar"},
+            json={"subject": "user", "predicate": "owns_item"},
             headers=owner_b_headers,
         )
         profile_b = client.post(
@@ -331,7 +331,7 @@ def test_cross_owner_fact_and_profile_queries_do_not_leak(
             mcp_b,
             request_id=2,
             name="memory_fact_search",
-            arguments={"subject": "user", "predicate": "owns_guitar"},
+            arguments={"subject": "user", "predicate": "owns_item"},
         )
         mcp_profile_b = _call_tool(
             client,
@@ -342,7 +342,7 @@ def test_cross_owner_fact_and_profile_queries_do_not_leak(
         )
 
     assert insert.status_code == 200, insert.text
-    assert _fact_objects(facts_a.json()) == ["a silver Gibson guitar"]
+    assert _fact_objects(facts_a.json()) == ["a silver compact camera"]
     assert facts_b.status_code == 200
     assert facts_b.json()["results"] == []
     assert profile_b.status_code == 200
@@ -354,7 +354,7 @@ def test_cross_owner_fact_and_profile_queries_do_not_leak(
 def test_auth_none_restart_cannot_read_owner_scoped_facts_through_api_or_mcp(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    payload = _conversation(text="My name is Rowan Vault. I own a violet Gibson guitar.")
+    payload = _conversation(text="My name is Rowan Vault. I own a violet compact camera.")
 
     with _auth_client(tmp_path, monkeypatch) as client:
         insert = client.post(
@@ -367,7 +367,7 @@ def test_auth_none_restart_cannot_read_owner_scoped_facts_through_api_or_mcp(
     with _client(tmp_path, auth="none") as client:
         api_facts = client.post(
             "/memory/facts/search",
-            json={"subject": "user", "predicate": "owns_guitar"},
+            json={"subject": "user", "predicate": "owns_item"},
         )
         api_profile = client.post("/memory/profile/get", json={"subject": "user"})
         mcp_headers = _initialize_mcp(client)
@@ -376,7 +376,7 @@ def test_auth_none_restart_cannot_read_owner_scoped_facts_through_api_or_mcp(
             mcp_headers,
             request_id=2,
             name="memory_fact_search",
-            arguments={"subject": "user", "predicate": "owns_guitar"},
+            arguments={"subject": "user", "predicate": "owns_item"},
         )
         mcp_profile = _call_tool(
             client,
@@ -397,8 +397,8 @@ def test_auth_none_restart_cannot_read_owner_scoped_facts_through_api_or_mcp(
 def test_supersession_through_mcp_is_visible_through_api(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    old_payload = _conversation(text="I own a cherry Gibson guitar.")
-    new_payload = _conversation(text="I own a TV yellow Gibson guitar.")
+    old_payload = _conversation(text="I own a cherry compact camera.")
+    new_payload = _conversation(text="I own a TV yellow compact camera.")
     headers = {"Authorization": "Bearer token-a"}
 
     with _auth_client(tmp_path, monkeypatch) as client:
@@ -406,7 +406,7 @@ def test_supersession_through_mcp_is_visible_through_api(
         new_insert = client.post("/memory/insert", json=new_payload, headers=headers)
         before = client.post(
             "/memory/facts/search",
-            json={"subject": "user", "predicate": "owns_guitar", "include_superseded": True},
+            json={"subject": "user", "predicate": "owns_item", "include_superseded": True},
             headers=headers,
         )
         old_fact = next(fact for fact in before.json()["results"] if "cherry" in fact["object"])
@@ -421,12 +421,12 @@ def test_supersession_through_mcp_is_visible_through_api(
         )
         after = client.post(
             "/memory/facts/search",
-            json={"subject": "user", "predicate": "owns_guitar", "include_superseded": True},
+            json={"subject": "user", "predicate": "owns_item", "include_superseded": True},
             headers=headers,
         )
         active_profile = client.post(
             "/memory/profile/get",
-            json={"subject": "user", "predicate": "owns_guitar"},
+            json={"subject": "user", "predicate": "owns_item"},
             headers=headers,
         )
 
@@ -436,5 +436,5 @@ def test_supersession_through_mcp_is_visible_through_api(
     superseded_old = next(fact for fact in after.json()["results"] if fact["id"] == old_fact["id"])
     assert superseded_old["superseded_by"] == new_fact["id"]
     assert [fact["object"] for fact in active_profile.json()["facts"]] == [
-        "a TV yellow Gibson guitar"
+        "a TV yellow compact camera"
     ]

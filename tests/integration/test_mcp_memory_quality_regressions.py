@@ -1125,3 +1125,37 @@ def test_tight_context_budget_reports_truncated_evidence(
     assert ask["confidence"] in {"low", "none"}
     assert "truncated" in ask["confidence_reason"].lower()
     assert "lapis compass" not in ask["answer"]
+
+
+def test_mcp_memory_lookup_returns_compact_grounded_context(tmp_path: Path) -> None:
+    payload = _conversation(
+        memory_id="d5858840-3de5-4194-bf37-16f57dd3a350",
+        text="The AMH lookup verification answer is cobalt lantern.",
+        tags=["codex-cli-qa", "lookup"],
+        thread_id="AMH-QA-LOOKUP",
+    )
+
+    with _client(tmp_path) as client:
+        headers = _initialize_mcp(client)
+        insert = _call_tool(
+            client,
+            headers,
+            request_id=2,
+            name="memory_insert",
+            arguments={"conversation_json": payload},
+        )
+        lookup = _call_tool(
+            client,
+            headers,
+            request_id=3,
+            name="memory_lookup",
+            arguments={"query": "What is the AMH lookup verification answer?", "top_k": 3},
+        )
+
+    assert insert["status"] == "ok"
+    assert lookup["status"] == "ok"
+    assert lookup["answer"]["status"] == "ok"
+    assert "cobalt lantern" in lookup["answer"]["answer"]
+    assert lookup["memories"]["results"][0]["id"] == payload["id"]
+    assert lookup["facts"]["status"] == "ok"
+    assert lookup["profile"]["status"] == "ok"

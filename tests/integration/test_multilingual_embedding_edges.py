@@ -25,7 +25,7 @@ class MultilingualTestEmbedder:
         normalized = unicodedata.normalize("NFKD", text).casefold()
         if any(term in normalized for term in ("memory", "recall")):
             return [1.0, 0.0, 0.0]
-        if any(term in normalized for term in ("guitarra", "guitar", "ギター")):
+        if any(term in normalized for term in ("cámara", "camera", "カメラ")):
             return [0.0, 1.0, 0.0]
         if any(term in normalized for term in ("cafe", "café", "コーヒー")):
             return [0.0, 0.0, 1.0]
@@ -148,11 +148,11 @@ def test_english_insert_and_query_use_configured_embedding_space(tmp_path: Path)
 def test_non_english_same_language_query_works_with_multilingual_embedder(
     tmp_path: Path,
 ) -> None:
-    payload = _conversation("Mi guitarra favorita es una Fender roja.")
+    payload = _conversation("Mi cámara favorita es una Fender roja.")
 
     with _client(tmp_path) as client:
         insert = client.post("/memory/insert", json=payload)
-        search = client.post("/memory/search", json={"query": "guitarra roja", "top_k": 3})
+        search = client.post("/memory/search", json={"query": "cámara roja", "top_k": 3})
 
     assert insert.status_code == 200, insert.text
     assert search.status_code == 200, search.text
@@ -160,11 +160,11 @@ def test_non_english_same_language_query_works_with_multilingual_embedder(
 
 
 def test_non_english_insert_english_query_is_model_quality_smoke(tmp_path: Path) -> None:
-    payload = _conversation("La guitarra importante es azul.")
+    payload = _conversation("La cámara importante es azul.")
 
     with _client(tmp_path) as client:
         insert = client.post("/memory/insert", json=payload)
-        search = client.post("/memory/search", json={"query": "blue guitar", "top_k": 3})
+        search = client.post("/memory/search", json={"query": "blue camera", "top_k": 3})
 
     assert insert.status_code == 200, insert.text
     assert search.status_code == 200, search.text
@@ -176,17 +176,17 @@ def test_unicode_normalization_edges_do_not_crash_memory_or_fact_paths(
 ) -> None:
     decomposed_cafe = "Cafe\u0301"
     payload = _conversation(
-        f"My name is José Álvarez. I own a {decomposed_cafe} guitar. "
+        f"My name is José Álvarez. I own a {decomposed_cafe} camera. "
         "Résumé notes mention mañana and コーヒー."
     )
 
     with _client(tmp_path) as client:
         insert = client.post("/memory/insert", json=payload)
-        search = client.post("/memory/search", json={"query": "café ギター", "top_k": 3})
-        ask = client.post("/memory/ask", json={"question": "What guitar do I own?"})
+        search = client.post("/memory/search", json={"query": "café カメラ", "top_k": 3})
+        ask = client.post("/memory/ask", json={"question": "What camera do I own?"})
         facts = client.post(
             "/memory/facts/search",
-            json={"subject": "user", "predicate": "owns_guitar"},
+            json={"subject": "user", "predicate": "owns_item"},
         )
         profile = client.post("/memory/profile/get", json={"subject": "user"})
 

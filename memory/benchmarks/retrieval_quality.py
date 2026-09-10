@@ -279,10 +279,10 @@ def _representative_conversations() -> list[dict[str, Any]]:
         ),
         _conversation(
             "55555555-5555-4555-8555-555555555555",
-            "User guitar profile",
+            "User equipment profile",
             "mcp",
-            ["profile", "guitar", "music"],
-            "I own a Gibson Special with P90 pickups. The correction says the finish is TV yellow, not cherry.",
+            ["profile", "equipment", "photography"],
+            "The equipment inventory contains an Orion-7 camera with a polarizer lens. The correction says the finish is silver, not black.",
         ),
         _conversation(
             "66666666-6666-4666-8666-666666666666",
@@ -332,8 +332,8 @@ def _representative_cases(*, top_k: int) -> list[RetrievalCase]:
             },
         ),
         RetrievalCase(
-            name="profile_guitar_fact",
-            query="Gibson P90 guitar",
+            name="profile_equipment_fact",
+            query="Orion-7 camera polarizer lens",
             expected_ids=("55555555-5555-4555-8555-555555555555",),
             vector_scores={
                 "44444444-4444-4444-8444-444444444444": 0.25,

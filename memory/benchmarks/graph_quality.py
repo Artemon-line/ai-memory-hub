@@ -491,16 +491,16 @@ def _golden_corpus() -> list[dict[str, Any]]:
             "conversation": _conversation(
                 "graph-quality-profile",
                 "User profile",
-                "I own a Gibson Special. My favorite editor is Codex.",
+                "I own a compact camera. My favorite editor is Codex.",
             ),
             "expected_entities": [
                 ExpectedEntity("person", "user", "graph-quality-profile", 0),
-                ExpectedEntity("owned_item", "a Gibson Special", "graph-quality-profile", 0),
+                ExpectedEntity("owned_item", "a compact camera", "graph-quality-profile", 0),
                 ExpectedEntity("preference", "editor", "graph-quality-profile", 0),
                 ExpectedEntity("preference", "Codex", "graph-quality-profile", 0),
             ],
             "expected_relationships": [
-                ExpectedRelationship("user", "owns", "a Gibson Special", "graph-quality-profile", 0),
+                ExpectedRelationship("user", "owns", "a compact camera", "graph-quality-profile", 0),
                 ExpectedRelationship("editor", "prefers", "Codex", "graph-quality-profile", 0),
             ],
         },

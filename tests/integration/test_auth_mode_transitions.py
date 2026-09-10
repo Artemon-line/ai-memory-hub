@@ -351,7 +351,7 @@ def test_bearer_owner_facts_are_not_readable_after_restart_with_auth_none(
 ) -> None:
     monkeypatch.setenv("AMH_TOKEN_HASH_SECRET", "transition-secret")
     _seed_bearer_token(tmp_path)
-    payload = _conversation(text="I own a teal Jazzmaster.")
+    payload = _conversation(text="I own a teal mirrorless camera.")
 
     with _client(_base_config(tmp_path, auth="bearer_token")) as client:
         insert = client.post(
@@ -364,10 +364,10 @@ def test_bearer_owner_facts_are_not_readable_after_restart_with_auth_none(
     with _client(_base_config(tmp_path, auth="none")) as client:
         facts = client.post(
             "/memory/facts/search",
-            json={"subject": "user", "predicate": "owns_guitar"},
+            json={"subject": "user", "predicate": "owns_item"},
         )
         profile = client.post("/memory/profile/get", json={"subject": "user"})
-        ask = client.post("/memory/ask", json={"question": "What guitar do I own?"})
+        ask = client.post("/memory/ask", json={"question": "What camera do I own?"})
 
     assert facts.status_code == 200
     assert facts.json()["results"] == []

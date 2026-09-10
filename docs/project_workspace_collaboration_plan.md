@@ -154,10 +154,10 @@ into team memory and prevents shared project facts from polluting private memory
 
 Examples:
 
-- Jane's private project can contain `Jane owns a Gibson Special`.
+- Jane's private project can contain `Jane owns a compact camera`.
 - Shared project `321` can contain `Velvet Lantern uses PGVector`.
 
-Questions about the user, such as "what guitar do I own?", should usually use
+Questions about the user, such as "what equipment do I own?", should usually use
 the user's default private project unless the client explicitly selects another
 project. Questions about a shared work item should use the active shared
 project.

@@ -292,7 +292,7 @@ Fact review helpers:
 ```bash
 python -m memory.cli fact-search --subject user --json
 python -m memory.cli fact-search --source codex --status superseded --json
-python -m memory.cli profile-get --subject user --predicate owns_guitar --source-quality corrected_by_user --save-intent-source codex --json
+python -m memory.cli profile-get --subject user --predicate owns_item --source-quality corrected_by_user --save-intent-source codex --json
 python -m memory.cli fact-supersede <OLD_FACT_ID> <NEW_FACT_ID> --json
 ```
 
@@ -327,13 +327,15 @@ Core tools:
 - `memory_project_default_get()`
 - `memory_project_get(project_id)`
 
-`memory_profile_get` returns `facts` plus a `summary` object. The summary is
-generated from active normalized facts and includes freshness, source-quality
-counts, filters, save-intent filters, and compact fact provenance. Insert also generates
-conversation, topic, and project summaries from stored message text. Generated
-summaries are stored separately from raw chunks and normalized facts; the
-conversation summary is returned as `metadata.generated_summary` on search and
-retrieve responses.
+`memory_profile_get` returns `facts` plus a `summary` object. Its default
+concise projection keeps canonical direct-user and user-correction facts; use
+an explicit predicate or `source_quality` filter to include assistant statements
+or inferred topics. Detailed reads retain the complete timestamped fact history.
+The summary includes freshness, source-quality counts, filters, save-intent
+filters, and compact fact provenance. Insert also generates conversation, topic,
+and project summaries from stored message text. Generated summaries are stored
+separately from raw chunks and normalized facts; the conversation summary is
+returned as `metadata.generated_summary` on search and retrieve responses.
 
 `memory_insert` accepts one complete conversation object. There is intentionally
 no bulk MCP insert tool. Clients may include a short `metadata.summary`, but
