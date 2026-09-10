@@ -596,6 +596,70 @@ def test_mcp_insert_handles_repeated_fresh_memories_stably(tmp_path: Path) -> No
     )
 
 
+def test_mcp_large_payload_and_burst_keep_exact_marker_relevant(tmp_path: Path) -> None:
+    marker = "AMH-QA-EXACT-MARKER-7Q9V"
+    target = _conversation(
+        memory_id="c5858840-3de5-4194-bf37-16f57dd3a350",
+        text=f"The exact verification marker is {marker}.",
+        tags=["codex-cli-qa", "exact-marker"],
+        thread_id="AMH-QA-EXACT-MARKER",
+    )
+    noise = [
+        _conversation(
+            memory_id=f"c5858840-3de5-4194-bf37-16f57dd3a3{index:02d}",
+            text=(
+                f"Large unrelated payload {index}: "
+                + "recent deployment telemetry and generic memory observations " * 180
+            ),
+            tags=["codex-cli-qa", "large-payload"],
+            thread_id=f"AMH-QA-NOISE-{index}",
+        )
+        for index in range(1, 9)
+    ]
+
+    with _client(tmp_path) as client:
+        headers = _initialize_mcp(client)
+        inserts = [
+            _call_tool(
+                client,
+                headers,
+                request_id=request_id,
+                name="memory_insert",
+                arguments={"conversation_json": payload},
+            )
+            for request_id, payload in enumerate((target, *noise), start=2)
+        ]
+        search = _call_tool(
+            client,
+            headers,
+            request_id=20,
+            name="memory_search",
+            arguments={"query": marker, "top_k": 3},
+        )
+        ask = _call_tool(
+            client,
+            headers,
+            request_id=21,
+            name="memory_ask",
+            arguments={
+                "question": f"What is {marker}?",
+                "top_k": 3,
+                "response_format": "detailed",
+            },
+        )
+
+    assert all(insert["status"] == "ok" for insert in inserts)
+    assert all(insert["embedded_chunks"] >= 1 for insert in inserts)
+    assert search["results"][0]["id"] == target["id"]
+    assert len(search["results"]) <= 3
+    assert marker in ask["answer"]
+    assert ask["answer_basis"] in {"direct_memory", "fact_layer"}
+    assert target["id"] in {
+        citation.get("id") or citation.get("conversation_id")
+        for citation in ask["citations"]
+    }
+
+
 @pytest.mark.parametrize(
     ("correction_text", "expected_new"),
     [
