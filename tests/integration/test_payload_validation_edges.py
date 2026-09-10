@@ -656,7 +656,7 @@ def test_api_and_mcp_reject_unknown_save_intent_values(tmp_path: Path) -> None:
 
 
 def test_review_pending_api_insert_is_hidden_until_approved(tmp_path: Path) -> None:
-    phrase = "pending review api guitar phrase"
+    phrase = "pending review api camera phrase"
     payload = _conversation(text=f"I own a {phrase}.")
 
     with _review_pending_client(tmp_path) as client:
@@ -668,12 +668,12 @@ def test_review_pending_api_insert_is_hidden_until_approved(tmp_path: Path) -> N
         retrieve = client.post("/memory/retrieve", json={"id": memory_id})
         search = client.post("/memory/search", json={"query": phrase})
         ask = client.post("/memory/ask", json={"question": f"What do I own about {phrase}?"})
-        facts = client.post("/memory/facts/search", json={"predicate": "owns_guitar"})
+        facts = client.post("/memory/facts/search", json={"predicate": "owns_item"})
         profile = client.post("/memory/profile/get", json={"subject": "user"})
 
         approve = client.post("/memory/pending/approve", json={"id": memory_id})
         approved_search = client.post("/memory/search", json={"query": phrase})
-        approved_facts = client.post("/memory/facts/search", json={"predicate": "owns_guitar"})
+        approved_facts = client.post("/memory/facts/search", json={"predicate": "owns_item"})
         approved_profile = client.post("/memory/profile/get", json={"subject": "user"})
 
     assert retrieve.status_code == 404
@@ -696,7 +696,7 @@ def test_review_pending_api_insert_is_hidden_until_approved(tmp_path: Path) -> N
 def test_sensitive_content_api_insert_is_quarantined_and_hidden(tmp_path: Path) -> None:
     config = _config(tmp_path)
     data_dir = Path(config["paths"]["data_dir"])
-    phrase = "api quarantine titanium guitar"
+    phrase = "api quarantine titanium camera"
     secret = "sk-proj-apiQuarantineSecretValue123456789"
     payload = _conversation(text=f"I own a {phrase}. API_KEY={secret}")
 
@@ -785,7 +785,7 @@ def test_review_pending_mcp_insert_can_be_rejected(tmp_path: Path) -> None:
 
 
 def test_sensitive_content_mcp_insert_is_quarantined_and_rejectable(tmp_path: Path) -> None:
-    phrase = "mcp quarantine guitar"
+    phrase = "mcp quarantine camera"
     secret = "sk-proj-mcpQuarantineSecretValue123456789"
     payload = _conversation(text=f"I own a {phrase}. token={secret}")
 

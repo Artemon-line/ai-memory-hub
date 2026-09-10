@@ -513,13 +513,13 @@ async def test_mcp_fact_tools_return_profile_facts() -> None:
     payload["metadata"]["save_intent"] = "explicit_user_request"
     payload["metadata"]["save_intent_source"] = "codex"
     payload["messages"] = [
-        {"role": "user", "text": "I own a Gibson Special with P90 pickups, cherry."}
+        {"role": "user", "text": "I own a compact camera with zoom lens, cherry."}
     ]
 
     await handlers["memory_insert"](payload)
     facts = await handlers["memory_fact_search"](
         subject="user",
-        predicate="owns_guitar",
+        predicate="owns_item",
         save_intent="explicit_user_request",
         response_format="detailed",
     )
@@ -527,17 +527,17 @@ async def test_mcp_fact_tools_return_profile_facts() -> None:
         subject="user", save_intent_source="codex", response_format="detailed"
     )
     ask = await handlers["memory_ask"](
-        "What guitar do I own?", 5, response_format="detailed"
+        "What camera do I own?", 5, response_format="detailed"
     )
 
     assert facts["status"] == "ok"
-    assert facts["results"][0]["predicate"] == "owns_guitar"
+    assert facts["results"][0]["predicate"] == "owns_item"
     assert facts["results"][0]["source_quality"] == "direct_user_statement"
     assert facts["results"][0]["save_intent_source"] == "codex"
     assert profile["facts"][0]["object"] == facts["results"][0]["object"]
     assert profile["summary"]["filters"]["save_intent_source"] == "codex"
     assert profile["summary"]["basis"] == "active_facts"
-    assert "owns_guitar" in profile["summary"]["text"]
+    assert "owns_item" in profile["summary"]["text"]
     assert ask["answer_basis"] == "fact_layer"
     assert ask["confidence_reason"] == "Extracted from a direct user statement."
     assert ask["evidence"][0]["type"] == "fact"
@@ -553,21 +553,21 @@ async def test_mcp_fact_and_profile_concise_format_reduces_fact_payloads() -> No
     payload = _conversation()
     payload["metadata"]["save_intent"] = "explicit_user_request"
     payload["messages"] = [
-        {"role": "user", "text": "I own a blue Gibson Special guitar."}
+        {"role": "user", "text": "I own a blue compact camera camera."}
     ]
 
     await handlers["memory_insert"](payload)
     facts = await handlers["memory_fact_search"](
-        subject="user", predicate="owns_guitar"
+        subject="user", predicate="owns_item"
     )
     profile = await handlers["memory_profile_get"](
-        subject="user", predicate="owns_guitar"
+        subject="user", predicate="owns_item"
     )
 
     assert facts["status"] == "ok"
     assert "qualifiers" not in facts["results"][0]
     assert "source_message_indexes" not in facts["results"][0]
-    assert facts["results"][0]["object_normalized"] == "a blue Gibson Special guitar"
+    assert facts["results"][0]["object_normalized"] == "a blue compact camera camera"
     assert facts["results"][0]["superseded"] is False
 
     assert profile["status"] == "ok"
@@ -579,7 +579,7 @@ async def test_mcp_fact_and_profile_concise_format_reduces_fact_payloads() -> No
         "source_quality_counts",
     }
     assert "qualifiers" not in profile["facts"][0]
-    assert profile["facts"][0]["predicate"] == "owns_guitar"
+    assert profile["facts"][0]["predicate"] == "owns_item"
 
 
 @pytest.mark.asyncio
@@ -624,27 +624,27 @@ async def test_mcp_fact_and_profile_concise_deduplicates_and_limits_rows(
         {
             "id": "fact-a",
             "subject": "user",
-            "predicate": "owns_guitar",
-            "object": "a cherry Gibson guitar",
-            "object_normalized": "a cherry Gibson guitar",
+            "predicate": "owns_item",
+            "object": "a cherry compact camera",
+            "object_normalized": "a cherry compact camera",
             "confidence": "high",
             "qualifiers": {"source_role": "user"},
         },
         {
             "id": "fact-b",
             "subject": " User ",
-            "predicate": "OWNS_GUITAR",
-            "object": "A  CHERRY Gibson guitar",
-            "object_normalized": "A  CHERRY Gibson guitar",
+            "predicate": "OWNS_ITEM",
+            "object": "A  CHERRY compact camera",
+            "object_normalized": "A  CHERRY compact camera",
             "confidence": "high",
             "qualifiers": {"source_role": "user"},
         },
         {
             "id": "fact-c",
             "subject": "user",
-            "predicate": "owns_guitar",
-            "object": "a blue Jazzmaster guitar",
-            "object_normalized": "a blue Jazzmaster guitar",
+            "predicate": "owns_item",
+            "object": "a blue mirrorless camera",
+            "object_normalized": "a blue mirrorless camera",
             "confidence": "medium",
             "qualifiers": {"source_role": "user"},
         },
@@ -658,14 +658,14 @@ async def test_mcp_fact_and_profile_concise_deduplicates_and_limits_rows(
         return {
             "status": "ok",
             "subject": "user",
-            "summary": {"text": "User has guitar facts.", "active_fact_count": 3},
+            "summary": {"text": "User has camera facts.", "active_fact_count": 3},
             "facts": facts,
         }
 
     monkeypatch.setattr(agent, "fact_search", fake_fact_search)
     monkeypatch.setattr(agent, "profile_get", fake_profile_get)
 
-    query_facts = await handlers["memory_fact_search"](query="cherry Gibson")
+    query_facts = await handlers["memory_fact_search"](query="cherry camera")
     default_facts = await handlers["memory_fact_search"](subject="user")
     concise_facts = await handlers["memory_fact_search"](subject="user", limit=1)
     detailed_facts = await handlers["memory_fact_search"](
@@ -673,7 +673,7 @@ async def test_mcp_fact_and_profile_concise_deduplicates_and_limits_rows(
     )
     concise_profile = await handlers["memory_profile_get"](subject="user", limit=1)
 
-    assert fact_search_kwargs[0]["query"] == "cherry Gibson"
+    assert fact_search_kwargs[0]["query"] == "cherry camera"
     assert [row["id"] for row in query_facts["results"]] == ["fact-a", "fact-c"]
     assert [row["id"] for row in default_facts["results"]] == ["fact-a", "fact-c"]
     assert default_facts["total_results"] == 3

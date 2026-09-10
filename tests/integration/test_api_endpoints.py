@@ -868,26 +868,26 @@ def test_bearer_auth_stamps_owner_and_isolates_memory() -> None:
     owner_a_payload = _conversation()
     owner_a_payload["metadata"]["owner_id"] = "client-supplied"
     owner_a_payload["messages"] = [
-        {"role": "user", "text": "I own a blue Gibson guitar."}
+        {"role": "user", "text": "I own a blue compact camera."}
     ]
     owner_b_payload = _conversation()
     owner_b_payload["id"] = "11111111-1111-4111-8111-111111111111"
     owner_b_payload["messages"] = [
-        {"role": "user", "text": "I own a red Fender guitar."}
+        {"role": "user", "text": "I own a red Fender camera."}
     ]
 
     insert_a = client.post("/memory/insert", json=owner_a_payload, headers=owner_a_headers)
     insert_b = client.post("/memory/insert", json=owner_b_payload, headers=owner_b_headers)
-    search_a = client.post("/memory/search", json={"query": "Gibson"}, headers=owner_a_headers)
-    search_b = client.post("/memory/search", json={"query": "Gibson"}, headers=owner_b_headers)
+    search_a = client.post("/memory/search", json={"query": "camera"}, headers=owner_a_headers)
+    search_b = client.post("/memory/search", json={"query": "camera"}, headers=owner_b_headers)
     retrieve_cross = client.post(
         "/memory/retrieve", json={"id": owner_a_payload["id"]}, headers=owner_b_headers
     )
     ask_a = client.post(
-        "/memory/ask", json={"question": "What guitar do I own?"}, headers=owner_a_headers
+        "/memory/ask", json={"question": "What camera do I own?"}, headers=owner_a_headers
     )
     ask_b = client.post(
-        "/memory/ask", json={"question": "What guitar do I own?"}, headers=owner_b_headers
+        "/memory/ask", json={"question": "What camera do I own?"}, headers=owner_b_headers
     )
 
     assert insert_a.status_code == 200
@@ -896,7 +896,7 @@ def test_bearer_auth_stamps_owner_and_isolates_memory() -> None:
     assert search_a.json()["results"][0]["id"] == owner_a_payload["id"]
     assert owner_a_payload["id"] not in {row["id"] for row in search_b.json()["results"]}
     assert retrieve_cross.status_code == 404
-    assert "blue Gibson" in ask_a.json()["answer"]
+    assert "blue compact camera" in ask_a.json()["answer"]
     assert "red Fender" in ask_b.json()["answer"]
 
 
@@ -1289,19 +1289,19 @@ def test_memory_fact_endpoints() -> None:
     client = _client()
     payload = _conversation()
     payload["messages"] = [
-        {"role": "user", "text": "I own a Gibson Special with P90 pickups, cherry."}
+        {"role": "user", "text": "I own a compact camera with zoom lens, cherry."}
     ]
     client.post("/memory/insert", json=payload)
 
     facts = client.post(
         "/memory/facts/search",
-        json={"subject": "user", "predicate": "owns_guitar"},
+        json={"subject": "user", "predicate": "owns_item"},
     )
     profile = client.post("/memory/profile/get", json={"subject": "user"})
-    ask = client.post("/memory/ask", json={"question": "What guitar do I own?"})
+    ask = client.post("/memory/ask", json={"question": "What camera do I own?"})
 
     assert facts.status_code == 200
-    assert facts.json()["results"][0]["predicate"] == "owns_guitar"
+    assert facts.json()["results"][0]["predicate"] == "owns_item"
     assert facts.json()["results"][0]["source_quality"] == "direct_user_statement"
     assert facts.json()["results"][0]["last_confirmed_at"] == facts.json()["results"][0]["updated_at"]
     assert profile.status_code == 200

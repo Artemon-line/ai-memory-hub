@@ -272,7 +272,7 @@ def test_ingest_messages_quarantines_secret_and_excludes_default_reads() -> None
     metadata, vectors = _configure_stubs()
     conversation = _valid_conversation()
     secret = "sk-proj-quarantineSecretValue123456789"
-    phrase = "cobalt quarantine guitar"
+    phrase = "cobalt quarantine camera"
     conversation["messages"] = [
         {"role": "user", "text": f"I own a {phrase}. API_KEY={secret}"}
     ]
@@ -373,7 +373,7 @@ def test_approve_quarantined_memory_indexes_after_review() -> None:
     metadata, vectors = _configure_stubs()
     conversation = _valid_conversation()
     secret = "sk-proj-approveQuarantineValue123456789"
-    phrase = "approved quarantine guitar"
+    phrase = "approved quarantine camera"
     conversation["messages"] = [
         {"role": "user", "text": f"I own an {phrase}. API_KEY={secret}"}
     ]
@@ -609,13 +609,13 @@ def test_trusted_append_extracts_facts_only_from_new_messages() -> None:
     appended = _valid_conversation()
     appended["messages"] = [
         {"role": "user", "text": "hello"},
-        {"role": "user", "text": "I own a Gibson Special with P90 pickups, cherry."},
+        {"role": "user", "text": "I own a compact camera with zoom lens, cherry."},
     ]
     mvp_ingestion.ingest_messages(appended)
 
     facts = metadata._facts
     assert len(facts) == 1
-    assert facts[0]["predicate"] == "owns_guitar"
+    assert facts[0]["predicate"] == "owns_item"
     assert facts[0]["source_message_indexes"] == [1]
 
 
@@ -1443,23 +1443,23 @@ def test_ask_no_hit_returns_empty_structured_evidence() -> None:
     assert result["structured_evidence"] == {"facts": [], "results": []}
 
 
-def test_ask_answers_direct_guitar_question_from_fact_layer() -> None:
+def test_ask_answers_direct_camera_question_from_fact_layer() -> None:
     _configure_stubs()
     conversation = _valid_conversation()
     conversation["metadata"]["save_intent"] = "explicit_user_request"
     conversation["metadata"]["save_intent_source"] = "codex"
-    conversation["metadata"]["save_intent_evidence"] = "User asked to remember this guitar."
+    conversation["metadata"]["save_intent_evidence"] = "User asked to remember this camera."
     conversation["messages"] = [
-        {"role": "user", "text": "I own a Gibson Special with P90 pickups, cherry."}
+        {"role": "user", "text": "I own a compact camera with zoom lens, cherry."}
     ]
     mvp_ingestion.ingest_messages(conversation)
 
-    result = mvp_ingestion.ask("What guitar do I own?", top_k=5)
+    result = mvp_ingestion.ask("What camera do I own?", top_k=5)
 
     assert result["answer_basis"] == "fact_layer"
     assert result["confidence"] == "high"
-    assert "Gibson Special" in result["answer"]
-    assert result["facts"][0]["predicate"] == "owns_guitar"
+    assert "compact camera" in result["answer"]
+    assert result["facts"][0]["predicate"] == "owns_item"
     assert result["confidence_reason"] == "Extracted from a direct user statement."
     assert result["facts"][0]["source_quality"] == "direct_user_statement"
     assert result["facts"][0]["object_raw"] == result["facts"][0]["object"]
@@ -1467,7 +1467,7 @@ def test_ask_answers_direct_guitar_question_from_fact_layer() -> None:
     assert result["facts"][0]["last_confirmed_at"] == result["facts"][0]["updated_at"]
     assert result["facts"][0]["save_intent"] == "explicit_user_request"
     assert result["facts"][0]["save_intent_source"] == "codex"
-    assert result["facts"][0]["qualifiers"]["save_intent_evidence"] == "User asked to remember this guitar."
+    assert result["facts"][0]["qualifiers"]["save_intent_evidence"] == "User asked to remember this camera."
     assert result["evidence"][0]["type"] == "fact"
     assert result["evidence"][0]["used_in_answer"] is True
     assert result["evidence"][0]["source_quality"] == "direct_user_statement"
@@ -1633,20 +1633,20 @@ def test_fact_correction_supersedes_old_fact() -> None:
     first = _valid_conversation()
     first["id"] = "11111111-1111-4111-8111-111111111111"
     first["messages"] = [
-        {"role": "user", "text": "I own a Gibson Special with P90 pickups, cherry."}
+        {"role": "user", "text": "I own a compact camera with zoom lens, cherry."}
     ]
     second = _valid_conversation()
     second["id"] = "22222222-2222-4222-8222-222222222222"
     second["timestamp"] = "2026-01-02T00:00:00Z"
     second["messages"] = [
-        {"role": "user", "text": "Actually, my Gibson Special is TV yellow, not cherry."}
+        {"role": "user", "text": "Actually, my compact camera is TV yellow, not cherry."}
     ]
     mvp_ingestion.ingest_messages(first)
     mvp_ingestion.ingest_messages(second)
 
-    result = mvp_ingestion.ask("What guitar do I own?", top_k=5)
+    result = mvp_ingestion.ask("What camera do I own?", top_k=5)
     audit = mvp_ingestion.fact_search(
-        subject="user", predicate="owns_guitar", include_superseded=True
+        subject="user", predicate="owns_item", include_superseded=True
     )
 
     assert result["answer_basis"] == "fact_layer"
@@ -1737,7 +1737,7 @@ def test_fact_and_profile_filters_cover_status_quality_and_freshness() -> None:
     first = _valid_conversation()
     first["id"] = "11111111-1111-4111-8111-111111111111"
     first["messages"] = [
-        {"role": "user", "text": "I own a Gibson Special with P90 pickups, cherry."}
+        {"role": "user", "text": "I own a compact camera with zoom lens, cherry."}
     ]
     second = _valid_conversation()
     second["id"] = "22222222-2222-4222-8222-222222222222"
@@ -1745,7 +1745,7 @@ def test_fact_and_profile_filters_cover_status_quality_and_freshness() -> None:
     second["metadata"]["save_intent"] = "user_confirmed"
     second["metadata"]["save_intent_source"] = "codex"
     second["messages"] = [
-        {"role": "user", "text": "Actually, my Gibson Special is TV yellow, not cherry."}
+        {"role": "user", "text": "Actually, my compact camera is TV yellow, not cherry."}
     ]
     third = _valid_conversation()
     third["id"] = "33333333-3333-4333-8333-333333333333"
@@ -1757,11 +1757,11 @@ def test_fact_and_profile_filters_cover_status_quality_and_freshness() -> None:
     mvp_ingestion.ingest_messages(third)
 
     superseded = mvp_ingestion.fact_search(
-        subject="user", predicate="owns_guitar", status="superseded"
+        subject="user", predicate="owns_item", status="superseded"
     )
     profile = mvp_ingestion.profile_get(
         "user",
-        predicate="owns_guitar",
+        predicate="owns_item",
         source_quality="corrected_by_user",
         save_intent_source="codex",
         freshness_from="2026-01-02T00:00:00Z",
@@ -1774,7 +1774,7 @@ def test_fact_and_profile_filters_cover_status_quality_and_freshness() -> None:
 
     assert len(superseded["results"]) == 1
     assert superseded["results"][0]["superseded_by"]
-    assert [fact["object"] for fact in profile["facts"]] == ["Gibson Special is TV yellow"]
+    assert [fact["object"] for fact in profile["facts"]] == ["compact camera is TV yellow"]
     assert profile["summary"]["filters"]["save_intent_source"] == "codex"
     assert assistant_facts["results"][0]["predicate"] == "creator"
 
@@ -1785,7 +1785,7 @@ def test_fact_save_intent_filters_and_auto_save_confidence() -> None:
     explicit["id"] = "11111111-1111-4111-8111-111111111111"
     explicit["metadata"]["save_intent"] = "explicit_user_request"
     explicit["metadata"]["save_intent_source"] = "codex"
-    explicit["messages"] = [{"role": "user", "text": "I own a Gibson Special, cherry."}]
+    explicit["messages"] = [{"role": "user", "text": "I own a compact camera, cherry."}]
     auto_saved = _valid_conversation()
     auto_saved["id"] = "22222222-2222-4222-8222-222222222222"
     auto_saved["metadata"]["save_intent"] = "client_auto_save"
@@ -1797,7 +1797,7 @@ def test_fact_save_intent_filters_and_auto_save_confidence() -> None:
     explicit_facts = mvp_ingestion.fact_search(save_intent="explicit_user_request")
     opencode_profile = mvp_ingestion.profile_get("user", save_intent_source="opencode")
 
-    assert [fact["predicate"] for fact in explicit_facts["results"]] == ["owns_guitar"]
+    assert [fact["predicate"] for fact in explicit_facts["results"]] == ["owns_item"]
     assert opencode_profile["facts"][0]["predicate"] == "favorite_holiday"
     assert opencode_profile["facts"][0]["confidence"] == "medium"
     assert opencode_profile["facts"][0]["confidence_reason"] == (
@@ -1881,21 +1881,21 @@ def test_conflicting_active_facts_return_conflict_basis() -> None:
     _configure_stubs()
     first = _valid_conversation()
     first["id"] = "11111111-1111-4111-8111-111111111111"
-    first["messages"] = [{"role": "user", "text": "I own a red Gibson guitar."}]
+    first["messages"] = [{"role": "user", "text": "I own a red compact camera."}]
     second = _valid_conversation()
     second["id"] = "22222222-2222-4222-8222-222222222222"
-    second["messages"] = [{"role": "user", "text": "I own a black Fender guitar."}]
+    second["messages"] = [{"role": "user", "text": "I own a black Fender camera."}]
     mvp_ingestion.ingest_messages(first)
     mvp_ingestion.ingest_messages(second)
 
-    result = mvp_ingestion.ask("What guitar do I own?", top_k=5)
+    result = mvp_ingestion.ask("What camera do I own?", top_k=5)
 
     assert result["answer_basis"] == "conflict"
     assert result["confidence"] == "low"
     assert result["confidence_reason"] == (
         "Multiple latest facts match the question at the same timestamp but disagree."
     )
-    assert "red Gibson" in result["answer"]
+    assert "red compact camera" in result["answer"]
     assert "black Fender" in result["answer"]
 
 
@@ -1983,15 +1983,15 @@ def test_fact_answer_can_include_retrieval_context_as_mixed() -> None:
     _configure_stubs()
     conversation = _valid_conversation()
     conversation["messages"] = [
-        {"role": "user", "text": "I own a Gibson Special with P90 pickups, cherry."},
-        {"role": "assistant", "text": "We discussed using that guitar for studio tracking."},
+        {"role": "user", "text": "I own a compact camera with zoom lens, cherry."},
+        {"role": "assistant", "text": "We discussed using that camera for studio tracking."},
     ]
     mvp_ingestion.ingest_messages(conversation)
 
-    result = mvp_ingestion.ask("What guitar do I own and what context/source discussed it?", top_k=2)
+    result = mvp_ingestion.ask("What camera do I own and what context/source discussed it?", top_k=2)
 
     assert result["answer_basis"] == "mixed"
-    assert "Gibson Special" in result["answer"]
+    assert "compact camera" in result["answer"]
     assert "Context from memory" in result["answer"]
     assert result["results"]
 
@@ -2018,7 +2018,11 @@ def test_profile_and_recurring_topic_facts_are_extracted() -> None:
     assert "profile_name: Tyran" in profile["summary"]["text"]
     assert profile["summary"]["active_fact_count"] <= len(profile["facts"])
     assert profile["summary"]["source_quality_counts"]["direct_user_statement"] == 2
-    assert profile["summary"]["source_quality_counts"]["inferred_from_conversation"] == 4
+    assert "inferred_from_conversation" not in profile["summary"]["source_quality_counts"]
+    assert all(
+        fact["source_quality"] in {"direct_user_statement", "corrected_by_user"}
+        for fact in profile["profile_facts"]
+    )
     stored = getattr(mvp_ingestion._runtime().metadata_store, "_generated_summaries")
     assert stored[profile["summary"]["id"]]["type"] == "profile"
     assert stored[profile["summary"]["id"]]["provenance_status"] == "fact_ids"
@@ -2048,7 +2052,24 @@ def test_profile_summary_text_deduplicates_repeated_topic_lines() -> None:
     assert "more active fact" not in summary_text
 
 
-def test_profile_summary_keeps_only_latest_single_value_predicate() -> None:
+def test_default_profile_projection_omits_assistant_and_inferred_facts() -> None:
+    _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["messages"] = [
+        {"role": "user", "text": "My name is Taylor."},
+        {"role": "assistant", "text": "Taylor prefers quiet notification settings."},
+    ]
+    conversation["metadata"]["topics"] = ["memory", "memory", "retrieval"]
+
+    mvp_ingestion.ingest_messages(conversation)
+
+    profile = mvp_ingestion.profile_get("user")
+
+    assert [fact["predicate"] for fact in profile["profile_facts"]] == ["profile_name"]
+    assert "recurring_topic" not in profile["summary"]["text"]
+
+
+def test_profile_summary_preserves_distinct_unsuperseded_values() -> None:
     _configure_stubs()
     first = _valid_conversation()
     first["id"] = "11111111-1111-4111-8111-111111111111"
@@ -2064,8 +2085,10 @@ def test_profile_summary_keeps_only_latest_single_value_predicate() -> None:
     profile = mvp_ingestion.profile_get("user", predicate="favorite_food")
 
     assert len(profile["facts"]) == 2
-    assert profile["summary"]["active_fact_count"] == 1
-    assert profile["summary"]["text"] == "favorite_food: new ramen"
+    assert profile["summary"]["active_fact_count"] == 2
+    assert profile["summary"]["text"] == (
+        "favorite_food: new ramen; favorite_food: old curry"
+    )
 
 
 def test_profile_summary_handles_empty_filtered_view() -> None:

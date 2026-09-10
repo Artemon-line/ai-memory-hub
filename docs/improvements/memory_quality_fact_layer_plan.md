@@ -46,7 +46,7 @@ Remaining work:
 
 3. Weak direct-fact recall shape
 
-   Questions like "What guitar do I own?" or "What was the command name?" should behave like profile or project fact lookup, not only semantic chunk search.
+   Questions like "What equipment do I own?" or "What was the command name?" should behave like profile or project fact lookup, not only semantic chunk search.
 
 4. No correction model
 
@@ -119,12 +119,10 @@ Acceptance behavior:
 {
   "id": "...",
   "subject": "user",
-  "predicate": "owns_guitar",
-  "object": "Gibson Special with P90 pickups, cherry",
+  "predicate": "owns_item",
+  "object": "compact camera with a zoom lens",
   "qualifiers": {
-    "instrument": "guitar",
-    "color": "cherry",
-    "pickup": "P90"
+    "category": "equipment"
   },
   "confidence": "high",
   "source_conversation_id": "...",
@@ -170,8 +168,8 @@ Example profile response:
   "subject": "user",
   "facts": [
     {
-      "predicate": "owns_guitar",
-      "object": "Gibson Special with P90 pickups, cherry",
+      "predicate": "owns_item",
+      "object": "compact camera with a zoom lens",
       "confidence": "high",
       "source_conversation_id": "..."
     }
@@ -185,7 +183,7 @@ Corrections should preserve history instead of deleting old memories by default.
 
 Example flow:
 
-1. [x] User says: "Actually, my Gibson is TV yellow, not cherry."
+1. [x] User says: "Actually, my compact camera is silver, not black."
 2. [x] The server creates a new fact.
 3. [x] The old fact is marked with `superseded_by`.
 4. [x] Future answers prefer the newer fact.
@@ -201,7 +199,7 @@ Required behavior:
 
 Use facts first for direct profile questions:
 
-- [x] "What guitar do I own?"
+- [x] "What equipment do I own?"
 - [x] "What is my favorite command name?"
 - [x] "Who created Velvet Lantern?"
 
