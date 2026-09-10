@@ -406,16 +406,16 @@ def _dedupe_concise_facts(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
         subject = str(fact.get(FactField.SUBJECT.value, ""))
         predicate = str(fact.get(FactField.PREDICATE.value, ""))
         key = (
-            subject,
-            predicate,
-            str(
+            _canonical_fact_component(subject),
+            _canonical_fact_component(predicate),
+            _canonical_fact_component(
                 fact.get(FactField.OBJECT_NORMALIZED.value)
                 or fact.get(FactField.OBJECT.value, "")
             ),
         )
         if key in seen:
             continue
-        predicate_key = (subject.casefold(), predicate.casefold())
+        predicate_key = key[:2]
         if _single_value_predicate(predicate) and predicate_key in seen_single_value:
             continue
         seen.add(key)
@@ -426,7 +426,16 @@ def _dedupe_concise_facts(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _single_value_predicate(predicate: str) -> bool:
-    return predicate not in {"likes", "owns_guitar", "owns_item", "recurring_topic"}
+    return _canonical_fact_component(predicate) not in {
+        "likes",
+        "owns_guitar",
+        "owns_item",
+        "recurring_topic",
+    }
+
+
+def _canonical_fact_component(value: Any) -> str:
+    return " ".join(str(value).strip().split()).casefold()
 
 
 def _list_count(value: Any) -> int:

@@ -6162,9 +6162,9 @@ def _canonical_profile_facts(facts: list[dict[str, Any]]) -> list[dict[str, Any]
     canonical: list[dict[str, Any]] = []
     ordered = sorted(facts, key=_fact_recency_key, reverse=True)
     for fact in ordered:
-        subject = str(fact.get(FactField.SUBJECT.value, "")).casefold()
-        predicate = str(fact.get(FactField.PREDICATE.value, "")).casefold()
-        value = _profile_summary_fact_value(fact).casefold()
+        subject = _canonical_fact_component(fact.get(FactField.SUBJECT.value, ""))
+        predicate = _canonical_fact_component(fact.get(FactField.PREDICATE.value, ""))
+        value = _canonical_fact_component(_profile_summary_fact_value(fact))
         value_key = (subject, predicate, value)
         if value_key in seen_values:
             continue
@@ -6179,7 +6179,16 @@ def _canonical_profile_facts(facts: list[dict[str, Any]]) -> list[dict[str, Any]
 
 
 def _profile_single_value_predicate(predicate: str) -> bool:
-    return predicate not in {"likes", "owns_guitar", "owns_item", "recurring_topic"}
+    return _canonical_fact_component(predicate) not in {
+        "likes",
+        "owns_guitar",
+        "owns_item",
+        "recurring_topic",
+    }
+
+
+def _canonical_fact_component(value: Any) -> str:
+    return " ".join(str(value).strip().split()).casefold()
 
 
 def _fact_recency_key(fact: dict[str, Any]) -> str:
@@ -6205,7 +6214,10 @@ def _unique_profile_summary_lines(facts: list[dict[str, Any]]) -> list[_ProfileS
         value = _profile_summary_fact_value(fact)
         if not value:
             continue
-        key = (predicate.casefold(), value.casefold())
+        key = (
+            _canonical_fact_component(predicate),
+            _canonical_fact_component(value),
+        )
         if key in seen:
             continue
         seen.add(key)
