@@ -345,13 +345,13 @@ ask, container CI, provider live-test CI, and GitHub Pages docs publishing.
 Planned work includes broader importers, richer summaries, admin-only
 archive/retention workflows, provider-specific index compatibility checks, and
 release publishing. General destructive memory update/delete workflows are not
-part of `v0.1.0-beta`; corrections should be represented as new memory, fact
+part of `v1.0.0-beta`; corrections should be represented as new memory, fact
 supersession, or explicit governance events over immutable history.
 
 Known first-release limits: ai-memory-hub does not ship as a hosted memory
 service, production-quality retrieval requires a bring-your-own embedding model,
 browser extensions are planned as separate adapters, UI dashboards/SDKs are
-future work, and archive/restore does not ship in `v0.1.0-beta`.
+future work, and archive/restore does not ship in `v1.0.0-beta`.
 
 ## Contributing
 

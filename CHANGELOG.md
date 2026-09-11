@@ -6,6 +6,8 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+## 1.0.0-beta
+
 - Added first-release governance, support, and release automation scaffolding.
 - Fixed detailed `memory_retrieve` index manifests so successfully embedded
   chunks report `indexed` instead of stale `pending_index`.
@@ -13,6 +15,8 @@ should describe the supported public behavior for each tagged release.
   before direct chunk fallback, including corrected temporal facts.
 - Fixed `memory_profile_get` summary text so duplicate active fact rows are
   collapsed into canonical human-readable lines without mutating the timeline.
+- Patched the Bruno test toolchain against `js-yaml` CPU-exhaustion and
+  `csv-parse` prototype-replacement vulnerabilities.
 
 ## 0.1.0
 

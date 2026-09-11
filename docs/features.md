@@ -19,7 +19,7 @@ inventory for GitHub Pages readers.
 - Schema-validated conversation ingestion from HTTP, MCP, and CLI entrypoints.
 - Deterministic normalization, message chunking, deduplication, and content hash
   handling.
-- Append-only accepted memory history for `v0.1.0-beta`; destructive memory
+- Append-only accepted memory history for `v1.0.0-beta`; destructive memory
   update/delete endpoints and MCP tools are not part of the beta surface.
 - Semantic search over chunked memories with stable API and MCP response shapes.
 - Conversation retrieval by memory ID.

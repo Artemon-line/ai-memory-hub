@@ -14,7 +14,7 @@ Use this checklist for release PRs and release candidate drills.
 ## Required Local Checks
 
 ```bash
-uv run python tools/validate_release_version.py v0.1.0
+uv run python tools/validate_release_version.py v1.0.0-beta
 ```
 
 Ruff, Pyright, Bruno file validation, strict docs build, and release tag policy
@@ -35,7 +35,7 @@ debugging failures or preparing an offline release candidate.
 
 - [ ] Open the release-readiness PR.
 - [ ] Confirm all required checks pass.
-- [ ] Create a prerelease tag such as `v0.1.0-rc.1`.
+- [ ] Create a prerelease tag such as `v1.0.0-beta`.
 - [ ] Publish a GitHub prerelease.
 - [ ] Confirm Docker publishing creates version tags and does not update
       `latest`.
