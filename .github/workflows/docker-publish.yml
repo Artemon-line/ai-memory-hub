@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag to publish, such as v0.1.0 or v0.1.0-rc.1.
+        description: Release tag to publish, such as v1.0.0-beta or v1.0.0.
         required: true
         type: string
       prerelease:
@@ -102,12 +102,13 @@ jobs:
         run: |
           namespace="${DOCKERHUB_NAMESPACE:-$DOCKERHUB_USERNAME}"
           image="docker.io/${namespace}/ai-memory-hub"
+          docker_version="${RELEASE_TAG#v}"
 
           {
             echo "image=$image"
             echo "tags<<TAGS"
             echo "${image}:${RELEASE_TAG}"
-            echo "${image}:${RELEASE_VERSION}"
+            echo "${image}:${docker_version}"
             if [ "$IS_PRERELEASE" = "false" ] && [ "$EVENT_PRERELEASE" = "false" ]; then
               echo "${image}:latest"
             fi

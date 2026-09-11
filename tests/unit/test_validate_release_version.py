@@ -22,6 +22,13 @@ def test_validate_release_tag_accepts_release_candidate() -> None:
     assert release.is_prerelease is True
 
 
+def test_validate_release_tag_accepts_beta() -> None:
+    release = validate_release_tag("v1.0.0-beta", "1.0.0")
+
+    assert release.version == "1.0.0"
+    assert release.is_prerelease is True
+
+
 def test_validate_release_tag_rejects_mismatched_project_version() -> None:
     try:
         validate_release_tag("v0.2.0", "0.1.0")
@@ -33,7 +40,7 @@ def test_validate_release_tag_rejects_mismatched_project_version() -> None:
 
 def test_validate_release_tag_rejects_unsupported_prerelease() -> None:
     try:
-        validate_release_tag("v0.1.0-beta.1", "0.1.0")
+        validate_release_tag("v0.1.0-alpha.1", "0.1.0")
     except ReleaseVersionError as exc:
         assert "vMAJOR.MINOR.PATCH" in str(exc)
     else:

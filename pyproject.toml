@@ -1,6 +1,6 @@
 [project]
 name = "ai-memory-hub"
-version = "0.1.0"
+version = "1.0.0"
 description = "Local-first deterministic memory ingestion hub"
 readme = "README.md"
 requires-python = ">=3.14"

@@ -1,6 +1,6 @@
 FROM ghcr.io/astral-sh/uv:0.11.32-python3.14-trixie-slim@sha256:c2971e36c3f826c5d0c59f009ecc5c2c5e90fe2ad2087d258b711cb7a453697f
 
-ARG VERSION=0.1.0
+ARG VERSION=1.0.0
 ARG REVISION=unknown
 ARG SOURCE=https://github.com/Artemon-line/ai-memory-hub
 

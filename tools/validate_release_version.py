@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 RELEASE_TAG_PATTERN = re.compile(
-    r"^v(?P<version>\d+\.\d+\.\d+)(?P<prerelease>-rc\.(?P<rc>\d+))?$"
+    r"^v(?P<version>\d+\.\d+\.\d+)(?P<prerelease>-(?:beta|rc\.(?P<rc>\d+)))?$"
 )
 
 
@@ -40,7 +40,8 @@ def validate_release_tag(tag: str, project_version: str) -> ReleaseVersion:
     match = RELEASE_TAG_PATTERN.fullmatch(tag)
     if match is None:
         raise ReleaseVersionError(
-            "release tag must use vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-rc.N"
+            "release tag must use vMAJOR.MINOR.PATCH, vMAJOR.MINOR.PATCH-beta, "
+            "or vMAJOR.MINOR.PATCH-rc.N"
         )
     version = match.group("version")
     if version != project_version:
@@ -63,7 +64,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Validate that a release tag matches pyproject.toml."
     )
-    parser.add_argument("tag", help="Release tag, such as v0.1.0 or v0.1.0-rc.1.")
+    parser.add_argument(
+        "tag",
+        help="Release tag, such as v1.0.0, v1.0.0-beta, or v1.0.0-rc.1.",
+    )
     parser.add_argument(
         "--pyproject",
         default="pyproject.toml",
