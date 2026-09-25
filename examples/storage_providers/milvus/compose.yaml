@@ -16,14 +16,13 @@ services:
       - milvus_etcd:/etcd
 
   minio:
-    image: quay.io/minio/minio:RELEASE.2024-05-28T17-19-04Z
+    image: rustfs/rustfs:1.0.1
     restart: unless-stopped
     environment:
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin
-    command: minio server /minio_data
+      RUSTFS_ACCESS_KEY: minioadmin
+      RUSTFS_SECRET_KEY: minioadmin
     volumes:
-      - milvus_minio:/minio_data
+      - milvus_minio:/data
 
   milvus:
     image: milvusdb/milvus:v2.5.4
