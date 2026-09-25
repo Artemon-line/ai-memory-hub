@@ -19,16 +19,20 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       bsdutils=1:2.41.5-0+deb13u1 \
+      gzip=1.13-1+deb13u1 \
       libblkid1=2.41.5-0+deb13u1 \
       liblastlog2-2=2.41.5-0+deb13u1 \
       libmount1=2.41.5-0+deb13u1 \
+      libpcre2-8-0=10.46-1~deb13u2 \
       libsmartcols1=2.41.5-0+deb13u1 \
+      libsqlite3-0=3.46.1-7+deb13u2 \
       libssl3t64=3.5.7-1~deb13u2 \
       libuuid1=2.41.5-0+deb13u1 \
       login=1:4.16.0-2+really2.41.5-0+deb13u1 \
       mount=2.41.5-0+deb13u1 \
       openssl=3.5.7-1~deb13u2 \
       openssl-provider-legacy=3.5.7-1~deb13u2 \
+      perl-base=5.40.1-6+deb13u1 \
       util-linux=2.41.5-0+deb13u1 && \
     rm -rf /var/lib/apt/lists/*
 
