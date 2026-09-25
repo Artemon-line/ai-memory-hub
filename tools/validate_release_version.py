@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 RELEASE_TAG_PATTERN = re.compile(
-    r"^v(?P<version>\d+\.\d+\.\d+)(?P<prerelease>-(?:beta|rc\.(?P<rc>\d+)))?$"
+    r"^v(?P<version>\d+\.\d+\.\d+)(?P<prerelease>-(?:beta(?:\.(?P<beta>\d+))?|rc\.(?P<rc>\d+)))?$"
 )
 
 
@@ -41,7 +41,7 @@ def validate_release_tag(tag: str, project_version: str) -> ReleaseVersion:
     if match is None:
         raise ReleaseVersionError(
             "release tag must use vMAJOR.MINOR.PATCH, vMAJOR.MINOR.PATCH-beta, "
-            "or vMAJOR.MINOR.PATCH-rc.N"
+            "vMAJOR.MINOR.PATCH-beta.N, or vMAJOR.MINOR.PATCH-rc.N"
         )
     version = match.group("version")
     if version != project_version:
@@ -49,9 +49,12 @@ def validate_release_tag(tag: str, project_version: str) -> ReleaseVersion:
             f"release tag {tag!r} targets version {version!r}, "
             f"but pyproject.toml has {project_version!r}"
         )
-    rc = match.group("rc")
-    if rc is not None and int(rc) < 1:
-        raise ReleaseVersionError("release candidate number must be greater than zero")
+    for label, number in (
+        ("beta", match.group("beta")),
+        ("release candidate", match.group("rc")),
+    ):
+        if number is not None and int(number) < 1:
+            raise ReleaseVersionError(f"{label} number must be greater than zero")
     return ReleaseVersion(
         tag=tag,
         project_version=project_version,
@@ -66,7 +69,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "tag",
-        help="Release tag, such as v1.0.0, v1.0.0-beta, or v1.0.0-rc.1.",
+        help=(
+            "Release tag, such as v1.0.0, v1.0.0-beta, v1.0.0-beta.1, "
+            "or v1.0.0-rc.1."
+        ),
     )
     parser.add_argument(
         "--pyproject",
