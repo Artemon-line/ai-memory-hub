@@ -16,7 +16,7 @@ services:
       - milvus_etcd:/etcd
 
   minio:
-    image: rustfs/rustfs:1.0.1
+    image: rustfs/rustfs:1.0.0
     restart: unless-stopped
     environment:
       RUSTFS_ACCESS_KEY: minioadmin
