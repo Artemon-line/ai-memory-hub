@@ -418,8 +418,11 @@ def test_storage_provider_live_jobs_wait_for_services() -> None:
     assert mongodb_wait < mongodb_test
     assert "MongoClient('mongodb://127.0.0.1:27017'" in workflow
     assert ".admin.command('ping')" in workflow
-    assert "image: quay.io/minio/minio:RELEASE.2024-05-28T17-19-04Z" in milvus_compose
+    assert "image: rustfs/rustfs:1.0.1" in milvus_compose
     assert "image: minio/minio:" not in milvus_compose
+    assert "image: quay.io/minio/minio:" not in milvus_compose
+    assert "RUSTFS_ACCESS_KEY: minioadmin" in milvus_compose
+    assert "RUSTFS_SECRET_KEY: minioadmin" in milvus_compose
 
 
 def test_bruno_oauth_discovery_check_fails_with_diagnostics() -> None:
