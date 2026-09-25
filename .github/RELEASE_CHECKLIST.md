@@ -35,7 +35,7 @@ debugging failures or preparing an offline release candidate.
 
 - [ ] Open the release-readiness PR.
 - [ ] Confirm all required checks pass.
-- [ ] Create a prerelease tag such as `v1.0.0-beta`.
+- [ ] Create a prerelease tag such as `v1.0.0-beta` or `v1.0.0-beta.1`.
 - [ ] Publish a GitHub prerelease.
 - [ ] Confirm Docker publishing creates version tags and does not update
       `latest`.

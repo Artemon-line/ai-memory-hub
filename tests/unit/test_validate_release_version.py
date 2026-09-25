@@ -29,6 +29,22 @@ def test_validate_release_tag_accepts_beta() -> None:
     assert release.is_prerelease is True
 
 
+def test_validate_release_tag_accepts_numbered_beta() -> None:
+    release = validate_release_tag("v1.0.0-beta.1", "1.0.0")
+
+    assert release.version == "1.0.0"
+    assert release.is_prerelease is True
+
+
+def test_validate_release_tag_rejects_zero_numbered_beta() -> None:
+    try:
+        validate_release_tag("v1.0.0-beta.0", "1.0.0")
+    except ReleaseVersionError as exc:
+        assert "beta number must be greater than zero" in str(exc)
+    else:
+        raise AssertionError("expected ReleaseVersionError")
+
+
 def test_validate_release_tag_rejects_mismatched_project_version() -> None:
     try:
         validate_release_tag("v0.2.0", "0.1.0")
