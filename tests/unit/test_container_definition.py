@@ -409,12 +409,17 @@ def test_dependency_review_workflow_blocks_disallowed_dependency_changes() -> No
 
 def test_storage_provider_live_jobs_wait_for_services() -> None:
     workflow = Path(".github/workflows/storage-providers.yml").read_text(encoding="utf-8")
+    milvus_compose = Path("examples/storage_providers/milvus/compose.yaml").read_text(
+        encoding="utf-8"
+    )
 
     mongodb_wait = workflow.index("Wait for MongoDB")
     mongodb_test = workflow.index("Run MongoDB live test")
     assert mongodb_wait < mongodb_test
     assert "MongoClient('mongodb://127.0.0.1:27017'" in workflow
     assert ".admin.command('ping')" in workflow
+    assert "image: quay.io/minio/minio:RELEASE.2025-09-06T17-38-46Z" in milvus_compose
+    assert "image: minio/minio:" not in milvus_compose
 
 
 def test_bruno_oauth_discovery_check_fails_with_diagnostics() -> None:

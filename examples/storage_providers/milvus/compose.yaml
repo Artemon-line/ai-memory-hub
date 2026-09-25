@@ -16,7 +16,7 @@ services:
       - milvus_etcd:/etcd
 
   minio:
-    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+    image: quay.io/minio/minio:RELEASE.2025-09-06T17-38-46Z
     restart: unless-stopped
     environment:
       MINIO_ACCESS_KEY: minioadmin
