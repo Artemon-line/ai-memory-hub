@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Any, Callable, Iterator, Mapping, Protocol, Sequence, TypeVar
-from uuid import uuid4
+from uuid import NAMESPACE_URL, uuid4, uuid5
 
 from memory.advanced_memory import (
     MemoryScoringSignals,
@@ -66,6 +66,14 @@ from memory.ingestion.fact_timeline import (
     FactTimelineProjector,
     MemoryField,
     temporal_fact_source_metadata,
+)
+from memory.ingestion.handoff_models import (
+    HandoffChangedFile,
+    HandoffCitation,
+    HandoffClaim,
+    HandoffCommand,
+    HandoffPacket,
+    HandoffStatus,
 )
 from memory.ingestion.summary_models import (
     GeneratedSummary,
@@ -367,6 +375,7 @@ class _AskResponseKey(StrEnum):
     CHUNKS_DROPPED = "chunks_dropped"
     CONTEXT_TRUNCATED = "context_truncated"
     TOKENIZER_USED = "tokenizer_used"
+    HANDOFF = "handoff"
 
 
 class _AskResponseStatus(StrEnum):
@@ -3234,7 +3243,7 @@ def _validate_result_mode(result_mode: str) -> None:
 
 
 def _apply_result_mode(rows: list[dict[str, Any]], result_mode: str) -> list[dict[str, Any]]:
-    if result_mode == SearchResultMode.CHUNKS:
+    if result_mode in {SearchResultMode.CHUNKS, SearchResultMode.HANDOFF}:
         return rows
     if result_mode == SearchResultMode.THREADS:
         return _thread_result_rows(rows)
@@ -3736,7 +3745,7 @@ def ask(
         owner_id=owner_id, project_id=project_id, required_role=PROJECT_ROLE_READER
     )
     status_filter = _validate_memory_status_filter(memory_status)
-    fact_answer = _answer_from_facts(
+    fact_answer = None if result_mode == SearchResultMode.HANDOFF else _answer_from_facts(
         question,
         top_k=top_k,
         result_mode=result_mode,
@@ -3759,16 +3768,49 @@ def ask(
         )
         return fact_answer
 
+    retrieval_result_mode = (
+        SearchResultMode.CHUNKS.value
+        if result_mode == SearchResultMode.HANDOFF
+        else result_mode
+    )
     search_result = _search_for_ask(
         question=question,
         top_k=top_k,
-        result_mode=result_mode,
+        result_mode=retrieval_result_mode,
         owner_id=owner_id,
         project_id=effective_project_id,
         memory_status=status_filter,
         filters=filters,
     )
     matches = search_result.get("results", [])
+    if result_mode == SearchResultMode.HANDOFF:
+        runtime = _runtime()
+        token_budget = (
+            max_context_tokens
+            if max_context_tokens is not None
+            else runtime.ask_max_context_tokens
+        )
+        result = _handoff_ask_result(
+            question=question,
+            matches=matches[:top_k],
+            project_id=effective_project_id,
+            thread_id=thread_id,
+            token_budget=token_budget,
+            encoding=runtime.tokenizer_encoding,
+        )
+        _record_audit_event(
+            "memory.asked",
+            owner_id=owner_id,
+            project_id=effective_project_id,
+            metadata={
+                "question_hash": _audit_hash(question),
+                "top_k": top_k,
+                "result_count": len(result.get("results", [])),
+                "answer_basis": "handoff",
+                "memory_status": status_filter,
+            },
+        )
+        return result
     if not matches:
         _record_audit_event(
             "memory.asked",
@@ -3950,6 +3992,193 @@ def _ask_from_matches(
         confidence=_confidence_from_matches(selected),
         confidence_reason=_confidence_reason_from_matches(selected),
     )
+
+
+_HANDOFF_SECTION_PREFIXES: tuple[tuple[str, str], ...] = (
+    ("decision:", "decisions"),
+    ("changed file:", "changed_files"),
+    ("changed files:", "changed_files"),
+    ("command:", "commands_run"),
+    ("validation:", "validation"),
+    ("validated:", "validation"),
+    ("blocker:", "blockers"),
+    ("blocked:", "blockers"),
+    ("next step:", "next_steps"),
+    ("next steps:", "next_steps"),
+)
+
+
+def _handoff_ask_result(
+    *,
+    question: str,
+    matches: list[dict[str, Any]],
+    project_id: str | None,
+    thread_id: str | None,
+    token_budget: int,
+    encoding: str,
+) -> dict[str, Any]:
+    selected, raw_citations, _, tokens_used, dropped, truncated = _select_ask_context(
+        matches=matches,
+        max_context_tokens=token_budget,
+        encoding=encoding,
+    )
+    citations = [
+        HandoffCitation(
+            memory_id=str(item.get("id")),
+            chunk_index=int(item.get("chunk_index", 0)),
+            score=float(item.get("score", 0.0)),
+            text=redact_secrets(str(item.get("text", ""))),
+        )
+        for item in raw_citations
+        if item.get("id") is not None and str(item.get("text", "")).strip()
+    ]
+    refs = [f"{item.memory_id}#{item.chunk_index}" for item in citations]
+    summary: list[HandoffClaim] = []
+    sections: dict[str, list[Any]] = {
+        "decisions": [],
+        "changed_files": [],
+        "commands_run": [],
+        "validation": [],
+        "blockers": [],
+        "next_steps": [],
+    }
+    for row, citation in zip(selected, citations, strict=False):
+        text = redact_secrets(" ".join(str(row.get("text", "")).split()))
+        if not text:
+            continue
+        ref = f"{citation.memory_id}#{citation.chunk_index}"
+        summary.append(HandoffClaim(text=text, citations=[ref]))
+        _classify_handoff_claim(text, ref=ref, sections=sections)
+
+    timestamps = [
+        _parse_handoff_timestamp(str(conversation.get("timestamp")))
+        for row in selected
+        for conversation in [row.get("conversation")]
+        if isinstance(conversation, dict) and conversation.get("timestamp")
+    ]
+    now = datetime.now(UTC)
+    source_agent = next(
+        (
+            str(conversation.get("source"))
+            for row in selected
+            for conversation in [row.get("conversation")]
+            if isinstance(conversation, dict) and conversation.get("source")
+        ),
+        None,
+    )
+    notes: list[str] = []
+    if not citations:
+        notes.append("No authorized matching memory was found.")
+    if truncated or dropped:
+        notes.append("The packet is incomplete because the context token budget was reached.")
+    for label, key in (
+        ("decisions", "decisions"),
+        ("changed files", "changed_files"),
+        ("commands", "commands_run"),
+        ("validation", "validation"),
+        ("blockers", "blockers"),
+        ("next steps", "next_steps"),
+    ):
+        if not sections[key]:
+            notes.append(f"No explicit {label} were found in the retrieved evidence.")
+
+    goal = next(
+        (
+            HandoffClaim(
+                text=claim.text[claim.text.casefold().find("goal:") + len("goal:") :].strip(),
+                citations=claim.citations,
+            )
+            for claim in summary
+            if "goal:" in claim.text.casefold()
+            and claim.text[claim.text.casefold().find("goal:") + len("goal:") :].strip()
+        ),
+        summary[0] if summary else HandoffClaim(text=redact_secrets(question.strip())),
+    )
+    status = HandoffStatus.BLOCKED if sections["blockers"] else HandoffStatus.ACTIVE
+    status_text = " ".join(claim.text.casefold() for claim in summary)
+    if "status: complete" in status_text:
+        status = HandoffStatus.COMPLETE
+    elif "status: waiting_for_review" in status_text or "status: waiting for review" in status_text:
+        status = HandoffStatus.WAITING_FOR_REVIEW
+
+    packet = HandoffPacket(
+        handoff_id=str(
+            uuid5(
+                NAMESPACE_URL,
+                "|".join([project_id or "", thread_id or "", question.strip(), *refs]),
+            )
+        ),
+        project_id=project_id,
+        thread_id=thread_id,
+        source_agent=source_agent,
+        goal=goal,
+        status=status,
+        summary=summary,
+        decisions=sections["decisions"],
+        changed_files=sections["changed_files"],
+        commands_run=sections["commands_run"],
+        validation=sections["validation"],
+        blockers=sections["blockers"],
+        next_steps=sections["next_steps"],
+        citations=citations,
+        created_at=min(timestamps) if timestamps else now,
+        updated_at=max(timestamps) if timestamps else now,
+        confidence=_confidence_from_context(selected, context_truncated=truncated),
+        completeness_notes=notes,
+        context_tokens_used=tokens_used,
+        context_token_budget=token_budget,
+        context_truncated=truncated,
+    )
+    return {
+        "status": "ok",
+        "results": [_redact_handoff_value(item) for item in selected],
+        "answer": "Handoff packet generated from authorized memory.",
+        "citations": [item.model_dump() for item in citations],
+        "confidence": packet.confidence,
+        "confidence_reason": "; ".join(notes) or "All explicit handoff sections were found.",
+        "answer_basis": "handoff",
+        "handoff": packet.model_dump(mode="json"),
+    }
+
+
+def _classify_handoff_claim(text: str, *, ref: str, sections: dict[str, list[Any]]) -> None:
+    lowered = text.casefold()
+    for prefix, section in _HANDOFF_SECTION_PREFIXES:
+        position = lowered.find(prefix)
+        if position < 0:
+            continue
+        value = text[position + len(prefix) :].strip(" -")
+        if not value:
+            return
+        if section == "changed_files":
+            for path in (item.strip() for item in value.split(",")):
+                if path:
+                    sections[section].append(
+                        HandoffChangedFile(path=path, text=value, citations=[ref])
+                    )
+        elif section == "commands_run":
+            sections[section].append(HandoffCommand(command=value, text=value, citations=[ref]))
+        else:
+            sections[section].append(HandoffClaim(text=value, citations=[ref]))
+        return
+
+
+def _parse_handoff_timestamp(value: str) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return datetime.now(UTC)
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
+
+
+def _redact_handoff_value(value: Any) -> Any:
+    if isinstance(value, str):
+        return redact_secrets(value)
+    if isinstance(value, dict):
+        return {key: _redact_handoff_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_redact_handoff_value(item) for item in value]
+    return value
 
 
 def _budgeted_direct_memory_ask_result(

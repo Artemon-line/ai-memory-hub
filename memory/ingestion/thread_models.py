@@ -29,6 +29,7 @@ class SearchResultMode(StrEnum):
     COMPACT = "compact"
     CONVERSATIONS = "conversations"
     THREADS = "threads"
+    HANDOFF = "handoff"
 
 
 class MCPResponseFormat(StrEnum):

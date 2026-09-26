@@ -1285,6 +1285,31 @@ def test_memory_ask_accepts_context_budget() -> None:
     assert body["tokenizer_used"] in {"heuristic", "tiktoken:cl100k_base"}
 
 
+def test_memory_ask_returns_ephemeral_handoff_packet() -> None:
+    client = _client()
+    payload = _conversation()
+    payload["messages"] = [
+        {"role": "assistant", "text": "handoffapi Next step: review the cited change"}
+    ]
+    client.post("/memory/insert", json=payload)
+
+    ask = client.post(
+        "/memory/ask",
+        json={
+            "question": "what was happening with handoffapi?",
+            "result_mode": "handoff",
+            "max_context_tokens": 100,
+        },
+    )
+
+    assert ask.status_code == 200
+    body = ask.json()
+    assert body["answer_basis"] == "handoff"
+    assert body["handoff"]["next_steps"][0]["text"] == "review the cited change"
+    assert body["handoff"]["next_steps"][0]["citations"]
+    assert body["handoff"]["context_tokens_used"] <= 100
+
+
 def test_memory_fact_endpoints() -> None:
     client = _client()
     payload = _conversation()
