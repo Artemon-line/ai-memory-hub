@@ -1431,6 +1431,81 @@ def test_ask_direct_memory_uses_best_snippet() -> None:
     assert len(result["results"]) == 2
 
 
+def test_ask_handoff_returns_cited_structured_packet() -> None:
+    _configure_stubs()
+    messages = (
+        "handoffsample Decision: keep the public API additive",
+        "handoffsample Changed files: memory/api/server.py, tests/unit/test_api.py",
+        "handoffsample Validation: uv run pytest tests/unit -q",
+        "handoffsample Next step: open the pull request",
+    )
+    for index, text in enumerate(messages, start=1):
+        conversation = _valid_conversation()
+        conversation["id"] = f"00000000-0000-4000-8000-{index:012d}"
+        conversation["source"] = "codex"
+        conversation["timestamp"] = f"2026-09-{index:02d}T10:00:00Z"
+        conversation["messages"] = [{"role": "assistant", "text": text}]
+        mvp_ingestion.ingest_messages(conversation)
+
+    result = mvp_ingestion.ask(
+        "what was happening with handoffsample?",
+        top_k=10,
+        result_mode="handoff",
+        max_context_tokens=500,
+    )
+
+    packet = result["handoff"]
+    assert result["answer_basis"] == "handoff"
+    assert packet["source_agent"] == "codex"
+    assert packet["status"] == "active"
+    assert packet["decisions"][0]["citations"]
+    assert {item["path"] for item in packet["changed_files"]} == {
+        "memory/api/server.py",
+        "tests/unit/test_api.py",
+    }
+    assert packet["validation"][0]["citations"]
+    assert packet["next_steps"][0]["citations"]
+    assert packet["context_tokens_used"] <= packet["context_token_budget"]
+    assert all(item["memory_id"] for item in packet["citations"])
+
+
+def test_ask_handoff_redacts_secrets_and_reports_budget_truncation() -> None:
+    _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["messages"] = [
+        {
+            "role": "assistant",
+            "text": "budgethandoff Next step: deploy with api_key=super-secret " + "detail " * 200,
+        }
+    ]
+    mvp_ingestion.ingest_messages(conversation)
+
+    result = mvp_ingestion.ask(
+        "budgethandoff status",
+        result_mode="handoff",
+        max_context_tokens=20,
+    )
+
+    rendered = json.dumps(result)
+    assert "super-secret" not in rendered
+    assert "api_key=***" in rendered
+    assert result["handoff"]["context_tokens_used"] <= 20
+    assert result["handoff"]["context_truncated"] is True
+    assert any("token budget" in note for note in result["handoff"]["completeness_notes"])
+
+
+def test_ask_handoff_empty_result_has_valid_low_confidence_packet() -> None:
+    _configure_stubs(retrieval_vector_score_threshold=999.0, retrieval_keyword_enabled=False)
+
+    result = mvp_ingestion.ask("missing handoff", result_mode="handoff")
+
+    packet = result["handoff"]
+    assert packet["citations"] == []
+    assert packet["summary"] == []
+    assert packet["confidence"] == "none"
+    assert packet["goal"]["citations"] == []
+
+
 def test_ask_no_hit_returns_empty_structured_evidence() -> None:
     _configure_stubs(retrieval_vector_score_threshold=999.0, retrieval_keyword_enabled=False)
 

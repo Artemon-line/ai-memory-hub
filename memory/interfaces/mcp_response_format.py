@@ -153,6 +153,8 @@ def format_ask_response(payload: dict[str, Any], response_format: str) -> dict[s
     formatted["memory_result_count"] = _list_count(payload.get("results"))
     formatted["fact_count"] = _list_count(payload.get("facts"))
     formatted["citation_count"] = _list_count(payload.get("citations"))
+    if isinstance(payload.get("handoff"), dict):
+        formatted["handoff"] = payload["handoff"]
     return formatted
 
 

@@ -145,7 +145,8 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
     "memory_ask": (
         "Read-only question answering using stored memory and facts. Optional filters: source, date_from, "
         "date_to, tags, thread_id, project_id, and memory_status. Use response_format=concise "
-        "for normal recall or detailed for full search rows."
+        "for normal recall or detailed for full search rows. Use result_mode=handoff to receive "
+        "an ephemeral, cited continuation packet under max_context_tokens."
     ),
     "memory_fact_search": (
         "Read-only search of normalized extracted memory facts. Optional filters: query, source, subject, predicate, "
