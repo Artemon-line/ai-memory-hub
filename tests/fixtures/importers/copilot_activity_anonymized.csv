@@ -1,0 +1,11 @@
+Conversation,Time,Author,Message
+Garden sensor setup,2026-04-12T10:08:30,AI,"The pairing code can be reset from Settings, Devices."
+Garden sensor setup,2026-04-12T10:08:30,Human,"The code expired, can I create another one?"
+Garden sensor setup,2026-04-12T10:05:00,AI,"Yes. Keep the hub within two metres during pairing."
+Garden sensor setup,2026-04-12T10:05:00,Human,"Can I pair a weather sensor with my home hub?"
+Recipe notes,2026-04-10T18:15:00,AI,"Use 250 g flour, then fold gently.
+
+```text
+mix for 30 seconds
+```"
+Recipe notes,2026-04-10T18:15:00,Human,"Please format my test recipe; include commas and emoji 🥣."
