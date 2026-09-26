@@ -15,3 +15,4 @@ class ProviderCapabilities:
     supports_shared_scopes: bool = False
     supports_plugin_metadata: bool = False
     supports_audit_events: bool = False
+    supports_handoff_records: bool = False

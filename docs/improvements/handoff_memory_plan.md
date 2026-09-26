@@ -105,7 +105,8 @@ Acceptance criteria:
 
 ## Phase 2: Stored Handoff Records
 
-- [ ] Add metadata schema support for stored handoff records.
+- [x] Add metadata schema support for stored handoff records in SQLite and
+      Postgres, with immutable supersession lineage.
 - [ ] Add `memory_handoff_create` over MCP.
 - [ ] Add `memory_handoff_get` over MCP.
 - [ ] Add `memory_handoff_update` over MCP.
@@ -115,7 +116,7 @@ Acceptance criteria:
       - [ ] `GET /memory/handoffs/{id}`
       - [ ] `PATCH /memory/handoffs/{id}`
       - [ ] `POST /memory/handoffs/search`
-- [ ] Support `supersedes_handoff_id` so later agents can update stale
+- [x] Support `supersedes_handoff_id` so later agents can update stale
       continuation packets without mutating history.
 
 Acceptance criteria:
@@ -149,15 +150,16 @@ Acceptance criteria:
 
 ## Phase 4: Safety And Permission Model
 
-- [ ] Scope handoff reads by `owner_id`, project membership, and shared-memory
+- [x] Scope handoff reads by `owner_id`, project membership, and shared-memory
       policy.
-- [ ] Require write permission for handoff creation and updates.
-- [ ] Redact secrets from generated summaries and command output snippets.
+- [x] Require write permission for handoff creation and updates.
+- [x] Redact secrets from generated summaries and command output snippets.
 - [ ] Preserve `metadata.save_intent` semantics for handoff records derived from
       memory inserts.
 - [ ] Add review flow support for handoffs created from unmarked or
       client-auto-save material.
-- [ ] Add audit events for create, read, update, supersede, and delete.
+- [x] Add audit events for create, read, search, and supersede. Update/delete
+      events remain tied to their future public mutation semantics.
 
 Acceptance criteria:
 
@@ -213,8 +215,8 @@ Acceptance criteria:
 
 ## Tests
 
-- [ ] Unit tests for handoff packet validation and redaction.
-- [ ] Metadata-store contract tests for create, get, update, supersede, search,
+- [x] Unit tests for handoff packet validation and redaction.
+- [x] Metadata-store contract tests for create, get, supersede, search,
       and authorization filters.
 - [ ] MCP tool tests for handoff create/get/update/search.
 - [ ] HTTP endpoint tests for handoff create/get/update/search.
