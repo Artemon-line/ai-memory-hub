@@ -1,0 +1,108 @@
+{
+  "code": 0,
+  "msg": "",
+  "data": {
+    "biz_code": 0,
+    "biz_msg": "",
+    "biz_data": {
+      "title": "Balcony herb plan",
+      "model_type": "default",
+      "messages": [
+        {
+          "message_id": 1,
+          "parent_id": null,
+          "role": "USER",
+          "status": "FINISHED",
+          "inserted_at": 1775988000.241,
+          "fragments": [
+            {"id": 1, "type": "REQUEST", "content": "Suggest herbs for a windy balcony."}
+          ]
+        },
+        {
+          "message_id": 2,
+          "parent_id": 1,
+          "role": "ASSISTANT",
+          "status": "FINISHED",
+          "inserted_at": 1775988000.237,
+          "fragments": [
+            {
+              "id": 1,
+              "type": "SEARCH",
+              "status": "FINISHED",
+              "content": "Found 2 web pages",
+              "queries": ["wind-tolerant balcony herbs"],
+              "results": [
+                {
+                  "cite_index": 1,
+                  "provider": "fixture-search",
+                  "published_at": "2025-03-01",
+                  "query_indexes": [0],
+                  "site_icon": "https://example.invalid/icon.png",
+                  "site_name": "Example Gardening",
+                  "snippet": "Synthetic fixture result.",
+                  "title": "Wind-tolerant herbs",
+                  "url": "https://example.invalid/herbs"
+                }
+              ]
+            },
+            {
+              "id": 2,
+              "type": "RESPONSE",
+              "stage_id": 1,
+              "content": "Try rosemary and thyme in weighted pots [1].",
+              "references": []
+            }
+          ]
+        },
+        {
+          "message_id": 3,
+          "parent_id": 2,
+          "role": "USER",
+          "status": "FINISHED",
+          "inserted_at": 1775988060.5,
+          "fragments": [
+            {
+              "id": 1,
+              "type": "FILE",
+              "files": [
+                {
+                  "id": "fixture-image-1",
+                  "status": 7,
+                  "file_name": "balcony-layout.webp",
+                  "from_share": true,
+                  "file_size": 12345,
+                  "model_kind": "VISION",
+                  "token_usage": 42,
+                  "error_code": null,
+                  "inserted_at": 1775988059.0,
+                  "updated_at": 1775988059.0,
+                  "signed_path": "https://example.invalid/signed/fixture-image-1",
+                  "is_image": true,
+                  "audit_result": "PASS",
+                  "width": 1200,
+                  "height": 800
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "message_id": 4,
+          "parent_id": 3,
+          "role": "ASSISTANT",
+          "status": "FINISHED",
+          "inserted_at": 1775988060.49,
+          "fragments": [
+            {
+              "id": 1,
+              "type": "RESPONSE",
+              "stage_id": 1,
+              "content": "Place the heavier pots along the exposed edge.",
+              "references": []
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

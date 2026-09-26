@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 from memory.importers.base import ConversationImporter
+from memory.importers.copilot_activity_csv import CopilotActivityCsvImporter
+from memory.importers.deepseek_share_json import DeepSeekShareJsonImporter
 from memory.importers.manual_paste import ManualPasteImporter
 
 _IMPORTERS: dict[str, ConversationImporter] = {
+    CopilotActivityCsvImporter.name: CopilotActivityCsvImporter(),
+    DeepSeekShareJsonImporter.name: DeepSeekShareJsonImporter(),
     ManualPasteImporter.name: ManualPasteImporter(),
 }
 
@@ -18,4 +22,3 @@ def get_importer(name: str) -> ConversationImporter:
 
 def importer_names() -> tuple[str, ...]:
     return tuple(sorted(_IMPORTERS))
-

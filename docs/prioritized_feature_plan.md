@@ -500,12 +500,16 @@ Implementation sequence:
 
 ## P1: Platform-Specific Importers
 
-The importer boundary and manual paste importer are implemented. Export-specific parsers remain planned.
+The importer boundary, manual paste importer, Microsoft Copilot activity CSV
+importer, and DeepSeek share JSON importer are implemented. Other
+export-specific parsers remain planned.
 
 Implementation sequence:
 
 - [x] Define an importer interface that returns unified conversation payloads.
 - [x] Add manual paste importer first because it is lowest risk and useful across clients.
+- [x] Add a Microsoft Copilot activity-history CSV importer with anonymized fixtures.
+- [x] Add a DeepSeek public-share JSON importer with anonymized fixtures.
 - [ ] Add Gemini Takeout parser.
 - [ ] Add Claude HTML export parser.
 - [ ] Add optional local log importers for VS Code Copilot, Ollama, LM Studio, and Llama Stack.
@@ -558,7 +562,9 @@ Implementation sequence:
 
 ## P2: Recurring Codebase Cleanup
 
-Use `recurring_codebase_cleanup_plan.md` as the source of truth.
+Use `recurring_codebase_cleanup_plan.md` for cleanup scope and
+`improvements/weekly_self_healing_plan.md` for the guarded GitHub Actions
+rollout.
 
 - [ ] Run weekly automated detection checks for dead code, stale docs,
   accidental hardcoding, complex control flow, and unsafe logging patterns.

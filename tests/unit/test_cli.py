@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import json
 import tomllib
+from pathlib import Path
+
+import pytest
 
 from memory import cli
 
@@ -382,6 +385,40 @@ def test_manual_import_cli_ingests_unified_payload(capsys, monkeypatch, tmp_path
             "metadata": {"importer": "manual"},
         }
     ]
+
+
+@pytest.mark.parametrize(
+    ("importer", "fixture_name", "expected_count"),
+    [
+        ("copilot-activity-csv", "copilot_activity_anonymized.csv", 2),
+        ("deepseek-share-json", "deepseek_share_anonymized.json", 1),
+    ],
+)
+def test_export_import_cli_ingests_anonymized_fixtures(
+    capsys,
+    monkeypatch,
+    importer: str,
+    fixture_name: str,
+    expected_count: int,
+) -> None:
+    fixture_path = Path(__file__).parents[1] / "fixtures" / "importers" / fixture_name
+    captured_payloads = []
+    monkeypatch.setattr(cli, "_configure_memory_runtime", lambda config_path: None)
+    monkeypatch.setattr(
+        cli.mvp_ingestion,
+        "ingest_messages",
+        lambda payload: captured_payloads.append(payload)
+        or {"status": "ok", "id": f"memory-{len(captured_payloads)}", "chunks": 1},
+    )
+
+    exit_code = cli.main(["import", importer, str(fixture_path), "--json"])
+
+    body = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert body["importer"] == importer
+    assert body["imported"] == expected_count
+    assert len(captured_payloads) == expected_count
+    assert all(payload["metadata"]["importer"] == importer for payload in captured_payloads)
 
 
 def test_manual_import_cli_stores_retrievable_conversation(capsys, tmp_path) -> None:
