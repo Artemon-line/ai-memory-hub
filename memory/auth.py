@@ -212,6 +212,10 @@ def required_scopes_for_request(request: Request) -> set[str]:
         "/memory/pending/reject",
     }:
         return {WRITE_SCOPE}
+    if path == "/memory/handoffs" and request.method == "POST":
+        return {WRITE_SCOPE}
+    if path.startswith("/memory/handoffs/") and request.method == "PATCH":
+        return {WRITE_SCOPE}
     if path.startswith("/memory/"):
         return {READ_SCOPE}
     return set()

@@ -25,6 +25,7 @@ from memory.auth import (
 from memory.backend.log_safety import redact_secrets
 from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig
+from memory.handoff_models import HandoffPacket, HandoffStatus
 from memory.ingestion.base_agent import BaseIngestionAgent
 from memory.ingestion.mvp_ingestion import (
     normalize_conversation_json,
@@ -48,6 +49,7 @@ from memory.ingestion.thread_models import (
 from memory.interfaces.mcp_response_format import (
     format_ask_response,
     format_fact_search_response,
+    format_handoff_response,
     format_profile_response,
     format_retrieve_response,
     format_search_response,
@@ -167,6 +169,10 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "is preferable to choosing among separate read tools."
     ),
     "memory_fact_supersede": "Write fact state by marking one normalized fact as superseded by another fact within a project_id. Requires the `memory:write` auth scope when MCP auth is enabled.",
+    "memory_handoff_create": "Create a stored, redacted handoff record in a project. Requires the `memory:write` auth scope when MCP auth is enabled.",
+    "memory_handoff_get": "Read one stored handoff by handoff_id, subject to project membership.",
+    "memory_handoff_update": "Create an immutable replacement for a stored handoff and mark the earlier record superseded. Requires the `memory:write` auth scope when MCP auth is enabled.",
+    "memory_handoff_search": "Search stored handoffs within one visible project, optionally by text and status.",
     "memory_pending_approve": "Write reviewable memory state by approving a pending or quarantined insert so it becomes searchable and can create facts. Requires the `memory:write` auth scope when MCP auth is enabled.",
     "memory_pending_reject": "Write reviewable memory state by rejecting a pending or quarantined insert so it remains excluded from default reads. Requires the `memory:write` auth scope when MCP auth is enabled.",
     "memory_project_list": "Read-only list of project workspaces visible to the authenticated user.",
@@ -246,6 +252,10 @@ MCP_TOOL_POLICIES: dict[str, MCPToolPolicy] = {
     "memory_profile_get": READ_ONLY_WITH_INTERNAL_WRITES_POLICY,
     "memory_lookup": READ_ONLY_WITH_INTERNAL_WRITES_POLICY,
     "memory_fact_supersede": NON_DESTRUCTIVE_WRITE_POLICY,
+    "memory_handoff_create": NON_DESTRUCTIVE_WRITE_POLICY,
+    "memory_handoff_get": READ_ONLY_WITH_INTERNAL_WRITES_POLICY,
+    "memory_handoff_update": NON_DESTRUCTIVE_WRITE_POLICY,
+    "memory_handoff_search": READ_ONLY_WITH_INTERNAL_WRITES_POLICY,
     "memory_pending_approve": NON_DESTRUCTIVE_WRITE_POLICY,
     "memory_pending_reject": NON_DESTRUCTIVE_WRITE_POLICY,
     "memory_project_list": READ_ONLY_WITH_INTERNAL_WRITES_POLICY,
@@ -1603,6 +1613,134 @@ def build_tool_handlers(
             raise
         return _with_envelope_defaults(result)
 
+    async def memory_handoff_create(
+        handoff: dict[str, Any],
+        project_id: str | None = None,
+        response_format: ResponseFormatArg = MCPResponseFormat.CONCISE.value,
+        ctx: FastMCPContext | None = None,
+    ) -> dict[str, Any]:
+        scope_error = require_scope(WRITE_SCOPE)
+        if scope_error is not None:
+            return scope_error
+        try:
+            response_format = _validate_response_format(response_format)
+            packet = HandoffPacket.model_validate(handoff)
+            created = await agent.handoff_create(
+                packet.model_dump(mode="json"),
+                owner_id=owner_id(),
+                project_id=project_id or packet.project_id,
+            )
+        except PermissionError as exc:
+            return await _mcp_permission_denied_response(
+                ctx, tool_name="memory_handoff_create", exc=exc
+            )
+        except ValueError as exc:
+            error_code = "conflict" if str(exc) == "handoff_id already exists" else "invalid_input"
+            return _envelope(
+                status="error", error_code=error_code, error_message=str(exc)
+            )
+        return format_handoff_response(
+            _with_envelope_defaults({"status": "ok", "handoff": created}),
+            response_format,
+        )
+
+    async def memory_handoff_get(
+        handoff_id: str,
+        project_id: str | None = None,
+        response_format: ResponseFormatArg = MCPResponseFormat.CONCISE.value,
+        ctx: FastMCPContext | None = None,
+    ) -> dict[str, Any]:
+        try:
+            response_format = _validate_response_format(response_format)
+            handoff = await agent.handoff_get(
+                handoff_id, owner_id=owner_id(), project_id=project_id
+            )
+        except PermissionError as exc:
+            return await _mcp_permission_denied_response(
+                ctx, tool_name="memory_handoff_get", exc=exc
+            )
+        except ValueError as exc:
+            return _envelope(
+                status="error", error_code="invalid_input", error_message=str(exc)
+            )
+        if handoff is None:
+            return _envelope(
+                status="error",
+                error_code="not_found",
+                error_message="handoff not found",
+            )
+        return format_handoff_response(
+            _with_envelope_defaults({"status": "ok", "handoff": handoff}),
+            response_format,
+        )
+
+    async def memory_handoff_update(
+        handoff_id: str,
+        handoff: dict[str, Any],
+        project_id: str | None = None,
+        response_format: ResponseFormatArg = MCPResponseFormat.CONCISE.value,
+        ctx: FastMCPContext | None = None,
+    ) -> dict[str, Any]:
+        scope_error = require_scope(WRITE_SCOPE)
+        if scope_error is not None:
+            return scope_error
+        try:
+            response_format = _validate_response_format(response_format)
+            packet = HandoffPacket.model_validate(handoff)
+            updated = await agent.handoff_supersede(
+                handoff_id,
+                packet.model_dump(mode="json"),
+                owner_id=owner_id(),
+                project_id=project_id or packet.project_id,
+            )
+        except PermissionError as exc:
+            return await _mcp_permission_denied_response(
+                ctx, tool_name="memory_handoff_update", exc=exc
+            )
+        except ValueError as exc:
+            error_code = "conflict" if str(exc) == "handoff is already superseded" else "invalid_input"
+            return _envelope(status="error", error_code=error_code, error_message=str(exc))
+        if updated is None:
+            return _envelope(
+                status="error",
+                error_code="not_found",
+                error_message="handoff not found",
+            )
+        return format_handoff_response(
+            _with_envelope_defaults({"status": "ok", "handoff": updated}),
+            response_format,
+        )
+
+    async def memory_handoff_search(
+        query: str | None = None,
+        status: str | None = None,
+        include_superseded: bool = False,
+        limit: int = 20,
+        project_id: str | None = None,
+        response_format: ResponseFormatArg = MCPResponseFormat.CONCISE.value,
+        ctx: FastMCPContext | None = None,
+    ) -> dict[str, Any]:
+        try:
+            response_format = _validate_response_format(response_format)
+            normalized_status = HandoffStatus(status).value if status is not None else None
+            result = await agent.handoff_search(
+                owner_id=owner_id(),
+                project_id=project_id,
+                query=query,
+                status=normalized_status,
+                include_superseded=include_superseded,
+                limit=limit,
+            )
+        except PermissionError as exc:
+            return await _mcp_permission_denied_response(
+                ctx, tool_name="memory_handoff_search", exc=exc
+            )
+        except ValueError as exc:
+            return _envelope(
+                status="error", error_code="invalid_input", error_message=str(exc)
+            )
+        return format_handoff_response(_with_envelope_defaults(result), response_format)
+
     async def memory_pending_approve(
         id: str, project_id: str | None = None, ctx: FastMCPContext | None = None
     ) -> dict[str, Any]:
@@ -1732,6 +1870,10 @@ def build_tool_handlers(
         "memory_profile_get": memory_profile_get,
         "memory_lookup": memory_lookup,
         "memory_fact_supersede": memory_fact_supersede,
+        "memory_handoff_create": memory_handoff_create,
+        "memory_handoff_get": memory_handoff_get,
+        "memory_handoff_update": memory_handoff_update,
+        "memory_handoff_search": memory_handoff_search,
         "memory_pending_approve": memory_pending_approve,
         "memory_pending_reject": memory_pending_reject,
         "memory_project_list": memory_project_list,

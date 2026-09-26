@@ -73,6 +73,10 @@ normalized web chat payloads to the existing insert API; see the
 | `POST` | `/memory/facts/search` | Search normalized facts |
 | `POST` | `/memory/profile/get` | Return profile facts and a compact fact-based summary for a subject |
 | `POST` | `/memory/facts/supersede` | Mark a fact as superseded |
+| `POST` | `/memory/handoffs` | Create a stored handoff |
+| `GET` | `/memory/handoffs/{id}` | Retrieve a stored handoff |
+| `PATCH` | `/memory/handoffs/{id}` | Supersede a handoff with an immutable replacement |
+| `POST` | `/memory/handoffs/search` | Search stored handoffs within a project |
 | `GET` | `/health` | Liveness endpoint with redacted runtime health |
 | `GET` | `/ready` | Readiness endpoint for container orchestration |
 
@@ -344,6 +348,10 @@ Core tools:
 - `memory_fact_search(query=None, subject=None, predicate=None, include_superseded=False, response_format="concise", limit=None, source, date_from, date_to, confidence, status, source_quality, save_intent, save_intent_source, freshness_from, freshness_to, project_id)`
 - `memory_profile_get(subject="user", predicate, response_format="concise", limit=None, source, date_from, date_to, confidence, status, source_quality, save_intent, save_intent_source, freshness_from, freshness_to, project_id)`
 - `memory_fact_supersede(fact_id, superseded_by)`
+- `memory_handoff_create(handoff, project_id=None, response_format="concise")`
+- `memory_handoff_get(handoff_id, project_id=None, response_format="concise")`
+- `memory_handoff_update(handoff_id, handoff, project_id=None, response_format="concise")`
+- `memory_handoff_search(query=None, status=None, include_superseded=False, limit=20, project_id=None, response_format="concise")`
 - `memory_project_list()`
 - `memory_project_default_get()`
 - `memory_project_get(project_id)`

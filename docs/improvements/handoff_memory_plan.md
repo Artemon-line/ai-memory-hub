@@ -107,15 +107,15 @@ Acceptance criteria:
 
 - [x] Add metadata schema support for stored handoff records in SQLite and
       Postgres, with immutable supersession lineage.
-- [ ] Add `memory_handoff_create` over MCP.
-- [ ] Add `memory_handoff_get` over MCP.
-- [ ] Add `memory_handoff_update` over MCP.
-- [ ] Add `memory_handoff_search` over MCP.
-- [ ] Add matching HTTP endpoints:
-      - [ ] `POST /memory/handoffs`
-      - [ ] `GET /memory/handoffs/{id}`
-      - [ ] `PATCH /memory/handoffs/{id}`
-      - [ ] `POST /memory/handoffs/search`
+- [x] Add `memory_handoff_create` over MCP.
+- [x] Add `memory_handoff_get` over MCP.
+- [x] Add `memory_handoff_update` over MCP.
+- [x] Add `memory_handoff_search` over MCP.
+- [x] Add matching HTTP endpoints:
+      - [x] `POST /memory/handoffs`
+      - [x] `GET /memory/handoffs/{id}`
+      - [x] `PATCH /memory/handoffs/{id}`
+      - [x] `POST /memory/handoffs/search`
 - [x] Support `supersedes_handoff_id` so later agents can update stale
       continuation packets without mutating history.
 
@@ -218,8 +218,8 @@ Acceptance criteria:
 - [x] Unit tests for handoff packet validation and redaction.
 - [x] Metadata-store contract tests for create, get, supersede, search,
       and authorization filters.
-- [ ] MCP tool tests for handoff create/get/update/search.
-- [ ] HTTP endpoint tests for handoff create/get/update/search.
+- [x] MCP tool tests for handoff create/get/update/search.
+- [x] HTTP endpoint tests for handoff create/get/update/search.
 - [ ] Integration tests for Agent A creates handoff, Agent B resumes handoff.
 - [ ] Negative tests for cross-user and cross-project handoff leakage.
 - [ ] Regression tests for budget-constrained handoff packets.

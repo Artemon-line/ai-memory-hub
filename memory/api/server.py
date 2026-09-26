@@ -23,6 +23,7 @@ from memory.auth import (
 from memory.backend.log_safety import install_secret_redaction_filter, redact_secrets
 from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig, ensure_token_hash_secret, normalize_config
+from memory.handoff_models import HandoffPacket, HandoffStatus
 from memory.ingestion.base_agent import BaseIngestionAgent
 from memory.ingestion.mvp_ingestion import reset_audit_context, set_audit_context
 from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
@@ -143,6 +144,24 @@ class FactSupersedeRequest(BaseModel):
 
 class MemoryReviewRequest(BaseModel):
     id: str
+    project_id: str | None = None
+
+
+class HandoffCreateRequest(BaseModel):
+    handoff: HandoffPacket
+    project_id: str | None = None
+
+
+class HandoffUpdateRequest(BaseModel):
+    handoff: HandoffPacket
+    project_id: str | None = None
+
+
+class HandoffSearchRequest(BaseModel):
+    query: str | None = None
+    status: HandoffStatus | None = None
+    include_superseded: bool = False
+    limit: int = Field(default=20, ge=1, le=100)
     project_id: str | None = None
 
 
@@ -642,6 +661,82 @@ def _register_api_routes(
             raise HTTPException(status_code=403, detail=str(exc)) from exc
 
     app.post("/memory/facts/supersede")(memory_fact_supersede)
+
+    async def memory_handoff_create(
+        payload: HandoffCreateRequest, request: Request
+    ) -> dict[str, Any]:
+        try:
+            handoff = await agent.handoff_create(
+                payload.handoff.model_dump(mode="json"),
+                owner_id=owner_id(request),
+                project_id=payload.project_id or payload.handoff.project_id,
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except ValueError as exc:
+            status_code = 409 if str(exc) == "handoff_id already exists" else 400
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+        return {"status": "ok", "handoff": redact_content_hashes(handoff)}
+
+    async def memory_handoff_get(
+        handoff_id: str, request: Request, project_id: str | None = None
+    ) -> dict[str, Any]:
+        try:
+            handoff = await agent.handoff_get(
+                handoff_id,
+                owner_id=owner_id(request),
+                project_id=project_id,
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if handoff is None:
+            raise HTTPException(status_code=404, detail="handoff not found")
+        return {"status": "ok", "handoff": redact_content_hashes(handoff)}
+
+    async def memory_handoff_update(
+        handoff_id: str, payload: HandoffUpdateRequest, request: Request
+    ) -> dict[str, Any]:
+        try:
+            handoff = await agent.handoff_supersede(
+                handoff_id,
+                payload.handoff.model_dump(mode="json"),
+                owner_id=owner_id(request),
+                project_id=payload.project_id or payload.handoff.project_id,
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except ValueError as exc:
+            status_code = 409 if str(exc) == "handoff is already superseded" else 400
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+        if handoff is None:
+            raise HTTPException(status_code=404, detail="handoff not found")
+        return {"status": "ok", "handoff": redact_content_hashes(handoff)}
+
+    async def memory_handoff_search(
+        payload: HandoffSearchRequest, request: Request
+    ) -> dict[str, Any]:
+        try:
+            return redact_content_hashes(
+                await agent.handoff_search(
+                    owner_id=owner_id(request),
+                    project_id=payload.project_id,
+                    query=payload.query,
+                    status=payload.status.value if payload.status is not None else None,
+                    include_superseded=payload.include_superseded,
+                    limit=payload.limit,
+                )
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    app.post("/memory/handoffs")(memory_handoff_create)
+    app.get("/memory/handoffs/{handoff_id}")(memory_handoff_get)
+    app.patch("/memory/handoffs/{handoff_id}")(memory_handoff_update)
+    app.post("/memory/handoffs/search")(memory_handoff_search)
 
     async def memory_pending_approve(
         payload: MemoryReviewRequest, request: Request

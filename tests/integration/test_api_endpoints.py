@@ -115,6 +115,36 @@ def _conversation() -> dict[str, object]:
     }
 
 
+def _handoff(handoff_id: str, *, goal: str = "Continue the release") -> dict[str, object]:
+    return {
+        "handoff_id": handoff_id,
+        "project_id": "shared-321",
+        "thread_id": "thread-a",
+        "source_agent": "codex",
+        "target_agent": None,
+        "goal": {"text": goal, "citations": ["memory-a:0"]},
+        "status": "active",
+        "summary": [{"text": "Implementation is ready", "citations": ["memory-a:0"]}],
+        "decisions": [],
+        "changed_files": [],
+        "commands_run": [],
+        "validation": [],
+        "blockers": [],
+        "next_steps": [{"text": "Run tests", "citations": ["memory-a:0"]}],
+        "citations": [
+            {"memory_id": "memory-a", "chunk_index": 0, "text": "Evidence", "score": 1.0}
+        ],
+        "created_at": "2026-09-26T00:00:00Z",
+        "updated_at": "2026-09-26T00:00:00Z",
+        "expires_at": None,
+        "confidence": "high",
+        "completeness_notes": [],
+        "context_tokens_used": 10,
+        "context_token_budget": 100,
+        "context_truncated": False,
+    }
+
+
 def _client() -> TestClient:
     runtime = _runtime()
     agent = MVPIngestionAgent(
@@ -1308,6 +1338,71 @@ def test_memory_ask_returns_ephemeral_handoff_packet() -> None:
     assert body["handoff"]["next_steps"][0]["text"] == "review the cited change"
     assert body["handoff"]["next_steps"][0]["citations"]
     assert body["handoff"]["context_tokens_used"] <= 100
+
+
+def test_handoff_http_workflow_enforces_roles_and_supersession(tmp_path) -> None:
+    client, _ = _sqlite_auth_client(tmp_path)
+    owner_headers = {"Authorization": "Bearer token-a"}
+    writer_headers = {"Authorization": "Bearer token-b"}
+    reader_headers = {"Authorization": "Bearer token-d"}
+    outsider_headers = {"Authorization": "Bearer token-c"}
+
+    created = client.post(
+        "/memory/handoffs",
+        json={"handoff": _handoff("handoff-a"), "project_id": "shared-321"},
+        headers=owner_headers,
+    )
+    assert created.status_code == 200
+    assert created.json()["handoff"]["handoff_id"] == "handoff-a"
+    duplicate = client.post(
+        "/memory/handoffs",
+        json={"handoff": _handoff("handoff-a"), "project_id": "shared-321"},
+        headers=owner_headers,
+    )
+    assert duplicate.status_code == 409
+
+    read = client.get(
+        "/memory/handoffs/handoff-a?project_id=shared-321", headers=reader_headers
+    )
+    assert read.status_code == 200
+
+    denied = client.get(
+        "/memory/handoffs/handoff-a?project_id=shared-321", headers=outsider_headers
+    )
+    assert denied.status_code == 403
+
+    read_only_write = client.post(
+        "/memory/handoffs",
+        json={"handoff": _handoff("handoff-read-only"), "project_id": "shared-321"},
+        headers={"Authorization": "Bearer token-read"},
+    )
+    assert read_only_write.status_code == 403
+
+    updated = client.patch(
+        "/memory/handoffs/handoff-a",
+        json={
+            "handoff": _handoff("handoff-b", goal="Continue after review"),
+            "project_id": "shared-321",
+        },
+        headers=writer_headers,
+    )
+    assert updated.status_code == 200
+    assert updated.json()["handoff"]["supersedes_handoff_id"] == "handoff-a"
+
+    conflict = client.patch(
+        "/memory/handoffs/handoff-a",
+        json={"handoff": _handoff("handoff-c"), "project_id": "shared-321"},
+        headers=writer_headers,
+    )
+    assert conflict.status_code == 409
+
+    searched = client.post(
+        "/memory/handoffs/search",
+        json={"project_id": "shared-321", "query": "review"},
+        headers=reader_headers,
+    )
+    assert searched.status_code == 200
+    assert [item["handoff_id"] for item in searched.json()["results"]] == ["handoff-b"]
 
 
 def test_memory_fact_endpoints() -> None:

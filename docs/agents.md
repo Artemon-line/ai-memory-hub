@@ -48,6 +48,8 @@ Implemented:
 - MCP tools: `memory_validate`, `memory_insert`, `memory_search`,
   `memory_retrieve`, `memory_ask`, `memory_fact_search`,
   `memory_profile_get`, `memory_lookup`, `memory_fact_supersede`,
+  `memory_handoff_create`, `memory_handoff_get`, `memory_handoff_update`,
+  `memory_handoff_search`,
   `memory_pending_approve`, `memory_pending_reject`, `memory_project_list`,
   `memory_project_default_get`, and `memory_project_get`.
 - MCP resources: `memory://conversation/example`, `memory://conversation/{id}`,
@@ -56,6 +58,8 @@ Implemented:
 - HTTP memory endpoints: `POST /memory/insert`, `POST /memory/search`,
   `POST /memory/retrieve`, `POST /memory/ask`, `POST /memory/facts/search`,
   `POST /memory/profile/get`, `POST /memory/facts/supersede`,
+  `POST /memory/handoffs`, `GET/PATCH /memory/handoffs/{id}`,
+  `POST /memory/handoffs/search`,
   `POST /memory/pending/approve`, `POST /memory/pending/reject`,
   `GET /memory/projects`, `GET /memory/projects/default`, and
   `GET /memory/projects/{project_id}`.

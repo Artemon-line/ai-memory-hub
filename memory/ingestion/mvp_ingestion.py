@@ -5860,6 +5860,29 @@ def handoff_supersede(
     store = _runtime().metadata_store
     if not hasattr(store, "supersede_handoff"):
         raise RuntimeError("configured metadata provider does not support handoff records")
+    existing = store.get_handoff(
+        handoff_id, owner_id=owner_id, project_id=effective_project_id
+    )
+    if existing is None:
+        _record_audit_event(
+            "handoff.superseded",
+            owner_id=owner_id,
+            project_id=effective_project_id,
+            outcome="not_found",
+            reason_code="handoff_not_found",
+            metadata={"handoff_id": handoff_id},
+        )
+        return None
+    if existing.get("superseded_by_handoff_id") is not None:
+        _record_audit_event(
+            "handoff.superseded",
+            owner_id=owner_id,
+            project_id=effective_project_id,
+            outcome="conflict",
+            reason_code="handoff_already_superseded",
+            metadata={"handoff_id": handoff_id},
+        )
+        raise ValueError("handoff is already superseded")
     updated = store.supersede_handoff(
         handoff_id,
         replacement,

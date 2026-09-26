@@ -138,6 +138,46 @@ class BaseIngestionAgent(ABC):
     ) -> Dict[str, Any]:
         raise NotImplementedError("fact_supersede is not implemented")
 
+    async def handoff_create(
+        self,
+        handoff: dict[str, Any],
+        *,
+        owner_id: str | None = None,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        raise NotImplementedError("handoff_create is not implemented")
+
+    async def handoff_get(
+        self,
+        handoff_id: str,
+        *,
+        owner_id: str | None = None,
+        project_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        raise NotImplementedError("handoff_get is not implemented")
+
+    async def handoff_search(
+        self,
+        *,
+        owner_id: str | None = None,
+        project_id: str | None = None,
+        query: str | None = None,
+        status: str | None = None,
+        include_superseded: bool = False,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        raise NotImplementedError("handoff_search is not implemented")
+
+    async def handoff_supersede(
+        self,
+        handoff_id: str,
+        replacement: dict[str, Any],
+        *,
+        owner_id: str | None = None,
+        project_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        raise NotImplementedError("handoff_supersede is not implemented")
+
     async def approve_pending_memory(
         self, memory_id: str, *, owner_id: str | None = None, project_id: str | None = None
     ) -> Dict[str, Any]:

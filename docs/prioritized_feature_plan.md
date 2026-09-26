@@ -403,7 +403,8 @@ Implementation sequence:
       adding stored records.
 - [x] Add secure stored handoff records with SQLite/Postgres parity,
       authorization, redaction, immutable supersession, and audit events.
-- [ ] Add MCP and HTTP create/get/update/search surfaces.
+- [x] Add matching MCP and HTTP create/get/update/search surfaces with concise
+      and detailed MCP responses.
 - [ ] Add MCP prompts and CLI commands for create/resume workflows.
 - [ ] Enforce owner, project, shared-project, and secret-redaction boundaries.
 - [ ] Treat A2A as an optional later integration surface after MCP/HTTP handoff

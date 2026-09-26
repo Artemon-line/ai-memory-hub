@@ -15,6 +15,10 @@ EXPECTED_MEMORY_ROUTES = {
     ("POST", "/memory/facts/search"),
     ("POST", "/memory/profile/get"),
     ("POST", "/memory/facts/supersede"),
+    ("POST", "/memory/handoffs"),
+    ("GET", "/memory/handoffs/{handoff_id}"),
+    ("PATCH", "/memory/handoffs/{handoff_id}"),
+    ("POST", "/memory/handoffs/search"),
     ("POST", "/memory/pending/approve"),
     ("POST", "/memory/pending/reject"),
     ("GET", "/memory/projects"),
@@ -32,6 +36,10 @@ EXPECTED_MCP_TOOLS = {
     "memory_profile_get",
     "memory_lookup",
     "memory_fact_supersede",
+    "memory_handoff_create",
+    "memory_handoff_get",
+    "memory_handoff_update",
+    "memory_handoff_search",
     "memory_pending_approve",
     "memory_pending_reject",
     "memory_project_list",
@@ -40,6 +48,10 @@ EXPECTED_MCP_TOOLS = {
 }
 
 FORBIDDEN_DESTRUCTIVE_TERMS = ("delete", "update", "archive", "restore")
+ALLOWED_NON_DESTRUCTIVE_MUTATION_ROUTES = {
+    ("PATCH", "/memory/handoffs/{handoff_id}"),
+}
+ALLOWED_NON_DESTRUCTIVE_MUTATION_TOOLS = {"memory_handoff_update"}
 
 
 class StubEmbedder:
@@ -109,6 +121,7 @@ def test_beta_http_memory_surface_has_no_destructive_history_routes() -> None:
         (method, path)
         for method, path in routes
         if path.startswith("/memory/") and method in {"DELETE", "PATCH", "PUT"}
+        and (method, path) not in ALLOWED_NON_DESTRUCTIVE_MUTATION_ROUTES
     }
     assert not {
         path
@@ -126,6 +139,7 @@ def test_beta_mcp_tool_surface_has_no_destructive_history_tools() -> None:
     assert not {
         tool_name
         for tool_name in handlers
+        if tool_name not in ALLOWED_NON_DESTRUCTIVE_MUTATION_TOOLS
         for term in FORBIDDEN_DESTRUCTIVE_TERMS
         if term in tool_name
     }

@@ -255,6 +255,72 @@ class MVPIngestionAgent(BaseIngestionAgent):
             memory_write=True,
         )
 
+    async def handoff_create(
+        self,
+        handoff: dict[str, Any],
+        *,
+        owner_id: str | None = None,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        return await self._call_service(
+            self._service.handoff_create,
+            handoff,
+            owner_id=owner_id,
+            project_id=project_id,
+            memory_write=True,
+        )
+
+    async def handoff_get(
+        self,
+        handoff_id: str,
+        *,
+        owner_id: str | None = None,
+        project_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        return await self._call_service(
+            self._service.handoff_get,
+            handoff_id,
+            owner_id=owner_id,
+            project_id=project_id,
+        )
+
+    async def handoff_search(
+        self,
+        *,
+        owner_id: str | None = None,
+        project_id: str | None = None,
+        query: str | None = None,
+        status: str | None = None,
+        include_superseded: bool = False,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        return await self._call_service(
+            self._service.handoff_search,
+            owner_id=owner_id,
+            project_id=project_id,
+            query=query,
+            status=status,
+            include_superseded=include_superseded,
+            limit=limit,
+        )
+
+    async def handoff_supersede(
+        self,
+        handoff_id: str,
+        replacement: dict[str, Any],
+        *,
+        owner_id: str | None = None,
+        project_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        return await self._call_service(
+            self._service.handoff_supersede,
+            handoff_id,
+            replacement,
+            owner_id=owner_id,
+            project_id=project_id,
+            memory_write=True,
+        )
+
     async def approve_pending_memory(
         self, memory_id: str, *, owner_id: str | None = None, project_id: str | None = None
     ) -> Dict[str, Any]:
