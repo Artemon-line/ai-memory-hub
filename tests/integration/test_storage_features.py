@@ -3701,6 +3701,57 @@ def _recording_postgres_metadata_store(state: dict[str, Any]) -> PostgresMetadat
     return store
 
 
+def test_postgres_create_handoff_matches_sqlite_record_shape() -> None:
+    state: dict[str, Any] = {"queries": [], "params": []}
+    store = _recording_postgres_metadata_store(state)
+    packet = {
+        "handoff_id": "handoff-pg-a",
+        "project_id": None,
+        "thread_id": "thread-a",
+        "source_agent": "codex",
+        "target_agent": None,
+        "goal": {"text": "Continue implementation", "citations": ["memory-a:0"]},
+        "status": "active",
+        "summary": [{"text": "Storage is next", "citations": ["memory-a:0"]}],
+        "decisions": [],
+        "changed_files": [],
+        "commands_run": [],
+        "validation": [],
+        "blockers": [],
+        "next_steps": [],
+        "citations": [
+            {"memory_id": "memory-a", "chunk_index": 0, "text": "Evidence", "score": 1.0}
+        ],
+        "created_at": "2026-09-26T00:00:00Z",
+        "updated_at": "2026-09-26T00:00:00Z",
+        "expires_at": None,
+        "confidence": "high",
+        "completeness_notes": [],
+        "context_tokens_used": 10,
+        "context_token_budget": 100,
+        "context_truncated": False,
+    }
+
+    created = store.create_handoff(
+        packet, owner_id="owner-a", project_id="project-a"
+    )
+
+    insert_params = next(
+        params
+        for query, params in zip(state["queries"], state["params"])
+        if query.startswith("INSERT INTO handoffs")
+    )
+    stored_payload = json.loads(str(insert_params[4]))
+    assert created["owner_id"] == "owner-a"
+    assert created["project_id"] == "project-a"
+    assert stored_payload == created
+
+
+def test_postgres_metadata_capabilities_include_handoff_records() -> None:
+    store = PostgresMetadataStore.__new__(PostgresMetadataStore)
+    assert store.capabilities().supports_handoff_records is True
+
+
 def test_postgres_append_audit_event_records_jsonb_metadata() -> None:
     state: dict[str, Any] = {"queries": [], "params": []}
     store = _recording_postgres_metadata_store(state)

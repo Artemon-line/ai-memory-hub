@@ -16,6 +16,12 @@ from typing import Any, Mapping, Sequence
 
 from memory.backend.contracts import ProviderCapabilities
 from memory.backend.errors import NotSupportedError, OAuthClientQuotaExceeded
+from memory.backend.handoff_records import (
+    prepare_handoff_record,
+    public_handoff_record,
+    validate_handoff_id,
+    validate_handoff_limit,
+)
 
 LOCAL_DEFAULT_PROJECT_ID = "local-default"
 PROJECT_ROLE_ADMIN = "admin"
@@ -524,6 +530,36 @@ class SQLiteMetadataStore:
                     metadata TEXT NOT NULL,
                     created_at TEXT NOT NULL
                 )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS handoffs (
+                    id TEXT PRIMARY KEY,
+                    owner_id TEXT,
+                    project_id TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS handoff_supersessions (
+                    previous_handoff_id TEXT PRIMARY KEY,
+                    replacement_handoff_id TEXT NOT NULL UNIQUE,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(previous_handoff_id) REFERENCES handoffs(id),
+                    FOREIGN KEY(replacement_handoff_id) REFERENCES handoffs(id)
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_handoffs_scope_updated
+                ON handoffs(owner_id, project_id, updated_at)
                 """
             )
             conn.execute(
@@ -1926,7 +1962,163 @@ class SQLiteMetadataStore:
             supports_shared_scopes=True,
             supports_plugin_metadata=True,
             supports_audit_events=True,
+            supports_handoff_records=True,
         )
+
+    def create_handoff(
+        self,
+        record: dict[str, Any],
+        *,
+        owner_id: str | None,
+        project_id: str,
+        supersedes_handoff_id: str | None = None,
+    ) -> dict[str, Any]:
+        project = _validate_project_id(project_id)
+        owner = _validate_owner_id(owner_id) if owner_id is not None else None
+        normalized = prepare_handoff_record(
+            record,
+            owner_id=owner,
+            project_id=project,
+            supersedes_handoff_id=supersedes_handoff_id,
+        )
+        payload = json.dumps(normalized, separators=(",", ":"), ensure_ascii=False)
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO handoffs (id, owner_id, project_id, status, payload, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    normalized["handoff_id"],
+                    owner,
+                    project,
+                    normalized["status"],
+                    payload,
+                    normalized["created_at"],
+                    normalized["updated_at"],
+                ),
+            )
+        return normalized
+
+    def get_handoff(
+        self,
+        handoff_id: str,
+        *,
+        owner_id: str | None,
+        project_id: str,
+    ) -> dict[str, Any] | None:
+        _ = owner_id
+        clauses = ["handoffs.id = ?", "handoffs.project_id = ?"]
+        params: list[Any] = [validate_handoff_id(handoff_id), _validate_project_id(project_id)]
+        with self._connect() as conn:
+            row = conn.execute(
+                f"""
+                SELECT handoffs.payload, handoff_supersessions.replacement_handoff_id
+                FROM handoffs
+                LEFT JOIN handoff_supersessions
+                  ON handoff_supersessions.previous_handoff_id = handoffs.id
+                WHERE {" AND ".join(clauses)}
+                """,
+                params,
+            ).fetchone()
+        if row is None:
+            return None
+        return public_handoff_record(
+            json.loads(str(row["payload"])),
+            superseded_by_handoff_id=row["replacement_handoff_id"],
+        )
+
+    def search_handoffs(
+        self,
+        *,
+        owner_id: str | None,
+        project_id: str,
+        query: str | None = None,
+        status: str | None = None,
+        include_superseded: bool = False,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        _ = owner_id
+        clauses = ["handoffs.project_id = ?"]
+        params: list[Any] = [_validate_project_id(project_id)]
+        if query:
+            clauses.append("handoffs.payload LIKE ?")
+            params.append(f"%{str(query).strip()}%")
+        if status == "superseded":
+            clauses.append("handoff_supersessions.previous_handoff_id IS NOT NULL")
+            include_superseded = True
+        elif status is not None:
+            clauses.append("handoffs.status = ?")
+            params.append(str(status))
+        if not include_superseded:
+            clauses.append("handoff_supersessions.previous_handoff_id IS NULL")
+        params.append(validate_handoff_limit(limit))
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT handoffs.payload, handoff_supersessions.replacement_handoff_id
+                FROM handoffs
+                LEFT JOIN handoff_supersessions
+                  ON handoff_supersessions.previous_handoff_id = handoffs.id
+                WHERE {" AND ".join(clauses)}
+                ORDER BY handoffs.updated_at DESC, handoffs.id ASC
+                LIMIT ?
+                """,
+                params,
+            ).fetchall()
+        return [
+            public_handoff_record(
+                json.loads(str(row["payload"])),
+                superseded_by_handoff_id=row["replacement_handoff_id"],
+            )
+            for row in rows
+        ]
+
+    def supersede_handoff(
+        self,
+        handoff_id: str,
+        replacement: dict[str, Any],
+        *,
+        owner_id: str | None,
+        project_id: str,
+    ) -> dict[str, Any] | None:
+        existing_id = validate_handoff_id(handoff_id)
+        existing = self.get_handoff(
+            existing_id, owner_id=owner_id, project_id=project_id
+        )
+        if existing is None or existing.get("superseded_by_handoff_id") is not None:
+            return None
+        normalized = prepare_handoff_record(
+            replacement,
+            owner_id=owner_id,
+            project_id=_validate_project_id(project_id),
+            supersedes_handoff_id=existing_id,
+        )
+        payload = json.dumps(normalized, separators=(",", ":"), ensure_ascii=False)
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO handoffs (id, owner_id, project_id, status, payload, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    normalized["handoff_id"],
+                    normalized["owner_id"],
+                    normalized["project_id"],
+                    normalized["status"],
+                    payload,
+                    normalized["created_at"],
+                    normalized["updated_at"],
+                ),
+            )
+            conn.execute(
+                """
+                INSERT INTO handoff_supersessions (previous_handoff_id, replacement_handoff_id)
+                VALUES (?, ?)
+                """,
+                (existing_id, normalized["handoff_id"]),
+            )
+        return normalized
 
     def health(self) -> dict[str, Any]:
         return {

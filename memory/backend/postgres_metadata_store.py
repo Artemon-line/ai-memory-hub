@@ -7,6 +7,12 @@ from typing import Any, Callable
 
 from memory.backend.contracts import ProviderCapabilities
 from memory.backend.errors import OAuthClientQuotaExceeded, SchemaVersionError
+from memory.backend.handoff_records import (
+    prepare_handoff_record,
+    public_handoff_record,
+    validate_handoff_id,
+    validate_handoff_limit,
+)
 from memory.backend.metadata_store import (
     LOCAL_DEFAULT_PROJECT_ID,
     PROJECT_ROLE_ADMIN,
@@ -307,6 +313,28 @@ CREATE_AUDIT_EVENTS_MEMORY_INDEX_SQL = """
 CREATE INDEX IF NOT EXISTS idx_audit_events_memory_created
 ON audit_events(memory_id, created_at)
 """
+CREATE_HANDOFFS_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS handoffs (
+    id TEXT PRIMARY KEY,
+    owner_id TEXT NULL,
+    project_id TEXT NOT NULL,
+    status TEXT NOT NULL,
+    payload JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
+)
+"""
+CREATE_HANDOFF_SUPERSESSIONS_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS handoff_supersessions (
+    previous_handoff_id TEXT PRIMARY KEY REFERENCES handoffs(id),
+    replacement_handoff_id TEXT NOT NULL UNIQUE REFERENCES handoffs(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)
+"""
+CREATE_HANDOFFS_SCOPE_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_handoffs_scope_updated
+ON handoffs(owner_id, project_id, updated_at)
+"""
 CREATE_GRAPH_ENTITIES_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS graph_entities (
     id TEXT PRIMARY KEY,
@@ -474,6 +502,9 @@ class PostgresMetadataStore:
                 cur.execute(CREATE_AUDIT_EVENTS_PROJECT_INDEX_SQL)
                 cur.execute(CREATE_AUDIT_EVENTS_ACTOR_INDEX_SQL)
                 cur.execute(CREATE_AUDIT_EVENTS_MEMORY_INDEX_SQL)
+                cur.execute(CREATE_HANDOFFS_TABLE_SQL)
+                cur.execute(CREATE_HANDOFF_SUPERSESSIONS_TABLE_SQL)
+                cur.execute(CREATE_HANDOFFS_SCOPE_INDEX_SQL)
                 cur.execute(CREATE_GRAPH_ENTITIES_TABLE_SQL)
                 cur.execute(CREATE_GRAPH_RELATIONSHIPS_TABLE_SQL)
                 cur.execute(CREATE_GRAPH_ENTITIES_INDEX_SQL)
@@ -1865,7 +1896,167 @@ class PostgresMetadataStore:
             supports_shared_scopes=True,
             supports_plugin_metadata=True,
             supports_audit_events=True,
+            supports_handoff_records=True,
         )
+
+    def create_handoff(
+        self,
+        record: dict[str, Any],
+        *,
+        owner_id: str | None,
+        project_id: str,
+        supersedes_handoff_id: str | None = None,
+    ) -> dict[str, Any]:
+        project = _validate_project_id(project_id)
+        owner = _validate_owner_id(owner_id) if owner_id is not None else None
+        normalized = prepare_handoff_record(
+            record,
+            owner_id=owner,
+            project_id=project,
+            supersedes_handoff_id=supersedes_handoff_id,
+        )
+        payload = json.dumps(normalized, separators=(",", ":"), ensure_ascii=False)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO handoffs (id, owner_id, project_id, status, payload, created_at, updated_at)
+                    VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s)
+                    """,
+                    (
+                        normalized["handoff_id"],
+                        owner,
+                        project,
+                        normalized["status"],
+                        payload,
+                        normalized["created_at"],
+                        normalized["updated_at"],
+                    ),
+                )
+        return normalized
+
+    def get_handoff(
+        self,
+        handoff_id: str,
+        *,
+        owner_id: str | None,
+        project_id: str,
+    ) -> dict[str, Any] | None:
+        _ = owner_id
+        clauses = ["handoffs.id = %s", "handoffs.project_id = %s"]
+        params: list[Any] = [validate_handoff_id(handoff_id), _validate_project_id(project_id)]
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT handoffs.payload::text, handoff_supersessions.replacement_handoff_id
+                    FROM handoffs
+                    LEFT JOIN handoff_supersessions
+                      ON handoff_supersessions.previous_handoff_id = handoffs.id
+                    WHERE {" AND ".join(clauses)}
+                    """,
+                    params,
+                )
+                row = cur.fetchone()
+        if row is None:
+            return None
+        return public_handoff_record(
+            json.loads(str(row[0])), superseded_by_handoff_id=row[1]
+        )
+
+    def search_handoffs(
+        self,
+        *,
+        owner_id: str | None,
+        project_id: str,
+        query: str | None = None,
+        status: str | None = None,
+        include_superseded: bool = False,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        _ = owner_id
+        clauses = ["handoffs.project_id = %s"]
+        params: list[Any] = [_validate_project_id(project_id)]
+        if query:
+            clauses.append("handoffs.payload::text ILIKE %s")
+            params.append(f"%{str(query).strip()}%")
+        if status == "superseded":
+            clauses.append("handoff_supersessions.previous_handoff_id IS NOT NULL")
+            include_superseded = True
+        elif status is not None:
+            clauses.append("handoffs.status = %s")
+            params.append(str(status))
+        if not include_superseded:
+            clauses.append("handoff_supersessions.previous_handoff_id IS NULL")
+        params.append(validate_handoff_limit(limit))
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT handoffs.payload::text, handoff_supersessions.replacement_handoff_id
+                    FROM handoffs
+                    LEFT JOIN handoff_supersessions
+                      ON handoff_supersessions.previous_handoff_id = handoffs.id
+                    WHERE {" AND ".join(clauses)}
+                    ORDER BY handoffs.updated_at DESC, handoffs.id ASC
+                    LIMIT %s
+                    """,
+                    params,
+                )
+                rows = cur.fetchall()
+        return [
+            public_handoff_record(
+                json.loads(str(row[0])), superseded_by_handoff_id=row[1]
+            )
+            for row in rows
+        ]
+
+    def supersede_handoff(
+        self,
+        handoff_id: str,
+        replacement: dict[str, Any],
+        *,
+        owner_id: str | None,
+        project_id: str,
+    ) -> dict[str, Any] | None:
+        existing_id = validate_handoff_id(handoff_id)
+        existing = self.get_handoff(
+            existing_id, owner_id=owner_id, project_id=project_id
+        )
+        if existing is None or existing.get("superseded_by_handoff_id") is not None:
+            return None
+        normalized = prepare_handoff_record(
+            replacement,
+            owner_id=owner_id,
+            project_id=_validate_project_id(project_id),
+            supersedes_handoff_id=existing_id,
+        )
+        payload = json.dumps(normalized, separators=(",", ":"), ensure_ascii=False)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO handoffs (id, owner_id, project_id, status, payload, created_at, updated_at)
+                    VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s)
+                    """,
+                    (
+                        normalized["handoff_id"],
+                        normalized["owner_id"],
+                        normalized["project_id"],
+                        normalized["status"],
+                        payload,
+                        normalized["created_at"],
+                        normalized["updated_at"],
+                    ),
+                )
+                cur.execute(
+                    """
+                    INSERT INTO handoff_supersessions (previous_handoff_id, replacement_handoff_id)
+                    VALUES (%s, %s)
+                    """,
+                    (existing_id, normalized["handoff_id"]),
+                )
+        return normalized
 
     def health(self) -> dict[str, Any]:
         return {

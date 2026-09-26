@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from memory.backend.handoff_records import prepare_handoff_record
+
 logger = logging.getLogger(__name__)
 
 
@@ -46,6 +48,37 @@ class DryRunMetadataStore:
         )
         return dict(event)
 
+    def create_handoff(
+        self,
+        record: dict[str, Any],
+        *,
+        owner_id: str | None,
+        project_id: str,
+        supersedes_handoff_id: str | None = None,
+    ) -> dict[str, Any]:
+        normalized = prepare_handoff_record(
+            record,
+            owner_id=owner_id,
+            project_id=project_id,
+            supersedes_handoff_id=supersedes_handoff_id,
+        )
+        _log_dry_run_skip(
+            "metadata_create_handoff", handoff_id=normalized["handoff_id"]
+        )
+        return normalized
+
+    def supersede_handoff(
+        self,
+        handoff_id: str,
+        replacement: dict[str, Any],
+        *,
+        owner_id: str | None,
+        project_id: str,
+    ) -> dict[str, Any] | None:
+        _ = (replacement, owner_id, project_id)
+        _log_dry_run_skip("metadata_supersede_handoff", handoff_id=handoff_id)
+        return None
+
 
 class DryRunVectorStore:
     def __init__(self, store: Any):
@@ -77,4 +110,3 @@ def _log_dry_run_skip(operation: str, **extra: Any) -> None:
             **extra,
         },
     )
-
