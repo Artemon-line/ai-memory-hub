@@ -189,6 +189,8 @@ PGVector makes large captured/imported sets more practical, but ingestion code s
 Copilot does not provide a structured export comparable to ChatGPT. Capture/import must use one or more of the following strategies:
 
 - [x] **Manual paste importer** — user pastes a speaker-labelled chat; parser extracts roles and messages.
+- [x] **Copilot activity-history CSV importer** — group exported rows by conversation and restore chronological turns.
+- [x] **DeepSeek share JSON importer** — flatten request, response, and attachment fragments from public-share JSON.
 
 - [ ] **VS Code Copilot logs (optional)** — parse local `.jsonl` logs when available.
 

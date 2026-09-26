@@ -245,6 +245,8 @@ script after installation.
 python -m memory.cli ingest conversation.json --json
 python -m memory.cli reindex --json
 python -m memory.cli import manual copilot-chat.txt --source vscode-copilot --json
+python -m memory.cli import copilot-activity-csv copilot-activity-history.csv --json
+python -m memory.cli import deepseek-share-json deepseek-share.json --json
 python -m memory.cli search "local-first tools" --top-k 5 --json
 python -m memory.cli retrieve <MEMORY_ID> --json
 python -m memory.cli ask "What did I store about local-first tools?" --top-k 5 --json
@@ -254,6 +256,25 @@ python -m memory.cli serve --host 127.0.0.1 --port 8000
 Manual imports accept multiline messages labelled with common speaker names such
 as `User:`, `You:`, `Human:`, `Assistant:`, `Copilot:`, `Claude:`, or `Gemini:`.
 Use `-` as the file name to read the transcript from stdin.
+
+Microsoft Copilot activity exports must use the columns `Conversation`, `Time`,
+`Author`, and `Message`. The importer groups rows by conversation and restores
+the chronological user/assistant order used by the hub.
+
+For a public DeepSeek share link, save the response from its share-content API
+as JSON, then pass that file to `deepseek-share-json`. The importer keeps request
+and response text, represents file-only turns by their attachment names, and
+does not copy search-result snippets into memory. For example:
+
+```bash
+curl -fsS \
+  'https://chat.deepseek.com/api/v0/share/content?share_id=<SHARE_ID>' \
+  -o deepseek-share.json
+python -m memory.cli import deepseek-share-json deepseek-share.json --json
+```
+
+Review imported output before retaining sensitive conversations. The repository
+fixtures are synthetic and contain no text copied from personal exports.
 
 Shared options include `--config <path>`, `--json`, `--quiet`, and `--verbose`.
 `search` also supports `--source`, `--date-from`, `--date-to`, repeated `--tags`,

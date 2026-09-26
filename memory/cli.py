@@ -181,18 +181,37 @@ def build_parser() -> argparse.ArgumentParser:
     import_subparsers = import_command.add_subparsers(
         dest="importer", required=True, parser_class=CLIArgumentParser
     )
-    manual_import = import_subparsers.add_parser(
-        "manual",
-        help="Import a pasted speaker-labelled transcript.",
+    import_formats = (
+        (
+            "manual",
+            "Import a pasted speaker-labelled transcript.",
+            "manual-paste",
+        ),
+        (
+            "copilot-activity-csv",
+            "Import a Microsoft Copilot activity-history CSV export.",
+            "microsoft-copilot",
+        ),
+        (
+            "deepseek-share-json",
+            "Import JSON from the DeepSeek share-content endpoint.",
+            "deepseek",
+        ),
     )
-    _add_common_options(manual_import)
-    manual_import.add_argument("file", help="Transcript file path, or '-' for stdin.")
-    manual_import.add_argument(
-        "--source",
-        default="manual-paste",
-        help="Conversation source stored with the imported transcript.",
-    )
-    manual_import.add_argument("--title", default=None, help="Optional conversation title.")
+    for importer_name, importer_help, default_source in import_formats:
+        importer_parser = import_subparsers.add_parser(importer_name, help=importer_help)
+        _add_common_options(importer_parser)
+        importer_parser.add_argument("file", help="Import file path, or '-' for stdin.")
+        importer_parser.add_argument(
+            "--source",
+            default=default_source,
+            help="Conversation source stored with the imported transcript.",
+        )
+        importer_parser.add_argument(
+            "--title",
+            default=None,
+            help="Optional title override. CSV imports apply it to every conversation.",
+        )
 
     search = subparsers.add_parser("search", help="Search stored memory.")
     _add_common_options(search)
