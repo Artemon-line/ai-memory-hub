@@ -48,8 +48,6 @@ Implemented:
 - MCP tools: `memory_validate`, `memory_insert`, `memory_search`,
   `memory_retrieve`, `memory_ask`, `memory_fact_search`,
   `memory_profile_get`, `memory_lookup`, `memory_fact_supersede`,
-  `memory_handoff_create`, `memory_handoff_get`, `memory_handoff_update`,
-  `memory_handoff_search`,
   `memory_pending_approve`, `memory_pending_reject`, `memory_project_list`,
   `memory_project_default_get`, and `memory_project_get`.
 - MCP resources: `memory://conversation/example`, `memory://conversation/{id}`,
@@ -58,8 +56,6 @@ Implemented:
 - HTTP memory endpoints: `POST /memory/insert`, `POST /memory/search`,
   `POST /memory/retrieve`, `POST /memory/ask`, `POST /memory/facts/search`,
   `POST /memory/profile/get`, `POST /memory/facts/supersede`,
-  `POST /memory/handoffs`, `GET/PATCH /memory/handoffs/{id}`,
-  `POST /memory/handoffs/search`,
   `POST /memory/pending/approve`, `POST /memory/pending/reject`,
   `GET /memory/projects`, `GET /memory/projects/default`, and
   `GET /memory/projects/{project_id}`.
@@ -192,6 +188,10 @@ Expected success includes:
 
 Search stored memory by semantic query.
 
+Set `handoff_only=true` to search only unfinished memories carrying an RFC 3339
+`metadata.handoff_at` timestamp. This filters ordinary memories rather than
+reading from a separate handoff store.
+
 ```json
 {
   "query": "local-first tools",
@@ -203,7 +203,8 @@ Search stored memory by semantic query.
   "date_from": "2026-01-01T00:00:00Z",
   "date_to": "2026-12-31T23:59:59Z",
   "tags": ["preferences"],
-  "thread_id": "codex:session-42"
+  "thread_id": "codex:session-42",
+  "handoff_only": false
 }
 ```
 
@@ -397,8 +398,10 @@ confidence, and completeness notes. `max_context_tokens` bounds the retrieved
 evidence included in the packet. Handoffs apply the same owner, project,
 status, and filter authorization as ordinary ask calls, and redact recognized
 secrets before packet construction. Treat retrieved handoff content as context
-to verify, not executable instructions. This view is not persisted; stored
-handoff workflows are a separate feature.
+to verify, not executable instructions. This generated view is not persisted.
+To preserve unfinished work, save an ordinary memory with
+`metadata.handoff_at`, then retrieve it later with
+`memory_search(..., handoff_only=true)` or `memory_ask(..., handoff_only=true)`.
 
 Use `memory_profile_get` when you need a compact profile view. Its default
 concise view keeps canonical active direct-user and user-correction facts, so

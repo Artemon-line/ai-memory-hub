@@ -7,9 +7,10 @@ clients. When one agent runs out of context, budget, time, or tool access, the
 next agent should be able to continue from a compact, cited, permission-aware
 handoff packet instead of rediscovering the task from raw chat history.
 
-The product promise is simple: Agent A can save what matters, and Agent B can
-resume the work with the goal, decisions, changed files, commands, blockers,
-evidence, and next action intact.
+The product promise is simple: a user can mark an ordinary memory as unfinished
+work, then find and resume it tomorrow, next month, or after time away. A
+generated handoff packet may summarize that memory, but it is a view rather than
+a second stored resource.
 
 If the hub is backed by reachable cloud storage or a hosted deployment, the same
 handoff can be resumed from local machines, cloud IDEs, remote dev containers,
@@ -24,17 +25,17 @@ client, then the session runs out of context or budget. The useful work is not
 truly gone, but it is trapped in a conversation transcript that the next agent
 cannot reliably reconstruct.
 
-Generic memory search helps, but it is not enough. Continuation needs a typed
-handoff artifact with explicit status and provenance.
+Generic memory search is the foundation. Continuation needs a small,
+well-documented marker that lets normal search and ask focus on unfinished work.
 
 ## Scope
 
-- [ ] Add a first-class handoff memory type for cross-session and cross-agent
-      task continuity.
-- [ ] Preserve current MCP and HTTP memory surfaces while adding handoff-specific
-      operations.
-- [ ] Store handoffs as hub-owned records with links back to source
-      conversations, files, commands, tests, and decisions.
+- [x] Represent a stored handoff as an ordinary memory with
+      `metadata.handoff_at`.
+- [x] Preserve the current MCP and HTTP memory surfaces; do not add a parallel
+      handoff CRUD API.
+- [x] Query unfinished work through normal `memory_search` and `memory_ask`
+      using `handoff_only=true`.
 - [ ] Make handoff packets compact enough for low-budget agents to consume.
 - [ ] Make handoffs portable across local, LAN, hosted, and cloud development
       environments when the same authenticated hub is reachable.
@@ -103,28 +104,22 @@ Acceptance criteria:
 - [ ] Existing `memory_ask` and search behavior remains backward compatible.
 - [ ] Handoff generation refuses to include redacted or unauthorized memory.
 
-## Phase 2: Stored Handoff Records
+## Phase 2: Stored Handoff Marker
 
-- [x] Add metadata schema support for stored handoff records in SQLite and
-      Postgres, with immutable supersession lineage.
-- [x] Add `memory_handoff_create` over MCP.
-- [x] Add `memory_handoff_get` over MCP.
-- [x] Add `memory_handoff_update` over MCP.
-- [x] Add `memory_handoff_search` over MCP.
-- [x] Add matching HTTP endpoints:
-      - [x] `POST /memory/handoffs`
-      - [x] `GET /memory/handoffs/{id}`
-      - [x] `PATCH /memory/handoffs/{id}`
-      - [x] `POST /memory/handoffs/search`
-- [x] Support `supersedes_handoff_id` so later agents can update stale
-      continuation packets without mutating history.
+- [x] Add optional `metadata.handoff_at` to the ordinary conversation schema.
+- [x] Define presence of `handoff_at` as “unfinished work saved for later.”
+- [x] Add `handoff_only` to existing HTTP and MCP search/ask requests.
+- [x] Keep insert, retrieve, authorization, redaction, indexing, and storage on
+      the normal memory path.
+- [ ] Add a later resolution/link field only when a proven resume workflow
+      requires it; do not introduce a parallel handoff lifecycle prematurely.
 
 Acceptance criteria:
 
-- [ ] API and MCP handoff response envelopes match existing hub conventions.
+- [x] API and MCP responses remain the existing memory response envelopes.
 - [ ] Handoffs can be saved explicitly at the end of a session.
 - [ ] Handoffs can be resumed explicitly at the start of a later session.
-- [ ] Updates preserve an audit trail.
+- [x] Handoff memories inherit normal memory authorization and audit behavior.
 
 ## Phase 3: Agent Workflow Integration
 
@@ -216,10 +211,9 @@ Acceptance criteria:
 ## Tests
 
 - [x] Unit tests for handoff packet validation and redaction.
-- [x] Metadata-store contract tests for create, get, supersede, search,
-      and authorization filters.
-- [x] MCP tool tests for handoff create/get/update/search.
-- [x] HTTP endpoint tests for handoff create/get/update/search.
+- [x] Unit tests for filtering ordinary memories by `handoff_at` presence.
+- [x] MCP tests for `memory_search(..., handoff_only=true)`.
+- [x] HTTP tests for `/memory/search` with `handoff_only=true`.
 - [ ] Integration tests for Agent A creates handoff, Agent B resumes handoff.
 - [ ] Negative tests for cross-user and cross-project handoff leakage.
 - [ ] Regression tests for budget-constrained handoff packets.
@@ -237,8 +231,8 @@ Acceptance criteria:
 
 ## Open Questions
 
-- [ ] Should handoff packets be stored as a dedicated metadata table/collection
-      or as typed conversation-adjacent records?
+- [x] Store unfinished handoffs as ordinary memories with a marker, not in a
+      dedicated table or collection.
 - [ ] Should generated handoffs require explicit user confirmation by default?
 - [ ] What is the minimum useful handoff packet for very low token budgets?
 - [ ] Should stale handoffs expire automatically or only be superseded?

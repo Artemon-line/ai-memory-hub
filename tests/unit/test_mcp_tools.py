@@ -7,7 +7,6 @@ from typing import Any
 
 import pytest
 
-from memory.backend.metadata_store import SQLiteMetadataStore
 from memory.ingestion import mvp_ingestion
 from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
 from memory.interfaces import mcp_server
@@ -116,36 +115,6 @@ def _conversation_two() -> dict[str, object]:
             "tags": ["beta"],
             "thread_id": "thread-beta",
         },
-    }
-
-
-def _handoff(handoff_id: str, *, goal: str = "Continue MCP work") -> dict[str, object]:
-    return {
-        "handoff_id": handoff_id,
-        "project_id": None,
-        "thread_id": "thread-mcp",
-        "source_agent": "codex",
-        "target_agent": None,
-        "goal": {"text": goal, "citations": ["memory-a:0"]},
-        "status": "active",
-        "summary": [{"text": "Ready", "citations": ["memory-a:0"]}],
-        "decisions": [],
-        "changed_files": [],
-        "commands_run": [],
-        "validation": [],
-        "blockers": [],
-        "next_steps": [],
-        "citations": [
-            {"memory_id": "memory-a", "chunk_index": 0, "text": "Evidence", "score": 1.0}
-        ],
-        "created_at": "2026-09-26T00:00:00Z",
-        "updated_at": "2026-09-26T00:00:00Z",
-        "expires_at": None,
-        "confidence": "high",
-        "completeness_notes": [],
-        "context_tokens_used": 5,
-        "context_token_budget": 100,
-        "context_truncated": False,
     }
 
 
@@ -900,7 +869,9 @@ async def test_mcp_tool_handlers_search_pagination_and_filters() -> None:
     )
     handlers = build_tool_handlers(agent)
 
-    await handlers["memory_insert"](_conversation())
+    handoff = _conversation()
+    handoff["metadata"]["handoff_at"] = "2026-01-03T17:00:00Z"
+    await handlers["memory_insert"](handoff)
     await handlers["memory_insert"](_conversation_two())
 
     page_one = await handlers["memory_search"]("hello", limit=1, top_k=10)
@@ -951,6 +922,12 @@ async def test_mcp_tool_handlers_search_pagination_and_filters() -> None:
         "beta" in row["conversation"]["metadata"].get("tags", [])
         for row in filtered_tags["results"]
     )
+
+    filtered_handoffs = await handlers["memory_search"](
+        "hello", handoff_only=True, top_k=10, response_format="detailed"
+    )
+    assert filtered_handoffs["status"] == "ok"
+    assert [row["id"] for row in filtered_handoffs["results"]] == [handoff["id"]]
 
     wrapped_tags = await handlers["memory_search"](
         "hello",
@@ -1048,52 +1025,11 @@ async def test_mcp_tool_handlers_payload_compatibility_copilot_style() -> None:
 
     result = await handlers["memory_insert"](payload)
     assert result["status"] == "ok"
+
     stored = runtime.metadata_store.get(result["id"])
     assert "vscode" in stored["metadata"]["tags"]
     assert stored["metadata"]["session_id"] == "session-123"
 
-
-@pytest.mark.asyncio
-async def test_mcp_handoff_tools_match_create_get_update_search_contract(tmp_path) -> None:
-    runtime = mvp_ingestion.RuntimeDependencies(
-        embedding_provider=StubEmbedder(),  # type: ignore[arg-type]
-        metadata_store=SQLiteMetadataStore(tmp_path / "metadata.sqlite3"),
-        vector_store=StubVectorStore(),
-        health_state={"mode": "ok"},
-    )
-    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=runtime)
-    handlers = build_tool_handlers(agent)
-
-    created = await handlers["memory_handoff_create"](_handoff("handoff-mcp-a"))
-    assert created["status"] == "ok"
-    assert created["handoff"]["handoff_id"] == "handoff-mcp-a"
-    assert "citations" not in created["handoff"]
-    duplicate = await handlers["memory_handoff_create"](_handoff("handoff-mcp-a"))
-    assert duplicate["error_code"] == "conflict"
-
-    detailed = await handlers["memory_handoff_get"](
-        "handoff-mcp-a", response_format="detailed"
-    )
-    assert detailed["handoff"]["citations"][0]["memory_id"] == "memory-a"
-
-    updated = await handlers["memory_handoff_update"](
-        "handoff-mcp-a", _handoff("handoff-mcp-b", goal="Continue after review")
-    )
-    assert updated["handoff"]["supersedes_handoff_id"] == "handoff-mcp-a"
-
-    searched = await handlers["memory_handoff_search"](query="review")
-    assert searched["total"] == 1
-    assert searched["results"][0]["handoff_id"] == "handoff-mcp-b"
-
-    conflict = await handlers["memory_handoff_update"](
-        "handoff-mcp-a", _handoff("handoff-mcp-c")
-    )
-    assert conflict["status"] == "error"
-    assert conflict["error_code"] == "conflict"
-
-    invalid_status = await handlers["memory_handoff_search"](status="unknown")
-    assert invalid_status["status"] == "error"
-    assert invalid_status["error_code"] == "invalid_input"
 
 @pytest.mark.asyncio
 async def test_mcp_tool_handlers_payload_compatibility_chatgpt_style() -> None:

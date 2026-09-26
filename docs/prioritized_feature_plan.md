@@ -401,10 +401,9 @@ Implementation sequence:
       commands run, validation, blockers, next steps, and citations.
 - [ ] Add retrieval-only generated handoff views from existing memory before
       adding stored records.
-- [x] Add secure stored handoff records with SQLite/Postgres parity,
-      authorization, redaction, immutable supersession, and audit events.
-- [x] Add matching MCP and HTTP create/get/update/search surfaces with concise
-      and detailed MCP responses.
+- [x] Store unfinished handoffs as ordinary memories marked with
+      `metadata.handoff_at`; do not create a second persistence model.
+- [x] Add `handoff_only` to existing MCP/HTTP search and ask surfaces.
 - [ ] Add MCP prompts and CLI commands for create/resume workflows.
 - [ ] Enforce owner, project, shared-project, and secret-redaction boundaries.
 - [ ] Treat A2A as an optional later integration surface after MCP/HTTP handoff

@@ -1268,6 +1268,26 @@ def test_search_filters_by_thread_id() -> None:
     assert "cobalt" in search_result["results"][0]["text"]
 
 
+def test_search_filters_unfinished_handoff_memories() -> None:
+    _configure_stubs(retrieval_vector_score_threshold=0.0)
+    handoff = _valid_conversation()
+    handoff["id"] = "11111111-1111-4111-8111-111111111111"
+    handoff["messages"] = [{"role": "user", "text": "Continue the shared release work"}]
+    handoff["metadata"]["handoff_at"] = "2026-01-03T17:00:00Z"
+    completed = _valid_conversation()
+    completed["id"] = "22222222-2222-4222-8222-222222222222"
+    completed["messages"] = [{"role": "user", "text": "Completed the shared release work"}]
+    mvp_ingestion.ingest_messages(handoff)
+    mvp_ingestion.ingest_messages(completed)
+
+    result = mvp_ingestion.search("shared release", top_k=5, handoff_only=True)
+
+    assert [row["id"] for row in result["results"]] == [handoff["id"]]
+    assert result["results"][0]["conversation"]["metadata"]["handoff_at"] == (
+        "2026-01-03T17:00:00Z"
+    )
+
+
 def test_search_threads_mode_groups_results_by_thread() -> None:
     _configure_stubs(retrieval_vector_score_threshold=0.0)
     first = _valid_conversation()

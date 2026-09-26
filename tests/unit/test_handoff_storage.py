@@ -2,10 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 
-import pytest
-
-from memory.backend.metadata_store import PROJECT_ROLE_READER, SQLiteMetadataStore
-from memory.ingestion import mvp_ingestion
+from memory.backend.metadata_store import SQLiteMetadataStore
 
 
 def _packet(handoff_id: str, *, goal: str = "Continue the release") -> dict[str, object]:
@@ -36,15 +33,6 @@ def _packet(handoff_id: str, *, goal: str = "Continue the release") -> dict[str,
         "context_token_budget": 100,
         "context_truncated": False,
     }
-
-
-def _runtime(store: SQLiteMetadataStore) -> mvp_ingestion.RuntimeDependencies:
-    return mvp_ingestion.RuntimeDependencies(
-        embedding_provider=object(),
-        metadata_store=store,
-        vector_store=object(),
-        health_state={},
-    )
 
 
 def test_sqlite_handoff_storage_redacts_and_scopes_records(tmp_path) -> None:
@@ -99,34 +87,6 @@ def test_sqlite_handoff_supersession_preserves_original_payload(tmp_path) -> Non
         owner_id="owner-a",
         project_id="project-a",
     ) is None
-
-
-def test_handoff_service_enforces_project_roles_and_records_audit(tmp_path) -> None:
-    store = SQLiteMetadataStore(tmp_path / "metadata.sqlite3")
-    store.create_project(project_id="shared-a", owner_id="owner-a")
-    store.add_project_member(
-        project_id="shared-a", user_id="owner-b", role=PROJECT_ROLE_READER
-    )
-
-    with mvp_ingestion.runtime_context(_runtime(store)):
-        created = mvp_ingestion.handoff_create(
-            _packet("handoff-a"), owner_id="owner-a", project_id="shared-a"
-        )
-        assert created["handoff_id"] == "handoff-a"
-        with pytest.raises(PermissionError, match="project access denied"):
-            mvp_ingestion.handoff_create(
-                _packet("handoff-b"), owner_id="owner-b", project_id="shared-a"
-            )
-        assert mvp_ingestion.handoff_get(
-            "handoff-a", owner_id="owner-b", project_id="shared-a"
-        ) is not None
-        with pytest.raises(PermissionError, match="project access denied"):
-            mvp_ingestion.handoff_get(
-                "handoff-a", owner_id="owner-c", project_id="shared-a"
-            )
-
-    event_types = {event["event_type"] for event in store.list_audit_events(limit=20)}
-    assert {"handoff.created", "handoff.read", "project.access_denied"} <= event_types
 
 
 def test_handoff_create_does_not_mutate_input(tmp_path) -> None:

@@ -118,24 +118,6 @@ _CONCISE_ASK_KEYS: tuple[str | StrEnum, ...] = (
 _CONCISE_RETRIEVE_MESSAGE_LIMIT = 6
 _CONCISE_RETRIEVE_MESSAGE_TEXT_LIMIT = 800
 _CONCISE_RETRIEVE_METADATA_KEYS = (_MEMORY_STATUS_KEY,)
-_CONCISE_HANDOFF_KEYS = (
-    "handoff_id",
-    "project_id",
-    "thread_id",
-    "source_agent",
-    "target_agent",
-    "goal",
-    "status",
-    "summary",
-    "blockers",
-    "next_steps",
-    "created_at",
-    "updated_at",
-    "expires_at",
-    "confidence",
-    "supersedes_handoff_id",
-    "superseded_by_handoff_id",
-)
 
 
 def format_search_response(
@@ -173,26 +155,6 @@ def format_ask_response(payload: dict[str, Any], response_format: str) -> dict[s
     formatted["citation_count"] = _list_count(payload.get("citations"))
     if isinstance(payload.get("handoff"), dict):
         formatted["handoff"] = payload["handoff"]
-    return formatted
-
-
-def format_handoff_response(
-    payload: dict[str, Any], response_format: str
-) -> dict[str, Any]:
-    if response_format == MCPResponseFormat.DETAILED.value:
-        return payload
-    formatted = _compact_mapping(payload, ("status",))
-    handoff = payload.get("handoff")
-    if isinstance(handoff, dict):
-        formatted["handoff"] = _compact_mapping(handoff, _CONCISE_HANDOFF_KEYS)
-    results = payload.get("results")
-    if isinstance(results, list):
-        formatted["results"] = [
-            _compact_mapping(item, _CONCISE_HANDOFF_KEYS)
-            for item in results
-            if isinstance(item, dict)
-        ]
-        formatted["total"] = len(results)
     return formatted
 
 
