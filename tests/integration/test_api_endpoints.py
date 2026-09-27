@@ -1201,11 +1201,18 @@ def test_memory_insert_400_on_invalid_schema() -> None:
 def test_memory_search_and_retrieve() -> None:
     client = _client()
     payload = _conversation()
+    payload["metadata"]["handoff_at"] = "2026-01-03T17:00:00Z"
     client.post("/memory/insert", json=payload)
 
     search = client.post("/memory/search", json={"query": "hello", "top_k": 3})
     assert search.status_code == 200
     assert search.json()["status"] == "ok"
+
+    handoffs = client.post(
+        "/memory/search", json={"query": "hello", "handoff_only": True}
+    )
+    assert handoffs.status_code == 200
+    assert [row["id"] for row in handoffs.json()["results"]] == [payload["id"]]
 
     retrieve = client.post("/memory/retrieve", json={"id": payload["id"]})
     assert retrieve.status_code == 200

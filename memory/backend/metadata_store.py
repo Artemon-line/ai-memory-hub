@@ -1982,22 +1982,25 @@ class SQLiteMetadataStore:
             supersedes_handoff_id=supersedes_handoff_id,
         )
         payload = json.dumps(normalized, separators=(",", ":"), ensure_ascii=False)
-        with self._connect() as conn:
-            conn.execute(
-                """
-                INSERT INTO handoffs (id, owner_id, project_id, status, payload, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    normalized["handoff_id"],
-                    owner,
-                    project,
-                    normalized["status"],
-                    payload,
-                    normalized["created_at"],
-                    normalized["updated_at"],
-                ),
-            )
+        try:
+            with self._connect() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO handoffs (id, owner_id, project_id, status, payload, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        normalized["handoff_id"],
+                        owner,
+                        project,
+                        normalized["status"],
+                        payload,
+                        normalized["created_at"],
+                        normalized["updated_at"],
+                    ),
+                )
+        except sqlite3.IntegrityError as exc:
+            raise ValueError("handoff_id already exists") from exc
         return normalized
 
     def get_handoff(

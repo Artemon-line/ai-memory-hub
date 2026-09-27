@@ -155,6 +155,11 @@ closely matched chunks from the same conversation can surface together without
 hiding strong unrelated matches.
 Use `result_mode=threads` to group matching conversations by `metadata.thread_id`.
 
+To save unfinished work for later, insert it as a normal memory with an RFC 3339
+`metadata.handoff_at` timestamp. Search or ask with `handoff_only=true` to limit
+retrieval to these handoff-marked memories. Handoffs therefore use the same
+storage, indexing, permissions, and retrieval path as every other memory.
+
 MCP `memory_search` adds a `response_format` enum. The default,
 `response_format="concise"`, returns each row as matched chunk fields plus a
 small `citation` object with conversation ID, source, title, timestamp,
@@ -338,9 +343,9 @@ Core tools:
 
 - `memory_validate(conversation_json)`
 - `memory_insert(conversation_json)`
-- `memory_search(query, top_k=5, limit, cursor, result_mode="chunks", response_format="concise", source, date_from, date_to, tags, thread_id)`
+- `memory_search(query, top_k=5, limit, cursor, result_mode="chunks", response_format="concise", source, date_from, date_to, tags, thread_id, handoff_only=false)`
 - `memory_retrieve(id, response_format="concise", project_id, memory_status)`
-- `memory_ask(question, top_k=5, max_context_tokens=None, result_mode="chunks", response_format="concise", source, date_from, date_to, tags, thread_id, project_id)`
+- `memory_ask(question, top_k=5, max_context_tokens=None, result_mode="chunks", response_format="concise", source, date_from, date_to, tags, thread_id, handoff_only=false, project_id)`
 - `memory_fact_search(query=None, subject=None, predicate=None, include_superseded=False, response_format="concise", limit=None, source, date_from, date_to, confidence, status, source_quality, save_intent, save_intent_source, freshness_from, freshness_to, project_id)`
 - `memory_profile_get(subject="user", predicate, response_format="concise", limit=None, source, date_from, date_to, confidence, status, source_quality, save_intent, save_intent_source, freshness_from, freshness_to, project_id)`
 - `memory_fact_supersede(fact_id, superseded_by)`

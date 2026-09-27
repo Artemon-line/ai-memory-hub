@@ -7,9 +7,10 @@ clients. When one agent runs out of context, budget, time, or tool access, the
 next agent should be able to continue from a compact, cited, permission-aware
 handoff packet instead of rediscovering the task from raw chat history.
 
-The product promise is simple: Agent A can save what matters, and Agent B can
-resume the work with the goal, decisions, changed files, commands, blockers,
-evidence, and next action intact.
+The product promise is simple: a user can mark an ordinary memory as unfinished
+work, then find and resume it tomorrow, next month, or after time away. A
+generated handoff packet may summarize that memory, but it is a view rather than
+a second stored resource.
 
 If the hub is backed by reachable cloud storage or a hosted deployment, the same
 handoff can be resumed from local machines, cloud IDEs, remote dev containers,
@@ -24,17 +25,33 @@ client, then the session runs out of context or budget. The useful work is not
 truly gone, but it is trapped in a conversation transcript that the next agent
 cannot reliably reconstruct.
 
-Generic memory search helps, but it is not enough. Continuation needs a typed
-handoff artifact with explicit status and provenance.
+Generic memory search is the foundation. Continuation needs a small,
+well-documented marker that lets normal search and ask focus on unfinished work.
+
+## Design References
+
+The plan borrows small, proven concepts without copying provider-specific
+session formats:
+
+- Hermes: preserve opaque source-client and source-session identity plus the
+  workspace/project scope used to find the work again.
+- Codex: preserve immutable parent lineage so a continuation can point to the
+  memory it follows without rewriting history.
+- OpenCode: generate a compact resume hint from the underlying memory while
+  retaining that memory as the source of truth.
+
+These are metadata conventions on ordinary memories. They do not authorize the
+hub to replay a foreign session, import provider credentials, or inherit the
+source agent's permissions.
 
 ## Scope
 
-- [ ] Add a first-class handoff memory type for cross-session and cross-agent
-      task continuity.
-- [ ] Preserve current MCP and HTTP memory surfaces while adding handoff-specific
-      operations.
-- [ ] Store handoffs as hub-owned records with links back to source
-      conversations, files, commands, tests, and decisions.
+- [x] Represent a stored handoff as an ordinary memory with
+      `metadata.handoff_at`.
+- [x] Preserve the current MCP and HTTP memory surfaces; do not add a parallel
+      handoff CRUD API.
+- [x] Query unfinished work through normal `memory_search` and `memory_ask`
+      using `handoff_only=true`.
 - [ ] Make handoff packets compact enough for low-budget agents to consume.
 - [ ] Make handoffs portable across local, LAN, hosted, and cloud development
       environments when the same authenticated hub is reachable.
@@ -54,33 +71,30 @@ handoff artifact with explicit status and provenance.
       output in generated handoff packets.
 - [ ] Do not require A2A before the handoff model is useful.
 
-## Handoff Packet Model
+## Handoff Memory Model
 
-Initial fields:
+Persisted fields are intentionally small and live in ordinary memory metadata:
 
-- [ ] `handoff_id`: hub-generated stable UUID.
-- [ ] `project_id`: optional project/workspace scope.
-- [ ] `thread_id`: optional source thread or upstream session identifier.
-- [ ] `source_agent`: client or agent that created the handoff.
-- [ ] `target_agent`: optional intended next agent or client.
-- [ ] `goal`: concise user-level objective.
-- [ ] `status`: `active`, `blocked`, `waiting_for_review`, `complete`, or
-      `superseded`.
-- [ ] `summary`: short continuation summary.
-- [ ] `decisions`: ordered list of important decisions and rationale.
-- [ ] `changed_files`: file paths, change intent, and whether changes were
-      committed.
-- [ ] `commands_run`: command, result, and important output summary.
-- [ ] `validation`: tests, builds, checks, or manual verification already run.
-- [ ] `blockers`: concrete blockers and what would unblock them.
-- [ ] `next_steps`: ordered, actionable continuation steps.
-- [ ] `citations`: source memory IDs, conversation IDs, chunks, or fact IDs.
-- [ ] `created_at`, `updated_at`, `expires_at`: lifecycle timestamps.
-- [ ] `confidence`: generated handoff confidence or completeness score.
+- [x] `handoff_at`: RFC 3339 timestamp marking the memory as unfinished work.
+- [x] `project_id`: existing project/workspace authorization scope.
+- [ ] `source_client`: optional producer such as `codex`, `hermes`, `opencode`,
+      or `gemini`; treat it as descriptive provenance, not authority.
+- [ ] `source_session_id`: optional opaque identifier from the source client.
+- [ ] `workspace_key`: optional normalized workspace identity when `project_id`
+      alone cannot distinguish local workspaces.
+- [ ] `parent_memory_id`: optional immutable link to the preceding memory in a
+      continuation chain.
+- [ ] `resume_hint`: compact, cited continuation guidance generated from the
+      underlying authorized memory.
+
+The richer packet returned by `result_mode="handoff"` remains an ephemeral view.
+It may contain goal, summary, decisions, changed files, commands, validation,
+blockers, next steps, citations, confidence, and completeness notes without
+turning those fields into a second persistence model.
 
 Acceptance criteria:
 
-- [ ] Handoff packets are compact, structured, and readable by humans and agents.
+- [ ] Handoff views are compact, structured, and readable by humans and agents.
 - [ ] Every generated packet links back to evidence instead of being an
       unsupported summary.
 - [ ] A new agent can request "what was happening here?" and receive a useful
@@ -103,30 +117,81 @@ Acceptance criteria:
 - [ ] Existing `memory_ask` and search behavior remains backward compatible.
 - [ ] Handoff generation refuses to include redacted or unauthorized memory.
 
-## Phase 2: Stored Handoff Records
+## Phase 2: Stored Handoff Marker
 
-- [x] Add metadata schema support for stored handoff records in SQLite and
-      Postgres, with immutable supersession lineage.
-- [ ] Add `memory_handoff_create` over MCP.
-- [ ] Add `memory_handoff_get` over MCP.
-- [ ] Add `memory_handoff_update` over MCP.
-- [ ] Add `memory_handoff_search` over MCP.
-- [ ] Add matching HTTP endpoints:
-      - [ ] `POST /memory/handoffs`
-      - [ ] `GET /memory/handoffs/{id}`
-      - [ ] `PATCH /memory/handoffs/{id}`
-      - [ ] `POST /memory/handoffs/search`
-- [x] Support `supersedes_handoff_id` so later agents can update stale
-      continuation packets without mutating history.
+- [x] Add optional `metadata.handoff_at` to the ordinary conversation schema.
+- [x] Define presence of `handoff_at` as “unfinished work saved for later.”
+- [x] Add `handoff_only` to existing HTTP and MCP search/ask requests.
+- [x] Keep insert, retrieve, authorization, redaction, indexing, and storage on
+      the normal memory path.
+- [ ] Add a later resolution/link field only when a proven resume workflow
+      requires it; do not introduce a parallel handoff lifecycle prematurely.
 
 Acceptance criteria:
 
-- [ ] API and MCP handoff response envelopes match existing hub conventions.
+- [x] API and MCP responses remain the existing memory response envelopes.
 - [ ] Handoffs can be saved explicitly at the end of a session.
 - [ ] Handoffs can be resumed explicitly at the start of a later session.
-- [ ] Updates preserve an audit trail.
+- [x] Handoff memories inherit normal memory authorization and audit behavior.
 
-## Phase 3: Agent Workflow Integration
+## Phase 3: Source Provenance And Workspace Identity
+
+- [ ] Add optional `metadata.source_client` without restricting clients to a
+      closed provider enum.
+- [ ] Add optional opaque `metadata.source_session_id`; never interpret it as a
+      credential or proof of access.
+- [ ] Reuse `project_id` as the primary workspace boundary.
+- [ ] Define an optional normalized `workspace_key` only for clients that need
+      more precise workspace discovery.
+- [ ] Document importer mappings for Hermes, Codex, and OpenCode session IDs.
+- [ ] Ensure concise responses expose useful provenance without leaking local
+      paths or private provider identifiers by default.
+
+Acceptance criteria:
+
+- [ ] A memory created in Codex can be found from another client by project and
+      source provenance.
+- [ ] Missing provenance fields do not affect existing memory behavior.
+- [ ] Source identifiers remain descriptive metadata and never bypass normal
+      owner/project authorization.
+
+## Phase 4: Immutable Continuation Lineage
+
+- [ ] Add optional `metadata.parent_memory_id` referencing an authorized memory.
+- [ ] Validate that parent and child belong to the same visible project scope.
+- [ ] Keep parent memories immutable; continuation creates a new memory rather
+      than rewriting its predecessor.
+- [ ] Return bounded lineage in detailed retrieval and handoff views.
+- [ ] Detect missing, cyclic, or cross-project lineage deterministically.
+
+Acceptance criteria:
+
+- [ ] A Gemini continuation can point back to the Codex memory it resumed.
+- [ ] The complete chain remains auditable without requiring either provider's
+      native session format.
+- [ ] Lineage cannot expose a parent memory the caller is not allowed to read.
+
+## Phase 5: Compact Resume Hint
+
+- [ ] Generate `resume_hint` from the authorized underlying memory, not only
+      from client-supplied text.
+- [ ] Keep the hint short enough for low-budget agents and include source-memory
+      citations or an explicit low-confidence result.
+- [ ] Prefer read-time generation initially; persist a hint only when cache or
+      offline workflow evidence justifies it.
+- [ ] Include current objective, confirmed progress, blocker, and immediate next
+      action when supported by evidence.
+- [ ] Never treat a resume hint as executable instructions or as a replacement
+      for retrieving the source memory.
+
+Acceptance criteria:
+
+- [ ] A receiving agent can orient itself without replaying the full source
+      transcript.
+- [ ] The hint stays within a documented token budget.
+- [ ] Stale or unsupported hints are clearly identified and can be regenerated.
+
+## Phase 6: Agent Workflow Integration
 
 - [ ] Add MCP prompt `create_handoff` for "save my current working state."
 - [ ] Add MCP prompt `resume_handoff` for "continue this task."
@@ -148,7 +213,7 @@ Acceptance criteria:
 - [ ] Real-client smoke coverage proves at least one MCP client can create and
       resume a handoff.
 
-## Phase 4: Safety And Permission Model
+## Phase 7: Safety And Permission Model
 
 - [x] Scope handoff reads by `owner_id`, project membership, and shared-memory
       policy.
@@ -158,8 +223,9 @@ Acceptance criteria:
       memory inserts.
 - [ ] Add review flow support for handoffs created from unmarked or
       client-auto-save material.
-- [x] Add audit events for create, read, search, and supersede. Update/delete
-      events remain tied to their future public mutation semantics.
+- [x] Reuse normal memory insert, read, and search audit events.
+- [ ] Record provenance/lineage validation failures without logging provider
+      session IDs or private workspace paths.
 
 Acceptance criteria:
 
@@ -170,7 +236,7 @@ Acceptance criteria:
 - [ ] Handoff records are evidence, not instructions; docs warn agents to treat
       them as context to verify.
 
-## Phase 5: A2A Integration Path
+## Phase 8: A2A Integration Path
 
 - [ ] Track the current Agent2Agent protocol separately from the MCP tool
       surface.
@@ -181,6 +247,10 @@ Acceptance criteria:
       - [ ] search handoffs for a project
       - [ ] resume a handoff with citations
 - [ ] Map A2A task IDs and agent IDs into handoff provenance.
+- [ ] Let a receiving agent create a continuation memory linked by
+      `parent_memory_id`; do not mutate or impersonate the source session.
+- [ ] Add claiming or completion state only after real multi-agent workflows
+      demonstrate a concurrency requirement.
 - [ ] Keep MCP as the primary tool/data interface and A2A as an optional
       agent-to-agent coordination surface.
 
@@ -191,7 +261,7 @@ Acceptance criteria:
 - [ ] A2A support remains additive; MCP and HTTP users do not need it.
 - [ ] A2A task provenance can be queried through normal memory retrieval.
 
-## Phase 6: Graph-Aware Handoff Memory
+## Phase 9: Graph-Aware Handoff Memory
 
 - [ ] Link handoff records to projects, agents, files, commands, tests,
       decisions, blockers, source memories, and follow-up handoffs.
@@ -216,11 +286,13 @@ Acceptance criteria:
 ## Tests
 
 - [x] Unit tests for handoff packet validation and redaction.
-- [x] Metadata-store contract tests for create, get, supersede, search,
-      and authorization filters.
-- [ ] MCP tool tests for handoff create/get/update/search.
-- [ ] HTTP endpoint tests for handoff create/get/update/search.
+- [x] Unit tests for filtering ordinary memories by `handoff_at` presence.
+- [x] MCP tests for `memory_search(..., handoff_only=true)`.
+- [x] HTTP tests for `/memory/search` with `handoff_only=true`.
 - [ ] Integration tests for Agent A creates handoff, Agent B resumes handoff.
+- [ ] Tests for optional source provenance and workspace identity.
+- [ ] Tests for immutable parent lineage, cycles, and cross-project denial.
+- [ ] Tests for cited, token-bounded resume hints.
 - [ ] Negative tests for cross-user and cross-project handoff leakage.
 - [ ] Regression tests for budget-constrained handoff packets.
 - [ ] Bruno or real-client smoke coverage once the MCP surface exists.
@@ -237,10 +309,14 @@ Acceptance criteria:
 
 ## Open Questions
 
-- [ ] Should handoff packets be stored as a dedicated metadata table/collection
-      or as typed conversation-adjacent records?
+- [x] Store unfinished handoffs as ordinary memories with a marker, not in a
+      dedicated table or collection.
 - [ ] Should generated handoffs require explicit user confirmation by default?
 - [ ] What is the minimum useful handoff packet for very low token budgets?
 - [ ] Should stale handoffs expire automatically or only be superseded?
 - [ ] How should target-agent hints be represented without coupling the hub to
       specific vendors?
+- [ ] Is `project_id` sufficient for workspace identity, or do representative
+      client exports prove that an additional `workspace_key` is required?
+- [ ] Should `resume_hint` remain read-time only or be cached with source-memory
+      version metadata?

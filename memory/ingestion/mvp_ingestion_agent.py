@@ -95,6 +95,7 @@ class MVPIngestionAgent(BaseIngestionAgent):
         date_to: str | None = None,
         tags: list[str] | tuple[str, ...] | None = None,
         thread_id: str | None = None,
+        handoff_only: bool = False,
     ) -> Dict[str, Any]:
         return await self._call_service(
             self._service.search,
@@ -109,6 +110,7 @@ class MVPIngestionAgent(BaseIngestionAgent):
             date_to=date_to,
             tags=tags,
             thread_id=thread_id,
+            handoff_only=handoff_only,
         )
 
     async def retrieve(
@@ -142,6 +144,7 @@ class MVPIngestionAgent(BaseIngestionAgent):
         date_to: str | None = None,
         tags: list[str] | tuple[str, ...] | None = None,
         thread_id: str | None = None,
+        handoff_only: bool = False,
     ) -> Dict[str, Any]:
         return await self._call_service(
             self._service.ask,
@@ -157,6 +160,7 @@ class MVPIngestionAgent(BaseIngestionAgent):
             date_to=date_to,
             tags=tags,
             thread_id=thread_id,
+            handoff_only=handoff_only,
         )
 
     async def health(self) -> Dict[str, Any]:

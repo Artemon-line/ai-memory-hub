@@ -1916,23 +1916,28 @@ class PostgresMetadataStore:
             supersedes_handoff_id=supersedes_handoff_id,
         )
         payload = json.dumps(normalized, separators=(",", ":"), ensure_ascii=False)
-        with self._connect() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    INSERT INTO handoffs (id, owner_id, project_id, status, payload, created_at, updated_at)
-                    VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s)
-                    """,
-                    (
-                        normalized["handoff_id"],
-                        owner,
-                        project,
-                        normalized["status"],
-                        payload,
-                        normalized["created_at"],
-                        normalized["updated_at"],
-                    ),
-                )
+        try:
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO handoffs (id, owner_id, project_id, status, payload, created_at, updated_at)
+                        VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s)
+                        """,
+                        (
+                            normalized["handoff_id"],
+                            owner,
+                            project,
+                            normalized["status"],
+                            payload,
+                            normalized["created_at"],
+                            normalized["updated_at"],
+                        ),
+                    )
+        except Exception as exc:
+            if self._is_unique_violation(exc):
+                raise ValueError("handoff_id already exists") from exc
+            raise
         return normalized
 
     def get_handoff(

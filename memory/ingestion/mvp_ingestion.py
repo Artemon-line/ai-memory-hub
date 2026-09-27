@@ -280,6 +280,7 @@ class ConversationFilters:
     date_to: str | None = None
     tags: tuple[str, ...] = ()
     thread_id: str | None = None
+    handoff_only: bool = False
 
     @classmethod
     def from_options(
@@ -290,6 +291,7 @@ class ConversationFilters:
         date_to: str | None = None,
         tags: Sequence[str] | None = None,
         thread_id: str | None = None,
+        handoff_only: bool = False,
     ) -> "ConversationFilters":
         return cls(
             source=str(source) if source else None,
@@ -297,11 +299,19 @@ class ConversationFilters:
             date_to=str(date_to) if date_to else None,
             tags=tuple(str(tag) for tag in tags or () if str(tag)),
             thread_id=str(thread_id) if thread_id else None,
+            handoff_only=bool(handoff_only),
         )
 
     @property
     def has_filters(self) -> bool:
-        return bool(self.source or self.date_from or self.date_to or self.tags or self.thread_id)
+        return bool(
+            self.source
+            or self.date_from
+            or self.date_to
+            or self.tags
+            or self.thread_id
+            or self.handoff_only
+        )
 
 
 @dataclass(frozen=True)
@@ -1187,20 +1197,6 @@ class MVPIngestionService:
     def fact_supersede(self, fact_id: str, superseded_by: str, **kwargs: Any) -> dict[str, Any]:
         return self._call(fact_supersede, fact_id, superseded_by, **kwargs)
 
-    def handoff_create(self, packet: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
-        return self._call(handoff_create, packet, **kwargs)
-
-    def handoff_get(self, handoff_id: str, **kwargs: Any) -> dict[str, Any] | None:
-        return self._call(handoff_get, handoff_id, **kwargs)
-
-    def handoff_search(self, **kwargs: Any) -> dict[str, Any]:
-        return self._call(handoff_search, **kwargs)
-
-    def handoff_supersede(
-        self, handoff_id: str, replacement: dict[str, Any], **kwargs: Any
-    ) -> dict[str, Any] | None:
-        return self._call(handoff_supersede, handoff_id, replacement, **kwargs)
-
     def approve_pending_memory(self, memory_id: str, **kwargs: Any) -> dict[str, Any]:
         return self._call(approve_pending_memory, memory_id, **kwargs)
 
@@ -1819,6 +1815,10 @@ def _conversation_matches_filters(conversation: Any, filters: ConversationFilter
     if filters.source and str(conversation.get("source", "")) != filters.source:
         return False
     metadata = conversation.get("metadata", {})
+    if filters.handoff_only and (
+        not isinstance(metadata, dict) or not metadata.get("handoff_at")
+    ):
+        return False
     if filters.thread_id:
         if (
             not isinstance(metadata, dict)
@@ -3108,6 +3108,7 @@ def search(
     date_to: str | None = None,
     tags: Sequence[str] | None = None,
     thread_id: str | None = None,
+    handoff_only: bool = False,
 ) -> dict[str, Any]:
     _validate_result_mode(result_mode)
     status_filter = _validate_memory_status_filter(memory_status)
@@ -3117,6 +3118,7 @@ def search(
         date_to=date_to,
         tags=tags,
         thread_id=thread_id,
+        handoff_only=handoff_only,
     )
     runtime = _runtime()
     effective_project_id = _resolve_project(
@@ -3746,6 +3748,7 @@ def ask(
     date_to: str | None = None,
     tags: Sequence[str] | None = None,
     thread_id: str | None = None,
+    handoff_only: bool = False,
 ) -> dict[str, Any]:
     _validate_result_mode(result_mode)
     filters = ConversationFilters.from_options(
@@ -3754,6 +3757,7 @@ def ask(
         date_to=date_to,
         tags=tags,
         thread_id=thread_id,
+        handoff_only=handoff_only,
     )
     effective_project_id = _resolve_project(
         owner_id=owner_id, project_id=project_id, required_role=PROJECT_ROLE_READER
@@ -5499,6 +5503,7 @@ def _fact_matches_filters(
                 date_to=conversation_filters.date_to,
                 tags=conversation_filters.tags,
                 thread_id=conversation_filters.thread_id,
+                handoff_only=conversation_filters.handoff_only,
             )
         conversation = _source_conversation_for_fact(fact)
         if not _conversation_matches_filters(conversation, source_filters):
@@ -5757,127 +5762,6 @@ def fact_supersede(
         "id": fact_id,
         "superseded_by": superseded_by,
     }
-
-
-def handoff_create(
-    packet: dict[str, Any],
-    *,
-    owner_id: str | None = None,
-    project_id: str | None = None,
-) -> dict[str, Any]:
-    effective_project_id = _resolve_project(
-        owner_id=owner_id, project_id=project_id, required_role=PROJECT_ROLE_WRITER
-    )
-    store = _runtime().metadata_store
-    if not hasattr(store, "create_handoff"):
-        raise RuntimeError("configured metadata provider does not support handoff records")
-    created = store.create_handoff(
-        packet, owner_id=owner_id, project_id=effective_project_id
-    )
-    _record_audit_event(
-        "handoff.created",
-        owner_id=owner_id,
-        project_id=effective_project_id,
-        outcome="ok",
-        metadata={"handoff_id": created["handoff_id"]},
-    )
-    return created
-
-
-def handoff_get(
-    handoff_id: str,
-    *,
-    owner_id: str | None = None,
-    project_id: str | None = None,
-) -> dict[str, Any] | None:
-    effective_project_id = _resolve_project(
-        owner_id=owner_id, project_id=project_id, required_role=PROJECT_ROLE_READER
-    )
-    store = _runtime().metadata_store
-    if not hasattr(store, "get_handoff"):
-        raise RuntimeError("configured metadata provider does not support handoff records")
-    record = store.get_handoff(
-        handoff_id, owner_id=owner_id, project_id=effective_project_id
-    )
-    _record_audit_event(
-        "handoff.read",
-        owner_id=owner_id,
-        project_id=effective_project_id,
-        outcome="ok" if record is not None else "not_found",
-        reason_code=None if record is not None else "handoff_not_found",
-        metadata={"handoff_id": handoff_id},
-    )
-    return record
-
-
-def handoff_search(
-    *,
-    owner_id: str | None = None,
-    project_id: str | None = None,
-    query: str | None = None,
-    status: str | None = None,
-    include_superseded: bool = False,
-    limit: int = 20,
-) -> dict[str, Any]:
-    effective_project_id = _resolve_project(
-        owner_id=owner_id, project_id=project_id, required_role=PROJECT_ROLE_READER
-    )
-    store = _runtime().metadata_store
-    if not hasattr(store, "search_handoffs"):
-        raise RuntimeError("configured metadata provider does not support handoff records")
-    results = store.search_handoffs(
-        owner_id=owner_id,
-        project_id=effective_project_id,
-        query=query,
-        status=status,
-        include_superseded=include_superseded,
-        limit=limit,
-    )
-    _record_audit_event(
-        "handoff.searched",
-        owner_id=owner_id,
-        project_id=effective_project_id,
-        outcome="ok",
-        metadata={
-            "query_hash": _audit_hash(query) if query else None,
-            "result_count": len(results),
-            "include_superseded": include_superseded,
-        },
-    )
-    return {"status": "ok", "results": results}
-
-
-def handoff_supersede(
-    handoff_id: str,
-    replacement: dict[str, Any],
-    *,
-    owner_id: str | None = None,
-    project_id: str | None = None,
-) -> dict[str, Any] | None:
-    effective_project_id = _resolve_project(
-        owner_id=owner_id, project_id=project_id, required_role=PROJECT_ROLE_WRITER
-    )
-    store = _runtime().metadata_store
-    if not hasattr(store, "supersede_handoff"):
-        raise RuntimeError("configured metadata provider does not support handoff records")
-    updated = store.supersede_handoff(
-        handoff_id,
-        replacement,
-        owner_id=owner_id,
-        project_id=effective_project_id,
-    )
-    _record_audit_event(
-        "handoff.superseded",
-        owner_id=owner_id,
-        project_id=effective_project_id,
-        outcome="ok" if updated is not None else "not_found",
-        reason_code=None if updated is not None else "handoff_not_found_or_superseded",
-        metadata={
-            "handoff_id": handoff_id,
-            "replacement_handoff_id": updated.get("handoff_id") if updated else None,
-        },
-    )
-    return updated
 
 
 def _record_allowed(record: dict[str, Any], owner_id: str | None, project_id: str | None) -> bool:

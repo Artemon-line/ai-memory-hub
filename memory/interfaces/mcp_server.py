@@ -106,7 +106,7 @@ SERVER_INSTRUCTIONS = (
     "Only call memory_insert when the user asked to save, confirmed a save, or enabled auto-save; "
     "include metadata.save_intent as explicit_user_request, user_confirmed, or client_auto_save. "
     "Pass project_id when saving to or reading from a shared project; omit it for the default private project. "
-    "memory_search and memory_ask support source, date_from, date_to, tags, thread_id, and memory_status filters "
+    "memory_search and memory_ask support source, date_from, date_to, tags, thread_id, handoff_only, and memory_status filters "
     "when narrowing recall. memory_retrieve supports response_format for id-based reads. "
     "Use response_format=concise for normal agent recall; "
     "use response_format=detailed only when auditing full stored records. "
@@ -133,7 +133,8 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
     ),
     "memory_search": (
         "Read-only search of existing memory by text query. Optional filters: source, date_from, date_to, tags, "
-        "and thread_id. Use project_id for a shared workspace. Use limit and cursor for paged "
+        "thread_id, and handoff_only. Set handoff_only=true for unfinished memories marked with metadata.handoff_at. "
+        "Use project_id for a shared workspace. Use limit and cursor for paged "
         "results. Use result_mode=threads for thread-grouped results. Use response_format=concise "
         "for normal recall or detailed for full conversation payloads. Use memory_status to inspect active, pending_review, quarantined, rejected, or all memories."
     ),
@@ -144,7 +145,8 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
     ),
     "memory_ask": (
         "Read-only question answering using stored memory and facts. Optional filters: source, date_from, "
-        "date_to, tags, thread_id, project_id, and memory_status. Use response_format=concise "
+        "date_to, tags, thread_id, handoff_only, project_id, and memory_status. Set handoff_only=true for "
+        "unfinished memories marked with metadata.handoff_at. Use response_format=concise "
         "for normal recall or detailed for full search rows. Use result_mode=handoff to receive "
         "an ephemeral, cited continuation packet under max_context_tokens."
     ),
@@ -1093,6 +1095,7 @@ def build_tool_handlers(
         project_id: str | None = None,
         memory_status: str = "active",
         thread_id: str | None = None,
+        handoff_only: bool = False,
         ctx: FastMCPContext | None = None,
     ) -> dict[str, Any]:
         if not isinstance(query, str) or not query.strip():
@@ -1138,6 +1141,7 @@ def build_tool_handlers(
                 date_to=unwrap_array(date_to),
                 tags=unwrap_array(tags),
                 thread_id=unwrap_array(thread_id),
+                handoff_only=handoff_only,
             )
             matches = result.get("results", [])
             if not isinstance(matches, list):
@@ -1257,6 +1261,7 @@ def build_tool_handlers(
         project_id: str | None = None,
         memory_status: str = "active",
         thread_id: str | None = None,
+        handoff_only: bool = False,
         ctx: FastMCPContext | None = None,
     ) -> dict[str, Any]:
         if not isinstance(question, str) or not question.strip():
@@ -1331,6 +1336,7 @@ def build_tool_handlers(
                 date_to=unwrap_array(date_to),
                 tags=unwrap_array(tags),
                 thread_id=unwrap_array(thread_id),
+                handoff_only=handoff_only,
             )
         except ValueError as exc:
             return _envelope(

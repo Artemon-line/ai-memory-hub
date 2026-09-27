@@ -129,6 +129,11 @@
         "contains_code": {
           "type": "boolean",
           "description": "Whether the conversation contains code blocks."
+        },
+        "handoff_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When this unfinished memory was marked for later continuation. Presence identifies a handoff memory."
         }
       },
       "required": ["imported_at", "updated_at", "conversation_hash"],

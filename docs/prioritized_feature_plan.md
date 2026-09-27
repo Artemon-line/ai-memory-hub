@@ -401,9 +401,15 @@ Implementation sequence:
       commands run, validation, blockers, next steps, and citations.
 - [ ] Add retrieval-only generated handoff views from existing memory before
       adding stored records.
-- [x] Add secure stored handoff records with SQLite/Postgres parity,
-      authorization, redaction, immutable supersession, and audit events.
-- [ ] Add MCP and HTTP create/get/update/search surfaces.
+- [x] Store unfinished handoffs as ordinary memories marked with
+      `metadata.handoff_at`; do not create a second persistence model.
+- [x] Add `handoff_only` to existing MCP/HTTP search and ask surfaces.
+- [ ] Add optional source provenance: `source_client`, opaque
+      `source_session_id`, and evidence-driven workspace identity.
+- [ ] Add immutable `parent_memory_id` continuation lineage with project-scope
+      validation.
+- [ ] Generate a compact, cited, token-bounded `resume_hint` from the underlying
+      memory.
 - [ ] Add MCP prompts and CLI commands for create/resume workflows.
 - [ ] Enforce owner, project, shared-project, and secret-redaction boundaries.
 - [ ] Treat A2A as an optional later integration surface after MCP/HTTP handoff
