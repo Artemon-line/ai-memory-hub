@@ -243,6 +243,10 @@ def build_parser() -> argparse.ArgumentParser:
     handoff_search.add_argument("query", help="Handoff search query.")
     handoff_search.add_argument("--top-k", type=int, default=5, help="Number of results to return.")
     handoff_search.add_argument("--source", default=None, help="Filter by conversation source.")
+    handoff_search.add_argument("--source-client", default=None, help="Filter by producing client.")
+    handoff_search.add_argument(
+        "--source-session-id", default=None, help="Filter by opaque source session id."
+    )
     handoff_search.add_argument("--tags", action="append", default=None, help="Require a tag. Repeat for multiple tags.")
     handoff_search.add_argument("--thread-id", default=None, help="Filter by canonical thread id.")
 
@@ -261,6 +265,10 @@ def build_parser() -> argparse.ArgumentParser:
     search.add_argument("query", help="Search query.")
     search.add_argument("--top-k", type=int, default=5, help="Number of results to return.")
     search.add_argument("--source", default=None, help="Filter results by conversation source.")
+    search.add_argument("--source-client", default=None, help="Filter by producing client.")
+    search.add_argument(
+        "--source-session-id", default=None, help="Filter by opaque source session id."
+    )
     search.add_argument("--date-from", default=None, help="Filter results from this ISO-8601 timestamp.")
     search.add_argument("--date-to", default=None, help="Filter results through this ISO-8601 timestamp.")
     search.add_argument("--tags", action="append", default=None, help="Require a tag. Repeat for multiple tags.")
@@ -282,6 +290,10 @@ def build_parser() -> argparse.ArgumentParser:
     ask.add_argument("--top-k", type=int, default=5, help="Number of memories to retrieve.")
     ask.add_argument("--max-context-tokens", type=int, default=None, help="Optional context token budget.")
     ask.add_argument("--source", default=None, help="Filter context by conversation source.")
+    ask.add_argument("--source-client", default=None, help="Filter by producing client.")
+    ask.add_argument(
+        "--source-session-id", default=None, help="Filter by opaque source session id."
+    )
     ask.add_argument("--date-from", default=None, help="Filter context from this ISO-8601 timestamp.")
     ask.add_argument("--date-to", default=None, help="Filter context through this ISO-8601 timestamp.")
     ask.add_argument("--tags", action="append", default=None, help="Require a tag. Repeat for multiple tags.")
@@ -616,6 +628,8 @@ def _handoff_search(args: argparse.Namespace) -> int:
             tags=args.tags,
             thread_id=args.thread_id,
             handoff_only=True,
+            source_client=args.source_client,
+            source_session_id=args.source_session_id,
         )
     )
     _emit_result(args, result, text_formatter=_format_handoff_search_text)
@@ -678,6 +692,8 @@ def _search(args: argparse.Namespace) -> int:
             date_to=args.date_to,
             tags=args.tags,
             thread_id=args.thread_id,
+            source_client=args.source_client,
+            source_session_id=args.source_session_id,
         )
     )
     _emit_result(args, result, text_formatter=_format_search_text)
@@ -712,6 +728,8 @@ def _ask(args: argparse.Namespace) -> int:
             date_to=args.date_to,
             tags=args.tags,
             thread_id=args.thread_id,
+            source_client=args.source_client,
+            source_session_id=args.source_session_id,
         )
     )
     _emit_result(args, result, text_formatter=_format_ask_text)

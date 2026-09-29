@@ -77,11 +77,11 @@ Persisted fields are intentionally small and live in ordinary memory metadata:
 
 - [x] `handoff_at`: RFC 3339 timestamp marking the memory as unfinished work.
 - [x] `project_id`: existing project/workspace authorization scope.
-- [ ] `source_client`: optional producer such as `codex`, `hermes`, `opencode`,
+- [x] `source_client`: optional producer such as `codex`, `hermes`, `opencode`,
       or `gemini`; treat it as descriptive provenance, not authority.
-- [ ] `source_session_id`: optional opaque identifier from the source client.
-- [ ] `workspace_key`: optional normalized workspace identity when `project_id`
-      alone cannot distinguish local workspaces.
+- [x] `source_session_id`: optional opaque identifier from the source client.
+- [x] Keep `project_id` as the workspace identity; representative repository
+      fixtures do not justify adding a separate `workspace_key` contract.
 - [ ] `parent_memory_id`: optional immutable link to the preceding memory in a
       continuation chain.
 - [ ] `resume_hint`: compact, cited continuation guidance generated from the
@@ -136,23 +136,23 @@ Acceptance criteria:
 
 ## Phase 3: Source Provenance And Workspace Identity
 
-- [ ] Add optional `metadata.source_client` without restricting clients to a
+- [x] Add optional `metadata.source_client` without restricting clients to a
       closed provider enum.
-- [ ] Add optional opaque `metadata.source_session_id`; never interpret it as a
+- [x] Add optional opaque `metadata.source_session_id`; never interpret it as a
       credential or proof of access.
-- [ ] Reuse `project_id` as the primary workspace boundary.
-- [ ] Define an optional normalized `workspace_key` only for clients that need
-      more precise workspace discovery.
-- [ ] Document importer mappings for Hermes, Codex, and OpenCode session IDs.
-- [ ] Ensure concise responses expose useful provenance without leaking local
+- [x] Reuse `project_id` as the primary workspace boundary.
+- [x] Do not add `workspace_key` without representative evidence that
+      `project_id` cannot distinguish a supported workflow.
+- [x] Document client mappings for Hermes, Codex, and OpenCode session IDs.
+- [x] Ensure concise responses expose useful provenance without leaking local
       paths or private provider identifiers by default.
 
 Acceptance criteria:
 
-- [ ] A memory created in Codex can be found from another client by project and
+- [x] A memory created in Codex can be found from another client by project and
       source provenance.
-- [ ] Missing provenance fields do not affect existing memory behavior.
-- [ ] Source identifiers remain descriptive metadata and never bypass normal
+- [x] Missing provenance fields do not affect existing memory behavior.
+- [x] Source identifiers remain descriptive metadata and never bypass normal
       owner/project authorization.
 
 ## Phase 4: Immutable Continuation Lineage

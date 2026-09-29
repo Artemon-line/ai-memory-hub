@@ -106,7 +106,7 @@ SERVER_INSTRUCTIONS = (
     "Only call memory_insert when the user asked to save, confirmed a save, or enabled auto-save; "
     "include metadata.save_intent as explicit_user_request, user_confirmed, or client_auto_save. "
     "Pass project_id when saving to or reading from a shared project; omit it for the default private project. "
-    "memory_search and memory_ask support source, date_from, date_to, tags, thread_id, handoff_only, and memory_status filters "
+    "memory_search and memory_ask support source, source_client, source_session_id, date_from, date_to, tags, thread_id, handoff_only, and memory_status filters "
     "when narrowing recall. memory_retrieve supports response_format for id-based reads. "
     "Use response_format=concise for normal agent recall; "
     "use response_format=detailed only when auditing full stored records. "
@@ -132,8 +132,9 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "and optionally pass `project_id` for a shared workspace."
     ),
     "memory_search": (
-        "Read-only search of existing memory by text query. Optional filters: source, date_from, date_to, tags, "
-        "thread_id, and handoff_only. Set handoff_only=true for unfinished memories marked with metadata.handoff_at. "
+        "Read-only search of existing memory by text query. Optional filters: source, source_client, "
+        "source_session_id, date_from, date_to, tags, thread_id, and handoff_only. Set handoff_only=true "
+        "for unfinished memories marked with metadata.handoff_at. "
         "Use project_id for a shared workspace. Use limit and cursor for paged "
         "results. Use result_mode=threads for thread-grouped results. Use response_format=concise "
         "for normal recall or detailed for full conversation payloads. Use memory_status to inspect active, pending_review, quarantined, rejected, or all memories."
@@ -144,8 +145,9 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "for normal recall or detailed for the full stored record."
     ),
     "memory_ask": (
-        "Read-only question answering using stored memory and facts. Optional filters: source, date_from, "
-        "date_to, tags, thread_id, handoff_only, project_id, and memory_status. Set handoff_only=true for "
+        "Read-only question answering using stored memory and facts. Optional filters: source, source_client, "
+        "source_session_id, date_from, date_to, tags, thread_id, handoff_only, project_id, and memory_status. "
+        "Set handoff_only=true for "
         "unfinished memories marked with metadata.handoff_at. Use response_format=concise "
         "for normal recall or detailed for full search rows. Use result_mode=handoff to receive "
         "an ephemeral, cited continuation packet under max_context_tokens."
@@ -1120,6 +1122,8 @@ def build_tool_handlers(
         memory_status: str = "active",
         thread_id: str | None = None,
         handoff_only: bool = False,
+        source_client: str | None = None,
+        source_session_id: str | None = None,
         ctx: FastMCPContext | None = None,
     ) -> dict[str, Any]:
         if not isinstance(query, str) or not query.strip():
@@ -1166,6 +1170,8 @@ def build_tool_handlers(
                 tags=unwrap_array(tags),
                 thread_id=unwrap_array(thread_id),
                 handoff_only=handoff_only,
+                source_client=unwrap_array(source_client),
+                source_session_id=unwrap_array(source_session_id),
             )
             matches = result.get("results", [])
             if not isinstance(matches, list):
@@ -1286,6 +1292,8 @@ def build_tool_handlers(
         memory_status: str = "active",
         thread_id: str | None = None,
         handoff_only: bool = False,
+        source_client: str | None = None,
+        source_session_id: str | None = None,
         ctx: FastMCPContext | None = None,
     ) -> dict[str, Any]:
         if not isinstance(question, str) or not question.strip():
@@ -1361,6 +1369,8 @@ def build_tool_handlers(
                 tags=unwrap_array(tags),
                 thread_id=unwrap_array(thread_id),
                 handoff_only=handoff_only,
+                source_client=unwrap_array(source_client),
+                source_session_id=unwrap_array(source_session_id),
             )
         except ValueError as exc:
             return _envelope(

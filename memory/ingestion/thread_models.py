@@ -14,6 +14,11 @@ class ThreadMetadataKey(StrEnum):
     RELATED_CONVERSATION_IDS = "related_conversation_ids"
 
 
+class HandoffProvenanceKey(StrEnum):
+    SOURCE_CLIENT = "source_client"
+    SOURCE_SESSION_ID = "source_session_id"
+
+
 class ThreadResultKey(StrEnum):
     THREAD_ID = "thread_id"
     THREAD_CONVERSATION_IDS = "thread_conversation_ids"
@@ -97,6 +102,42 @@ class ThreadMetadata(BaseModel):
         return update
 
 
+class HandoffProvenanceMetadata(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_client: str | None = Field(
+        default=None,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$",
+    )
+    source_session_id: str | None = Field(default=None, max_length=512)
+
+    @field_validator("source_client", "source_session_id", mode="before")
+    @classmethod
+    def _strip_optional_strings(cls, value: object) -> object:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            return value
+        stripped = value.strip()
+        return stripped or None
+
+    @field_validator("source_session_id")
+    @classmethod
+    def _reject_control_characters(cls, value: str | None) -> str | None:
+        if value is not None and any(ord(character) < 32 or ord(character) == 127 for character in value):
+            raise ValueError("metadata.source_session_id must not contain control characters")
+        return value
+
+    def to_metadata_update(self) -> dict[str, str]:
+        update: dict[str, str] = {}
+        if self.source_client is not None:
+            update[HandoffProvenanceKey.SOURCE_CLIENT] = self.source_client
+        if self.source_session_id is not None:
+            update[HandoffProvenanceKey.SOURCE_SESSION_ID] = self.source_session_id
+        return update
+
+
 def thread_metadata_from_mapping(metadata: dict[str, Any]) -> ThreadMetadata:
     return ThreadMetadata.model_validate(
         {
@@ -109,6 +150,19 @@ def thread_metadata_from_mapping(metadata: dict[str, Any]) -> ThreadMetadata:
             ),
             ThreadMetadataKey.RELATED_CONVERSATION_IDS: metadata.get(
                 ThreadMetadataKey.RELATED_CONVERSATION_IDS
+            ),
+        }
+    )
+
+
+def handoff_provenance_from_mapping(metadata: dict[str, Any]) -> HandoffProvenanceMetadata:
+    return HandoffProvenanceMetadata.model_validate(
+        {
+            HandoffProvenanceKey.SOURCE_CLIENT: metadata.get(
+                HandoffProvenanceKey.SOURCE_CLIENT
+            ),
+            HandoffProvenanceKey.SOURCE_SESSION_ID: metadata.get(
+                HandoffProvenanceKey.SOURCE_SESSION_ID
             ),
         }
     )

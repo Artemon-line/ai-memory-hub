@@ -83,9 +83,11 @@ from memory.ingestion.summary_models import (
     SummaryType,
 )
 from memory.ingestion.thread_models import (
+    HandoffProvenanceKey,
     SearchResultMode,
     ThreadMetadataKey,
     ThreadResultKey,
+    handoff_provenance_from_mapping,
     result_mode_error_message,
     result_mode_values,
     thread_metadata_from_mapping,
@@ -281,6 +283,8 @@ class ConversationFilters:
     tags: tuple[str, ...] = ()
     thread_id: str | None = None
     handoff_only: bool = False
+    source_client: str | None = None
+    source_session_id: str | None = None
 
     @classmethod
     def from_options(
@@ -292,6 +296,8 @@ class ConversationFilters:
         tags: Sequence[str] | None = None,
         thread_id: str | None = None,
         handoff_only: bool = False,
+        source_client: str | None = None,
+        source_session_id: str | None = None,
     ) -> "ConversationFilters":
         return cls(
             source=str(source) if source else None,
@@ -300,6 +306,8 @@ class ConversationFilters:
             tags=tuple(str(tag) for tag in tags or () if str(tag)),
             thread_id=str(thread_id) if thread_id else None,
             handoff_only=bool(handoff_only),
+            source_client=str(source_client) if source_client else None,
+            source_session_id=str(source_session_id) if source_session_id else None,
         )
 
     @property
@@ -311,6 +319,8 @@ class ConversationFilters:
             or self.tags
             or self.thread_id
             or self.handoff_only
+            or self.source_client
+            or self.source_session_id
         )
 
 
@@ -1700,6 +1710,16 @@ def _normalize_thread_metadata(conversation: dict[str, Any]) -> None:
     metadata.update(thread_metadata.to_metadata_update())
 
 
+def _normalize_handoff_provenance(conversation: dict[str, Any]) -> None:
+    metadata = conversation.get("metadata")
+    if not isinstance(metadata, dict):
+        return
+    provenance = handoff_provenance_from_mapping(metadata)
+    for key in HandoffProvenanceKey:
+        metadata.pop(key, None)
+    metadata.update(provenance.to_metadata_update())
+
+
 def _merge_thread_metadata(target: dict[str, Any], incoming: dict[str, Any]) -> None:
     for key in (
         ThreadMetadataKey.THREAD_ID,
@@ -1823,6 +1843,20 @@ def _conversation_matches_filters(conversation: Any, filters: ConversationFilter
         if (
             not isinstance(metadata, dict)
             or str(metadata.get(ThreadMetadataKey.THREAD_ID, "")) != filters.thread_id
+        ):
+            return False
+    if filters.source_client:
+        if (
+            not isinstance(metadata, dict)
+            or str(metadata.get(HandoffProvenanceKey.SOURCE_CLIENT, ""))
+            != filters.source_client
+        ):
+            return False
+    if filters.source_session_id:
+        if (
+            not isinstance(metadata, dict)
+            or str(metadata.get(HandoffProvenanceKey.SOURCE_SESSION_ID, ""))
+            != filters.source_session_id
         ):
             return False
     if not _datetime_in_range(
@@ -2002,6 +2036,7 @@ def normalize_conversation_json(
     metadata["conversation_hash"] = hash_ordered_messages(normalized["messages"])
     normalized["metadata"] = metadata
     _normalize_thread_metadata(normalized)
+    _normalize_handoff_provenance(normalized)
     _enforce_payload_limits(normalized)
     return normalized
 
@@ -3109,6 +3144,8 @@ def search(
     tags: Sequence[str] | None = None,
     thread_id: str | None = None,
     handoff_only: bool = False,
+    source_client: str | None = None,
+    source_session_id: str | None = None,
 ) -> dict[str, Any]:
     _validate_result_mode(result_mode)
     status_filter = _validate_memory_status_filter(memory_status)
@@ -3119,6 +3156,8 @@ def search(
         tags=tags,
         thread_id=thread_id,
         handoff_only=handoff_only,
+        source_client=source_client,
+        source_session_id=source_session_id,
     )
     runtime = _runtime()
     effective_project_id = _resolve_project(
@@ -3247,6 +3286,8 @@ def search(
                 "date_to": bool(filters.date_to),
                 "tags": len(filters.tags),
                 "thread_id": bool(filters.thread_id),
+                "source_client": bool(filters.source_client),
+                "source_session_id": bool(filters.source_session_id),
             },
         },
     )
@@ -3749,6 +3790,8 @@ def ask(
     tags: Sequence[str] | None = None,
     thread_id: str | None = None,
     handoff_only: bool = False,
+    source_client: str | None = None,
+    source_session_id: str | None = None,
 ) -> dict[str, Any]:
     _validate_result_mode(result_mode)
     filters = ConversationFilters.from_options(
@@ -3758,6 +3801,8 @@ def ask(
         tags=tags,
         thread_id=thread_id,
         handoff_only=handoff_only,
+        source_client=source_client,
+        source_session_id=source_session_id,
     )
     effective_project_id = _resolve_project(
         owner_id=owner_id, project_id=project_id, required_role=PROJECT_ROLE_READER
@@ -3947,6 +3992,9 @@ def _search_for_ask(
             date_to=filters.date_to,
             tags=filters.tags,
             thread_id=filters.thread_id,
+            handoff_only=filters.handoff_only,
+            source_client=filters.source_client,
+            source_session_id=filters.source_session_id,
         )
     except TypeError:
         if result_mode != SearchResultMode.CHUNKS:

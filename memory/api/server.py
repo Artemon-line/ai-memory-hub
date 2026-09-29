@@ -68,6 +68,8 @@ class SearchRequest(BaseModel):
     tags: list[str] | None = None
     thread_id: str | None = None
     handoff_only: bool = False
+    source_client: str | None = None
+    source_session_id: str | None = None
 
 
 class RetrieveRequest(BaseModel):
@@ -89,6 +91,8 @@ class AskRequest(BaseModel):
     tags: list[str] | None = None
     thread_id: str | None = None
     handoff_only: bool = False
+    source_client: str | None = None
+    source_session_id: str | None = None
 
 
 class InsertRequest(BaseModel):
@@ -513,6 +517,8 @@ def _register_api_routes(
                     tags=payload.tags,
                     thread_id=payload.thread_id,
                     handoff_only=payload.handoff_only,
+                    source_client=payload.source_client,
+                    source_session_id=payload.source_session_id,
                 )
             )
         except PermissionError as exc:
@@ -559,6 +565,8 @@ def _register_api_routes(
                     tags=payload.tags,
                     thread_id=payload.thread_id,
                     handoff_only=payload.handoff_only,
+                    source_client=payload.source_client,
+                    source_session_id=payload.source_session_id,
                 )
             )
         except PermissionError as exc:

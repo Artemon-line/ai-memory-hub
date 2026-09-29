@@ -134,6 +134,20 @@
           "type": "string",
           "format": "date-time",
           "description": "When this unfinished memory was marked for later continuation. Presence identifies a handoff memory."
+        },
+        "source_client": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+          "description": "Optional descriptive client that produced the memory, such as codex or opencode. This is provenance, not authority."
+        },
+        "source_session_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[^\\u0000-\\u001F\\u007F]+$",
+          "description": "Optional opaque source-client session identifier. This is provenance, not a credential or access grant."
         }
       },
       "required": ["imported_at", "updated_at", "conversation_hash"],

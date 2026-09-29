@@ -529,13 +529,26 @@ def test_handoff_search_forces_handoff_mode_and_filter(capsys, monkeypatch) -> N
 
     monkeypatch.setattr(cli.mvp_ingestion, "search", fake_search)
 
-    exit_code = cli.main(["handoff", "search", "release work", "--json"])
+    exit_code = cli.main(
+        [
+            "handoff",
+            "search",
+            "release work",
+            "--source-client",
+            "codex-cli",
+            "--source-session-id",
+            "session-1",
+            "--json",
+        ]
+    )
 
     assert exit_code == 0
     assert json.loads(capsys.readouterr().out)["status"] == "ok"
     assert captured["query"] == "release work"
     assert captured["handoff_only"] is True
     assert captured["result_mode"] == "handoff"
+    assert captured["source_client"] == "codex-cli"
+    assert captured["source_session_id"] == "session-1"
 
 
 def test_handoff_get_rejects_normal_memory(capsys, monkeypatch) -> None:
