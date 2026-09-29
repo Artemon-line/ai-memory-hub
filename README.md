@@ -277,6 +277,32 @@ path. `handoff update` is append-only: it creates a new continuation linked by
 MCP clients can invoke the `create_handoff` and `resume_handoff` prompts for the
 same workflow.
 
+```mermaid
+flowchart LR
+    A["Agent A<br/>Codex, OpenCode, Claude, Copilot, Hermes"] -->|"create_handoff / handoff create"| H["ai-memory-hub<br/>validated, authorized, durable memory"]
+    H --> E["Evidence<br/>messages, summary, citations, lineage"]
+    E -->|"handoff-only search + retrieve"| B["Agent B<br/>same or different client"]
+    B --> N["Resume from objective,<br/>progress, blocker, next action"]
+```
+
+Why use it:
+
+- Cross-client: finish in one MCP client and continue in another without a
+  provider-specific session export.
+- Token-aware: retrieve a compact cited continuation packet first, then fetch
+  source evidence only when needed instead of replaying the full transcript.
+- Auditable: the packet points back to immutable stored messages rather than
+  becoming an unsupported summary.
+- Local-first and portable: the same workflow is available through MCP, HTTP,
+  and CLI, with the hub's normal project permissions and redaction.
+- Complementary: runtime handoffs in OpenAI Agents SDK, OpenCode, Hermes,
+  LangGraph, or AutoGen can keep coordinating live agents while ai-memory-hub
+  carries durable state across runs, clients, and model providers.
+
+See [Agent Integration](docs/agents.md#durable-cross-client-handoffs) for the
+token model, implementation diagram, and comparison with popular agent-runtime
+handoff patterns.
+
 Run with Docker:
 
 ```bash

@@ -383,6 +383,114 @@ Memory terms are distinct:
 - A handoff is an ordinary memory marked as unfinished by
   `metadata.handoff_at`; `result_mode="handoff"` is a compact cited view of it.
 
+## Durable Cross-Client Handoffs
+
+Most agent frameworks use *handoff* to mean an in-run control transfer: one
+agent routes the active conversation or graph state to another agent. The hub's
+handoff solves a different boundary. It persists the minimum useful continuation
+state so a later run, a different client, or a different model provider can
+resume from evidence without sharing the original runtime.
+
+These patterns are complementary. Use a runtime handoff to select who acts next
+inside a live workflow; use ai-memory-hub when the work must survive a process,
+session, client, or provider boundary.
+
+### Implementation
+
+```mermaid
+sequenceDiagram
+    participant A as Agent A
+    participant MCP as MCP / CLI / HTTP
+    participant Hub as Ingestion and policy
+    participant Store as Metadata + vectors
+    participant B as Agent B
+
+    A->>MCP: create_handoff or handoff create
+    MCP->>Hub: conversation + handoff_at + save_intent
+    Hub->>Hub: validate, normalize, redact, hash, deduplicate
+    Hub->>Store: store ordinary immutable memory + embeddings
+    Store-->>A: canonical memory id
+    B->>MCP: resume_handoff or handoff search
+    MCP->>Store: authorized handoff-only search
+    Store-->>B: compact cited handoff view
+    B->>MCP: retrieve selected id when more evidence is needed
+    MCP->>Store: authorized id lookup
+    Store-->>B: source messages and provenance
+```
+
+There is no second handoff database and no client-side reimplementation of
+memory policy. Creation uses the normal insert path. Search uses the normal
+retrieval path with `handoff_only=true`. The compact handoff packet is generated
+as a read view; stored messages remain the source of truth. An update creates a
+new memory with `metadata.parent_conversation_id`, preserving immutable history.
+
+### Token efficiency
+
+The token benefit comes from progressive disclosure, not from claiming that a
+summary is free or always sufficient.
+
+```mermaid
+flowchart TB
+    subgraph Replay["Full transcript replay"]
+        T["Entire prior transcript<br/>instructions + tool chatter + old turns"] --> M1["Receiving model"]
+    end
+    subgraph Resume["Cited handoff resume"]
+        Q["Short task query"] --> P["Compact handoff packet<br/>objective, progress, blocker, next action"]
+        P --> M2["Receiving model"]
+        M2 -->|"only if needed"| R["Selected source memory / citations"]
+    end
+```
+
+For a transcript of `T` input tokens, a compact packet of `H` tokens, and
+selectively retrieved evidence of `E` tokens, the approximate avoided prompt
+load is `T - (H + E)`. The saving is positive when `H + E < T`. This is a cost
+model, not a benchmark: actual token counts depend on the tokenizer, packet
+content, retrieval result, and how much evidence the receiving agent requests.
+
+Practical guidance:
+
+- Keep the stored conversation complete enough to audit; optimize the read
+  path, not the evidence away.
+- Start with `result_mode="handoff"` and concise responses.
+- Retrieve the canonical memory only when the packet is incomplete, ambiguous,
+  stale, or high-stakes.
+- Avoid carrying raw tool output and repeated system instructions into the
+  handoff unless they are necessary evidence.
+- Create a continuation rather than resending every previous turn after useful
+  progress has been made.
+
+### Comparison with popular agent handoff systems
+
+The comparison below describes the documented default patterns as of September
+2026. Products evolve, so follow the linked project documentation for exact
+runtime behavior.
+
+| System | Primary handoff unit | Default scope | Context behavior | Where ai-memory-hub adds value |
+| --- | --- | --- | --- | --- |
+| ai-memory-hub | Immutable memory plus a compact cited continuation view | Across runs, clients, and providers through MCP/HTTP/CLI | Searches only marked handoffs, returns a bounded view, and retrieves source evidence on demand | This is the durable interoperability layer itself |
+| [OpenAI Agents SDK](https://openai.github.io/openai-agents-python/handoffs/) | Tool-like transfer from one configured agent to another | One managed agent workflow; sessions can preserve history across runs | The receiving specialist takes over and can receive filtered conversation history | Persist a provider-neutral checkpoint that Codex, OpenCode, Hermes, or another MCP client can resume later |
+| [OpenCode agents](https://opencode.ai/docs/agents) | Primary-agent switch or a subagent child session | An OpenCode session tree | Users or agents navigate parent/child sessions and specialized subagents | Make the useful outcome discoverable outside that OpenCode session tree |
+| [Hermes Agent memory providers](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/memory-providers.md) | Built-in files plus one active external memory provider | Cross-session within Hermes and the selected provider | Prefetches provider memory before turns and syncs/extracts after responses | Offer one hub-owned schema, authorization model, citations, and MCP/HTTP surface shared with non-Hermes clients |
+| [LangGraph Swarm](https://langchain-ai.github.io/langgraphjs/reference/modules/langgraph-swarm.html) | `Command` state update plus routing to another graph node | One graph/thread and its checkpointed state | The default handoff shares message state and records the active agent | Export a compact evidence-backed checkpoint beyond the graph runtime or into another client |
+| [Microsoft AutoGen](https://microsoft.github.io/autogen/dev/user-guide/agentchat-user-guide/swarm.html) | `HandoffMessage` or event routed to another agent | One team/runtime, optionally distributed | Agents commonly share group or task message context | Avoid replaying the entire team transcript when work resumes in another runtime or tool |
+
+The hub is not intended to replace those orchestrators. It is useful when their
+runtime-native state is too local, too large, or unavailable to the next client.
+The strongest combined pattern is:
+
+```mermaid
+flowchart LR
+    O["Live orchestrator<br/>OpenAI / OpenCode / Hermes / LangGraph / AutoGen"] -->|"specialist routing"| S["Active agent work"]
+    S -->|"explicit checkpoint"| H["ai-memory-hub handoff"]
+    H -->|"authorized compact resume"| X["Later run or different client"]
+    X -->|"continue with its native orchestration"| O2["Next live workflow"]
+```
+
+Users should try this workflow when tasks span days, model providers, machines,
+or agent clients; when replaying a long transcript is expensive; or when a team
+needs a reviewable record of what the next agent was told. A normal single-turn
+delegation inside one runtime does not need a durable hub handoff.
+
 ## Client Payload Notes
 
 The MCP layer tolerates common client-shaped payloads:
