@@ -277,6 +277,12 @@ path. `handoff update` is append-only: it creates a new continuation linked by
 MCP clients can invoke the `create_handoff` and `resume_handoff` prompts for the
 same workflow.
 
+Clients may add descriptive `metadata.source_client` and opaque
+`metadata.source_session_id` values when saving. Search, ask, and `handoff
+search` can filter by those fields with `--source-client` and
+`--source-session-id`. These values help another client find the right work;
+they never grant access or replace the normal owner and project checks.
+
 ```mermaid
 flowchart LR
     A["Agent A<br/>Codex, OpenCode, Claude, Copilot, Hermes"] -->|"create_handoff / handoff create"| H["ai-memory-hub<br/>validated, authorized, durable memory"]

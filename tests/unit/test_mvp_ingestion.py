@@ -19,6 +19,8 @@ from memory.ingestion.summary_models import (
     SummaryType,
 )
 from memory.ingestion.thread_models import (
+    HandoffProvenanceKey,
+    HandoffProvenanceMetadata,
     SearchResultMode,
     ThreadMetadata,
     ThreadMetadataKey,
@@ -244,6 +246,32 @@ def test_thread_metadata_model_normalizes_and_exports_typed_keys() -> None:
         "22222222-2222-4222-8222-222222222222"
     ]
     assert SearchResultMode.THREADS.value == "threads"
+
+
+def test_handoff_provenance_model_normalizes_and_exports_typed_keys() -> None:
+    provenance = HandoffProvenanceMetadata(
+        source_client=" codex-cli ",
+        source_session_id=" session/opaque:123 ",
+    )
+
+    payload = provenance.to_metadata_update()
+
+    assert payload[HandoffProvenanceKey.SOURCE_CLIENT] == "codex-cli"
+    assert payload[HandoffProvenanceKey.SOURCE_SESSION_ID] == "session/opaque:123"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("source_client", "not a slug"),
+        ("source_client", "x" * 129),
+        ("source_session_id", "session\nsecret"),
+        ("source_session_id", "x" * 513),
+    ],
+)
+def test_handoff_provenance_model_rejects_malformed_values(field: str, value: str) -> None:
+    with pytest.raises(ValueError):
+        HandoffProvenanceMetadata(**{field: value})
 
 
 def test_ingest_messages_success() -> None:
@@ -829,6 +857,20 @@ def test_validate_conversation_enforces_schema_formats() -> None:
         ingestion_validate.validate_conversation(normalized)
 
 
+def test_validate_conversation_enforces_handoff_provenance_bounds() -> None:
+    normalized = mvp_ingestion.normalize_conversation_json(_valid_conversation())
+    normalized["metadata"]["source_client"] = "not a slug"
+
+    with pytest.raises(jsonschema.ValidationError, match="does not match"):
+        ingestion_validate.validate_conversation(normalized)
+
+    normalized = mvp_ingestion.normalize_conversation_json(_valid_conversation())
+    normalized["metadata"]["source_session_id"] = "x" * 513
+
+    with pytest.raises(jsonschema.ValidationError, match="is too long"):
+        ingestion_validate.validate_conversation(normalized)
+
+
 @pytest.mark.parametrize(
     "timestamp",
     ["2026-01-01", "2026-01-01 00:00:00Z", "2026-01-01T00:00:00"],
@@ -1285,6 +1327,48 @@ def test_search_filters_unfinished_handoff_memories() -> None:
     assert [row["id"] for row in result["results"]] == [handoff["id"]]
     assert result["results"][0]["conversation"]["metadata"]["handoff_at"] == (
         "2026-01-03T17:00:00Z"
+    )
+
+
+def test_search_filters_handoffs_by_optional_source_provenance() -> None:
+    _configure_stubs(retrieval_vector_score_threshold=0.0)
+    codex = _valid_conversation()
+    codex["id"] = "11111111-1111-4111-8111-111111111111"
+    codex["messages"] = [{"role": "user", "text": "shared release from codex"}]
+    codex["metadata"].update(
+        {
+            "handoff_at": "2026-01-03T17:00:00Z",
+            "source_client": "codex-cli",
+            "source_session_id": "codex-session-1",
+        }
+    )
+    opencode = _valid_conversation()
+    opencode["id"] = "22222222-2222-4222-8222-222222222222"
+    opencode["messages"] = [{"role": "user", "text": "shared release from opencode"}]
+    opencode["metadata"].update(
+        {
+            "handoff_at": "2026-01-03T18:00:00Z",
+            "source_client": "opencode",
+            "source_session_id": "opencode-session-1",
+        }
+    )
+    mvp_ingestion.ingest_messages(codex)
+    mvp_ingestion.ingest_messages(opencode)
+
+    by_client = mvp_ingestion.search(
+        "shared release", top_k=5, handoff_only=True, source_client="codex-cli"
+    )
+    by_session = mvp_ingestion.ask(
+        "shared release",
+        top_k=5,
+        handoff_only=True,
+        source_session_id="opencode-session-1",
+    )
+
+    assert [row["id"] for row in by_client["results"]] == [codex["id"]]
+    assert [row["id"] for row in by_session["results"]] == [opencode["id"]]
+    assert by_client["results"][0]["conversation"]["metadata"]["source_client"] == (
+        "codex-cli"
     )
 
 

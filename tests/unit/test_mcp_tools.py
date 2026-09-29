@@ -870,7 +870,13 @@ async def test_mcp_tool_handlers_search_pagination_and_filters() -> None:
     handlers = build_tool_handlers(agent)
 
     handoff = _conversation()
-    handoff["metadata"]["handoff_at"] = "2026-01-03T17:00:00Z"
+    handoff["metadata"].update(
+        {
+            "handoff_at": "2026-01-03T17:00:00Z",
+            "source_client": "codex-cli",
+            "source_session_id": "private-local-session-1",
+        }
+    )
     await handlers["memory_insert"](handoff)
     await handlers["memory_insert"](_conversation_two())
 
@@ -928,6 +934,25 @@ async def test_mcp_tool_handlers_search_pagination_and_filters() -> None:
     )
     assert filtered_handoffs["status"] == "ok"
     assert [row["id"] for row in filtered_handoffs["results"]] == [handoff["id"]]
+
+    filtered_provenance = await handlers["memory_search"](
+        "hello",
+        handoff_only=True,
+        source_client="codex-cli",
+        source_session_id="private-local-session-1",
+        top_k=10,
+        response_format="detailed",
+    )
+    assert [row["id"] for row in filtered_provenance["results"]] == [handoff["id"]]
+    assert filtered_provenance["results"][0]["conversation"]["metadata"][
+        "source_session_id"
+    ] == "private-local-session-1"
+
+    concise_provenance = await handlers["memory_search"](
+        "hello", handoff_only=True, source_client="codex-cli", top_k=10
+    )
+    assert "source_client" not in concise_provenance["results"][0]["citation"]
+    assert "source_session_id" not in concise_provenance["results"][0]["citation"]
 
     wrapped_tags = await handlers["memory_search"](
         "hello",

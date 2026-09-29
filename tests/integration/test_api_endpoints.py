@@ -1201,7 +1201,13 @@ def test_memory_insert_400_on_invalid_schema() -> None:
 def test_memory_search_and_retrieve() -> None:
     client = _client()
     payload = _conversation()
-    payload["metadata"]["handoff_at"] = "2026-01-03T17:00:00Z"
+    payload["metadata"].update(
+        {
+            "handoff_at": "2026-01-03T17:00:00Z",
+            "source_client": "codex-cli",
+            "source_session_id": "session-1",
+        }
+    )
     client.post("/memory/insert", json=payload)
 
     search = client.post("/memory/search", json={"query": "hello", "top_k": 3})
@@ -1213,6 +1219,17 @@ def test_memory_search_and_retrieve() -> None:
     )
     assert handoffs.status_code == 200
     assert [row["id"] for row in handoffs.json()["results"]] == [payload["id"]]
+
+    provenance = client.post(
+        "/memory/search",
+        json={
+            "query": "hello",
+            "source_client": "codex-cli",
+            "source_session_id": "session-1",
+        },
+    )
+    assert provenance.status_code == 200
+    assert [row["id"] for row in provenance.json()["results"]] == [payload["id"]]
 
     retrieve = client.post("/memory/retrieve", json={"id": payload["id"]})
     assert retrieve.status_code == 200
@@ -1252,6 +1269,8 @@ def test_memory_ask_accepts_conversation_filters() -> None:
         "imported_at": "2026-01-02T00:00:00Z",
         "tags": ["shared"],
         "thread_id": "thread-opencode",
+        "source_client": "opencode",
+        "source_session_id": "opencode-session-1",
     }
     client.post("/memory/insert", json=first)
     client.post("/memory/insert", json=second)
@@ -1264,6 +1283,8 @@ def test_memory_ask_accepts_conversation_filters() -> None:
             "source": "opencode",
             "tags": ["shared"],
             "thread_id": "thread-opencode",
+            "source_client": "opencode",
+            "source_session_id": "opencode-session-1",
         },
     )
 
@@ -1271,6 +1292,22 @@ def test_memory_ask_accepts_conversation_filters() -> None:
     body = ask.json()
     assert body["status"] == "ok"
     assert [row["id"] for row in body["results"]] == [second["id"]]
+
+
+def test_provenance_filter_does_not_bypass_project_authorization(tmp_path) -> None:
+    client, _store = _sqlite_auth_client(tmp_path)
+
+    response = client.post(
+        "/memory/search",
+        json={
+            "query": "Velvet Lantern",
+            "project_id": "shared-321",
+            "source_client": "codex-cli",
+        },
+        headers={"Authorization": "Bearer token-c"},
+    )
+
+    assert response.status_code == 403
 
 
 def test_memory_ask_accepts_context_budget() -> None:

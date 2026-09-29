@@ -53,6 +53,8 @@ class BaseIngestionAgent(ABC):
         tags: list[str] | tuple[str, ...] | None = None,
         thread_id: str | None = None,
         handoff_only: bool = False,
+        source_client: str | None = None,
+        source_session_id: str | None = None,
     ) -> Dict[str, Any]:
         raise NotImplementedError("search is not implemented")
 
@@ -82,6 +84,8 @@ class BaseIngestionAgent(ABC):
         tags: list[str] | tuple[str, ...] | None = None,
         thread_id: str | None = None,
         handoff_only: bool = False,
+        source_client: str | None = None,
+        source_session_id: str | None = None,
     ) -> Dict[str, Any]:
         raise NotImplementedError("ask is not implemented")
 

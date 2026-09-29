@@ -96,6 +96,8 @@ class MVPIngestionAgent(BaseIngestionAgent):
         tags: list[str] | tuple[str, ...] | None = None,
         thread_id: str | None = None,
         handoff_only: bool = False,
+        source_client: str | None = None,
+        source_session_id: str | None = None,
     ) -> Dict[str, Any]:
         return await self._call_service(
             self._service.search,
@@ -111,6 +113,8 @@ class MVPIngestionAgent(BaseIngestionAgent):
             tags=tags,
             thread_id=thread_id,
             handoff_only=handoff_only,
+            source_client=source_client,
+            source_session_id=source_session_id,
         )
 
     async def retrieve(
@@ -145,6 +149,8 @@ class MVPIngestionAgent(BaseIngestionAgent):
         tags: list[str] | tuple[str, ...] | None = None,
         thread_id: str | None = None,
         handoff_only: bool = False,
+        source_client: str | None = None,
+        source_session_id: str | None = None,
     ) -> Dict[str, Any]:
         return await self._call_service(
             self._service.ask,
@@ -161,6 +167,8 @@ class MVPIngestionAgent(BaseIngestionAgent):
             tags=tags,
             thread_id=thread_id,
             handoff_only=handoff_only,
+            source_client=source_client,
+            source_session_id=source_session_id,
         )
 
     async def health(self) -> Dict[str, Any]:
