@@ -26,9 +26,10 @@ DEFAULT_CLIENTS = ("claude", "copilot", "codex", "opencode", "gemini")
 STARTER_CLIENTS = {"claude", "copilot"}
 SMOKE_MARKER = "weekly real-client smoke test marker"
 SMOKE_PROMPT = (
-    "Use the ai-memory-hub MCP server. Validate and insert a short conversation "
-    f"about the {SMOKE_MARKER}. Then search for it, retrieve it by ID, and ask "
-    "what the conversation was about. Inspect saved facts and report the inserted ID."
+    "Use the ai-memory-hub MCP server for a two-agent handoff. As Agent A, validate "
+    f"and insert a short unfinished-work conversation about the {SMOKE_MARKER}, with "
+    "metadata.handoff_at set. As Agent B, search with handoff_only=true, retrieve the "
+    "result by ID, and ask what should happen next. Inspect saved facts and report the inserted ID."
 )
 SMOKE_FACT_OBJECT = "real-client smoke checks"
 _CONTENT_TYPE_HEADER = "content-type"
@@ -220,7 +221,7 @@ def run_client(
 def verify_memory_created(*, hub_url: str, marker: str) -> dict[str, Any]:
     search = _post_json(
         f"{hub_url.rstrip('/')}/memory/search",
-        {"query": marker, "top_k": 5, "result_mode": "compact"},
+        {"query": marker, "top_k": 5, "result_mode": "compact", "handoff_only": True},
     )
     results = search.get("results", []) if isinstance(search, dict) else []
     first = results[0] if results else None
@@ -228,6 +229,9 @@ def verify_memory_created(*, hub_url: str, marker: str) -> dict[str, Any]:
     if not memory_id:
         return {"status": "failed", "reason": "direct search did not find smoke marker"}
     retrieve = _post_json(f"{hub_url.rstrip('/')}/memory/retrieve", {"id": memory_id})
+    metadata = retrieve.get("memory", {}).get("metadata", {}) if isinstance(retrieve, dict) else {}
+    if not isinstance(metadata, dict) or not metadata.get("handoff_at"):
+        return {"status": "failed", "reason": "retrieved smoke memory is not marked as a handoff"}
     ask = _post_json(
         f"{hub_url.rstrip('/')}/memory/ask",
         {"question": f"What was the conversation about: {marker}?", "top_k": 5},
@@ -601,7 +605,8 @@ def _openai_responses_tool_call(tool_name: str, payload: dict[str, Any]) -> dict
             "type": "function_call",
             "id": f"fc_mcp__ai_memory_hub_{tool_name}",
             "call_id": f"call_mcp__ai_memory_hub_{tool_name}",
-            "name": f"mcp__ai_memory_hub.{tool_name}",
+            "name": tool_name,
+            "namespace": "mcp__ai_memory_hub",
             "arguments": arguments,
         }
     return {
@@ -815,6 +820,8 @@ def _tool_input(tool_name: str, context: Any | None = None) -> dict[str, Any]:
         ],
     }
     if tool_name in {"memory_validate", "memory_insert"}:
+        conversation["metadata"]["handoff_at"] = "2026-06-12T00:05:00Z"
+        conversation["metadata"]["save_intent"] = "explicit_user_request"
         return {"conversation_json": conversation}
     if tool_name == "memory_search":
         return {
@@ -822,6 +829,7 @@ def _tool_input(tool_name: str, context: Any | None = None) -> dict[str, Any]:
             "top_k": 5,
             "result_mode": "compact",
             "response_format": "concise",
+            "handoff_only": True,
         }
     if tool_name == "memory_retrieve":
         return {

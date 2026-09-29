@@ -477,6 +477,123 @@ def test_search_cli_validates_top_k(capsys, monkeypatch) -> None:
     assert body["error_code"] == "validation_error"
 
 
+def test_handoff_create_marks_conversation_and_uses_ingestion_path(
+    capsys, monkeypatch, tmp_path
+) -> None:
+    payload_path = tmp_path / "handoff.json"
+    payload_path.write_text(
+        json.dumps(
+            {
+                "source": "codex",
+                "timestamp": "2026-09-29T08:00:00Z",
+                "messages": [{"role": "assistant", "text": "Next: run the release checks."}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    captured = {}
+    monkeypatch.setattr(cli, "_configure_memory_runtime", lambda config_path: None)
+
+    def fake_ingest(payload):
+        captured.update(payload)
+        return {"status": "ok", "id": "11111111-2222-4333-8444-555555555555"}
+
+    monkeypatch.setattr(cli.mvp_ingestion, "ingest_messages", fake_ingest)
+
+    exit_code = cli.main(
+        [
+            "handoff",
+            "create",
+            str(payload_path),
+            "--handoff-at",
+            "2026-09-29T09:00:00Z",
+            "--json",
+        ]
+    )
+
+    body = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert body["id"] == "11111111-2222-4333-8444-555555555555"
+    assert captured["metadata"]["handoff_at"] == "2026-09-29T09:00:00Z"
+    assert captured["metadata"]["save_intent"] == "explicit_user_request"
+
+
+def test_handoff_search_forces_handoff_mode_and_filter(capsys, monkeypatch) -> None:
+    captured = {}
+    monkeypatch.setattr(cli, "_configure_memory_runtime", lambda config_path: None)
+
+    def fake_search(query, **kwargs):
+        captured["query"] = query
+        captured.update(kwargs)
+        return {"status": "ok", "results": []}
+
+    monkeypatch.setattr(cli.mvp_ingestion, "search", fake_search)
+
+    exit_code = cli.main(["handoff", "search", "release work", "--json"])
+
+    assert exit_code == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "ok"
+    assert captured["query"] == "release work"
+    assert captured["handoff_only"] is True
+    assert captured["result_mode"] == "handoff"
+
+
+def test_handoff_get_rejects_normal_memory(capsys, monkeypatch) -> None:
+    monkeypatch.setattr(cli, "_configure_memory_runtime", lambda config_path: None)
+    monkeypatch.setattr(
+        cli.mvp_ingestion,
+        "retrieve",
+        lambda memory_id: {"id": memory_id, "metadata": {}, "messages": []},
+    )
+
+    exit_code = cli.main(["handoff", "get", "normal-memory", "--json"])
+
+    body = json.loads(capsys.readouterr().out)
+    assert exit_code == 1
+    assert body["status"] == "not_found"
+    assert body["error_message"] == "handoff not found"
+
+
+def test_handoff_update_creates_immutable_linked_continuation(
+    capsys, monkeypatch, tmp_path
+) -> None:
+    previous_id = "11111111-2222-4333-8444-555555555555"
+    payload_path = tmp_path / "continuation.json"
+    payload_path.write_text(
+        json.dumps(
+            {
+                "source": "opencode",
+                "timestamp": "2026-09-29T10:00:00Z",
+                "messages": [{"role": "assistant", "text": "Release checks now pass."}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    captured = {}
+    monkeypatch.setattr(cli, "_configure_memory_runtime", lambda config_path: None)
+    monkeypatch.setattr(
+        cli.mvp_ingestion,
+        "retrieve",
+        lambda memory_id: {"id": memory_id, "metadata": {"handoff_at": "2026-09-29T09:00:00Z"}},
+    )
+
+    def fake_ingest(payload):
+        captured.update(payload)
+        return {"status": "ok", "id": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"}
+
+    monkeypatch.setattr(cli.mvp_ingestion, "ingest_messages", fake_ingest)
+
+    exit_code = cli.main(
+        ["handoff", "update", previous_id, str(payload_path), "--json"]
+    )
+
+    body = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert body["parent_memory_id"] == previous_id
+    assert captured["metadata"]["parent_conversation_id"] == previous_id
+    assert captured["metadata"]["handoff_at"]
+
+
 def test_search_cli_applies_source_filter(capsys, monkeypatch) -> None:
     monkeypatch.setattr(cli, "_configure_memory_runtime", lambda config_path: None)
     captured = {}

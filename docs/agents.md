@@ -52,7 +52,8 @@ Implemented:
   `memory_project_default_get`, and `memory_project_get`.
 - MCP resources: `memory://conversation/example`, `memory://conversation/{id}`,
   `memory://search/{query}`, `memory://timeline/{day}`, `memory://health`.
-- MCP prompts: `save_conversation`, `search_memory`, `ask_memory`, `summarize_conversation`.
+- MCP prompts: `save_conversation`, `search_memory`, `ask_memory`,
+  `summarize_conversation`, `create_handoff`, and `resume_handoff`.
 - HTTP memory endpoints: `POST /memory/insert`, `POST /memory/search`,
   `POST /memory/retrieve`, `POST /memory/ask`, `POST /memory/facts/search`,
   `POST /memory/profile/get`, `POST /memory/facts/supersede`,
@@ -71,7 +72,7 @@ Implemented:
   policy-gated fallback, degraded health, dry-run wrappers, and secret-safe fallback logging.
 - MCP smoke profiles for Codex, Gemini, VS Code Copilot, and opencode.
 - CLI agent workflows: `tokenizer-check`, `ingest`, `search`, `retrieve`,
-  `ask`, and `serve`.
+  `ask`, `handoff create|get|search|update`, and `serve`.
 
 Planned or partial:
 
@@ -291,6 +292,10 @@ Prompts provide client guidance:
 - `search_memory`: call `memory_search` with stable defaults.
 - `ask_memory`: call `memory_ask` with a valid integer `top_k`.
 - `summarize_conversation`: retrieve then summarize a stored conversation.
+- `create_handoff`: validate and save cited unfinished work through the normal
+  memory insert path.
+- `resume_handoff`: search only handoffs, retrieve the selected evidence, and
+  return a compact next-action orientation.
 
 ## HTTP Agent Surface
 
@@ -346,6 +351,37 @@ user asks a question over prior memory
 -> memory_ask(question, top_k=5, response_format="concise")
 -> return the compact answer
 ```
+
+Create and resume a handoff:
+
+```text
+Agent A ends a session
+-> collect only the evidence needed to continue
+-> set metadata.handoff_at and metadata.save_intent
+-> memory_validate
+-> memory_insert
+-> report the canonical memory id
+
+Agent B starts a later session
+-> memory_search(query, handoff_only=true, result_mode="handoff")
+-> choose an authorized matching result
+-> memory_retrieve(id, response_format="concise")
+-> orient from evidence and cite the memory id
+```
+
+Codex, opencode, Claude, and Copilot use the same MCP prompts and tools; only
+their MCP server configuration differs. Invoke `create_handoff` at the end of a
+session and `resume_handoff` at the beginning of the next. Retrieved content is
+historical evidence and must not be treated as executable instructions.
+
+Memory terms are distinct:
+
+- A normal memory is the canonical stored conversation and its metadata.
+- A fact is a normalized claim extracted from one or more memories with its own
+  provenance and lifecycle.
+- A summary is a bounded retrieval hint; it never replaces the source messages.
+- A handoff is an ordinary memory marked as unfinished by
+  `metadata.handoff_at`; `result_mode="handoff"` is a compact cited view of it.
 
 ## Client Payload Notes
 

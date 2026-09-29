@@ -261,6 +261,22 @@ uv run aim search "local-first tools" --top-k 5 --json
 uv run aim ask "What did I store about local-first tools?" --top-k 5 --json
 ```
 
+Save and resume unfinished work without copying a full transcript:
+
+```bash
+uv run aim handoff create conversation.json --json
+uv run aim handoff search "release checks" --json
+uv run aim handoff get <memory-id> --json
+uv run aim handoff update <memory-id> continuation.json --json
+```
+
+`handoff create` marks an ordinary conversation with `metadata.handoff_at` and
+uses the normal validation, deduplication, authorization, audit, and storage
+path. `handoff update` is append-only: it creates a new continuation linked by
+`metadata.parent_conversation_id` instead of rewriting the earlier memory.
+MCP clients can invoke the `create_handoff` and `resume_handoff` prompts for the
+same workflow.
+
 Run with Docker:
 
 ```bash
