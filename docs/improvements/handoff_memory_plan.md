@@ -193,24 +193,24 @@ Acceptance criteria:
 
 ## Phase 6: Agent Workflow Integration
 
-- [ ] Add MCP prompt `create_handoff` for "save my current working state."
-- [ ] Add MCP prompt `resume_handoff` for "continue this task."
-- [ ] Add client-facing docs for Codex, opencode, Claude, Copilot, and other MCP
+- [x] Add MCP prompt `create_handoff` for "save my current working state."
+- [x] Add MCP prompt `resume_handoff` for "continue this task."
+- [x] Add client-facing docs for Codex, opencode, Claude, Copilot, and other MCP
       clients.
-- [ ] Add CLI commands:
-      - [ ] `aim handoff create`
-      - [ ] `aim handoff get`
-      - [ ] `aim handoff search`
-      - [ ] `aim handoff update`
+- [x] Add CLI commands:
+      - [x] `aim handoff create`
+      - [x] `aim handoff get`
+      - [x] `aim handoff search`
+      - [x] `aim handoff update`
 - [ ] Add Connect UI snippets or setup guidance only after at least one real
       client flow is verified.
 
 Acceptance criteria:
 
-- [ ] A user can end a session with a saved handoff and begin another session
+- [x] A user can end a session with a saved handoff and begin another session
       with the same handoff.
-- [ ] The recommended workflow does not require copying a full transcript.
-- [ ] Real-client smoke coverage proves at least one MCP client can create and
+- [x] The recommended workflow does not require copying a full transcript.
+- [x] Real-client smoke coverage proves at least one MCP client can create and
       resume a handoff.
 
 ## Phase 7: Safety And Permission Model

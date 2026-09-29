@@ -52,7 +52,14 @@ def test_mcp_prompts_list_and_get() -> None:
         prompts = list_result.get("prompts")
         assert isinstance(prompts, list)
         prompt_names = {item.get("name") for item in prompts if isinstance(item, dict)}
-        assert {"save_conversation", "search_memory", "ask_memory", "summarize_conversation"}.issubset(prompt_names)
+        assert {
+            "save_conversation",
+            "search_memory",
+            "ask_memory",
+            "summarize_conversation",
+            "create_handoff",
+            "resume_handoff",
+        }.issubset(prompt_names)
 
         get_response = client.post(
             "/mcp/",
@@ -94,3 +101,40 @@ def test_mcp_prompts_list_and_get() -> None:
         assert "memory_ask" in ask_text
         assert "question=\"what changed?\"" in ask_text
         assert "top_k=3" in ask_text
+
+        create_response = client.post(
+            "/mcp/",
+            json={
+                "jsonrpc": "2.0",
+                "id": 5,
+                "method": "prompts/get",
+                "params": {
+                    "name": "create_handoff",
+                    "arguments": {"objective": "ship release"},
+                },
+            },
+            headers=headers,
+        )
+        create_text = _event_data_json(create_response.text)["result"]["messages"][0]["content"]["text"]
+        assert "memory_validate" in create_text
+        assert "memory_insert" in create_text
+        assert "metadata.handoff_at" in create_text
+        assert 'objective="ship release"' in create_text
+
+        resume_response = client.post(
+            "/mcp/",
+            json={
+                "jsonrpc": "2.0",
+                "id": 6,
+                "method": "prompts/get",
+                "params": {
+                    "name": "resume_handoff",
+                    "arguments": {"query": "release checks"},
+                },
+            },
+            headers=headers,
+        )
+        resume_text = _event_data_json(resume_response.text)["result"]["messages"][0]["content"]["text"]
+        assert "memory_search" in resume_text
+        assert "handoff_only=true" in resume_text
+        assert "memory_retrieve" in resume_text

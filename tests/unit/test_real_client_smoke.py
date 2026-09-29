@@ -72,6 +72,7 @@ def test_gateway_chat_completion_requests_tool_call() -> None:
     tool_call = response["choices"][0]["message"]["tool_calls"][0]
     assert tool_call["function"]["name"] == "memory_validate"
     assert real_client_smoke.SMOKE_MARKER in tool_call["function"]["arguments"]
+    assert "handoff_at" in tool_call["function"]["arguments"]
 
 
 def test_gateway_moves_to_next_tool_after_prior_tool_result() -> None:
@@ -101,7 +102,8 @@ def test_responses_gateway_requests_fact_search_after_ask() -> None:
 
     output = response["output"][0]
     arguments = json.loads(output["arguments"])
-    assert output["name"] == "mcp__ai_memory_hub.memory_fact_search"
+    assert output["name"] == "memory_fact_search"
+    assert output["namespace"] == "mcp__ai_memory_hub"
     assert arguments == {"subject": "user", "predicate": "likes", "response_format": "concise"}
     assert real_client_smoke.SMOKE_FACT_OBJECT in json.dumps(
         real_client_smoke._tool_input("memory_insert")
@@ -120,6 +122,13 @@ def test_real_client_smoke_retrieve_uses_concise_response_format() -> None:
     }
 
 
+def test_real_client_smoke_search_resumes_only_handoffs() -> None:
+    arguments = real_client_smoke._tool_input("memory_search")
+
+    assert arguments["handoff_only"] is True
+    assert arguments["query"] == real_client_smoke.SMOKE_MARKER
+
+
 def test_responses_stream_emits_tool_arguments_and_completed_event() -> None:
     response = real_client_smoke._openai_responses_response(
         {"model": "amh-smoke-model", "input": [{"type": "message", "content": "go"}]}
@@ -129,7 +138,8 @@ def test_responses_stream_emits_tool_arguments_and_completed_event() -> None:
     event_types = [event["type"] for event in events]
 
     assert response["output"][0]["type"] == "function_call"
-    assert response["output"][0]["name"] == "mcp__ai_memory_hub.memory_validate"
+    assert response["output"][0]["name"] == "memory_validate"
+    assert response["output"][0]["namespace"] == "mcp__ai_memory_hub"
     assert "response.function_call_arguments.done" in event_types
     assert event_types[-1] == "response.completed"
     assert events[-1]["response"]["status"] == "completed"

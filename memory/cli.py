@@ -4,6 +4,7 @@ import argparse
 import json
 import secrets
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, NoReturn, Sequence
 
@@ -212,6 +213,48 @@ def build_parser() -> argparse.ArgumentParser:
             default=None,
             help="Optional title override. CSV imports apply it to every conversation.",
         )
+
+    handoff = subparsers.add_parser(
+        "handoff", help="Create, retrieve, search, or continue unfinished work."
+    )
+    _add_common_options(handoff)
+    handoff_subparsers = handoff.add_subparsers(
+        dest="handoff_action", required=True, parser_class=CLIArgumentParser
+    )
+    handoff_create = handoff_subparsers.add_parser(
+        "create", help="Save a conversation as unfinished work."
+    )
+    _add_common_options(handoff_create)
+    handoff_create.add_argument("file", help="Conversation JSON file path, or '-' for stdin.")
+    handoff_create.add_argument(
+        "--handoff-at", default=None, help="RFC 3339 handoff timestamp. Defaults to now."
+    )
+
+    handoff_get = handoff_subparsers.add_parser(
+        "get", help="Retrieve a saved handoff by memory id."
+    )
+    _add_common_options(handoff_get)
+    handoff_get.add_argument("id", help="Handoff memory id to retrieve.")
+
+    handoff_search = handoff_subparsers.add_parser(
+        "search", help="Search only unfinished handoff memories."
+    )
+    _add_common_options(handoff_search)
+    handoff_search.add_argument("query", help="Handoff search query.")
+    handoff_search.add_argument("--top-k", type=int, default=5, help="Number of results to return.")
+    handoff_search.add_argument("--source", default=None, help="Filter by conversation source.")
+    handoff_search.add_argument("--tags", action="append", default=None, help="Require a tag. Repeat for multiple tags.")
+    handoff_search.add_argument("--thread-id", default=None, help="Filter by canonical thread id.")
+
+    handoff_update = handoff_subparsers.add_parser(
+        "update", help="Save a new handoff continuation linked to an earlier handoff."
+    )
+    _add_common_options(handoff_update)
+    handoff_update.add_argument("id", help="Earlier handoff memory id.")
+    handoff_update.add_argument("file", help="Continuation conversation JSON file path, or '-' for stdin.")
+    handoff_update.add_argument(
+        "--handoff-at", default=None, help="RFC 3339 handoff timestamp. Defaults to now."
+    )
 
     search = subparsers.add_parser("search", help="Search stored memory.")
     _add_common_options(search)
@@ -432,6 +475,8 @@ def _dispatch(args: argparse.Namespace) -> int:
         return _reindex(args)
     if args.command == "import":
         return _import_conversations(args)
+    if args.command == "handoff":
+        return _handoff(args)
     if args.command == "search":
         return _search(args)
     if args.command == "retrieve":
@@ -520,6 +565,104 @@ def _import_conversations(args: argparse.Namespace) -> int:
     )
     _emit_result(args, result, text_formatter=_format_import_text)
     return EXIT_OK
+
+
+def _handoff(args: argparse.Namespace) -> int:
+    if args.handoff_action == "create":
+        return _handoff_create(args)
+    if args.handoff_action == "get":
+        return _handoff_get(args)
+    if args.handoff_action == "search":
+        return _handoff_search(args)
+    if args.handoff_action == "update":
+        return _handoff_update(args)
+    raise ValueError(f"unknown handoff action: {args.handoff_action}")
+
+
+def _handoff_create(args: argparse.Namespace) -> int:
+    payload = _prepare_handoff_payload(_read_payload(args.file), handoff_at=args.handoff_at)
+    _configure_memory_runtime(args.config)
+    result = redact_content_hashes(mvp_ingestion.ingest_messages(payload))
+    _emit_result(args, result, text_formatter=_format_handoff_write_text)
+    return EXIT_OK
+
+
+def _handoff_get(args: argparse.Namespace) -> int:
+    _configure_memory_runtime(args.config)
+    memory = mvp_ingestion.retrieve(args.id)
+    if memory is None or not _is_handoff_memory(memory):
+        result = _envelope(
+            status="not_found",
+            id=args.id,
+            error_code="not_found",
+            error_message="handoff not found",
+        )
+        _emit_result(args, result, text_formatter=lambda item: item["error_message"])
+        return EXIT_COMMAND_FAILURE
+    result = _envelope(status="ok", id=args.id, memory=redact_content_hashes(memory))
+    _emit_result(args, result, text_formatter=_format_retrieve_text)
+    return EXIT_OK
+
+
+def _handoff_search(args: argparse.Namespace) -> int:
+    _validate_top_k(args.top_k)
+    _configure_memory_runtime(args.config)
+    result = redact_content_hashes(
+        mvp_ingestion.search(
+            args.query,
+            top_k=args.top_k,
+            result_mode=SearchResultMode.HANDOFF.value,
+            source=args.source,
+            tags=args.tags,
+            thread_id=args.thread_id,
+            handoff_only=True,
+        )
+    )
+    _emit_result(args, result, text_formatter=_format_handoff_search_text)
+    return EXIT_OK
+
+
+def _handoff_update(args: argparse.Namespace) -> int:
+    _configure_memory_runtime(args.config)
+    previous = mvp_ingestion.retrieve(args.id)
+    if previous is None or not _is_handoff_memory(previous):
+        result = _envelope(
+            status="not_found",
+            id=args.id,
+            error_code="not_found",
+            error_message="handoff not found",
+        )
+        _emit_result(args, result, text_formatter=lambda item: item["error_message"])
+        return EXIT_COMMAND_FAILURE
+    payload = _prepare_handoff_payload(
+        _read_payload(args.file), handoff_at=args.handoff_at, parent_memory_id=args.id
+    )
+    result = redact_content_hashes(mvp_ingestion.ingest_messages(payload))
+    result["parent_memory_id"] = args.id
+    _emit_result(args, result, text_formatter=_format_handoff_write_text)
+    return EXIT_OK
+
+
+def _prepare_handoff_payload(
+    payload: Any,
+    *,
+    handoff_at: str | None,
+    parent_memory_id: str | None = None,
+) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise ValueError("handoff input must be a conversation JSON object")
+    prepared = dict(payload)
+    metadata = dict(prepared.get("metadata") or {})
+    metadata["handoff_at"] = handoff_at or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    metadata.setdefault("save_intent", "explicit_user_request")
+    if parent_memory_id is not None:
+        metadata["parent_conversation_id"] = parent_memory_id
+    prepared["metadata"] = metadata
+    return prepared
+
+
+def _is_handoff_memory(memory: Any) -> bool:
+    return isinstance(memory, dict) and bool((memory.get("metadata") or {}).get("handoff_at"))
 
 
 def _search(args: argparse.Namespace) -> int:
@@ -938,6 +1081,20 @@ def _format_reindex_text(result: dict[str, Any]) -> str:
 
 def _format_import_text(result: dict[str, Any]) -> str:
     return f"imported {result.get('imported', 0)} conversation(s) with {result.get('importer')}"
+
+
+def _format_handoff_write_text(result: dict[str, Any]) -> str:
+    parent = result.get("parent_memory_id")
+    suffix = f" parent={parent}" if parent else ""
+    return f"saved handoff {result.get('id')} status={result.get('status')}{suffix}"
+
+
+def _format_handoff_search_text(result: dict[str, Any]) -> str:
+    handoff = result.get("handoff")
+    if isinstance(handoff, dict):
+        summary = handoff.get("summary") or handoff.get("goal") or "handoff found"
+        return f"{handoff.get('handoff_id') or result.get('id')}: {summary}"
+    return _format_search_text(result)
 
 
 def _format_search_text(result: dict[str, Any]) -> str:

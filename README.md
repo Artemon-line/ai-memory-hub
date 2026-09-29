@@ -261,6 +261,60 @@ uv run aim search "local-first tools" --top-k 5 --json
 uv run aim ask "What did I store about local-first tools?" --top-k 5 --json
 ```
 
+Save and resume unfinished work without copying a full transcript:
+
+```bash
+uv run aim handoff create conversation.json --json
+uv run aim handoff search "release checks" --json
+uv run aim handoff get <memory-id> --json
+uv run aim handoff update <memory-id> continuation.json --json
+```
+
+`handoff create` marks an ordinary conversation with `metadata.handoff_at` and
+uses the normal validation, deduplication, authorization, audit, and storage
+path. `handoff update` is append-only: it creates a new continuation linked by
+`metadata.parent_conversation_id` instead of rewriting the earlier memory.
+MCP clients can invoke the `create_handoff` and `resume_handoff` prompts for the
+same workflow.
+
+```mermaid
+flowchart LR
+    A["Agent A<br/>Codex, OpenCode, Claude, Copilot, Hermes"] -->|"create_handoff / handoff create"| H["ai-memory-hub<br/>validated, authorized, durable memory"]
+    H --> E["Evidence<br/>messages, summary, citations, lineage"]
+    E -->|"handoff-only search + retrieve"| B["Agent B<br/>same or different client"]
+    B --> N["Resume from objective,<br/>progress, blocker, next action"]
+```
+
+Why use it:
+
+- Cross-client: finish in one MCP client and continue in another without a
+  provider-specific session export.
+- Token-aware: retrieve a compact cited continuation packet first, then fetch
+  source evidence only when needed instead of replaying the full transcript.
+- Auditable: the packet points back to immutable stored messages rather than
+  becoming an unsupported summary.
+- Local-first and portable: the same workflow is available through MCP, HTTP,
+  and CLI, with the hub's normal project permissions and redaction.
+- Complementary: runtime handoffs in OpenAI Agents SDK, OpenCode, Hermes,
+  LangGraph, or AutoGen can keep coordinating live agents while ai-memory-hub
+  carries durable state across runs, clients, and model providers.
+
+Typical use cases:
+
+- Continue a coding task tomorrow without reloading the entire debugging chat.
+- Move unfinished work from Codex to OpenCode, Claude, Copilot, or Hermes.
+- Hand a task from an implementation agent to a review or testing agent with
+  confirmed changes, commands, blockers, and citations.
+- Preserve incident-response state across shifts without treating a generated
+  summary as the only source of truth.
+- Pause a long research or migration workflow and resume from the last verified
+  decision and next action.
+- Create a reviewable checkpoint before changing models, machines, or providers.
+
+See [Agent Integration](docs/agents.md#durable-cross-client-handoffs) for the
+token model, implementation diagram, and comparison with popular agent-runtime
+handoff patterns.
+
 Run with Docker:
 
 ```bash
