@@ -61,7 +61,7 @@ redis = [
     "redis>=8.1.0",
 ]
 tokenizer = [
-    "tiktoken>=0.13.0",
+    "tiktoken>=0.14.0",
 ]
 turbopuffer = [
     "turbopuffer>=2.9.0",
