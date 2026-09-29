@@ -491,6 +491,26 @@ or agent clients; when replaying a long transcript is expensive; or when a team
 needs a reviewable record of what the next agent was told. A normal single-turn
 delegation inside one runtime does not need a durable hub handoff.
 
+### Use cases
+
+| Use case | Handoff content | Benefit |
+| --- | --- | --- |
+| Cross-client coding continuation | Objective, changed files, decisions, test results, blocker, and next command | Continue in Codex, OpenCode, Claude, Copilot, or Hermes without reconstructing the task from chat history |
+| Implementer-to-reviewer transfer | Canonical memory id, intended behavior, files changed, validations run, and known risks | Gives the reviewer a compact starting point while keeping source messages available for audit |
+| Debugging across sessions | Reproduction steps, observations, rejected hypotheses, relevant logs after redaction, and next experiment | Avoids repeating expensive investigation and prevents old guesses from being presented as confirmed facts |
+| Incident or operations shift change | Current impact, actions taken, verified system state, blocker, owner, and immediate next action | Produces a durable, permission-scoped checkpoint for the next operator or agent |
+| Long-running research | Research question, sources already checked, supported conclusions, open questions, and citations | Lets a later agent continue from evidence instead of rereading every search and intermediate note |
+| Migration or refactor checkpoint | Target state, completed phases, compatibility decisions, validation status, and rollback notes | Supports work that spans multiple days or specialized agents without losing sequencing and risk context |
+| Model or provider switch | Compact task state plus references to the provider-neutral stored memory | Reduces dependence on one vendor's proprietary session format or context window |
+| Human approval boundary | Proposed action, evidence, unresolved risk, and the exact decision needed | Allows work to pause safely until a person approves, then resume with the same reviewed context |
+| Token-constrained agent | Objective, confirmed progress, blocker, immediate next action, and only the most relevant citations | Keeps initial prompt load small while allowing selective retrieval when more detail is required |
+| Reproducible evaluation | Fixed handoff memory id, expected next action, and cited evidence | Gives different agents or models the same continuation point for comparison |
+
+Avoid using a durable handoff as a generic transcript dump, a secret store, a
+replacement for source control, or a way to bypass project permissions. If the
+next agent is already operating in the same short-lived runtime and has the
+necessary context, a native runtime handoff is usually sufficient.
+
 ## Client Payload Notes
 
 The MCP layer tolerates common client-shaped payloads:

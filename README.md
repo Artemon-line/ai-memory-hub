@@ -299,6 +299,18 @@ Why use it:
   LangGraph, or AutoGen can keep coordinating live agents while ai-memory-hub
   carries durable state across runs, clients, and model providers.
 
+Typical use cases:
+
+- Continue a coding task tomorrow without reloading the entire debugging chat.
+- Move unfinished work from Codex to OpenCode, Claude, Copilot, or Hermes.
+- Hand a task from an implementation agent to a review or testing agent with
+  confirmed changes, commands, blockers, and citations.
+- Preserve incident-response state across shifts without treating a generated
+  summary as the only source of truth.
+- Pause a long research or migration workflow and resume from the last verified
+  decision and next action.
+- Create a reviewable checkpoint before changing models, machines, or providers.
+
 See [Agent Integration](docs/agents.md#durable-cross-client-handoffs) for the
 token model, implementation diagram, and comparison with popular agent-runtime
 handoff patterns.
