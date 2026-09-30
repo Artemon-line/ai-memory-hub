@@ -374,6 +374,27 @@ their MCP server configuration differs. Invoke `create_handoff` at the end of a
 session and `resume_handoff` at the beginning of the next. Retrieved content is
 historical evidence and must not be treated as executable instructions.
 
+For a Codex-to-OpenCode handoff, Codex saves the marked memory with
+`create_handoff`; OpenCode authenticates as a principal that can read the same
+project, calls `resume_handoff`, and retrieves the cited memory ID. The reverse
+OpenCode-to-Codex flow is identical. Do not copy provider session IDs into
+commands or use them as credentials: `source_session_id` is only an opaque
+search filter. A client without access to the underlying private or shared
+project receives no handoff content.
+
+The memory insert policy still applies. An explicit create prompt supplies
+`metadata.save_intent=explicit_user_request`; strict deployments reject
+unmarked inserts, while `review_pending` deployments keep unmarked handoffs out
+of normal search and retrieval until review. Audit records describe the
+operation and outcome without storing handoff text, provider session IDs, or
+local workspace paths.
+
+Normal memory is the durable source conversation. Facts are normalized claims
+derived from that source, summaries are retrieval hints, and a handoff packet
+is an ephemeral cited view for continuing work. Verify its claims against the
+cited memory before acting. A2A task exchange and graph-expanded handoffs are
+planned extensions, not part of the current MCP/HTTP contract.
+
 Optional handoff provenance is provider-neutral:
 
 | Client | `metadata.source_client` | `metadata.source_session_id` |

@@ -283,6 +283,14 @@ search` can filter by those fields with `--source-client` and
 `--source-session-id`. These values help another client find the right work;
 they never grant access or replace the normal owner and project checks.
 
+Handoffs follow the same save policy as every other memory. In
+`require_save_intent` mode, an unmarked handoff is rejected; in
+`review_pending` mode it remains hidden from normal retrieval until approved.
+A receiving client can resume shared-project work only when its authenticated
+principal has normal read access to that project. Handoff audit events contain
+operation identifiers and outcomes, not conversation payloads, provider session
+IDs, or private workspace paths.
+
 ```mermaid
 flowchart LR
     A["Agent A<br/>Codex, OpenCode, Claude, Copilot, Hermes"] -->|"create_handoff / handoff create"| H["ai-memory-hub<br/>validated, authorized, durable memory"]
