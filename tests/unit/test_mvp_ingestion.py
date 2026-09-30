@@ -1673,6 +1673,80 @@ def test_ask_handoff_redacts_secrets_and_reports_budget_truncation() -> None:
     assert any("token budget" in note for note in result["handoff"]["completeness_notes"])
 
 
+def test_handoff_packet_redacts_command_config_and_environment_secrets() -> None:
+    secret_values = ("command-secret", "config-secret", "environment-secret")
+    text = (
+        "Next step: curl -H 'Authorization: Bearer command-secret' /deploy; "
+        "config password=config-secret; OPENAI_API_KEY=environment-secret"
+    )
+    result = mvp_ingestion._handoff_ask_result(
+        question="What should happen next?",
+        matches=[
+            {
+                "id": "11111111-1111-4111-8111-111111111111",
+                "chunk_index": 0,
+                "score": 1.0,
+                "text": text,
+                "conversation": {
+                    "id": "11111111-1111-4111-8111-111111111111",
+                    "source": "codex",
+                    "timestamp": "2026-09-30T12:00:00Z",
+                    "messages": [{"role": "assistant", "text": text}],
+                    "metadata": {},
+                },
+            }
+        ],
+        project_id="project-a",
+        thread_id=None,
+        token_budget=200,
+        encoding="cl100k_base",
+    )
+
+    rendered = json.dumps(result)
+    assert all(secret not in rendered for secret in secret_values)
+    assert "Authorization: Bearer ***" in rendered
+    assert "password=***" in rendered
+    assert "OPENAI_API_KEY=***" in rendered
+
+
+def test_handoff_audit_events_exclude_payload_session_and_private_paths() -> None:
+    metadata, _ = _configure_stubs()
+    conversation = _valid_conversation()
+    private_path = "C:/Users/alice/private-workspace/release-notes.md"
+    provider_session = "provider-private-session-123"
+    conversation["messages"] = [
+        {"role": "assistant", "text": f"Changed file: {private_path}"}
+    ]
+    conversation["metadata"].update(
+        {
+            "handoff_at": "2026-09-30T12:00:00Z",
+            "save_intent": "explicit_user_request",
+            "source_session_id": provider_session,
+        }
+    )
+
+    inserted = mvp_ingestion.ingest_messages(conversation, owner_id="owner-a")
+    mvp_ingestion.retrieve(inserted["id"], owner_id="owner-a")
+    mvp_ingestion.search("release notes", owner_id="owner-a", handoff_only=True)
+
+    events = [
+        event
+        for event in getattr(metadata, "_audit_events")
+        if event["event_type"] in {"memory.inserted", "memory.retrieved", "memory.searched"}
+    ]
+    rendered = json.dumps(events)
+    assert {event["event_type"] for event in events} == {
+        "memory.inserted",
+        "memory.retrieved",
+        "memory.searched",
+    }
+    assert all(event["outcome"] == "ok" for event in events)
+    assert inserted["id"] in rendered
+    assert provider_session not in rendered
+    assert private_path not in rendered
+    assert conversation["messages"][0]["text"] not in rendered
+
+
 def test_ask_handoff_empty_result_has_valid_low_confidence_packet() -> None:
     _configure_stubs(retrieval_vector_score_threshold=999.0, retrieval_keyword_enabled=False)
 

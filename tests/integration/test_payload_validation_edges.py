@@ -655,6 +655,43 @@ def test_api_and_mcp_reject_unknown_save_intent_values(tmp_path: Path) -> None:
     assert mcp_insert["error_code"] == "invalid_save_intent"
 
 
+@pytest.mark.parametrize(
+    ("insert_policy", "save_intent", "expected_status", "expected_error"),
+    [
+        ("permissive", None, "ok", None),
+        ("require_save_intent", None, "error", "save_intent_required"),
+        ("require_save_intent", "explicit_user_request", "ok", None),
+        ("review_pending", None, "pending_review", None),
+    ],
+)
+def test_mcp_handoff_preserves_normal_save_intent_policy(
+    tmp_path: Path,
+    insert_policy: str,
+    save_intent: str | None,
+    expected_status: str,
+    expected_error: str | None,
+) -> None:
+    payload = _conversation(
+        text=f"Handoff policy evidence for {insert_policy} and {save_intent}.",
+        save_intent=save_intent,
+    )
+    payload["metadata"]["handoff_at"] = "2026-09-30T12:00:00Z"
+
+    with TestClient(create_app(config=_config(tmp_path, insert_policy=insert_policy))) as client:
+        headers = _initialize_mcp(client)
+        insert = _call_tool(
+            client,
+            headers,
+            request_id=2,
+            name="memory_insert",
+            arguments={"conversation_json": payload},
+        )
+
+    assert insert["status"] == expected_status
+    if expected_error is not None:
+        assert insert["error_code"] == expected_error
+
+
 def test_review_pending_api_insert_is_hidden_until_approved(tmp_path: Path) -> None:
     phrase = "pending review api camera phrase"
     payload = _conversation(text=f"I own a {phrase}.")

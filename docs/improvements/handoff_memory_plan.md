@@ -55,21 +55,21 @@ source agent's permissions.
 - [ ] Make handoff packets compact enough for low-budget agents to consume.
 - [ ] Make handoffs portable across local, LAN, hosted, and cloud development
       environments when the same authenticated hub is reachable.
-- [ ] Keep handoff reads scoped by owner, project, shared-project membership,
+- [x] Keep handoff reads scoped by owner, project, shared-project membership,
       and existing auth policy.
-- [ ] Keep A2A protocol support optional and later; implement the core handoff
+- [x] Keep A2A protocol support optional and later; implement the core handoff
       value over MCP and HTTP first.
 
 ## Non-Goals
 
 - [ ] Do not replace conversation memory, facts, profile memory, or raw message
       storage.
-- [ ] Do not let one agent hand off private project context to another agent
+- [x] Do not let one agent hand off private project context to another agent
       without the same authorization checks used by search and ask.
-- [ ] Do not treat retrieved handoff text as executable instructions.
-- [ ] Do not expose secrets, raw tokens, DSNs, environment dumps, or private tool
+- [x] Do not treat retrieved handoff text as executable instructions.
+- [x] Do not expose secrets, raw tokens, DSNs, environment dumps, or private tool
       output in generated handoff packets.
-- [ ] Do not require A2A before the handoff model is useful.
+- [x] Do not require A2A before the handoff model is useful.
 
 ## Handoff Memory Model
 
@@ -131,8 +131,8 @@ Acceptance criteria:
 Acceptance criteria:
 
 - [x] API and MCP responses remain the existing memory response envelopes.
-- [ ] Handoffs can be saved explicitly at the end of a session.
-- [ ] Handoffs can be resumed explicitly at the start of a later session.
+- [x] Handoffs can be saved explicitly at the end of a session.
+- [x] Handoffs can be resumed explicitly at the start of a later session.
 - [x] Handoff memories inherit normal memory authorization and audit behavior.
 
 ## Phase 3: Source Provenance And Workspace Identity
@@ -224,9 +224,9 @@ Acceptance criteria:
       policy.
 - [x] Require write permission for handoff creation and updates.
 - [x] Redact secrets from generated summaries and command output snippets.
-- [ ] Preserve `metadata.save_intent` semantics for handoff records derived from
+- [x] Preserve `metadata.save_intent` semantics for handoff records derived from
       memory inserts.
-- [ ] Add review flow support for handoffs created from unmarked or
+- [x] Add review flow support for handoffs created from unmarked or
       client-auto-save material.
 - [x] Reuse normal memory insert, read, and search audit events.
 - [ ] Record provenance/lineage validation failures without logging provider
@@ -234,11 +234,11 @@ Acceptance criteria:
 
 Acceptance criteria:
 
-- [ ] Agent B cannot retrieve a handoff unless it could retrieve the underlying
+- [x] Agent B cannot retrieve a handoff unless it could retrieve the underlying
       memory.
-- [ ] Generated handoffs do not leak raw secrets from logs, commands, config, or
+- [x] Generated handoffs do not leak raw secrets from logs, commands, config, or
       environment variables.
-- [ ] Handoff records are evidence, not instructions; docs warn agents to treat
+- [x] Handoff records are evidence, not instructions; docs warn agents to treat
       them as context to verify.
 
 ## Phase 8: A2A Integration Path
@@ -294,23 +294,32 @@ Acceptance criteria:
 - [x] Unit tests for filtering ordinary memories by `handoff_at` presence.
 - [x] MCP tests for `memory_search(..., handoff_only=true)`.
 - [x] HTTP tests for `/memory/search` with `handoff_only=true`.
-- [ ] Integration tests for Agent A creates handoff, Agent B resumes handoff.
-- [ ] Tests for optional source provenance and workspace identity.
+- [x] Integration tests for Agent A creates handoff, Agent B resumes handoff.
+- [x] Tests for optional source provenance and workspace identity.
 - [x] Tests for immutable parent lineage, cycles, and cross-project denial.
 - [ ] Tests for cited, token-bounded resume hints.
-- [ ] Negative tests for cross-user and cross-project handoff leakage.
+- [x] Negative tests for cross-user and cross-project handoff leakage.
 - [ ] Regression tests for budget-constrained handoff packets.
-- [ ] Bruno or real-client smoke coverage once the MCP surface exists.
+- [x] Bruno or real-client smoke coverage once the MCP surface exists.
 
 ## Documentation
 
-- [ ] Update `README.md` to describe cross-agent task continuity after the first
+- [x] Update `README.md` to describe cross-agent task continuity after the first
       handoff surface ships.
-- [ ] Update `docs/agents.md` with recommended create/resume workflows.
-- [ ] Add examples for Codex-to-opencode and opencode-to-Codex handoffs.
-- [ ] Document A2A as planned until protocol-compatible support exists.
-- [ ] Document the difference between normal memory, facts, summaries, and
+- [x] Update `docs/agents.md` with recommended create/resume workflows.
+- [x] Add examples for Codex-to-opencode and opencode-to-Codex handoffs.
+- [x] Document A2A as planned until protocol-compatible support exists.
+- [x] Document the difference between normal memory, facts, summaries, and
       handoff packets.
+
+Phase 6/7 evidence is covered by
+`tests/integration/test_api_mcp_interop.py` (authenticated Agent A/Agent B,
+shared-project, cross-user, and cross-project behavior),
+`tests/integration/test_payload_validation_edges.py` (permissive, required, and
+review-pending save intent), and `tests/unit/test_mvp_ingestion.py` (packet
+redaction and audit-field privacy). Phase 5 remains tracked separately for the
+full low-token resume-hint contract. Phases 8 and 9 remain intentionally
+deferred.
 
 ## Open Questions
 

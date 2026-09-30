@@ -178,9 +178,14 @@ def _auth_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     store = SQLiteMetadataStore(tmp_path / "metadata.sqlite")
     store.create_auth_token(owner_id="owner-a", token="token-a")
     store.create_auth_token(owner_id="owner-b", token="token-b")
+    store.create_auth_token(owner_id="owner-c", token="token-c")
     store.create_project(project_id="shared-interop", owner_id="owner-a", name="Shared")
     store.add_project_member(
         project_id="shared-interop", user_id="owner-b", role=PROJECT_ROLE_WRITER
+    )
+    store.create_project(project_id="other-interop", owner_id="owner-a", name="Other")
+    store.add_project_member(
+        project_id="other-interop", user_id="owner-b", role=PROJECT_ROLE_WRITER
     )
     return _client(config=config, metadata_store=store)
 
@@ -629,6 +634,119 @@ def test_mcp_codex_and_opencode_sessions_share_same_bearer_token(
     assert opencode_payload["id"] in {
         row["id"] for row in codex_searches_opencode["results"]
     }
+
+
+def test_mcp_agent_a_creates_handoff_and_agent_b_resumes_only_when_authorized(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    shared = _conversation(
+        text="Goal: ship the MCP handoff. Next step: run the cited integration test.",
+        source="codex",
+    )
+    shared["metadata"].update(
+        {
+            "handoff_at": "2026-09-30T12:00:00Z",
+            "save_intent": "explicit_user_request",
+            "source_client": "codex",
+            "source_session_id": "provider-private-session-a",
+        }
+    )
+    private = _conversation(text="Private handoff phrase is indigo vault.", source="codex")
+    private["metadata"].update(
+        {
+            "handoff_at": "2026-09-30T12:05:00Z",
+            "save_intent": "explicit_user_request",
+        }
+    )
+
+    with _auth_client(tmp_path, monkeypatch) as client:
+        agent_a = _initialize_mcp(client, token="token-a", client_name="codex")
+        agent_b = _initialize_mcp(client, token="token-b", client_name="opencode")
+        outsider = _initialize_mcp(client, token="token-c", client_name="claude")
+        shared_insert = _call_tool(
+            client,
+            agent_a,
+            request_id=2,
+            name="memory_insert",
+            arguments={"conversation_json": shared, "project_id": "shared-interop"},
+        )
+        private_insert = _call_tool(
+            client,
+            agent_a,
+            request_id=3,
+            name="memory_insert",
+            arguments={"conversation_json": private},
+        )
+        resumed = _call_tool(
+            client,
+            agent_b,
+            request_id=4,
+            name="memory_search",
+            arguments={
+                "query": "MCP handoff cited integration test",
+                "project_id": "shared-interop",
+                "handoff_only": True,
+                "result_mode": "handoff",
+                "top_k": 5,
+            },
+        )
+        orientation = _call_tool(
+            client,
+            agent_b,
+            request_id=5,
+            name="memory_ask",
+            arguments={
+                "question": "What is the next step for the MCP handoff?",
+                "project_id": "shared-interop",
+                "handoff_only": True,
+                "result_mode": "handoff",
+                "top_k": 5,
+            },
+        )
+        retrieved = _call_tool(
+            client,
+            agent_b,
+            request_id=6,
+            name="memory_retrieve",
+            arguments={
+                "id": shared["id"],
+                "project_id": "shared-interop",
+                "response_format": "detailed",
+            },
+        )
+        wrong_project = _call_tool(
+            client,
+            agent_b,
+            request_id=7,
+            name="memory_retrieve",
+            arguments={"id": shared["id"], "project_id": "other-interop"},
+        )
+        private_denied = _call_tool(
+            client,
+            agent_b,
+            request_id=8,
+            name="memory_retrieve",
+            arguments={"id": private["id"]},
+        )
+        outsider_denied = _call_tool(
+            client,
+            outsider,
+            request_id=9,
+            name="memory_retrieve",
+            arguments={"id": shared["id"], "project_id": "shared-interop"},
+        )
+
+    assert shared_insert["status"] == "ok"
+    assert private_insert["status"] == "ok"
+    assert [row["id"] for row in resumed["results"]] == [shared["id"]]
+    assert orientation["answer_basis"] == "handoff"
+    assert orientation["handoff"]["next_steps"][0]["citations"]
+    assert retrieved["status"] == "ok"
+    assert retrieved["memory"]["id"] == shared["id"]
+    assert wrong_project["status"] == "not_found"
+    assert private_denied["status"] == "not_found"
+    assert outsider_denied["status"] == "error"
+    assert outsider_denied["error_code"] == "permission_denied"
 
 
 def test_mcp_codex_and_opencode_sessions_isolate_different_bearer_tokens(
