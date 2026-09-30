@@ -4,6 +4,7 @@ from memory.handoff_models import (
     HandoffClaim,
     HandoffCommand,
     HandoffPacket,
+    HandoffResumeHint,
     HandoffStatus,
     StoredHandoffPacket,
 )
@@ -14,6 +15,7 @@ __all__ = [
     "HandoffClaim",
     "HandoffCommand",
     "HandoffPacket",
+    "HandoffResumeHint",
     "HandoffStatus",
     "StoredHandoffPacket",
 ]

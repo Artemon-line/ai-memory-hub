@@ -73,6 +73,7 @@ from memory.ingestion.handoff_models import (
     HandoffClaim,
     HandoffCommand,
     HandoffPacket,
+    HandoffResumeHint,
     HandoffStatus,
 )
 from memory.ingestion.summary_models import (
@@ -3951,7 +3952,7 @@ def ask(
         token_budget = (
             max_context_tokens
             if max_context_tokens is not None
-            else runtime.ask_max_context_tokens
+            else min(runtime.ask_max_context_tokens, _DEFAULT_HANDOFF_CONTEXT_TOKENS)
         )
         result = _handoff_ask_result(
             question=question,
@@ -4161,6 +4162,8 @@ def _ask_from_matches(
 
 
 _HANDOFF_SECTION_PREFIXES: tuple[tuple[str, str], ...] = (
+    ("confirmed progress:", "confirmed_progress"),
+    ("progress:", "confirmed_progress"),
     ("decision:", "decisions"),
     ("changed file:", "changed_files"),
     ("changed files:", "changed_files"),
@@ -4172,6 +4175,9 @@ _HANDOFF_SECTION_PREFIXES: tuple[tuple[str, str], ...] = (
     ("next step:", "next_steps"),
     ("next steps:", "next_steps"),
 )
+
+_DEFAULT_HANDOFF_CONTEXT_TOKENS = 512
+_HANDOFF_STALE_AFTER_DAYS = 30
 
 
 def _handoff_ask_result(
@@ -4201,6 +4207,7 @@ def _handoff_ask_result(
     refs = [f"{item.memory_id}#{item.chunk_index}" for item in citations]
     summary: list[HandoffClaim] = []
     sections: dict[str, list[Any]] = {
+        "confirmed_progress": [],
         "decisions": [],
         "changed_files": [],
         "commands_run": [],
@@ -4238,6 +4245,7 @@ def _handoff_ask_result(
     if truncated or dropped:
         notes.append("The packet is incomplete because the context token budget was reached.")
     for label, key in (
+        ("confirmed progress", "confirmed_progress"),
         ("decisions", "decisions"),
         ("changed files", "changed_files"),
         ("commands", "commands_run"),
@@ -4248,7 +4256,7 @@ def _handoff_ask_result(
         if not sections[key]:
             notes.append(f"No explicit {label} were found in the retrieved evidence.")
 
-    goal = next(
+    explicit_goal = next(
         (
             HandoffClaim(
                 text=claim.text[claim.text.casefold().find("goal:") + len("goal:") :].strip(),
@@ -4258,7 +4266,10 @@ def _handoff_ask_result(
             if "goal:" in claim.text.casefold()
             and claim.text[claim.text.casefold().find("goal:") + len("goal:") :].strip()
         ),
-        summary[0] if summary else HandoffClaim(text=redact_secrets(question.strip())),
+        None,
+    )
+    goal = explicit_goal or HandoffClaim(
+        text="Insufficient cited evidence to identify the objective.", citations=[]
     )
     status = HandoffStatus.BLOCKED if sections["blockers"] else HandoffStatus.ACTIVE
     status_text = " ".join(claim.text.casefold() for claim in summary)
@@ -4266,6 +4277,36 @@ def _handoff_ask_result(
         status = HandoffStatus.COMPLETE
     elif "status: waiting_for_review" in status_text or "status: waiting for review" in status_text:
         status = HandoffStatus.WAITING_FOR_REVIEW
+
+    updated_at = max(timestamps) if timestamps else now
+    stale = bool(timestamps) and (now - updated_at).days > _HANDOFF_STALE_AFTER_DAYS
+    unsupported = not citations
+    incomplete = bool(truncated or dropped or explicit_goal is None or not sections["next_steps"])
+    evidence_state = (
+        "unsupported"
+        if unsupported
+        else "stale"
+        if stale
+        else "incomplete"
+        if incomplete
+        else "current"
+    )
+    if stale:
+        notes.append(
+            f"The newest cited evidence is older than {_HANDOFF_STALE_AFTER_DAYS} days."
+        )
+    resume_hint = HandoffResumeHint(
+        objective=explicit_goal,
+        confirmed_progress=sections["confirmed_progress"],
+        blocker=sections["blockers"][0] if sections["blockers"] else None,
+        immediate_next_action=sections["next_steps"][0] if sections["next_steps"] else None,
+        evidence_state=evidence_state,
+        stale=stale,
+        incomplete=incomplete,
+        regeneration_hint=(
+            "Regenerate with memory_ask(result_mode=\"handoff\") to use current authorized memory."
+        ),
+    )
 
     packet = HandoffPacket(
         handoff_id=str(
@@ -4288,12 +4329,13 @@ def _handoff_ask_result(
         next_steps=sections["next_steps"],
         citations=citations,
         created_at=min(timestamps) if timestamps else now,
-        updated_at=max(timestamps) if timestamps else now,
+        updated_at=updated_at,
         confidence=_confidence_from_context(selected, context_truncated=truncated),
         completeness_notes=notes,
         context_tokens_used=tokens_used,
         context_token_budget=token_budget,
         context_truncated=truncated,
+        resume_hint=resume_hint,
     )
     lineage_source = next(
         (

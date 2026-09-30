@@ -1376,6 +1376,12 @@ def test_memory_ask_returns_ephemeral_handoff_packet() -> None:
     assert body["handoff"]["next_steps"][0]["text"] == "review the cited change"
     assert body["handoff"]["next_steps"][0]["citations"]
     assert body["handoff"]["context_tokens_used"] <= 100
+    assert body["handoff"]["resume_hint"]["immediate_next_action"]["citations"]
+    assert body["handoff"]["resume_hint"]["evidence_state"] in {
+        "current",
+        "incomplete",
+        "stale",
+    }
 
 
 def test_memory_fact_endpoints() -> None:

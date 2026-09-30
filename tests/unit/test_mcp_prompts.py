@@ -135,6 +135,8 @@ def test_mcp_prompts_list_and_get() -> None:
             headers=headers,
         )
         resume_text = _event_data_json(resume_response.text)["result"]["messages"][0]["content"]["text"]
-        assert "memory_search" in resume_text
+        assert "memory_ask" in resume_text
         assert "handoff_only=true" in resume_text
+        assert "max_context_tokens=512" in resume_text
+        assert "handoff.resume_hint" in resume_text
         assert "memory_retrieve" in resume_text
