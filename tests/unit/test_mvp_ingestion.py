@@ -514,7 +514,12 @@ def test_ingest_messages_generates_auto_tags_without_overwriting_manual_tags() -
 
 def test_ingest_messages_promotes_upstream_thread_metadata() -> None:
     metadata, _ = _configure_stubs()
+    parent = _valid_conversation()
+    parent["id"] = "11111111-1111-4111-8111-111111111111"
+    mvp_ingestion.ingest_messages(parent)
     conversation = _valid_conversation()
+    conversation["id"] = "33333333-3333-4333-8333-333333333333"
+    conversation["messages"] = [{"role": "user", "text": "Continue parent work"}]
     conversation["source"] = "codex"
     conversation["metadata"]["upstream_thread_id"] = "session-42"
     conversation["metadata"]["parent_conversation_id"] = "11111111-1111-4111-8111-111111111111"
@@ -532,6 +537,76 @@ def test_ingest_messages_promotes_upstream_thread_metadata() -> None:
     assert stored_metadata["related_conversation_ids"] == [
         "22222222-2222-4222-8222-222222222222"
     ]
+
+
+def test_ingest_messages_validates_immutable_parent_lineage() -> None:
+    metadata, _ = _configure_stubs()
+    parent = _valid_conversation()
+    parent["id"] = "11111111-1111-4111-8111-111111111111"
+    parent["metadata"]["handoff_at"] = "2026-01-01T00:00:00Z"
+    mvp_ingestion.ingest_messages(parent)
+
+    continuation = _valid_conversation()
+    continuation["id"] = "22222222-2222-4222-8222-222222222222"
+    continuation["messages"] = [{"role": "user", "text": "Continue the handoff"}]
+    continuation["metadata"].update(
+        {
+            "handoff_at": "2026-01-02T00:00:00Z",
+            "parent_conversation_id": parent["id"],
+        }
+    )
+    mvp_ingestion.ingest_messages(continuation)
+
+    stored_parent = metadata.by_id[parent["id"]]
+    assert "parent_conversation_id" not in stored_parent["metadata"]
+    retrieved = mvp_ingestion.retrieve(continuation["id"])
+    assert retrieved is not None
+    assert retrieved["lineage"] == {
+        "ancestors": [{"id": parent["id"]}],
+        "max_depth": 16,
+        "truncated": False,
+        "missing_history": False,
+        "cycle_detected": False,
+    }
+
+
+@pytest.mark.parametrize(
+    ("parent_id", "error_code"),
+    [
+        ("33333333-3333-4333-8333-333333333333", "lineage_parent_not_found"),
+        ("22222222-2222-4222-8222-222222222222", "lineage_self_link"),
+    ],
+)
+def test_ingest_messages_rejects_invalid_lineage_parent(
+    parent_id: str, error_code: str
+) -> None:
+    _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["id"] = "22222222-2222-4222-8222-222222222222"
+    conversation["metadata"]["parent_conversation_id"] = parent_id
+
+    with pytest.raises(ValueError, match=error_code):
+        mvp_ingestion.ingest_messages(conversation)
+
+
+def test_ingest_messages_rejects_cyclic_existing_lineage() -> None:
+    metadata, _ = _configure_stubs()
+    first = _valid_conversation()
+    first["id"] = "11111111-1111-4111-8111-111111111111"
+    first["metadata"]["parent_conversation_id"] = (
+        "22222222-2222-4222-8222-222222222222"
+    )
+    second = _valid_conversation()
+    second["id"] = "22222222-2222-4222-8222-222222222222"
+    second["metadata"]["parent_conversation_id"] = first["id"]
+    metadata.insert(first)
+    metadata.insert(second)
+    child = _valid_conversation()
+    child["id"] = "33333333-3333-4333-8333-333333333333"
+    child["metadata"]["parent_conversation_id"] = first["id"]
+
+    with pytest.raises(ValueError, match="lineage_cycle"):
+        mvp_ingestion.ingest_messages(child)
 
 
 def test_search_uses_generated_summary_metadata_without_returning_it_as_chunk_text() -> None:

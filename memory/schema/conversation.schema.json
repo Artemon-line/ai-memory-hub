@@ -74,6 +74,12 @@
           "description": "Trusted upstream platform thread identifier when available.",
           "minLength": 1
         },
+        "parent_conversation_id": {
+          "type": "string",
+          "format": "uuid",
+          "maxLength": 128,
+          "description": "Optional immutable link to the preceding authorized memory in the same project. This is the canonical persisted lineage field."
+        },
         "message_hashes": {
           "type": "array",
           "items": {
