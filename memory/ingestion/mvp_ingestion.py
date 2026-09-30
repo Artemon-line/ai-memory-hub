@@ -533,6 +533,8 @@ _MAX_METADATA_BYTES = 1_000_000
 _MAX_METADATA_SUMMARY_CHARS = 2_000
 _MAX_AUTO_TAGS = 24
 _MAX_SENSITIVE_FINDINGS = 16
+_MAX_LINEAGE_DEPTH = 16
+_MAX_LINEAGE_VALIDATION_DEPTH = 1024
 _SENSITIVE_SCAN_EXCLUDED_KEYS = {
     "id",
     "conversation_id",
@@ -1829,6 +1831,91 @@ def _conversation_visible(
     return _memory_status(conversation) == status_filter
 
 
+def _lineage_parent_id(conversation: Any) -> str | None:
+    if not isinstance(conversation, dict):
+        return None
+    metadata = conversation.get("metadata")
+    if not isinstance(metadata, dict):
+        return None
+    value = metadata.get(ThreadMetadataKey.PARENT_CONVERSATION_ID)
+    return str(value) if value else None
+
+
+def _lineage_view(
+    conversation: dict[str, Any],
+    *,
+    owner_id: str | None,
+    project_id: str,
+) -> dict[str, Any]:
+    ancestors: list[dict[str, str]] = []
+    visited = {str(conversation.get("id", ""))}
+    parent_id = _lineage_parent_id(conversation)
+    missing_history = False
+    cycle_detected = False
+    store = _runtime().metadata_store
+
+    while parent_id and len(ancestors) < _MAX_LINEAGE_DEPTH:
+        if parent_id in visited:
+            cycle_detected = True
+            break
+        visited.add(parent_id)
+        parent = store.get(parent_id)
+        if not _conversation_authorized(parent, owner_id, project_id):
+            missing_history = True
+            break
+        ancestors.append({"id": parent_id})
+        parent_id = _lineage_parent_id(parent)
+
+    return {
+        "ancestors": ancestors,
+        "max_depth": _MAX_LINEAGE_DEPTH,
+        "truncated": bool(parent_id) and len(ancestors) >= _MAX_LINEAGE_DEPTH,
+        "missing_history": missing_history,
+        "cycle_detected": cycle_detected,
+    }
+
+
+def _validate_lineage_parent(
+    conversation: dict[str, Any],
+    *,
+    owner_id: str | None,
+    project_id: str,
+) -> None:
+    parent_id = _lineage_parent_id(conversation)
+    if parent_id is None:
+        return
+    memory_id = str(conversation.get("id", ""))
+    if parent_id == memory_id:
+        raise ValueError("lineage_self_link: a memory cannot reference itself as parent")
+
+    store = _runtime().metadata_store
+    parent = store.get(parent_id)
+    if parent is None:
+        raise ValueError("lineage_parent_not_found: parent memory does not exist")
+    if not _conversation_authorized(parent, owner_id, project_id):
+        raise ValueError("lineage_parent_not_accessible: parent memory is outside the authorized project")
+
+    visited = {memory_id}
+    current: Any = parent
+    for _ in range(_MAX_LINEAGE_VALIDATION_DEPTH):
+        current_id = str(current.get("id", "")) if isinstance(current, dict) else ""
+        if current_id in visited:
+            raise ValueError("lineage_cycle: parent lineage contains a cycle")
+        visited.add(current_id)
+        ancestor_id = _lineage_parent_id(current)
+        if ancestor_id is None:
+            return
+        current = store.get(ancestor_id)
+        if current is None:
+            raise ValueError("lineage_history_missing: parent lineage is incomplete")
+        if not _conversation_authorized(current, owner_id, project_id):
+            raise ValueError("lineage_history_not_accessible: parent lineage leaves the authorized project")
+    raise ValueError(
+        "lineage_depth_exceeded: lineage exceeds "
+        f"{_MAX_LINEAGE_VALIDATION_DEPTH} ancestors"
+    )
+
+
 def _conversation_matches_filters(conversation: Any, filters: ConversationFilters) -> bool:
     if not isinstance(conversation, dict):
         return False
@@ -2418,6 +2505,12 @@ def ingest_messages(
     # 1. Validate JSON against schema
     with _ingestion_stage("validate_schema"):
         validate_json(conversation_json)
+
+    _validate_lineage_parent(
+        conversation_json,
+        owner_id=owner_id,
+        project_id=effective_project_id,
+    )
 
     # 2. Enrich metadata topics from message text
     with _ingestion_stage("normalize", enrichment=True):
@@ -3766,6 +3859,13 @@ def retrieve(
         return None
     conversation = _repair_retrieved_index_chunks(memory_id, conversation)
     result = _with_generated_summary_metadata(conversation)
+    if result is not None:
+        result = dict(result)
+        result["lineage"] = _lineage_view(
+            result,
+            owner_id=owner_id,
+            project_id=effective_project_id,
+        )
     _record_audit_event(
         "memory.retrieved",
         owner_id=owner_id,
@@ -4195,6 +4295,15 @@ def _handoff_ask_result(
         context_token_budget=token_budget,
         context_truncated=truncated,
     )
+    lineage_source = next(
+        (
+            conversation
+            for row in selected
+            for conversation in [row.get("conversation")]
+            if isinstance(conversation, dict)
+        ),
+        None,
+    )
     return {
         "status": "ok",
         "results": [_redact_handoff_value(item) for item in selected],
@@ -4204,6 +4313,21 @@ def _handoff_ask_result(
         "confidence_reason": "; ".join(notes) or "All explicit handoff sections were found.",
         "answer_basis": "handoff",
         "handoff": packet.model_dump(mode="json"),
+        "lineage": (
+            _lineage_view(
+                lineage_source,
+                owner_id=_owner_id_from_conversation(lineage_source),
+                project_id=project_id or LOCAL_DEFAULT_PROJECT_ID,
+            )
+            if lineage_source is not None
+            else {
+                "ancestors": [],
+                "max_depth": _MAX_LINEAGE_DEPTH,
+                "truncated": False,
+                "missing_history": False,
+                "cycle_detected": False,
+            }
+        ),
     }
 
 

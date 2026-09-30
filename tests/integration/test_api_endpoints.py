@@ -1198,6 +1198,30 @@ def test_memory_insert_400_on_invalid_schema() -> None:
     assert response.status_code == 400
 
 
+def test_memory_insert_rejects_cross_project_lineage(tmp_path) -> None:
+    client, _store = _sqlite_auth_client(tmp_path)
+    headers = {"Authorization": "Bearer token-a"}
+    parent = _conversation()
+    parent["metadata"]["handoff_at"] = "2026-01-01T00:00:00Z"
+    assert client.post("/memory/insert", json=parent, headers=headers).status_code == 200
+
+    child = _conversation()
+    child["id"] = "22222222-2222-4222-8222-222222222222"
+    child["messages"] = [{"role": "user", "text": "Continue shared work"}]
+    child["project_id"] = "shared-321"
+    child["metadata"].update(
+        {
+            "handoff_at": "2026-01-02T00:00:00Z",
+            "parent_conversation_id": parent["id"],
+        }
+    )
+
+    response = client.post("/memory/insert", json=child, headers=headers)
+
+    assert response.status_code == 400
+    assert "lineage_parent_not_accessible" in response.text
+
+
 def test_memory_search_and_retrieve() -> None:
     client = _client()
     payload = _conversation()

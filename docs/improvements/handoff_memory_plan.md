@@ -82,8 +82,9 @@ Persisted fields are intentionally small and live in ordinary memory metadata:
 - [x] `source_session_id`: optional opaque identifier from the source client.
 - [x] Keep `project_id` as the workspace identity; representative repository
       fixtures do not justify adding a separate `workspace_key` contract.
-- [ ] `parent_memory_id`: optional immutable link to the preceding memory in a
-      continuation chain.
+- [x] `parent_conversation_id`: optional immutable link to the preceding memory
+      in a continuation chain. CLI output retains `parent_memory_id` as a public
+      compatibility alias; it is not a second persisted field.
 - [ ] `resume_hint`: compact, cited continuation guidance generated from the
       underlying authorized memory.
 
@@ -157,19 +158,23 @@ Acceptance criteria:
 
 ## Phase 4: Immutable Continuation Lineage
 
-- [ ] Add optional `metadata.parent_memory_id` referencing an authorized memory.
-- [ ] Validate that parent and child belong to the same visible project scope.
-- [ ] Keep parent memories immutable; continuation creates a new memory rather
+- [x] Use optional `metadata.parent_conversation_id` as the canonical persisted
+      field referencing an authorized memory.
+- [x] Validate that parent and child belong to the same visible project scope.
+- [x] Keep parent memories immutable; continuation creates a new memory rather
       than rewriting its predecessor.
-- [ ] Return bounded lineage in detailed retrieval and handoff views.
-- [ ] Detect missing, cyclic, or cross-project lineage deterministically.
+- [x] Return lineage bounded to 16 ancestors in detailed retrieval and handoff
+      views, with explicit truncation, missing-history, and cycle markers.
+- [x] Detect missing, cyclic, over-depth, or cross-project lineage
+      deterministically with stable `lineage_*` error codes.
 
 Acceptance criteria:
 
-- [ ] A Gemini continuation can point back to the Codex memory it resumed.
-- [ ] The complete chain remains auditable without requiring either provider's
+- [x] A continuation from one client can point back to the authorized memory it
+      resumed in another client.
+- [x] The complete bounded chain remains auditable without requiring either provider's
       native session format.
-- [ ] Lineage cannot expose a parent memory the caller is not allowed to read.
+- [x] Lineage cannot expose a parent memory the caller is not allowed to read.
 
 ## Phase 5: Compact Resume Hint
 
@@ -291,7 +296,7 @@ Acceptance criteria:
 - [x] HTTP tests for `/memory/search` with `handoff_only=true`.
 - [ ] Integration tests for Agent A creates handoff, Agent B resumes handoff.
 - [ ] Tests for optional source provenance and workspace identity.
-- [ ] Tests for immutable parent lineage, cycles, and cross-project denial.
+- [x] Tests for immutable parent lineage, cycles, and cross-project denial.
 - [ ] Tests for cited, token-bounded resume hints.
 - [ ] Negative tests for cross-user and cross-project handoff leakage.
 - [ ] Regression tests for budget-constrained handoff packets.

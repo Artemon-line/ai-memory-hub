@@ -129,9 +129,9 @@ def test_containerfile_installs_project_after_copying_package() -> None:
     assert 'CMD ["/app/.venv/bin/aim", "serve", "--host", "0.0.0.0", "--port", "8000"]' in containerfile
     assert 'CMD ["uv", "run", "aim"' not in containerfile
     for package_pin in (
-        "libssl3t64=3.5.7-1~deb13u2",
-        "openssl=3.5.7-1~deb13u2",
-        "openssl-provider-legacy=3.5.7-1~deb13u2",
+        "libssl3t64=3.5.7-1~deb13u3",
+        "openssl=3.5.7-1~deb13u3",
+        "openssl-provider-legacy=3.5.7-1~deb13u3",
     ):
         assert package_pin in containerfile
 
