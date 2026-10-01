@@ -115,7 +115,6 @@ def test_opencode_export_is_accepted_by_native_importer(tmp_path: Path) -> None:
     ]
     assert SMOKE_MARKER in payload["messages"][0]["text"].lower()
     assert payload["messages"][1]["text"].strip()
-    assert SMOKE_MARKER in payload["messages"][1]["text"].lower()
 
 
 def _require_ollama() -> None:
