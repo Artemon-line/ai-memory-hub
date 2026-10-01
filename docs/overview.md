@@ -252,6 +252,7 @@ python -m memory.cli reindex --json
 python -m memory.cli import manual copilot-chat.txt --source vscode-copilot --json
 python -m memory.cli import copilot-activity-csv copilot-activity-history.csv --json
 python -m memory.cli import deepseek-share-json deepseek-share.json --json
+opencode export <SESSION_ID> | python -m memory.cli import opencode-session-json - --json
 python -m memory.cli search "local-first tools" --top-k 5 --json
 python -m memory.cli retrieve <MEMORY_ID> --json
 python -m memory.cli ask "What did I store about local-first tools?" --top-k 5 --json
@@ -277,6 +278,13 @@ curl -fsS \
   -o deepseek-share.json
 python -m memory.cli import deepseek-share-json deepseek-share.json --json
 ```
+
+OpenCode session exports can be streamed directly from `opencode export` or
+read from a saved JSON file. The importer keeps user and assistant text in
+export order, skips internal reasoning, tool-only turns, and synthetic or
+ignored text parts, and records the OpenCode session ID, title, working
+directory, and model as provenance when present. Sanitized exports are also
+accepted; their redacted text remains redacted.
 
 Review imported output before retaining sensitive conversations. The repository
 fixtures are synthetic and contain no text copied from personal exports.
