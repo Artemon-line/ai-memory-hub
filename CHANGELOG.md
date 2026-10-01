@@ -8,6 +8,8 @@ should describe the supported public behavior for each tagged release.
 
 - Added a native OpenCode session-export JSON importer, including CLI support
   and a live OpenCode/Ollama export compatibility smoke test.
+- Updated the container PCRE package and locked urllib3 release to their fixed
+  versions after the supply-chain scan detected new high-severity advisories.
 
 ## 1.0.0-beta
 

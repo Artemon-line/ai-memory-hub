@@ -119,12 +119,21 @@ def test_opencode_export_is_accepted_by_native_importer(tmp_path: Path) -> None:
 
 
 def _require_ollama() -> None:
+    if os.environ.get("AMH_RUN_OPENCODE_SMOKE") != "1":
+        pytest.skip("set AMH_RUN_OPENCODE_SMOKE=1 to run the live OpenCode smoke")
     try:
-        with urlopen(f"{OLLAMA_BASE_URL}/api/version", timeout=2) as response:
+        with urlopen(f"{OLLAMA_BASE_URL}/api/tags", timeout=2) as response:
             if response.status >= 400:
                 pytest.skip(f"Ollama returned HTTP {response.status}")
+            installed = {
+                model.get("name")
+                for model in json.load(response).get("models", [])
+                if isinstance(model, dict)
+            }
     except (OSError, URLError) as exc:
         pytest.skip(f"Ollama is not reachable at {OLLAMA_BASE_URL}: {exc}")
+    if CHAT_MODEL not in installed:
+        pytest.skip(f"Ollama model {CHAT_MODEL!r} is not installed")
 
 
 def _json_line(line: str) -> Any:

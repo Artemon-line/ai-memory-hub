@@ -120,6 +120,7 @@ jobs:
       - name: Run E2E tests
         env:
           PYTHONHASHSEED: '0'
+          AMH_RUN_OPENCODE_SMOKE: '1'
           AMH_OLLAMA_CHAT_MODEL: qwen2.5:0.5b
           AMH_OPENCODE_SMOKE_ARTIFACT_DIR: artifacts/opencode-export-smoke
         run: |
