@@ -189,6 +189,11 @@ def build_parser() -> argparse.ArgumentParser:
             "manual-paste",
         ),
         (
+            "codex-rollout-jsonl",
+            "Import a persisted Codex CLI or app rollout JSONL session.",
+            "codex",
+        ),
+        (
             "copilot-activity-csv",
             "Import a Microsoft Copilot activity-history CSV export.",
             "microsoft-copilot",

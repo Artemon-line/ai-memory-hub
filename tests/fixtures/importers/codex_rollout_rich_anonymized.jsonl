@@ -1,0 +1,66 @@
+{"timestamp":"2026-10-02T20:00:00Z","type":"session_meta","payload":{"id":"01999999-1111-7222-8333-444444444444","timestamp":"2026-10-02T20:00:00Z","cwd":"/workspace/aurora-observatory","source":"cli","originator":"codex-tui","cli_version":"0.152.0","model_provider":"example-provider","git":{"branch":"feature/aurora-catalog","commit_hash":"abcdef0123456789"}}}
+{"timestamp":"2026-10-02T20:00:00Z","type":"turn_context","payload":{"turn_id":"turn-salted-1","model":"example-model"}}
+{"timestamp":"2026-10-02T20:00:00Z","type":"response_item","payload":{"type":"message","role":"developer","content":[{"type":"input_text","text":"Synthetic developer instructions that must not be imported."}]}}
+{"timestamp":"2026-10-02T20:00:00Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"<environment_context>Synthetic runtime context that must not be imported.</environment_context>"}],"internal_chat_message_metadata_passthrough":{"turn_id":"turn-salted-1"}}}
+{"timestamp":"2026-10-02T20:00:01Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Hello from the Aurora Observatory project."}],"internal_chat_message_metadata_passthrough":{"turn_id":"turn-salted-1"}}}
+{"timestamp":"2026-10-02T20:00:02Z","type":"response_item","payload":{"type":"message","role":"assistant","phase":"commentary","content":[{"type":"output_text","text":"I’ll orient myself to the observatory workspace."}]}}
+{"timestamp":"2026-10-02T20:00:02Z","type":"response_item","payload":{"type":"reasoning","summary":[{"type":"summary_text","text":"PRIVATE_REASONING_SALTED_01"}]}}
+{"timestamp":"2026-10-02T20:00:02Z","type":"response_item","payload":{"type":"custom_tool_call","call_id":"call-salted-01","name":"shell_command","input":"SYNTHETIC_TOOL_INPUT_01"}}
+{"timestamp":"2026-10-02T20:00:02Z","type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"call-salted-01","output":"RAW_TOOL_OUTPUT_SALTED_01"}}
+{"timestamp":"2026-10-02T20:00:03Z","type":"response_item","payload":{"type":"reasoning","summary":[{"type":"summary_text","text":"PRIVATE_REASONING_SALTED_02"}]}}
+{"timestamp":"2026-10-02T20:00:03Z","type":"response_item","payload":{"type":"custom_tool_call","call_id":"call-salted-02","name":"list_files","input":"SYNTHETIC_TOOL_INPUT_02"}}
+{"timestamp":"2026-10-02T20:00:03Z","type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"call-salted-02","output":"RAW_TOOL_OUTPUT_SALTED_02"}}
+{"timestamp":"2026-10-02T20:00:04Z","type":"response_item","payload":{"type":"message","role":"assistant","phase":"final_answer","content":[{"type":"output_text","text":"The synthetic observatory workspace is ready."}]}}
+{"timestamp":"2026-10-02T20:01:00Z","type":"turn_context","payload":{"turn_id":"turn-salted-2","model":"example-model"}}
+{"timestamp":"2026-10-02T20:01:01Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Find recent public guidance about calibrating a fictional telescope."}],"internal_chat_message_metadata_passthrough":{"turn_id":"turn-salted-2"}}}
+{"timestamp":"2026-10-02T20:01:02Z","type":"response_item","payload":{"type":"message","role":"assistant","phase":"commentary","content":[{"type":"output_text","text":"I’ll search public sources for recent calibration guidance."}]}}
+{"timestamp":"2026-10-02T20:01:02Z","type":"response_item","payload":{"type":"reasoning","summary":[{"type":"summary_text","text":"PRIVATE_REASONING_SALTED_03"}]}}
+{"timestamp":"2026-10-02T20:01:02Z","type":"response_item","payload":{"type":"custom_tool_call","call_id":"call-salted-03","name":"web_search","input":"SYNTHETIC_TOOL_INPUT_03"}}
+{"timestamp":"2026-10-02T20:01:02Z","type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"call-salted-03","output":"RAW_TOOL_OUTPUT_SALTED_03"}}
+{"timestamp":"2026-10-02T20:01:03Z","type":"response_item","payload":{"type":"reasoning","summary":[{"type":"summary_text","text":"PRIVATE_REASONING_SALTED_04"}]}}
+{"timestamp":"2026-10-02T20:01:03Z","type":"response_item","payload":{"type":"custom_tool_call","call_id":"call-salted-04","name":"web_search","input":"SYNTHETIC_TOOL_INPUT_04"}}
+{"timestamp":"2026-10-02T20:01:03Z","type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"call-salted-04","output":"RAW_TOOL_OUTPUT_SALTED_04"}}
+{"timestamp":"2026-10-02T20:01:04Z","type":"response_item","payload":{"type":"reasoning","summary":[{"type":"summary_text","text":"PRIVATE_REASONING_SALTED_05"}]}}
+{"timestamp":"2026-10-02T20:01:04Z","type":"response_item","payload":{"type":"custom_tool_call","call_id":"call-salted-05","name":"web_search","input":"SYNTHETIC_TOOL_INPUT_05"}}
+{"timestamp":"2026-10-02T20:01:04Z","type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"call-salted-05","output":"RAW_TOOL_OUTPUT_SALTED_05"}}
+{"timestamp":"2026-10-02T20:01:05Z","type":"response_item","payload":{"type":"message","role":"assistant","phase":"final_answer","content":[{"type":"output_text","text":"Use a stable reference star and record a synthetic baseline before adjustments."}]}}
+{"timestamp":"2026-10-02T20:02:00Z","type":"turn_context","payload":{"turn_id":"turn-salted-3","model":"example-model"}}
+{"timestamp":"2026-10-02T20:02:01Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Create a small script that prints the fictional observation schedule."}],"internal_chat_message_metadata_passthrough":{"turn_id":"turn-salted-3"}}}
+{"timestamp":"2026-10-02T20:02:02Z","type":"response_item","payload":{"type":"message","role":"assistant","phase":"commentary","content":[{"type":"output_text","text":"I’ll add a minimal schedule script and verify its output."}]}}
+{"timestamp":"2026-10-02T20:02:02Z","type":"response_item","payload":{"type":"reasoning","summary":[{"type":"summary_text","text":"PRIVATE_REASONING_SALTED_06"}]}}
+{"timestamp":"2026-10-02T20:02:02Z","type":"response_item","payload":{"type":"custom_tool_call","call_id":"call-salted-06","name":"apply_patch","input":"SYNTHETIC_TOOL_INPUT_06"}}
+{"timestamp":"2026-10-02T20:02:02Z","type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"call-salted-06","output":"RAW_TOOL_OUTPUT_SALTED_06"}}
+{"timestamp":"2026-10-02T20:02:03Z","type":"response_item","payload":{"type":"reasoning","summary":[{"type":"summary_text","text":"PRIVATE_REASONING_SALTED_07"}]}}
+{"timestamp":"2026-10-02T20:02:03Z","type":"response_item","payload":{"type":"custom_tool_call","call_id":"call-salted-07","name":"shell_command","input":"SYNTHETIC_TOOL_INPUT_07"}}
+{"timestamp":"2026-10-02T20:02:03Z","type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"call-salted-07","output":"RAW_TOOL_OUTPUT_SALTED_07"}}
+{"timestamp":"2026-10-02T20:02:04Z","type":"response_item","payload":{"type":"reasoning","summary":[{"type":"summary_text","text":"PRIVATE_REASONING_SALTED_08"}]}}
+{"timestamp":"2026-10-02T20:02:04Z","type":"response_item","payload":{"type":"custom_tool_call","call_id":"call-salted-08","name":"shell_command","input":"SYNTHETIC_TOOL_INPUT_08"}}
+{"timestamp":"2026-10-02T20:02:04Z","type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"call-salted-08","output":"RAW_TOOL_OUTPUT_SALTED_08"}}
+{"timestamp":"2026-10-02T20:02:05Z","type":"response_item","payload":{"type":"message","role":"assistant","phase":"final_answer","content":[{"type":"output_text","text":"The synthetic schedule script was created and verified."}]}}
+{"timestamp":"2026-10-02T20:03:00Z","type":"turn_context","payload":{"turn_id":"turn-salted-4","model":"example-model"}}
+{"timestamp":"2026-10-02T20:03:01Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Run the schedule script in a fictional Linux environment."}],"internal_chat_message_metadata_passthrough":{"turn_id":"turn-salted-4"}}}
+{"timestamp":"2026-10-02T20:03:02Z","type":"response_item","payload":{"type":"message","role":"assistant","phase":"commentary","content":[{"type":"output_text","text":"I’ll run it in an isolated synthetic environment."}]}}
+{"timestamp":"2026-10-02T20:03:02Z","type":"response_item","payload":{"type":"reasoning","summary":[{"type":"summary_text","text":"PRIVATE_REASONING_SALTED_09"}]}}
+{"timestamp":"2026-10-02T20:03:02Z","type":"response_item","payload":{"type":"custom_tool_call","call_id":"call-salted-09","name":"shell_command","input":"SYNTHETIC_TOOL_INPUT_09"}}
+{"timestamp":"2026-10-02T20:03:02Z","type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"call-salted-09","output":"RAW_TOOL_OUTPUT_SALTED_09"}}
+{"timestamp":"2026-10-02T20:03:03Z","type":"response_item","payload":{"type":"reasoning","summary":[{"type":"summary_text","text":"PRIVATE_REASONING_SALTED_10"}]}}
+{"timestamp":"2026-10-02T20:03:03Z","type":"response_item","payload":{"type":"custom_tool_call","call_id":"call-salted-10","name":"shell_command","input":"SYNTHETIC_TOOL_INPUT_10"}}
+{"timestamp":"2026-10-02T20:03:03Z","type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"call-salted-10","output":"RAW_TOOL_OUTPUT_SALTED_10"}}
+{"timestamp":"2026-10-02T20:03:04Z","type":"response_item","payload":{"type":"reasoning","summary":[{"type":"summary_text","text":"PRIVATE_REASONING_SALTED_11"}]}}
+{"timestamp":"2026-10-02T20:03:04Z","type":"response_item","payload":{"type":"custom_tool_call","call_id":"call-salted-11","name":"background_terminal","input":"SYNTHETIC_TOOL_INPUT_11"}}
+{"timestamp":"2026-10-02T20:03:04Z","type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"call-salted-11","output":"RAW_TOOL_OUTPUT_SALTED_11"}}
+{"timestamp":"2026-10-02T20:03:05Z","type":"response_item","payload":{"type":"message","role":"assistant","phase":"final_answer","content":[{"type":"output_text","text":"The synthetic Linux execution completed successfully."}]}}
+{"timestamp":"2026-10-02T20:04:00Z","type":"world_state","payload":{"workspace":"synthetic-state-not-imported"}}
+{"timestamp":"2026-10-02T20:04:00Z","type":"turn_context","payload":{"turn_id":"turn-salted-5","model":"example-model"}}
+{"timestamp":"2026-10-02T20:04:01Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Summarize what the fictional observatory workflow accomplished."}],"internal_chat_message_metadata_passthrough":{"turn_id":"turn-salted-5"}}}
+{"timestamp":"2026-10-02T20:04:02Z","type":"response_item","payload":{"type":"message","role":"assistant","phase":"commentary","content":[{"type":"output_text","text":"I’ll summarize the verified synthetic outcomes."}]}}
+{"timestamp":"2026-10-02T20:04:02Z","type":"response_item","payload":{"type":"reasoning","summary":[{"type":"summary_text","text":"PRIVATE_REASONING_SALTED_12"}]}}
+{"timestamp":"2026-10-02T20:04:02Z","type":"response_item","payload":{"type":"custom_tool_call","call_id":"call-salted-12","name":"read_file","input":"SYNTHETIC_TOOL_INPUT_12"}}
+{"timestamp":"2026-10-02T20:04:02Z","type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"call-salted-12","output":"RAW_TOOL_OUTPUT_SALTED_12"}}
+{"timestamp":"2026-10-02T20:04:03Z","type":"response_item","payload":{"type":"reasoning","summary":[{"type":"summary_text","text":"PRIVATE_REASONING_SALTED_13"}]}}
+{"timestamp":"2026-10-02T20:04:03Z","type":"response_item","payload":{"type":"custom_tool_call","call_id":"call-salted-13","name":"read_file","input":"SYNTHETIC_TOOL_INPUT_13"}}
+{"timestamp":"2026-10-02T20:04:03Z","type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"call-salted-13","output":"RAW_TOOL_OUTPUT_SALTED_13"}}
+{"timestamp":"2026-10-02T20:04:04Z","type":"response_item","payload":{"type":"reasoning","summary":[{"type":"summary_text","text":"PRIVATE_REASONING_SALTED_14"}]}}
+{"timestamp":"2026-10-02T20:04:04Z","type":"response_item","payload":{"type":"custom_tool_call","call_id":"call-salted-14","name":"list_files","input":"SYNTHETIC_TOOL_INPUT_14"}}
+{"timestamp":"2026-10-02T20:04:04Z","type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"call-salted-14","output":"RAW_TOOL_OUTPUT_SALTED_14"}}
+{"timestamp":"2026-10-02T20:04:05Z","type":"response_item","payload":{"type":"message","role":"assistant","phase":"final_answer","content":[{"type":"output_text","text":"The fictional workflow researched guidance, created a schedule, and verified it in isolation."}]}}
