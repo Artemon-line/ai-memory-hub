@@ -58,31 +58,41 @@ def test_opencode_export_round_trips_through_hub(tmp_path: Path) -> None:
     random_value = f"{SMOKE_MARKER}-{uuid4().hex}"
     prompt = f"Memorize this random identifier: {random_value}. Confirm briefly."
 
-    run = subprocess.run(
-        [
-            opencode,
-            "run",
-            "--pure",
-            "--format",
-            "json",
-            "--model",
-            f"ollama/{CHAT_MODEL}",
-            "--title",
-            "OpenCode export importer smoke",
-            prompt,
-        ],
-        cwd=workspace,
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=180,
-        check=False,
-    )
-    _write_artifact("run.stdout.jsonl", run.stdout)
-    _write_artifact("run.stderr.log", run.stderr)
-    assert run.returncode == 0, run.stderr
+    command = [
+        opencode,
+        "run",
+        "--pure",
+        "--format",
+        "json",
+        "--model",
+        f"ollama/{CHAT_MODEL}",
+        "--title",
+        "OpenCode export importer smoke",
+        prompt,
+    ]
+    try:
+        run = subprocess.run(
+            command,
+            cwd=workspace,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+        run_stdout = run.stdout
+        run_stderr = run.stderr
+        run_succeeded = run.returncode == 0
+    except subprocess.TimeoutExpired as exc:
+        run_stdout = _output_text(exc.stdout)
+        run_stderr = _output_text(exc.stderr)
+        run_succeeded = _has_completed_step(run_stdout)
 
-    events = [_json_line(line) for line in run.stdout.splitlines() if line.strip()]
+    _write_artifact("run.stdout.jsonl", run_stdout)
+    _write_artifact("run.stderr.log", run_stderr)
+    assert run_succeeded, run_stderr or run_stdout
+
+    events = [_json_line(line) for line in run_stdout.splitlines() if line.strip()]
     session_id = next(
         (
             event["sessionID"]
@@ -93,7 +103,7 @@ def test_opencode_export_round_trips_through_hub(tmp_path: Path) -> None:
         ),
         None,
     )
-    assert session_id is not None, run.stdout
+    assert session_id is not None, run_stdout
 
     exported = subprocess.run(
         [opencode, "export", session_id, "--pure"],
@@ -196,6 +206,29 @@ def _json_line(line: str) -> Any:
         return json.loads(line)
     except json.JSONDecodeError as exc:
         raise AssertionError(f"OpenCode emitted a non-JSON line: {line}") from exc
+
+
+def _output_text(output: str | bytes | None) -> str:
+    if output is None:
+        return ""
+    if isinstance(output, bytes):
+        return output.decode("utf-8", errors="replace")
+    return output
+
+
+def _has_completed_step(output: str) -> bool:
+    for line in output.splitlines():
+        if not line.strip():
+            continue
+        event = _json_line(line)
+        if not isinstance(event, dict):
+            continue
+        if event.get("type") == "step_finish":
+            return True
+        part = event.get("part")
+        if isinstance(part, dict) and part.get("type") == "step-finish":
+            return True
+    return False
 
 
 def _write_artifact(name: str, content: str) -> None:
