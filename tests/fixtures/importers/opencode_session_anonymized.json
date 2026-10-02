@@ -1,0 +1,112 @@
+{
+  "info": {
+    "id": "ses_synthetic_garden",
+    "title": "Garden sensor setup",
+    "directory": "/workspace/garden-sensor",
+    "model": {
+      "id": "example-model",
+      "providerID": "example-provider"
+    },
+    "time": {
+      "created": 1775988000000,
+      "updated": 1775988300000
+    }
+  },
+  "messages": [
+    {
+      "info": {
+        "id": "msg_user_1",
+        "sessionID": "ses_synthetic_garden",
+        "role": "user",
+        "time": { "created": 1775988000000 }
+      },
+      "parts": [
+        {
+          "id": "part_user_1",
+          "sessionID": "ses_synthetic_garden",
+          "messageID": "msg_user_1",
+          "type": "text",
+          "text": "Draft a setup checklist for a balcony temperature sensor."
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_assistant_1",
+        "sessionID": "ses_synthetic_garden",
+        "role": "assistant",
+        "providerID": "example-provider",
+        "modelID": "example-model",
+        "time": { "created": 1775988060000 }
+      },
+      "parts": [
+        {
+          "id": "part_reasoning_1",
+          "sessionID": "ses_synthetic_garden",
+          "messageID": "msg_assistant_1",
+          "type": "reasoning",
+          "text": "Internal planning text is not conversational output."
+        },
+        {
+          "id": "part_assistant_1",
+          "sessionID": "ses_synthetic_garden",
+          "messageID": "msg_assistant_1",
+          "type": "text",
+          "text": "1. Mount the sensor in shade.\n2. Record a baseline reading."
+        },
+        {
+          "id": "part_assistant_2",
+          "sessionID": "ses_synthetic_garden",
+          "messageID": "msg_assistant_1",
+          "type": "text",
+          "text": "Keep the enclosure clear of standing water."
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_tool_only",
+        "sessionID": "ses_synthetic_garden",
+        "role": "assistant",
+        "providerID": "example-provider",
+        "modelID": "example-model",
+        "time": { "created": 1775988120000 }
+      },
+      "parts": [
+        {
+          "id": "part_tool_1",
+          "sessionID": "ses_synthetic_garden",
+          "messageID": "msg_tool_only",
+          "type": "tool",
+          "tool": "read",
+          "state": { "status": "completed", "output": "synthetic output" }
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_user_2",
+        "sessionID": "ses_synthetic_garden",
+        "role": "user",
+        "time": { "created": 1775988180000 }
+      },
+      "parts": [
+        {
+          "id": "part_synthetic_1",
+          "sessionID": "ses_synthetic_garden",
+          "messageID": "msg_user_2",
+          "type": "text",
+          "text": "Synthetic tool context",
+          "synthetic": true
+        },
+        {
+          "id": "part_user_2",
+          "sessionID": "ses_synthetic_garden",
+          "messageID": "msg_user_2",
+          "type": "text",
+          "text": "Add a note about battery checks."
+        }
+      ]
+    }
+  ]
+}

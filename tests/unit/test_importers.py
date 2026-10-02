@@ -9,6 +9,7 @@ from memory.importers import (
     CopilotActivityCsvImporter,
     DeepSeekShareJsonImporter,
     ManualPasteImporter,
+    OpenCodeSessionJsonImporter,
     get_importer,
     importer_names,
 )
@@ -115,12 +116,16 @@ def test_importer_registry_exposes_manual_importer() -> None:
         "copilot-activity-csv",
         "deepseek-share-json",
         "manual",
+        "opencode-session-json",
     )
     assert get_importer("manual").name == "manual"
 
 
 def test_importer_registry_rejects_unknown_importer() -> None:
-    with pytest.raises(ValueError, match="copilot-activity-csv, deepseek-share-json, manual"):
+    with pytest.raises(
+        ValueError,
+        match="copilot-activity-csv, deepseek-share-json, manual, opencode-session-json",
+    ):
         get_importer("unknown")
 
 
@@ -207,3 +212,85 @@ def test_deepseek_share_json_fixture_flattens_conversational_fragments() -> None
 def test_deepseek_share_json_rejects_invalid_exports(text: str, message: str) -> None:
     with pytest.raises(ValueError, match=message):
         DeepSeekShareJsonImporter().import_text(text)
+
+
+def test_opencode_session_json_fixture_maps_text_and_provenance() -> None:
+    text = (_FIXTURES / "opencode_session_anonymized.json").read_text(encoding="utf-8")
+
+    payload = OpenCodeSessionJsonImporter().import_text(text)[0]
+
+    assert payload == {
+        "source": "opencode",
+        "title": "Garden sensor setup",
+        "timestamp": "2026-04-12T10:00:00+00:00",
+        "messages": [
+            {
+                "role": "user",
+                "text": "Draft a setup checklist for a balcony temperature sensor.",
+            },
+            {
+                "role": "assistant",
+                "text": (
+                    "1. Mount the sensor in shade.\n2. Record a baseline reading.\n\n"
+                    "Keep the enclosure clear of standing water."
+                ),
+            },
+            {"role": "user", "text": "Add a note about battery checks."},
+        ],
+        "metadata": {
+            "importer": "opencode-session-json",
+            "platform": "cli",
+            "ingestion_method": "json-import",
+            "source_session_id": "ses_synthetic_garden",
+            "title": "Garden sensor setup",
+            "directory": "/workspace/garden-sensor",
+            "model": "example-provider/example-model",
+        },
+    }
+
+
+def test_opencode_session_json_accepts_overrides_and_message_model() -> None:
+    payload = OpenCodeSessionJsonImporter().import_text(
+        """{
+          "info": {"id": "ses_1", "path": "/workspace/example"},
+          "messages": [{
+            "info": {
+              "role": "assistant",
+              "providerID": "provider",
+              "modelID": "model",
+              "time": {"created": "2026-04-12T10:00:00Z"}
+            },
+            "parts": [{"type": "text", "text": "Done."}]
+          }]
+        }""",
+        source="custom-opencode",
+        title="Override",
+    )[0]
+
+    assert payload["source"] == "custom-opencode"
+    assert payload["title"] == "Override"
+    assert payload["timestamp"] == "2026-04-12T10:00:00+00:00"
+    assert payload["metadata"]["title"] == "Override"
+    assert payload["metadata"]["directory"] == "/workspace/example"
+    assert payload["metadata"]["model"] == "provider/model"
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("not json", "valid JSON"),
+        ("{}", "valid info object"),
+        ('{"info": {}, "messages": []}', "contains no messages"),
+        (
+            '{"info": {}, "messages": [{"info": {"role": "system"}, "parts": []}]}',
+            "unknown role",
+        ),
+        (
+            '{"info": {}, "messages": [{"info": {"role": "user"}, "parts": []}]}',
+            "no conversational text",
+        ),
+    ],
+)
+def test_opencode_session_json_rejects_invalid_exports(text: str, message: str) -> None:
+    with pytest.raises(ValueError, match=message):
+        OpenCodeSessionJsonImporter().import_text(text)

@@ -6,6 +6,12 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Added a native OpenCode session-export JSON importer, including CLI support
+  and a live OpenCode/Ollama export, hub insert, and cited query round-trip
+  smoke test.
+- Updated the container PCRE package and locked urllib3 release to their fixed
+  versions after the supply-chain scan detected new high-severity advisories.
+
 ## 1.0.0-beta
 
 - Added first-release governance, support, and release automation scaffolding.

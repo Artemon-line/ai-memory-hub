@@ -23,7 +23,7 @@ RUN apt-get update && \
       libblkid1=2.41.5-0+deb13u1 \
       liblastlog2-2=2.41.5-0+deb13u1 \
       libmount1=2.41.5-0+deb13u1 \
-      libpcre2-8-0=10.46-1~deb13u2 \
+      libpcre2-8-0=10.46-1~deb13u3 \
       libsmartcols1=2.41.5-0+deb13u1 \
       libsqlite3-0=3.46.1-7+deb13u2 \
       libssl3t64=3.5.7-1~deb13u3 \

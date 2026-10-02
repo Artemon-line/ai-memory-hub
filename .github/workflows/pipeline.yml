@@ -84,8 +84,16 @@ jobs:
         with:
           enable-cache: true
 
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: '24'
+
       - name: Install dependencies
         run: uv sync --dev
+
+      - name: Install pinned OpenCode CLI
+        run: npm install --global opencode-ai@1.18.34
 
       - name: Start pinned Ollama container
         run: |
@@ -112,7 +120,9 @@ jobs:
       - name: Run E2E tests
         env:
           PYTHONHASHSEED: '0'
+          AMH_RUN_OPENCODE_SMOKE: '1'
           AMH_OLLAMA_CHAT_MODEL: qwen2.5:0.5b
+          AMH_OPENCODE_SMOKE_ARTIFACT_DIR: artifacts/opencode-export-smoke
         run: |
           mkdir -p reports/junit
           uv run pytest tests/e2e \
@@ -150,6 +160,14 @@ jobs:
         with:
           name: ollama-e2e-logs
           path: ollama.log
+          if-no-files-found: warn
+
+      - name: Upload OpenCode export smoke artifacts
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: opencode-export-smoke
+          path: artifacts/opencode-export-smoke
           if-no-files-found: warn
 
       - name: Stop Ollama

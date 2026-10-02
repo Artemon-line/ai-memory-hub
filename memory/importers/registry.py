@@ -4,11 +4,13 @@ from memory.importers.base import ConversationImporter
 from memory.importers.copilot_activity_csv import CopilotActivityCsvImporter
 from memory.importers.deepseek_share_json import DeepSeekShareJsonImporter
 from memory.importers.manual_paste import ManualPasteImporter
+from memory.importers.opencode_session_json import OpenCodeSessionJsonImporter
 
 _IMPORTERS: dict[str, ConversationImporter] = {
     CopilotActivityCsvImporter.name: CopilotActivityCsvImporter(),
     DeepSeekShareJsonImporter.name: DeepSeekShareJsonImporter(),
     ManualPasteImporter.name: ManualPasteImporter(),
+    OpenCodeSessionJsonImporter.name: OpenCodeSessionJsonImporter(),
 }
 
 

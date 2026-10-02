@@ -392,6 +392,7 @@ def test_manual_import_cli_ingests_unified_payload(capsys, monkeypatch, tmp_path
     [
         ("copilot-activity-csv", "copilot_activity_anonymized.csv", 2),
         ("deepseek-share-json", "deepseek_share_anonymized.json", 1),
+        ("opencode-session-json", "opencode_session_anonymized.json", 1),
     ],
 )
 def test_export_import_cli_ingests_anonymized_fixtures(

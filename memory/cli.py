@@ -198,6 +198,11 @@ def build_parser() -> argparse.ArgumentParser:
             "Import JSON from the DeepSeek share-content endpoint.",
             "deepseek",
         ),
+        (
+            "opencode-session-json",
+            "Import JSON emitted by the OpenCode session export command.",
+            "opencode",
+        ),
     )
     for importer_name, importer_help, default_source in import_formats:
         importer_parser = import_subparsers.add_parser(importer_name, help=importer_help)
