@@ -52,7 +52,7 @@ source agent's permissions.
       handoff CRUD API.
 - [x] Query unfinished work through normal `memory_search` and `memory_ask`
       using `handoff_only=true`.
-- [ ] Make handoff packets compact enough for low-budget agents to consume.
+- [x] Make handoff packets compact enough for low-budget agents to consume.
 - [ ] Make handoffs portable across local, LAN, hosted, and cloud development
       environments when the same authenticated hub is reachable.
 - [x] Keep handoff reads scoped by owner, project, shared-project membership,
@@ -85,7 +85,7 @@ Persisted fields are intentionally small and live in ordinary memory metadata:
 - [x] `parent_conversation_id`: optional immutable link to the preceding memory
       in a continuation chain. CLI output retains `parent_memory_id` as a public
       compatibility alias; it is not a second persisted field.
-- [ ] `resume_hint`: compact, cited continuation guidance generated from the
+- [x] `resume_hint`: compact, cited continuation guidance generated from the
       underlying authorized memory.
 
 The richer packet returned by `result_mode="handoff"` remains an ephemeral view.
@@ -95,28 +95,28 @@ turning those fields into a second persistence model.
 
 Acceptance criteria:
 
-- [ ] Handoff views are compact, structured, and readable by humans and agents.
-- [ ] Every generated packet links back to evidence instead of being an
+- [x] Handoff views are compact, structured, and readable by humans and agents.
+- [x] Every generated packet links back to evidence instead of being an
       unsupported summary.
-- [ ] A new agent can request "what was happening here?" and receive a useful
+- [x] A new agent can request "what was happening here?" and receive a useful
       continuation packet in one call.
 
 ## Phase 1: Retrieval-Only Handoff View
 
-- [ ] Add internal handoff packet generation from existing conversations,
-      summaries, facts, and recent project memory.
-- [ ] Add deterministic summarization prompts/templates for continuation packets.
-- [ ] Include explicit source citations and confidence notes.
-- [ ] Add `result_mode="handoff"` or an equivalent read-only ask/search option
+- [x] Add internal handoff packet generation from authorized conversation
+      chunks and summaries; fact-layer expansion remains optional future work.
+- [x] Add deterministic extraction templates for continuation packets.
+- [x] Include explicit source citations and confidence notes.
+- [x] Add `result_mode="handoff"` as a read-only ask option
       if it can fit the existing response shape without breaking clients.
-- [ ] Keep generated packets ephemeral until the user or agent explicitly saves
+- [x] Keep generated packets ephemeral until the user or agent explicitly saves
       them.
 
 Acceptance criteria:
 
-- [ ] No schema migration is required for the first read-only view.
-- [ ] Existing `memory_ask` and search behavior remains backward compatible.
-- [ ] Handoff generation refuses to include redacted or unauthorized memory.
+- [x] No schema migration is required for the first read-only view.
+- [x] Existing `memory_ask` and search behavior remains backward compatible.
+- [x] Handoff generation refuses to include redacted or unauthorized memory.
 
 ## Phase 2: Stored Handoff Marker
 
@@ -178,23 +178,23 @@ Acceptance criteria:
 
 ## Phase 5: Compact Resume Hint
 
-- [ ] Generate `resume_hint` from the authorized underlying memory, not only
+- [x] Generate `resume_hint` from the authorized underlying memory, not only
       from client-supplied text.
-- [ ] Keep the hint short enough for low-budget agents and include source-memory
+- [x] Keep the hint short enough for low-budget agents and include source-memory
       citations or an explicit low-confidence result.
-- [ ] Prefer read-time generation initially; persist a hint only when cache or
+- [x] Prefer read-time generation initially; persist a hint only when cache or
       offline workflow evidence justifies it.
-- [ ] Include current objective, confirmed progress, blocker, and immediate next
+- [x] Include current objective, confirmed progress, blocker, and immediate next
       action when supported by evidence.
-- [ ] Never treat a resume hint as executable instructions or as a replacement
+- [x] Never treat a resume hint as executable instructions or as a replacement
       for retrieving the source memory.
 
 Acceptance criteria:
 
-- [ ] A receiving agent can orient itself without replaying the full source
+- [x] A receiving agent can orient itself without replaying the full source
       transcript.
-- [ ] The hint stays within a documented token budget.
-- [ ] Stale or unsupported hints are clearly identified and can be regenerated.
+- [x] The hint stays within a documented 512-token default context budget.
+- [x] Stale or unsupported hints are clearly identified and can be regenerated.
 
 ## Phase 6: Agent Workflow Integration
 
@@ -297,9 +297,9 @@ Acceptance criteria:
 - [x] Integration tests for Agent A creates handoff, Agent B resumes handoff.
 - [x] Tests for optional source provenance and workspace identity.
 - [x] Tests for immutable parent lineage, cycles, and cross-project denial.
-- [ ] Tests for cited, token-bounded resume hints.
+- [x] Tests for cited, token-bounded resume hints.
 - [x] Negative tests for cross-user and cross-project handoff leakage.
-- [ ] Regression tests for budget-constrained handoff packets.
+- [x] Regression tests for budget-constrained handoff packets.
 - [x] Bruno or real-client smoke coverage once the MCP surface exists.
 
 ## Documentation
@@ -326,7 +326,7 @@ deferred.
 - [x] Store unfinished handoffs as ordinary memories with a marker, not in a
       dedicated table or collection.
 - [ ] Should generated handoffs require explicit user confirmation by default?
-- [ ] What is the minimum useful handoff packet for very low token budgets?
+- [x] Use a 512-token default context budget while allowing explicit overrides.
 - [ ] Should stale handoffs expire automatically or only be superseded?
 - [ ] How should target-agent hints be represented without coupling the hub to
       specific vendors?
