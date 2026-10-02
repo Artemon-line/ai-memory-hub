@@ -56,7 +56,7 @@ def test_opencode_export_round_trips_through_hub(tmp_path: Path) -> None:
         "XDG_STATE_HOME": str(tmp_path / "state"),
     }
     random_value = f"{SMOKE_MARKER}-{uuid4().hex}"
-    prompt = f"Memorize this random identifier: {random_value}. Confirm briefly."
+    prompt = f"Reply in one sentence: the fictional comet is named {random_value}."
 
     command = [
         opencode,
@@ -82,11 +82,13 @@ def test_opencode_export_round_trips_through_hub(tmp_path: Path) -> None:
         )
         run_stdout = run.stdout
         run_stderr = run.stderr
-        run_succeeded = run.returncode == 0
+        run_succeeded = run.returncode == 0 and _has_completed_text_response(
+            run_stdout
+        )
     except subprocess.TimeoutExpired as exc:
         run_stdout = _output_text(exc.stdout)
         run_stderr = _output_text(exc.stderr)
-        run_succeeded = _has_completed_step(run_stdout)
+        run_succeeded = _has_completed_text_response(run_stdout)
 
     _write_artifact("run.stdout.jsonl", run_stdout)
     _write_artifact("run.stderr.log", run_stderr)
@@ -216,19 +218,23 @@ def _output_text(output: str | bytes | None) -> str:
     return output
 
 
-def _has_completed_step(output: str) -> bool:
+def _has_completed_text_response(output: str) -> bool:
+    has_text = False
+    has_finished_step = False
     for line in output.splitlines():
         if not line.strip():
             continue
         event = _json_line(line)
         if not isinstance(event, dict):
             continue
-        if event.get("type") == "step_finish":
-            return True
         part = event.get("part")
+        if event.get("type") == "text" and isinstance(part, dict):
+            has_text = isinstance(part.get("text"), str) and bool(part["text"].strip())
+        if event.get("type") == "step_finish":
+            has_finished_step = True
         if isinstance(part, dict) and part.get("type") == "step-finish":
-            return True
-    return False
+            has_finished_step = True
+    return has_text and has_finished_step
 
 
 def _write_artifact(name: str, content: str) -> None:
