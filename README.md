@@ -291,6 +291,12 @@ principal has normal read access to that project. Handoff audit events contain
 operation identifiers and outcomes, not conversation payloads, provider session
 IDs, or private workspace paths.
 
+`memory_ask(result_mode="handoff")` returns an ephemeral `resume_hint` with a
+cited objective, confirmed progress, blocker, immediate next action, and an
+explicit evidence state. Its default context budget is 512 tokens; stale,
+incomplete, and unsupported hints say so directly and can be regenerated from
+current authorized memory without persisting a second summary.
+
 ```mermaid
 flowchart LR
     A["Agent A<br/>Codex, OpenCode, Claude, Copilot, Hermes"] -->|"create_handoff / handoff create"| H["ai-memory-hub<br/>validated, authorized, durable memory"]

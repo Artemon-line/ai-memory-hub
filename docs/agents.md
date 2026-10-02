@@ -363,10 +363,10 @@ Agent A ends a session
 -> report the canonical memory id
 
 Agent B starts a later session
--> memory_search(query, handoff_only=true, result_mode="handoff")
--> choose an authorized matching result
--> memory_retrieve(id, response_format="concise")
--> orient from evidence and cite the memory id
+-> memory_ask(question, handoff_only=true, result_mode="handoff",
+              max_context_tokens=512, response_format="detailed")
+-> orient from handoff.resume_hint and its citations
+-> memory_retrieve(cited_id, response_format="concise") when verification is needed
 ```
 
 Codex, opencode, Claude, and Copilot use the same MCP prompts and tools; only
@@ -394,6 +394,14 @@ derived from that source, summaries are retrieval hints, and a handoff packet
 is an ephemeral cited view for continuing work. Verify its claims against the
 cited memory before acting. A2A task exchange and graph-expanded handoffs are
 planned extensions, not part of the current MCP/HTTP contract.
+
+The default handoff context budget is 512 tokens, even when the general ask
+budget is larger. Clients can request another positive `max_context_tokens`
+value explicitly. The packet reports its budget and usage, deterministic
+truncation, completeness notes, and a `resume_hint.evidence_state` of `current`,
+`stale`, `incomplete`, or `unsupported`. A hint is stale when its newest cited
+evidence is more than 30 days old. Regenerate it by calling `memory_ask` again;
+the hint is a read-time view and is never stored as a second summary resource.
 
 Optional handoff provenance is provider-neutral:
 

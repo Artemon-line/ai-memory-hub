@@ -38,6 +38,29 @@ class HandoffCommand(HandoffClaim):
     result: str | None = None
 
 
+class HandoffResumeHint(BaseModel):
+    """Compact orientation derived only from cited, authorized evidence."""
+
+    model_config = ConfigDict(extra="forbid")
+    objective: HandoffClaim | None = None
+    confirmed_progress: list[HandoffClaim] = Field(default_factory=list)
+    blocker: HandoffClaim | None = None
+    immediate_next_action: HandoffClaim | None = None
+    evidence_state: str
+    stale: bool = False
+    incomplete: bool = False
+    regeneration_hint: str
+
+    @field_validator("evidence_state")
+    @classmethod
+    def _validate_evidence_state(cls, value: str) -> str:
+        if value not in {"current", "stale", "incomplete", "unsupported"}:
+            raise ValueError(
+                "evidence_state must be one of: current, stale, incomplete, unsupported"
+            )
+        return value
+
+
 class HandoffPacket(BaseModel):
     """Ephemeral, evidence-linked continuation packet."""
 
@@ -65,6 +88,7 @@ class HandoffPacket(BaseModel):
     context_tokens_used: int = Field(ge=0)
     context_token_budget: int = Field(ge=1)
     context_truncated: bool = False
+    resume_hint: HandoffResumeHint | None = None
 
     @field_validator("confidence")
     @classmethod

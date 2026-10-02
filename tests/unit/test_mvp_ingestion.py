@@ -1648,6 +1648,76 @@ def test_ask_handoff_returns_cited_structured_packet() -> None:
     assert all(item["memory_id"] for item in packet["citations"])
 
 
+def test_ask_handoff_returns_evidence_only_resume_hint_under_default_budget() -> None:
+    _configure_stubs()
+    messages = (
+        "resumehint Goal: publish the release",
+        "resumehint Confirmed progress: package and documentation checks passed",
+        "resumehint Blocker: waiting for reviewer approval",
+        "resumehint Next step: request the final review",
+    )
+    for index, text in enumerate(messages, start=1):
+        conversation = _valid_conversation()
+        conversation["id"] = f"10000000-0000-4000-8000-{index:012d}"
+        conversation["timestamp"] = f"2026-09-{26 + index:02d}T10:00:00Z"
+        conversation["messages"] = [{"role": "assistant", "text": text}]
+        mvp_ingestion.ingest_messages(conversation)
+
+    result = mvp_ingestion.ask(
+        "what should happen with resumehint?", top_k=10, result_mode="handoff"
+    )
+
+    packet = result["handoff"]
+    hint = packet["resume_hint"]
+    assert packet["context_token_budget"] == 512
+    assert packet["context_tokens_used"] <= 512
+    assert hint["objective"]["text"] == "publish the release"
+    assert hint["confirmed_progress"][0]["citations"]
+    assert hint["blocker"]["citations"]
+    assert hint["immediate_next_action"]["citations"]
+    assert hint["evidence_state"] == "current"
+    assert hint["stale"] is False
+    assert hint["incomplete"] is False
+
+
+def test_ask_handoff_marks_stale_and_unsupported_hints_explicitly() -> None:
+    _configure_stubs()
+    stale = _valid_conversation()
+    stale["timestamp"] = "2025-01-01T00:00:00Z"
+    stale["messages"] = [
+        {"role": "assistant", "text": "stalehint Goal: migrate storage"},
+        {"role": "assistant", "text": "stalehint Next step: rerun migration checks"},
+    ]
+    mvp_ingestion.ingest_messages(stale)
+
+    stale_result = mvp_ingestion.ask("stalehint", result_mode="handoff")
+    stale_hint = stale_result["handoff"]["resume_hint"]
+    assert stale_hint["evidence_state"] == "stale"
+    assert stale_hint["stale"] is True
+    assert "memory_ask" in stale_hint["regeneration_hint"]
+
+    _configure_stubs(retrieval_vector_score_threshold=999.0, retrieval_keyword_enabled=False)
+    unsupported = mvp_ingestion.ask("unsupported hint", result_mode="handoff")
+    unsupported_hint = unsupported["handoff"]["resume_hint"]
+    assert unsupported_hint["evidence_state"] == "unsupported"
+    assert unsupported_hint["objective"] is None
+    assert unsupported_hint["immediate_next_action"] is None
+    assert unsupported["handoff"]["goal"]["citations"] == []
+
+
+def test_normal_ask_mode_remains_without_resume_hint() -> None:
+    _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["messages"] = [{"role": "user", "text": "normalmode answer"}]
+    mvp_ingestion.ingest_messages(conversation)
+
+    result = mvp_ingestion.ask("normalmode", result_mode="chunks")
+
+    assert result["answer_basis"] == "direct_memory"
+    assert "handoff" not in result
+    assert "resume_hint" not in result
+
+
 def test_ask_handoff_redacts_secrets_and_reports_budget_truncation() -> None:
     _configure_stubs()
     conversation = _valid_conversation()

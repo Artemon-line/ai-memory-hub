@@ -741,6 +741,7 @@ def test_mcp_agent_a_creates_handoff_and_agent_b_resumes_only_when_authorized(
     assert [row["id"] for row in resumed["results"]] == [shared["id"]]
     assert orientation["answer_basis"] == "handoff"
     assert orientation["handoff"]["next_steps"][0]["citations"]
+    assert orientation["handoff"]["resume_hint"]["immediate_next_action"]["citations"]
     assert retrieved["status"] == "ok"
     assert retrieved["memory"]["id"] == shared["id"]
     assert wrong_project["status"] == "not_found"
