@@ -252,6 +252,7 @@ python -m memory.cli reindex --json
 python -m memory.cli import manual copilot-chat.txt --source vscode-copilot --json
 python -m memory.cli import copilot-activity-csv copilot-activity-history.csv --json
 python -m memory.cli import deepseek-share-json deepseek-share.json --json
+python -m memory.cli import codex-rollout-jsonl "$CODEX_HOME/sessions/2026/04/12/rollout-<SESSION_ID>.jsonl" --json
 opencode export <SESSION_ID> | python -m memory.cli import opencode-session-json - --json
 python -m memory.cli search "local-first tools" --top-k 5 --json
 python -m memory.cli retrieve <MEMORY_ID> --json
@@ -262,6 +263,47 @@ python -m memory.cli serve --host 127.0.0.1 --port 8000
 Manual imports accept multiline messages labelled with common speaker names such
 as `User:`, `You:`, `Human:`, `Assistant:`, `Copilot:`, `Claude:`, or `Gemini:`.
 Use `-` as the file name to read the transcript from stdin.
+
+Codex CLI and the Codex app persist complete session rollouts as JSONL under
+`$CODEX_HOME/sessions/YYYY/MM/DD/`. Import those files with
+`codex-rollout-jsonl`; the importer keeps only canonical user and assistant text
+messages and omits reasoning, system/developer instructions, tool calls and
+results, approvals, usage, injected startup context, and duplicate presentation
+events. Sessions run with
+`--ephemeral` do not create rollout files. `codex exec --json` is an output
+protocol and is not guaranteed to contain the submitted prompt, so use the
+persisted rollout unless the prompt was captured separately in a versioned
+envelope. A result-only capture is rejected instead of creating a one-sided
+conversation.
+
+### Codex rollout compatibility contract
+
+The importer contract was verified against **Codex CLI 0.152.0** on
+2026-10-02. Both `codex --version` and the sampled rollout's
+`session_meta.payload.cli_version` reported `0.152.0`; the rollout identified
+itself with `source: "cli"` and `originator: "codex-tui"`. This is an observed
+compatibility baseline, not a claim that Codex's local rollout format is a
+stable public API. Validate a minimized fixture before declaring support for a
+newer Codex version.
+
+`codex-rollout-jsonl` consumes this bounded subset of the observed contract:
+
+| JSONL record | Fields consumed | Behavior |
+| --- | --- | --- |
+| `session_meta` | `payload.id`, `timestamp`, `cwd`, `source`, `originator`, `cli_version`, `model_provider`, and optional `git.branch`/`git.commit_hash` | Maps safe session provenance into canonical metadata. Account identifiers, base instructions, and unrecognized fields are not copied. |
+| `response_item` message | `payload.role`, textual `input_text`/`output_text` content blocks, and optional `internal_chat_message_metadata_passthrough.turn_id` | Keeps user `input_text` and assistant `output_text` only. When several user-role records share a turn ID, only the last is kept so injected startup context is excluded. |
+| Every other record | None | Ignores event copies, developer/system instructions, reasoning, tools, approvals, usage, turn context, and unknown future record types. |
+
+Malformed JSON fails with its line number. A result-only stream without both a
+user message and an assistant message is rejected. Records without a turn ID
+retain file order for compatibility with older or simplified rollouts.
+
+The regression suite also includes a salted, fully synthetic Codex 0.152.0
+rollout shaped like a resumed tool-using session. It verifies that five user
+turns, five visible assistant progress messages, and five final answers survive
+as 15 ordered conversation messages, while 14 reasoning records, 14 tool calls,
+14 tool outputs, developer instructions, and injected environment context do
+not enter canonical memory.
 
 Microsoft Copilot activity exports must use the columns `Conversation`, `Time`,
 `Author`, and `Message`. The importer groups rows by conversation and restores

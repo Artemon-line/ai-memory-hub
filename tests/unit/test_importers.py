@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
 from memory.importers import (
+    CodexRolloutJsonlImporter,
     ConversationImporter,
     CopilotActivityCsvImporter,
     DeepSeekShareJsonImporter,
@@ -113,6 +115,7 @@ def test_manual_paste_importer_rejects_oversized_input() -> None:
 
 def test_importer_registry_exposes_manual_importer() -> None:
     assert importer_names() == (
+        "codex-rollout-jsonl",
         "copilot-activity-csv",
         "deepseek-share-json",
         "manual",
@@ -124,7 +127,10 @@ def test_importer_registry_exposes_manual_importer() -> None:
 def test_importer_registry_rejects_unknown_importer() -> None:
     with pytest.raises(
         ValueError,
-        match="copilot-activity-csv, deepseek-share-json, manual, opencode-session-json",
+        match=(
+            "codex-rollout-jsonl, copilot-activity-csv, deepseek-share-json, manual, "
+            "opencode-session-json"
+        ),
     ):
         get_importer("unknown")
 
@@ -152,6 +158,112 @@ def test_copilot_activity_csv_fixture_is_grouped_and_chronological() -> None:
         "platform": "web",
         "ingestion_method": "csv-import",
     }
+
+
+def test_codex_rollout_jsonl_fixture_maps_only_canonical_messages_and_provenance() -> None:
+    text = (_FIXTURES / "codex_rollout_anonymized.jsonl").read_text(encoding="utf-8")
+
+    payload = CodexRolloutJsonlImporter().import_text(text)[0]
+
+    assert payload == {
+        "source": "codex",
+        "timestamp": "2026-04-12T10:00:00+00:00",
+        "messages": [
+            {
+                "role": "user",
+                "text": "Draft a setup checklist for a balcony temperature sensor.",
+            },
+            {
+                "role": "assistant",
+                "text": "1. Mount the sensor in shade.\n\n2. Record a baseline reading.",
+            },
+        ],
+        "metadata": {
+            "importer": "codex-rollout-jsonl",
+            "platform": "codex",
+            "ingestion_method": "jsonl-import",
+            "source_session_id": "0198f000-0000-7000-8000-000000000001",
+            "directory": "/workspace/garden-sensor",
+            "session_source": "cli",
+            "originator": "codex-tui",
+            "cli_version": "0.152.0",
+            "model_provider": "example-provider",
+            "git_branch": "feature/sensor-notes",
+            "git_commit": "0123456789abcdef",
+        },
+    }
+    serialized = json.dumps(payload)
+    assert "Private reasoning" not in serialized
+    assert "private tool output" not in serialized
+    assert "creator_user_id" not in serialized
+    assert "base_instructions" not in serialized
+    assert "Injected runtime context" not in serialized
+
+
+def test_codex_rollout_jsonl_accepts_overrides_and_uses_message_timestamp() -> None:
+    payload = CodexRolloutJsonlImporter().import_text(
+        "\n".join(
+            [
+                '{"type":"response_item","timestamp":"2026-04-12T10:00:02Z","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Question"}]}}',
+                '{"type":"response_item","timestamp":"2026-04-12T10:00:03Z","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Answer"}]}}',
+            ]
+        ),
+        source="custom-codex",
+        title="Imported rollout",
+    )[0]
+
+    assert payload["source"] == "custom-codex"
+    assert payload["title"] == "Imported rollout"
+    assert payload["timestamp"] == "2026-04-12T10:00:02+00:00"
+    assert payload["metadata"]["title"] == "Imported rollout"
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("not json", "line 1 must be valid JSON"),
+        ("[]", "line 1 must be an object"),
+        (
+            '{"type":"session_meta","payload":[]}\n',
+            "line 1 has invalid session metadata",
+        ),
+        (
+            '{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Result only"}]}}',
+            "must contain user and assistant",
+        ),
+        (
+            '{"type":"response_item","payload":{"type":"message","role":"user","content":[]}}',
+            "must contain user and assistant",
+        ),
+    ],
+)
+def test_codex_rollout_jsonl_rejects_invalid_or_incomplete_exports(
+    text: str, message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        CodexRolloutJsonlImporter().import_text(text)
+
+
+def test_codex_rollout_jsonl_rejects_non_text_and_oversized_input() -> None:
+    importer = CodexRolloutJsonlImporter()
+    with pytest.raises(ValueError, match="must be text"):
+        importer.import_text(b"{}")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="exceeds 20000000 bytes"):
+        importer.import_text("x" * 20_000_001)
+
+
+def test_codex_rollout_rich_fixture_keeps_visible_messages_only() -> None:
+    text = (_FIXTURES / "codex_rollout_rich_anonymized.jsonl").read_text(
+        encoding="utf-8"
+    )
+
+    payload = CodexRolloutJsonlImporter().import_text(text)[0]
+
+    assert len(payload["messages"]) == 15
+    assert [message["role"] for message in payload["messages"]] == [
+        role for _ in range(5) for role in ("user", "assistant", "assistant")
+    ]
+    assert payload["messages"][-1]["text"].startswith("The fictional workflow")
 
 
 @pytest.mark.parametrize(

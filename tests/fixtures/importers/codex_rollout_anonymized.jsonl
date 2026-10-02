@@ -1,0 +1,10 @@
+{"timestamp":"2026-04-12T10:00:00Z","type":"session_meta","payload":{"id":"0198f000-0000-7000-8000-000000000001","timestamp":"2026-04-12T10:00:00Z","cwd":"/workspace/garden-sensor","source":"cli","originator":"codex-tui","cli_version":"0.152.0","model_provider":"example-provider","git":{"branch":"feature/sensor-notes","commit_hash":"0123456789abcdef"},"creator_user_id":"omitted-private-id","base_instructions":"This must never be imported."}}
+{"timestamp":"2026-04-12T10:00:00Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"<environment_context>Injected runtime context must not be imported.</environment_context>"}],"internal_chat_message_metadata_passthrough":{"turn_id":"turn-1"}}}
+{"timestamp":"2026-04-12T10:00:01Z","type":"event_msg","payload":{"type":"user_message","message":"Draft a setup checklist for a balcony temperature sensor."}}
+{"timestamp":"2026-04-12T10:00:01Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Draft a setup checklist for a balcony temperature sensor."}],"internal_chat_message_metadata_passthrough":{"turn_id":"turn-1"}}}
+{"timestamp":"2026-04-12T10:00:02Z","type":"response_item","payload":{"type":"reasoning","summary":[{"type":"summary_text","text":"Private reasoning must not be imported."}]}}
+{"timestamp":"2026-04-12T10:00:03Z","type":"response_item","payload":{"type":"function_call","name":"read_file","arguments":"{\"path\":\"secret.txt\"}"}}
+{"timestamp":"2026-04-12T10:00:04Z","type":"response_item","payload":{"type":"function_call_output","output":"private tool output"}}
+{"timestamp":"2026-04-12T10:00:05Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"1. Mount the sensor in shade."},{"type":"output_text","text":"2. Record a baseline reading."},{"type":"refusal","refusal":"not conversation text"}]}}
+{"timestamp":"2026-04-12T10:00:06Z","type":"turn_context","payload":{"model":"example-model","effort":"high"}}
+{"timestamp":"2026-04-12T10:00:07Z","type":"future_record","payload":{"private":"ignored"}}
