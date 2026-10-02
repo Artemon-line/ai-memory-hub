@@ -8,17 +8,20 @@ from pathlib import Path
 from typing import Any
 from urllib.error import URLError
 from urllib.request import urlopen
+from uuid import uuid4
 
 import pytest
+from fastapi.testclient import TestClient
 
+from memory.api.server import create_app
 from memory.importers import OpenCodeSessionJsonImporter
 
-OLLAMA_BASE_URL = "http://127.0.0.1:11434"
+OLLAMA_BASE_URL = os.environ.get("AMH_OLLAMA_BASE_URL", "http://127.0.0.1:11434")
 CHAT_MODEL = os.environ.get("AMH_OLLAMA_CHAT_MODEL", "qwen2.5:0.5b")
-SMOKE_MARKER = "opencode export importer smoke"
+SMOKE_MARKER = "opencode-memory"
 
 
-def test_opencode_export_is_accepted_by_native_importer(tmp_path: Path) -> None:
+def test_opencode_export_round_trips_through_hub(tmp_path: Path) -> None:
     _require_ollama()
     opencode = shutil.which("opencode")
     if opencode is None:
@@ -52,7 +55,8 @@ def test_opencode_export_is_accepted_by_native_importer(tmp_path: Path) -> None:
         "XDG_DATA_HOME": str(tmp_path / "data"),
         "XDG_STATE_HOME": str(tmp_path / "state"),
     }
-    prompt = f"Reply with exactly these four words: {SMOKE_MARKER}"
+    random_value = f"{SMOKE_MARKER}-{uuid4().hex}"
+    prompt = f"Memorize this random identifier: {random_value}. Confirm briefly."
 
     run = subprocess.run(
         [
@@ -113,8 +117,60 @@ def test_opencode_export_is_accepted_by_native_importer(tmp_path: Path) -> None:
         "user",
         "assistant",
     ]
-    assert SMOKE_MARKER in payload["messages"][0]["text"].lower()
+    assert random_value in payload["messages"][0]["text"]
     assert payload["messages"][1]["text"].strip()
+
+    with _hub_client(tmp_path / "hub") as client:
+        inserted = client.post("/memory/insert", json=payload)
+        _write_artifact("hub-insert.json", inserted.text)
+        assert inserted.status_code == 200, inserted.text
+        inserted_body = inserted.json()
+        assert inserted_body["status"] == "ok"
+        assert isinstance(inserted_body["id"], str)
+
+        queried = client.post(
+            "/memory/ask",
+            json={
+                "question": "Which random identifier was memorized?",
+                "top_k": 5,
+                "source": "opencode",
+                "source_session_id": session_id,
+            },
+        )
+        _write_artifact("hub-query.json", queried.text)
+        assert queried.status_code == 200, queried.text
+        queried_body = queried.json()
+        assert queried_body["status"] == "ok"
+        assert queried_body["answer"]
+        assert queried_body["results"]
+        assert queried_body["results"][0]["id"] == inserted_body["id"]
+        assert any(
+            random_value in citation["text"]
+            for citation in queried_body["citations"]
+        )
+        assert random_value in queried_body["answer"]
+
+
+def _hub_client(data_dir: Path) -> TestClient:
+    return TestClient(
+        create_app(
+            config={
+                "interfaces": {"mcp": False, "api": True},
+                "embedding_endpoint": {
+                    "base_url": f"{OLLAMA_BASE_URL.rstrip('/')}/v1",
+                    "api_key": "ollama",
+                },
+                "paths": {"data_dir": str(data_dir)},
+                "providers": {
+                    "embeddings": "http",
+                    "embedding_model": "nomic-embed-text",
+                    "embedding_dimension": 768,
+                    "metadata_db": "sqlite",
+                    "vector_db": "memory",
+                },
+            }
+        )
+    )
 
 
 def _require_ollama() -> None:
