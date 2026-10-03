@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Self
 
 import jsonschema  # pyright: ignore[reportMissingModuleSource]
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from memory.importers.base import ConversationImporter
 
@@ -32,13 +32,27 @@ _MESSAGE_CANDIDATE_VALIDATOR, _IMPORTABLE_MESSAGE_VALIDATOR = (
 )
 
 
-@dataclass(frozen=True, slots=True)
-class _ParsedMessage:
+class _MessageEnvelope(BaseModel):
+    model_config = ConfigDict(extra="ignore", protected_namespaces=())
+
     role: str
     content: str | list[Any]
-    uuid: str | None
-    timestamp: str | None
-    model: str | None
+    model: str | None = None
+
+
+class _MessageRecord(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    type: str
+    uuid: str | None = None
+    timestamp: str | None = None
+    message: _MessageEnvelope
+
+    @model_validator(mode="after")
+    def roles_match(self) -> Self:
+        if self.type != self.message.role:
+            raise ValueError("outer and nested message roles must match")
+        return self
 
 
 class ClaudeCodeSessionJsonlImporter(ConversationImporter):
@@ -81,17 +95,17 @@ class ClaudeCodeSessionJsonlImporter(ConversationImporter):
             parsed_message = _parse_message_record(record, line_number=line_number)
             if parsed_message is None:
                 continue
-            content = _message_text(parsed_message.content)
+            content = _message_text(parsed_message.message.content)
             if content is None:
                 continue
             if _is_duplicate(parsed_message.uuid, seen_uuids):
                 continue
 
-            messages.append({"role": parsed_message.role, "text": content})
+            messages.append({"role": parsed_message.type, "text": content})
             timestamp = _timestamp(parsed_message.timestamp, line_number=line_number)
             if timestamp is not None:
                 message_times.append(timestamp)
-            _capture_model(parsed_message.model, provenance)
+            _capture_model(parsed_message.message.model, provenance)
 
         if not messages:
             raise ValueError("Claude Code session contains no conversational text")
@@ -119,7 +133,7 @@ class ClaudeCodeSessionJsonlImporter(ConversationImporter):
 
 def _parse_message_record(
     record: dict[str, Any], *, line_number: int
-) -> _ParsedMessage | None:
+) -> _MessageRecord | None:
     if not _MESSAGE_CANDIDATE_VALIDATOR.is_valid(record):
         return None
     error = next(_IMPORTABLE_MESSAGE_VALIDATOR.iter_errors(record), None)
@@ -130,14 +144,7 @@ def _parse_message_record(
             f"Claude Code message on line {line_number} does not match the importer schema"
             f"{location}: {error.message}"
         )
-    message = cast(dict[str, Any], record["message"])
-    return _ParsedMessage(
-        role=cast(str, record["type"]),
-        content=cast(str | list[Any], message["content"]),
-        uuid=_nonempty_string(record.get("uuid")),
-        timestamp=cast(str | None, record.get("timestamp")),
-        model=_nonempty_string(message.get("model")),
-    )
+    return _MessageRecord.model_validate(record)
 
 
 def _message_text(content: str | list[Any]) -> str | None:
@@ -146,11 +153,9 @@ def _message_text(content: str | list[Any]) -> str | None:
 
     parts: list[str] = []
     for block in content:
-        if not isinstance(block, dict) or block.get("type") != "text":
-            continue
-        text = cast(str, block["text"])
-        if text.strip():
-            parts.append(text)
+        match block:
+            case {"type": "text", "text": str(text)} if text.strip():
+                parts.append(text)
     return "\n\n".join(parts) if parts else None
 
 
