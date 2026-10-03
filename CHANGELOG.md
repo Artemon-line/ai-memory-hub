@@ -6,6 +6,9 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Added a native Claude Code session JSONL importer that keeps visible user and
+  assistant text while omitting reasoning, tools, system records, usage,
+  compaction summaries, and file snapshots.
 - Added a native Codex CLI/app rollout JSONL importer, verified against Codex
   CLI 0.152.0, that keeps canonical user and assistant text while omitting
   reasoning, tools, injected startup context, and runtime-only events.

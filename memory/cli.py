@@ -194,6 +194,11 @@ def build_parser() -> argparse.ArgumentParser:
             "codex",
         ),
         (
+            "claude-code-session-jsonl",
+            "Import a persisted Claude Code session transcript.",
+            "claude-code",
+        ),
+        (
             "copilot-activity-csv",
             "Import a Microsoft Copilot activity-history CSV export.",
             "microsoft-copilot",
