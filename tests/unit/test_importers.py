@@ -11,6 +11,7 @@ from memory.importers import (
     ConversationImporter,
     CopilotActivityCsvImporter,
     CopilotCliEventsJsonlImporter,
+    DeepSeekHarnessSessionJsonlImporter,
     DeepSeekShareJsonImporter,
     GeminiCliSessionJsonImporter,
     ManualPasteImporter,
@@ -124,6 +125,7 @@ def test_importer_registry_exposes_manual_importer() -> None:
         "codex-rollout-jsonl",
         "copilot-activity-csv",
         "copilot-cli-events-jsonl",
+        "deepseek-harness-session-jsonl",
         "deepseek-share-json",
         "gemini-cli-session-json",
         "manual",
@@ -139,8 +141,9 @@ def test_importer_registry_rejects_unknown_importer() -> None:
         ValueError,
         match=(
             "claude-code-session-jsonl, codex-rollout-jsonl, copilot-activity-csv, "
-            "copilot-cli-events-jsonl, deepseek-share-json, gemini-cli-session-json, manual, "
-            "opencode-session-json, pi-session-jsonl, qwen-code-session-export"
+            "copilot-cli-events-jsonl, deepseek-harness-session-jsonl, "
+            "deepseek-share-json, gemini-cli-session-json, manual, opencode-session-json, "
+            "pi-session-jsonl, qwen-code-session-export"
         ),
     ):
         get_importer("unknown")
@@ -243,6 +246,139 @@ def test_copilot_cli_importer_rejects_invalid_sessions(
 
 def test_copilot_cli_importer_rejects_non_text_and_oversized_input() -> None:
     importer = CopilotCliEventsJsonlImporter()
+    with pytest.raises(ValueError, match="must be text"):
+        importer.import_text(b"{}")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="exceeds 20000000 bytes"):
+        importer.import_text("x" * 20_000_001)
+
+
+def test_deepseek_harness_v4_fixture_maps_text_and_safe_provenance() -> None:
+    text = (_FIXTURES / "deepseek_harness_session_v4_anonymized.jsonl").read_text(
+        encoding="utf-8"
+    )
+
+    payload = DeepSeekHarnessSessionJsonlImporter().import_text(text)[0]
+
+    assert payload == {
+        "source": "deepseek-harness",
+        "title": "Sensor test investigation",
+        "timestamp": "2026-10-02T09:15:23+00:00",
+        "messages": [
+            {"role": "user", "text": "Explain the failing sensor test."},
+            {"role": "assistant", "text": "The fixture path is stale."},
+        ],
+        "metadata": {
+            "importer": "deepseek-harness-session-jsonl",
+            "platform": "deepseek-harness",
+            "ingestion_method": "jsonl-import",
+            "source_session_id": "dsh-root-synthetic",
+            "session_format_version": 4,
+            "session_relationship": "root",
+            "directory": "/work/garden-sensor",
+            "agent_preset": "minimal",
+            "delegation_depth": 0,
+            "model": "deepseek-official/deepseek-example-model",
+            "title": "Sensor test investigation",
+        },
+    }
+
+
+def test_deepseek_harness_v0_descendant_accepts_compact_messages() -> None:
+    text = (
+        _FIXTURES / "deepseek_harness_session_v0_descendant_anonymized.jsonl"
+    ).read_text(encoding="utf-8")
+
+    payload = DeepSeekHarnessSessionJsonlImporter().import_text(text)[0]
+
+    assert payload["messages"] == [
+        {"role": "user", "text": "Check the child parser."},
+        {"role": "assistant", "text": "The child parser is valid."},
+    ]
+    assert payload["metadata"]["session_format_version"] == 0
+    assert payload["metadata"]["session_relationship"] == "descendant"
+    assert payload["metadata"]["parent_session_id"] == "dsh-root-synthetic"
+    assert payload["metadata"]["session_origin"] == "subagent"
+    assert payload["metadata"]["delegation_depth"] == 1
+
+
+def test_deepseek_harness_importer_accepts_overrides() -> None:
+    text = "\n".join(
+        [
+            '{"type":"session","version":4,"id":"s1","createdAt":1,"isSeeded":false,"delegationDepth":0}',
+            '{"type":"user/message","data":{"content":"Question"}}',
+            '{"type":"assistant/message","data":{"content":"Answer"}}',
+        ]
+    )
+
+    payload = DeepSeekHarnessSessionJsonlImporter().import_text(
+        text, source="custom-harness", title="Imported Harness session"
+    )[0]
+
+    assert payload["source"] == "custom-harness"
+    assert payload["title"] == "Imported Harness session"
+    assert payload["metadata"]["title"] == "Imported Harness session"
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("", "is empty"),
+        ("not json", "line 1 must be valid JSON"),
+        ("[]", "line 1 must be an object"),
+        ('{"type":"turn/start","data":{}}', "must be the session header"),
+        (
+            '{"type":"session","version":5,"id":"s1","createdAt":1}',
+            "version 5 is not supported",
+        ),
+        (
+            "\n".join(
+                [
+                    '{"type":"session","version":4,"id":"s1","createdAt":1,"isSeeded":false,"delegationDepth":0}',
+                    '{"type":"turn/start","seq":0,"time":1,"data":{}}',
+                    '{"type":"user/message","seq":2,"time":2,"data":{"content":"Question"}}',
+                ]
+            ),
+            "non-monotonic sequence; expected 1, got 2",
+        ),
+        (
+            "\n".join(
+                [
+                    '{"type":"session","version":4,"id":"s1","createdAt":1,"isSeeded":false,"delegationDepth":0}',
+                    '{"type":"turn/start","seq":0,"time":1,"data":{}}',
+                    '{"type":"user/message","data":{"content":"Question"}}',
+                ]
+            ),
+            "mixes coordinated and physical-order events",
+        ),
+        (
+            "\n".join(
+                [
+                    '{"type":"session","version":4,"id":"s1","createdAt":1,"isSeeded":false,"delegationDepth":0}',
+                    '{"type":"user/message","data":{}}',
+                ]
+            ),
+            "message on line 2 does not match the importer schema",
+        ),
+        (
+            "\n".join(
+                [
+                    '{"type":"session","version":4,"id":"s1","createdAt":1,"isSeeded":false,"delegationDepth":0}',
+                    '{"type":"tool/call","data":{"name":"read_file"}}',
+                ]
+            ),
+            "contains no conversational text",
+        ),
+    ],
+)
+def test_deepseek_harness_importer_rejects_invalid_sessions(
+    text: str, message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        DeepSeekHarnessSessionJsonlImporter().import_text(text)
+
+
+def test_deepseek_harness_importer_rejects_non_text_and_oversized_input() -> None:
+    importer = DeepSeekHarnessSessionJsonlImporter()
     with pytest.raises(ValueError, match="must be text"):
         importer.import_text(b"{}")  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="exceeds 20000000 bytes"):

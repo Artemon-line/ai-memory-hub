@@ -214,6 +214,11 @@ def build_parser() -> argparse.ArgumentParser:
             "deepseek",
         ),
         (
+            "deepseek-harness-session-jsonl",
+            "Import an extracted DeepSeek Harness canonical session JSONL log.",
+            "deepseek-harness",
+        ),
+        (
             "gemini-cli-session-json",
             "Import a Gemini CLI exported session or shared JSON history.",
             "gemini-cli",
