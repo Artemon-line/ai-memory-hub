@@ -2,12 +2,26 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from pathlib import Path
 from typing import Any
+
+import jsonschema  # pyright: ignore[reportMissingModuleSource]
 
 from memory.importers.base import ConversationImporter
 
 _MAX_INPUT_BYTES = 20_000_000
-_ROLES = {"user", "assistant"}
+_SCHEMA_PATH = (
+    Path(__file__).resolve().parents[1] / "schema" / "claude-code-session.schema.json"
+)
+with _SCHEMA_PATH.open("r", encoding="utf-8") as _schema_handle:
+    _SCHEMA = json.load(_schema_handle)
+jsonschema.Draft202012Validator.check_schema(_SCHEMA)
+_MESSAGE_CANDIDATE_VALIDATOR = jsonschema.Draft202012Validator(
+    _SCHEMA["$defs"]["messageCandidate"]
+)
+_IMPORTABLE_MESSAGE_VALIDATOR = jsonschema.Draft202012Validator(
+    _SCHEMA["$defs"]["importableMessage"]
+)
 
 
 class ClaudeCodeSessionJsonlImporter(ConversationImporter):
@@ -47,21 +61,10 @@ class ClaudeCodeSessionJsonlImporter(ConversationImporter):
                 )
 
             _capture_provenance(record, provenance)
-            role = record.get("type")
-            if role not in _ROLES:
+            parsed_message = _parse_message_record(record, line_number=line_number)
+            if parsed_message is None:
                 continue
-            if record.get("isCompactSummary") is True:
-                continue
-            message = record.get("message")
-            if not isinstance(message, dict):
-                raise ValueError(
-                    f"Claude Code message on line {line_number} has an invalid envelope"
-                )
-            message_role = message.get("role")
-            if message_role != role:
-                raise ValueError(
-                    f"Claude Code message on line {line_number} has an inconsistent role"
-                )
+            role, message = parsed_message
             content = _message_text(message.get("content"), line_number=line_number)
             if content is None:
                 continue
@@ -103,6 +106,22 @@ class ClaudeCodeSessionJsonlImporter(ConversationImporter):
         if message_times:
             payload["timestamp"] = message_times[0].isoformat()
         return [payload]
+
+
+def _parse_message_record(
+    record: dict[str, Any], *, line_number: int
+) -> tuple[str, dict[str, Any]] | None:
+    if not _MESSAGE_CANDIDATE_VALIDATOR.is_valid(record):
+        return None
+    error = next(_IMPORTABLE_MESSAGE_VALIDATOR.iter_errors(record), None)
+    if error is not None:
+        path = ".".join(str(part) for part in error.absolute_path)
+        location = f" at {path}" if path else ""
+        raise ValueError(
+            f"Claude Code message on line {line_number} does not match the importer schema"
+            f"{location}: {error.message}"
+        )
+    return str(record["type"]), record["message"]
 
 
 def _message_text(content: Any, *, line_number: int) -> str | None:

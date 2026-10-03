@@ -328,11 +328,11 @@ def test_claude_code_session_accepts_overrides() -> None:
         ("[]", "line 1 must be an object"),
         (
             '{"type":"user","message":[]}',
-            "line 1 has an invalid envelope",
+            "line 1 does not match the importer schema",
         ),
         (
             '{"type":"user","message":{"role":"assistant","content":"wrong"}}',
-            "line 1 has an inconsistent role",
+            "line 1 does not match the importer schema",
         ),
         (
             '{"type":"assistant","message":{"role":"assistant","content":[]}}',

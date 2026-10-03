@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-memory-hub/schema/claude-code-session.schema.json",
+  "title": "Claude Code Session Record",
+  "description": "Bounded record shapes consumed by the Claude Code JSONL importer. Unknown event types remain forward-compatible and are ignored by the importer.",
+  "type": "object",
+  "additionalProperties": true,
+  "$defs": {
+    "messageCandidate": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": ["user", "assistant"]
+        },
+        "isCompactSummary": {
+          "not": {
+            "const": true
+          }
+        }
+      },
+      "required": ["type"],
+      "additionalProperties": true
+    },
+    "importableMessage": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": ["user", "assistant"]
+        },
+        "uuid": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timestamp": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cwd": {
+          "type": "string",
+          "minLength": 1
+        },
+        "gitBranch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "isCompactSummary": {
+          "not": {
+            "const": true
+          }
+        },
+        "message": {
+          "type": "object",
+          "properties": {
+            "role": {
+              "enum": ["user", "assistant"]
+            },
+            "model": {
+              "type": "string",
+              "minLength": 1
+            },
+            "content": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "anyOf": [
+                      {
+                        "not": {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "const": "text"
+                            }
+                          },
+                          "required": ["type"]
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "const": "text"
+                          },
+                          "text": {
+                            "type": "string"
+                          }
+                        },
+                        "required": ["type", "text"],
+                        "additionalProperties": true
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "required": ["role", "content"],
+          "additionalProperties": true
+        }
+      },
+      "required": ["type", "message"],
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "user"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "properties": {
+              "message": {
+                "properties": {
+                  "role": {
+                    "const": "user"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "assistant"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "properties": {
+              "message": {
+                "properties": {
+                  "role": {
+                    "const": "assistant"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
