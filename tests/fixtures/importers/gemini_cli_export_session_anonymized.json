@@ -1,0 +1,36 @@
+{
+  "sessionId": "7d0f0000-1111-4222-8333-444444444444",
+  "projectHash": "synthetic-project-hash",
+  "startTime": "2026-10-02T09:15:23.000Z",
+  "lastUpdated": "2026-10-02T09:16:01.000Z",
+  "directories": ["/workspace/weather-station"],
+  "messages": [
+    {
+      "id": "notice-1",
+      "timestamp": "2026-10-02T09:15:23.500Z",
+      "type": "info",
+      "content": "Diagnostic notice that must not be imported"
+    },
+    {
+      "id": "m1",
+      "timestamp": "2026-10-02T09:15:24.000Z",
+      "type": "user",
+      "content": [
+        {"text": "Explain the fictional sensor failure."},
+        {"functionResponse": {"name": "read_file", "response": "private tool output"}}
+      ]
+    },
+    {
+      "id": "m2",
+      "timestamp": "2026-10-02T09:15:30.000Z",
+      "type": "gemini",
+      "content": "The synthetic fixture has a stale calibration value.",
+      "thoughts": [{"subject": "Private reasoning", "description": "Do not import"}],
+      "toolCalls": [{"name": "read_file", "args": {"path": "sensor.py"}}],
+      "tokens": {"input": 120, "output": 18, "total": 138},
+      "model": "gemini-example-model"
+    }
+  ],
+  "kind": "main",
+  "unknownFutureField": {"ignored": true}
+}

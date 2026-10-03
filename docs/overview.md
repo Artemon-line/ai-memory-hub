@@ -254,6 +254,7 @@ python -m memory.cli import copilot-activity-csv copilot-activity-history.csv --
 python -m memory.cli import deepseek-share-json deepseek-share.json --json
 python -m memory.cli import claude-code-session-jsonl "$HOME/.claude/projects/<PROJECT>/<SESSION_ID>.jsonl" --json
 python -m memory.cli import codex-rollout-jsonl "$CODEX_HOME/sessions/2026/04/12/rollout-<SESSION_ID>.jsonl" --json
+python -m memory.cli import gemini-cli-session-json gemini-session.json --json
 opencode export <SESSION_ID> | python -m memory.cli import opencode-session-json - --json
 python -m memory.cli search "local-first tools" --top-k 5 --json
 python -m memory.cli retrieve <MEMORY_ID> --json
@@ -343,6 +344,23 @@ Code's `/export transcript.txt` output is suitable for the `manual` importer
 when a readable transcript is preferred, but it does not preserve the same
 structured provenance. Review the transcript for sensitive content before
 copying or importing it.
+
+Gemini CLI sessions can be exported with `/export-session gemini-session.json`
+and imported with `gemini-cli-session-json`. JSON written by
+`/chat share gemini-session.json` is also accepted, as are legacy local saved-chat
+JSON objects with the same session envelope. Current Gemini CLI autosaved session
+files may use an internal JSONL format; use `/export-session` rather than passing
+those files to this JSON importer. The importer maps `user` and `gemini`/`model`
+roles to canonical messages, keeps text blocks in export order, and records the
+session ID, project hash, workspace directories, start time, and first visible
+model name when available. It omits injected session context, thoughts, tool
+calls and results, token counts, diagnostics, and unknown fields.
+
+Gemini's export formats may contain prompts, responses, workspace paths, and
+other sensitive context. Review the JSON before sharing or retaining it outside
+the CLI's local state. The bundled importer schema accepts only the documented
+session-object and shared-history envelopes; malformed recognized messages fail
+with their message index.
 
 Review imported output before retaining sensitive conversations. The repository
 fixtures are synthetic and contain no text copied from personal exports.

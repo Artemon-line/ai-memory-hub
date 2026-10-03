@@ -394,6 +394,11 @@ def test_manual_import_cli_ingests_unified_payload(capsys, monkeypatch, tmp_path
         ("codex-rollout-jsonl", "codex_rollout_anonymized.jsonl", 1),
         ("copilot-activity-csv", "copilot_activity_anonymized.csv", 2),
         ("deepseek-share-json", "deepseek_share_anonymized.json", 1),
+        (
+            "gemini-cli-session-json",
+            "gemini_cli_export_session_anonymized.json",
+            1,
+        ),
         ("opencode-session-json", "opencode_session_anonymized.json", 1),
     ],
 )

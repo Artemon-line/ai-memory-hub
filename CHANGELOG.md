@@ -6,6 +6,9 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Added a native Gemini CLI session JSON importer for `/export-session`,
+  `/chat share` JSON, and compatible legacy saved-chat objects while omitting
+  injected context, thoughts, tools, token usage, and diagnostics.
 - Added a native Claude Code session JSONL importer that keeps visible user and
   assistant text while omitting reasoning, tools, system records, usage,
   compaction summaries, and file snapshots.

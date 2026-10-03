@@ -11,6 +11,7 @@ from memory.importers import (
     ConversationImporter,
     CopilotActivityCsvImporter,
     DeepSeekShareJsonImporter,
+    GeminiCliSessionJsonImporter,
     ManualPasteImporter,
     OpenCodeSessionJsonImporter,
     get_importer,
@@ -120,6 +121,7 @@ def test_importer_registry_exposes_manual_importer() -> None:
         "codex-rollout-jsonl",
         "copilot-activity-csv",
         "deepseek-share-json",
+        "gemini-cli-session-json",
         "manual",
         "opencode-session-json",
     )
@@ -131,7 +133,8 @@ def test_importer_registry_rejects_unknown_importer() -> None:
         ValueError,
         match=(
             "claude-code-session-jsonl, codex-rollout-jsonl, copilot-activity-csv, "
-            "deepseek-share-json, manual, opencode-session-json"
+            "deepseek-share-json, gemini-cli-session-json, manual, "
+            "opencode-session-json"
         ),
     ):
         get_importer("unknown")
@@ -352,6 +355,131 @@ def test_claude_code_session_rejects_invalid_exports(text: str, message: str) ->
 
 def test_claude_code_session_rejects_non_text_and_oversized_input() -> None:
     importer = ClaudeCodeSessionJsonlImporter()
+    with pytest.raises(ValueError, match="must be text"):
+        importer.import_text(b"{}")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="exceeds 20000000 bytes"):
+        importer.import_text("x" * 20_000_001)
+
+
+def test_gemini_cli_export_session_fixture_keeps_visible_text_and_provenance() -> None:
+    text = (_FIXTURES / "gemini_cli_export_session_anonymized.json").read_text(
+        encoding="utf-8"
+    )
+
+    payload = GeminiCliSessionJsonImporter().import_text(text)[0]
+
+    assert payload == {
+        "source": "gemini-cli",
+        "timestamp": "2026-10-02T09:15:23+00:00",
+        "messages": [
+            {"role": "user", "text": "Explain the fictional sensor failure."},
+            {
+                "role": "assistant",
+                "text": "The synthetic fixture has a stale calibration value.",
+            },
+        ],
+        "metadata": {
+            "importer": "gemini-cli-session-json",
+            "platform": "gemini-cli",
+            "ingestion_method": "json-import",
+            "export_format": "session",
+            "source_session_id": "7d0f0000-1111-4222-8333-444444444444",
+            "project_hash": "synthetic-project-hash",
+            "model": "gemini-example-model",
+            "workspace_directories": ["/workspace/weather-station"],
+        },
+    }
+    serialized = json.dumps(payload)
+    assert "Private reasoning" not in serialized
+    assert "private tool output" not in serialized
+    assert "unknownFutureField" not in serialized
+
+
+def test_gemini_cli_shared_history_fixture_excludes_injected_context_and_tools() -> None:
+    text = (_FIXTURES / "gemini_cli_shared_history_anonymized.json").read_text(
+        encoding="utf-8"
+    )
+
+    payload = GeminiCliSessionJsonImporter().import_text(text)[0]
+
+    assert payload == {
+        "source": "gemini-cli",
+        "messages": [
+            {
+                "role": "user",
+                "text": "Summarize the fictional launch checklist.",
+            },
+            {
+                "role": "assistant",
+                "text": "Verify the dry run, owner, and rollback window.",
+            },
+        ],
+        "metadata": {
+            "importer": "gemini-cli-session-json",
+            "platform": "gemini-cli",
+            "ingestion_method": "json-import",
+            "export_format": "shared-history",
+        },
+    }
+    serialized = json.dumps(payload)
+    assert "Private workspace tree" not in serialized
+    assert "private tool output" not in serialized
+    assert "launch.md" not in serialized
+
+
+def test_gemini_cli_session_accepts_overrides_and_message_timestamp() -> None:
+    payload = GeminiCliSessionJsonImporter().import_text(
+        json.dumps(
+            {
+                "messages": [
+                    {
+                        "type": "user",
+                        "timestamp": "2026-04-12T10:00:01Z",
+                        "content": "Question",
+                    },
+                    {"type": "gemini", "content": [{"text": "Answer"}]},
+                ]
+            }
+        ),
+        source="custom-gemini",
+        title="Imported session",
+    )[0]
+
+    assert payload["source"] == "custom-gemini"
+    assert payload["title"] == "Imported session"
+    assert payload["timestamp"] == "2026-04-12T10:00:01+00:00"
+    assert payload["metadata"]["title"] == "Imported session"
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("not json", "must be valid JSON"),
+        ("{}", "must be an object or array"),
+        ('{"messages":[1]}', "message 1 must be an object"),
+        (
+            '{"messages":[{"type":"user","content":1}]}',
+            "message 1 has invalid content",
+        ),
+        (
+            '[{"role":"user","parts":"invalid"}]',
+            "shared history item 1 has invalid parts",
+        ),
+        ('{"messages":[]}', "contains no conversational text"),
+        (
+            '{"startTime":"not-a-time","messages":['
+            '{"type":"user","content":"Question"}]}',
+            "start time is invalid",
+        ),
+    ],
+)
+def test_gemini_cli_session_rejects_invalid_exports(text: str, message: str) -> None:
+    with pytest.raises(ValueError, match=message):
+        GeminiCliSessionJsonImporter().import_text(text)
+
+
+def test_gemini_cli_session_rejects_non_text_and_oversized_input() -> None:
+    importer = GeminiCliSessionJsonImporter()
     with pytest.raises(ValueError, match="must be text"):
         importer.import_text(b"{}")  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="exceeds 20000000 bytes"):
