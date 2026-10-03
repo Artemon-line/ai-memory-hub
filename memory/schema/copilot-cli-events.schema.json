@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-memory-hub/schema/copilot-cli-events.schema.json",
+  "title": "GitHub Copilot CLI Session Events",
+  "description": "Bounded event shapes consumed by the GitHub Copilot CLI events.jsonl importer. Unknown event types remain forward-compatible and are ignored.",
+  "type": "object",
+  "additionalProperties": true,
+  "$defs": {
+    "messageCandidate": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": ["user.message", "assistant.message"]
+        }
+      },
+      "required": ["type"],
+      "additionalProperties": true
+    },
+    "importableMessage": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": ["user.message", "assistant.message"]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "content": {"type": "string"},
+            "messageId": {"type": "string", "minLength": 1},
+            "interactionId": {"type": "string", "minLength": 1},
+            "model": {"type": "string", "minLength": 1},
+            "source": {"type": "string", "minLength": 1}
+          },
+          "required": ["content"],
+          "additionalProperties": true
+        },
+        "id": {"type": "string", "minLength": 1},
+        "timestamp": {"type": "string", "minLength": 1},
+        "agentId": {"type": "string", "minLength": 1}
+      },
+      "required": ["type", "data"],
+      "additionalProperties": true
+    },
+    "sessionCandidate": {
+      "type": "object",
+      "properties": {
+        "type": {"enum": ["session.start", "session.resume"]}
+      },
+      "required": ["type"],
+      "additionalProperties": true
+    },
+    "sessionMetadata": {
+      "type": "object",
+      "properties": {
+        "type": {"enum": ["session.start", "session.resume"]},
+        "data": {
+          "type": "object",
+          "properties": {
+            "sessionId": {"type": "string", "minLength": 1},
+            "startTime": {"type": "string", "minLength": 1},
+            "selectedModel": {"type": "string", "minLength": 1},
+            "copilotVersion": {"type": "string", "minLength": 1},
+            "title": {"type": "string", "minLength": 1},
+            "context": {
+              "type": "object",
+              "properties": {
+                "cwd": {"type": "string", "minLength": 1},
+                "gitRoot": {"type": "string", "minLength": 1},
+                "repository": {"type": "string", "minLength": 1},
+                "branch": {"type": "string", "minLength": 1}
+              },
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": true
+        },
+        "timestamp": {"type": "string", "minLength": 1}
+      },
+      "required": ["type", "data"],
+      "additionalProperties": true
+    },
+    "titleCandidate": {
+      "type": "object",
+      "properties": {
+        "type": {"const": "session.title_changed"}
+      },
+      "required": ["type"],
+      "additionalProperties": true
+    },
+    "titleEvent": {
+      "type": "object",
+      "properties": {
+        "type": {"const": "session.title_changed"},
+        "data": {
+          "type": "object",
+          "properties": {
+            "title": {"type": "string", "minLength": 1}
+          },
+          "required": ["title"],
+          "additionalProperties": true
+        }
+      },
+      "required": ["type", "data"],
+      "additionalProperties": true
+    }
+  }
+}

@@ -204,6 +204,11 @@ def build_parser() -> argparse.ArgumentParser:
             "microsoft-copilot",
         ),
         (
+            "copilot-cli-events-jsonl",
+            "Import a persisted GitHub Copilot CLI events.jsonl session.",
+            "copilot-cli",
+        ),
+        (
             "deepseek-share-json",
             "Import JSON from the DeepSeek share-content endpoint.",
             "deepseek",

@@ -10,6 +10,7 @@ from memory.importers import (
     CodexRolloutJsonlImporter,
     ConversationImporter,
     CopilotActivityCsvImporter,
+    CopilotCliEventsJsonlImporter,
     DeepSeekShareJsonImporter,
     GeminiCliSessionJsonImporter,
     ManualPasteImporter,
@@ -122,6 +123,7 @@ def test_importer_registry_exposes_manual_importer() -> None:
         "claude-code-session-jsonl",
         "codex-rollout-jsonl",
         "copilot-activity-csv",
+        "copilot-cli-events-jsonl",
         "deepseek-share-json",
         "gemini-cli-session-json",
         "manual",
@@ -137,11 +139,114 @@ def test_importer_registry_rejects_unknown_importer() -> None:
         ValueError,
         match=(
             "claude-code-session-jsonl, codex-rollout-jsonl, copilot-activity-csv, "
-            "deepseek-share-json, gemini-cli-session-json, manual, "
+            "copilot-cli-events-jsonl, deepseek-share-json, gemini-cli-session-json, manual, "
             "opencode-session-json, pi-session-jsonl, qwen-code-session-export"
         ),
     ):
         get_importer("unknown")
+
+
+def test_copilot_cli_v1_fixture_maps_text_and_safe_provenance() -> None:
+    text = (_FIXTURES / "copilot_cli_events_v1_anonymized.jsonl").read_text(
+        encoding="utf-8"
+    )
+
+    payload = CopilotCliEventsJsonlImporter().import_text(text)[0]
+
+    assert payload == {
+        "source": "copilot-cli",
+        "title": "Garden sensor parser",
+        "timestamp": "2026-09-28T20:35:15+00:00",
+        "messages": [
+            {"role": "user", "text": "Check the sensor parser."},
+            {"role": "assistant", "text": "I will inspect the parser."},
+            {
+                "role": "assistant",
+                "text": "The parser now rejects invalid readings.",
+            },
+        ],
+        "metadata": {
+            "importer": "copilot-cli-events-jsonl",
+            "platform": "copilot-cli",
+            "ingestion_method": "jsonl-import",
+            "source_session_id": "copilot-session-synthetic",
+            "model": "copilot-example-model",
+            "cli_version": "1.0.88",
+            "directory": "/work/garden-sensor",
+            "git_root": "/work/garden-sensor",
+            "git_repository": "garden-sensor",
+            "git_branch": "feature/synthetic",
+            "title": "Garden sensor parser",
+        },
+    }
+
+
+def test_copilot_cli_resumed_fixture_accepts_legacy_message_envelopes() -> None:
+    text = (_FIXTURES / "copilot_cli_events_resumed_anonymized.jsonl").read_text(
+        encoding="utf-8"
+    )
+
+    payload = CopilotCliEventsJsonlImporter().import_text(text)[0]
+
+    assert payload["title"] == "Resumed garden work"
+    assert payload["metadata"]["source_session_id"] == "copilot-resumed-synthetic"
+    assert payload["metadata"]["git_repository"] == "resumed-garden"
+    assert payload["messages"] == [
+        {"role": "user", "text": "Resume the garden notes."},
+        {"role": "assistant", "text": "The notes are ready."},
+    ]
+
+
+def test_copilot_cli_importer_accepts_overrides() -> None:
+    text = '\n'.join(
+        [
+            '{"type":"user.message","data":{"content":"Question"},"id":"u1"}',
+            '{"type":"assistant.message","data":{"content":"Answer"},"id":"a1"}',
+        ]
+    )
+
+    payload = CopilotCliEventsJsonlImporter().import_text(
+        text, source="custom-copilot", title="Imported session"
+    )[0]
+
+    assert payload["source"] == "custom-copilot"
+    assert payload["title"] == "Imported session"
+    assert payload["metadata"]["title"] == "Imported session"
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("", "is empty"),
+        ("not json", "line 1 must be valid JSON"),
+        ("[]", "line 1 must be an object"),
+        (
+            '{"type":"user.message","data":{}}',
+            "message on line 1 does not match the importer schema",
+        ),
+        (
+            '{"type":"session.start","data":{}}',
+            "contains no conversational text",
+        ),
+        (
+            '{"type":"tool.execution_complete","data":{"result":{"content":"first\nsecond"}}}',
+            "line 1 must be valid JSON",
+        ),
+    ],
+)
+def test_copilot_cli_importer_rejects_invalid_sessions(
+    text: str, message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        CopilotCliEventsJsonlImporter().import_text(text)
+
+
+def test_copilot_cli_importer_rejects_non_text_and_oversized_input() -> None:
+    importer = CopilotCliEventsJsonlImporter()
+    with pytest.raises(ValueError, match="must be text"):
+        importer.import_text(b"{}")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="exceeds 20000000 bytes"):
+        importer.import_text("x" * 20_000_001)
 
 
 def test_copilot_activity_csv_fixture_is_grouped_and_chronological() -> None:
