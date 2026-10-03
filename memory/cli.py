@@ -218,6 +218,11 @@ def build_parser() -> argparse.ArgumentParser:
             "Import JSON emitted by the OpenCode session export command.",
             "opencode",
         ),
+        (
+            "pi-session-jsonl",
+            "Import a Pi, Oh My Pi, or OpenClaw session-tree JSONL file.",
+            None,
+        ),
     )
     for importer_name, importer_help, default_source in import_formats:
         importer_parser = import_subparsers.add_parser(importer_name, help=importer_help)

@@ -6,6 +6,9 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Added a native Pi-family session JSONL importer for Pi, Oh My Pi, and
+  archived/legacy OpenClaw transcripts with active-branch reconstruction and
+  schema-backed tree validation.
 - Added a native Gemini CLI session JSON importer for `/export-session`,
   `/chat share` JSON, and compatible legacy saved-chat objects while omitting
   injected context, thoughts, tools, token usage, and diagnostics.

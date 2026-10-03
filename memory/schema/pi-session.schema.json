@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-memory-hub/schema/pi-session.schema.json",
+  "title": "Pi-family Session Record",
+  "description": "Bounded record shapes consumed by the Pi, Oh My Pi, and archived OpenClaw JSONL importer. Unknown entry types remain forward-compatible after their tree fields are validated.",
+  "type": "object",
+  "additionalProperties": true,
+  "$defs": {
+    "titleRecord": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "title"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["type", "title"],
+      "additionalProperties": true
+    },
+    "sessionHeader": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "session"
+        },
+        "version": {
+          "const": 3
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timestamp": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cwd": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "git": {
+          "type": "object"
+        }
+      },
+      "required": ["type", "version", "id", "timestamp", "cwd"],
+      "additionalProperties": true
+    },
+    "entryBase": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "parentId": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "timestamp": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["type", "id", "parentId", "timestamp"],
+      "additionalProperties": true
+    },
+    "messageCandidate": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "message"
+        }
+      },
+      "required": ["type"],
+      "additionalProperties": true
+    },
+    "importableMessage": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "message"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "parentId": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "timestamp": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "object",
+          "properties": {
+            "role": {
+              "type": "string",
+              "minLength": 1
+            },
+            "provider": {
+              "type": "string",
+              "minLength": 1
+            },
+            "model": {
+              "type": "string",
+              "minLength": 1
+            },
+            "content": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "anyOf": [
+                      {
+                        "not": {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "const": "text"
+                            }
+                          },
+                          "required": ["type"]
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "const": "text"
+                          },
+                          "text": {
+                            "type": "string"
+                          }
+                        },
+                        "required": ["type", "text"],
+                        "additionalProperties": true
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "required": ["role", "content"],
+          "additionalProperties": true
+        }
+      },
+      "required": ["type", "id", "parentId", "timestamp", "message"],
+      "additionalProperties": true
+    }
+  }
+}

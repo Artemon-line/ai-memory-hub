@@ -8,6 +8,7 @@ from memory.importers.deepseek_share_json import DeepSeekShareJsonImporter
 from memory.importers.gemini_cli_session_json import GeminiCliSessionJsonImporter
 from memory.importers.manual_paste import ManualPasteImporter
 from memory.importers.opencode_session_json import OpenCodeSessionJsonImporter
+from memory.importers.pi_session_jsonl import PiSessionJsonlImporter
 
 _IMPORTERS: dict[str, ConversationImporter] = {
     ClaudeCodeSessionJsonlImporter.name: ClaudeCodeSessionJsonlImporter(),
@@ -17,6 +18,7 @@ _IMPORTERS: dict[str, ConversationImporter] = {
     GeminiCliSessionJsonImporter.name: GeminiCliSessionJsonImporter(),
     ManualPasteImporter.name: ManualPasteImporter(),
     OpenCodeSessionJsonImporter.name: OpenCodeSessionJsonImporter(),
+    PiSessionJsonlImporter.name: PiSessionJsonlImporter(),
 }
 
 

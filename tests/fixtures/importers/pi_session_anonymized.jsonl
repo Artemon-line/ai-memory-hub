@@ -1,0 +1,9 @@
+{"type":"session","version":3,"id":"pi-session-synthetic","timestamp":"2026-04-12T10:00:00Z","cwd":"/workspace/garden-sensor","git":{"branch":"feature/sensor-notes","commit":"0123456789abcdef"}}
+{"type":"message","id":"u1","parentId":null,"timestamp":"2026-04-12T10:00:01Z","message":{"role":"user","content":"Draft a setup checklist for a balcony temperature sensor."}}
+{"type":"message","id":"a1","parentId":"u1","timestamp":"2026-04-12T10:00:02Z","message":{"role":"assistant","provider":"example-provider","model":"example-model","content":[{"type":"thinking","thinking":"Private reasoning"},{"type":"text","text":"Mount the sensor in shade."},{"type":"toolCall","name":"read","arguments":{"path":"private.txt"}}],"usage":{"input":10,"output":5}}}
+{"type":"message","id":"abandoned-u2","parentId":"a1","timestamp":"2026-04-12T10:00:03Z","message":{"role":"user","content":"Abandoned branch text."}}
+{"type":"message","id":"abandoned-a2","parentId":"abandoned-u2","timestamp":"2026-04-12T10:00:04Z","message":{"role":"assistant","content":"Abandoned answer."}}
+{"type":"message","id":"u2","parentId":"a1","timestamp":"2026-04-12T10:00:05Z","message":{"role":"user","content":[{"type":"text","text":"Add a battery-check note."}]}}
+{"type":"message","id":"tool1","parentId":"u2","timestamp":"2026-04-12T10:00:06Z","message":{"role":"toolResult","toolName":"read","content":[{"type":"text","text":"Private tool output"}]}}
+{"type":"compaction","id":"compact1","parentId":"tool1","timestamp":"2026-04-12T10:00:07Z","summary":"Private compaction body","firstKeptEntryId":"u2"}
+{"type":"message","id":"a2","parentId":"compact1","timestamp":"2026-04-12T10:00:08Z","message":{"role":"assistant","content":[{"type":"text","text":"Check the battery before each season."}]}}

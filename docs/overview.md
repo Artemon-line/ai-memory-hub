@@ -256,6 +256,9 @@ python -m memory.cli import claude-code-session-jsonl "$HOME/.claude/projects/<P
 python -m memory.cli import codex-rollout-jsonl "$CODEX_HOME/sessions/2026/04/12/rollout-<SESSION_ID>.jsonl" --json
 python -m memory.cli import gemini-cli-session-json gemini-session.json --json
 opencode export <SESSION_ID> | python -m memory.cli import opencode-session-json - --json
+python -m memory.cli import pi-session-jsonl "$HOME/.pi/agent/sessions/--work-project--/<SESSION_ID>.jsonl" --json
+python -m memory.cli import pi-session-jsonl "$HOME/.omp/agent/sessions/--work-project--/<SESSION_ID>.jsonl" --json
+python -m memory.cli import pi-session-jsonl openclaw-session.jsonl --source openclaw --json
 python -m memory.cli search "local-first tools" --top-k 5 --json
 python -m memory.cli retrieve <MEMORY_ID> --json
 python -m memory.cli ask "What did I store about local-first tools?" --top-k 5 --json
@@ -329,6 +332,35 @@ export order, skips internal reasoning, tool-only turns, and synthetic or
 ignored text parts, and records the OpenCode session ID, title, working
 directory, and model as provenance when present. Sanitized exports are also
 accepted; their redacted text remains redacted.
+
+Pi and Oh My Pi store machine-readable sessions as version 3 JSONL trees under
+`~/.pi/agent/sessions/` and `~/.omp/agent/sessions/`, respectively. Import a
+copied, inactive session with `pi-session-jsonl`. The importer follows the last
+entry's `parentId` ancestry to reconstruct the active branch, so abandoned fork
+branches are not flattened into the conversation. It keeps user and assistant
+text blocks in ancestry order and omits system/developer messages, thinking,
+tool calls and results, custom/bootstrap records, compaction bodies, usage, and
+provider-private data. Oh My Pi title/header markers and OpenClaw-namespaced
+records are used for variant detection; use `--source openclaw` for older
+OpenClaw archives without a distinguishing marker.
+
+Malformed JSON reports its line number. Duplicate entry IDs, missing parents,
+cycles, and unsupported session versions are rejected instead of guessing at a
+partial conversation. Orphaned branches therefore fail closed even when they
+are not the last branch. The importer accepts the optional fixed-width Oh My Pi
+title record before the logical session header and preserves only bounded safe
+provenance such as the session ID, working directory, model, title, and Git
+branch or commit. Its bundled Draft 2020-12 importer schema validates the title
+record, version 3 session header, entry-tree fields, and recognized message
+envelopes before typed parsing. Schema failures report the source line and
+field path when available.
+
+Pi and Oh My Pi HTML exports are presentation-only and do not preserve the
+session tree, so import their JSONL source instead. Current OpenClaw runtime
+sessions live in a SQLite database; do not copy or read a live database file
+through this importer because a main-file-only copy can omit write-ahead-log
+data. Use an archived/legacy JSONL artifact or a coordinated OpenClaw export or
+backup. The importer does not open paths found inside an export.
 
 Claude Code persists resumable session transcripts as JSONL under
 `~/.claude/projects/<project>/<session-id>.jsonl`. Import a copied, inactive
