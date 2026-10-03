@@ -209,6 +209,11 @@ def build_parser() -> argparse.ArgumentParser:
             "deepseek",
         ),
         (
+            "gemini-cli-session-json",
+            "Import a Gemini CLI exported session or shared JSON history.",
+            "gemini-cli",
+        ),
+        (
             "opencode-session-json",
             "Import JSON emitted by the OpenCode session export command.",
             "opencode",

@@ -1,0 +1,24 @@
+[
+  {
+    "role": "user",
+    "parts": [
+      {
+        "text": "<session_context>\nThis is the Gemini CLI. We are setting up the context for our chat.\nPrivate workspace tree\n</session_context>"
+      }
+    ]
+  },
+  {
+    "role": "user",
+    "parts": [
+      {"text": "Summarize the fictional launch checklist."},
+      {"functionResponse": {"name": "read_file", "response": "private tool output"}}
+    ]
+  },
+  {
+    "role": "model",
+    "parts": [
+      {"functionCall": {"name": "read_file", "args": {"path": "launch.md"}}},
+      {"text": "Verify the dry run, owner, and rollback window."}
+    ]
+  }
+]

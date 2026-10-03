@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-memory-hub.local/schema/gemini-cli-session.schema.json",
+  "title": "Gemini CLI session JSON import envelope",
+  "description": "The two JSON envelopes emitted by /export-session and /chat share file.json.",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["messages"],
+      "properties": {
+        "messages": {
+          "type": "array"
+        }
+      },
+      "additionalProperties": true
+    },
+    {
+      "type": "array"
+    }
+  ]
+}
