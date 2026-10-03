@@ -14,6 +14,7 @@ from memory.importers import (
     GeminiCliSessionJsonImporter,
     ManualPasteImporter,
     OpenCodeSessionJsonImporter,
+    PiSessionJsonlImporter,
     get_importer,
     importer_names,
 )
@@ -124,6 +125,7 @@ def test_importer_registry_exposes_manual_importer() -> None:
         "gemini-cli-session-json",
         "manual",
         "opencode-session-json",
+        "pi-session-jsonl",
     )
     assert get_importer("manual").name == "manual"
 
@@ -134,7 +136,7 @@ def test_importer_registry_rejects_unknown_importer() -> None:
         match=(
             "claude-code-session-jsonl, codex-rollout-jsonl, copilot-activity-csv, "
             "deepseek-share-json, gemini-cli-session-json, manual, "
-            "opencode-session-json"
+            "opencode-session-json, pi-session-jsonl"
         ),
     ):
         get_importer("unknown")
@@ -203,6 +205,130 @@ def test_codex_rollout_jsonl_fixture_maps_only_canonical_messages_and_provenance
     assert "creator_user_id" not in serialized
     assert "base_instructions" not in serialized
     assert "Injected runtime context" not in serialized
+
+
+def test_pi_session_fixture_reconstructs_only_the_active_branch() -> None:
+    text = (_FIXTURES / "pi_session_anonymized.jsonl").read_text(encoding="utf-8")
+
+    payload = PiSessionJsonlImporter().import_text(text)[0]
+
+    assert payload == {
+        "source": "pi",
+        "timestamp": "2026-04-12T10:00:00+00:00",
+        "messages": [
+            {
+                "role": "user",
+                "text": "Draft a setup checklist for a balcony temperature sensor.",
+            },
+            {"role": "assistant", "text": "Mount the sensor in shade."},
+            {"role": "user", "text": "Add a battery-check note."},
+            {
+                "role": "assistant",
+                "text": "Check the battery before each season.",
+            },
+        ],
+        "metadata": {
+            "importer": "pi-session-jsonl",
+            "platform": "pi",
+            "detected_variant": "pi",
+            "ingestion_method": "jsonl-import",
+            "source_session_id": "pi-session-synthetic",
+            "directory": "/workspace/garden-sensor",
+            "git_branch": "feature/sensor-notes",
+            "git_commit": "0123456789abcdef",
+            "model": "example-provider/example-model",
+        },
+    }
+    serialized = json.dumps(payload)
+    assert "Abandoned branch" not in serialized
+    assert "Private reasoning" not in serialized
+    assert "Private tool output" not in serialized
+    assert "Private compaction" not in serialized
+
+
+@pytest.mark.parametrize(
+    ("fixture_name", "variant", "expected_title"),
+    [
+        ("oh_my_pi_session_anonymized.jsonl", "oh-my-pi", "Garden sensor setup"),
+        ("openclaw_session_anonymized.jsonl", "openclaw", None),
+    ],
+)
+def test_pi_session_detects_variants_and_omits_private_records(
+    fixture_name: str, variant: str, expected_title: str | None
+) -> None:
+    text = (_FIXTURES / fixture_name).read_text(encoding="utf-8")
+
+    payload = PiSessionJsonlImporter().import_text(text)[0]
+
+    assert payload["source"] == variant
+    assert payload["metadata"]["detected_variant"] == variant
+    assert payload.get("title") == expected_title
+    serialized = json.dumps(payload)
+    assert "example.private-state" not in serialized
+    assert "private-account" not in serialized
+
+
+def test_pi_session_accepts_source_and_title_overrides() -> None:
+    text = (_FIXTURES / "pi_session_anonymized.jsonl").read_text(encoding="utf-8")
+
+    payload = PiSessionJsonlImporter().import_text(
+        text, source="custom-pi", title="Imported session"
+    )[0]
+
+    assert payload["source"] == "custom-pi"
+    assert payload["title"] == "Imported session"
+    assert payload["metadata"]["title"] == "Imported session"
+    assert payload["metadata"]["detected_variant"] == "pi"
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("not json", "line 1 must be valid JSON"),
+        ('{"type":"session","version":2}', "must use version 3"),
+        (
+            '\n'.join(
+                [
+                    '{"type":"session","version":3,"id":"s","timestamp":"2026-04-12T10:00:00Z","cwd":"/work"}',
+                    '{"type":"message","id":"a","parentId":"missing","timestamp":"2026-04-12T10:00:01Z","message":{"role":"user","content":"Question"}}',
+                ]
+            ),
+            "references missing parent",
+        ),
+        (
+            '\n'.join(
+                [
+                    '{"type":"session","version":3,"id":"s","timestamp":"2026-04-12T10:00:00Z","cwd":"/work"}',
+                    '{"type":"message","id":"a","parentId":"b","timestamp":"2026-04-12T10:00:01Z","message":{"role":"user","content":"Question"}}',
+                    '{"type":"message","id":"b","parentId":"a","timestamp":"2026-04-12T10:00:02Z","message":{"role":"assistant","content":"Answer"}}',
+                ]
+            ),
+            "contains a cycle",
+        ),
+        (
+            '\n'.join(
+                [
+                    '{"type":"session","version":3,"id":"s","timestamp":"2026-04-12T10:00:00Z","cwd":"/work"}',
+                    '{"type":"message","id":"a","parentId":null,"timestamp":"2026-04-12T10:00:01Z","message":{"role":"user"}}',
+                ]
+            ),
+            "message on line 2 does not match the importer schema",
+        ),
+    ],
+)
+def test_pi_session_rejects_invalid_or_corrupt_exports(
+    text: str, message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        PiSessionJsonlImporter().import_text(text)
+
+
+def test_pi_session_rejects_non_text_and_oversized_input() -> None:
+    importer = PiSessionJsonlImporter()
+    with pytest.raises(ValueError, match="must be text"):
+        importer.import_text(b"{}")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="exceeds 20000000 bytes"):
+        importer.import_text("x" * 20_000_001)
 
 
 def test_codex_rollout_jsonl_accepts_overrides_and_uses_message_timestamp() -> None:

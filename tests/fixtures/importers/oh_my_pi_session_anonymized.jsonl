@@ -1,0 +1,6 @@
+{"type":"title","title":"Garden sensor setup"}
+{"type":"session","version":3,"id":"omp-session-synthetic","timestamp":"2026-04-12T11:00:00Z","cwd":"/workspace/garden-sensor","title":"Garden sensor setup","titleSource":"user","additionalDirectories":["/workspace/shared"]}
+{"type":"message","id":"u1","parentId":null,"timestamp":"2026-04-12T11:00:01Z","message":{"role":"user","content":[{"type":"text","text":"Summarize the installation."}]}}
+{"type":"reset_boundary","id":"reset1","parentId":"u1","timestamp":"2026-04-12T11:00:02Z"}
+{"type":"custom","id":"custom1","parentId":"reset1","timestamp":"2026-04-12T11:00:03Z","customType":"example.private-state","data":{"secret":"omitted"}}
+{"type":"message","id":"a1","parentId":"custom1","timestamp":"2026-04-12T11:00:04Z","message":{"role":"assistant","content":"The sensor is mounted in shade."}}

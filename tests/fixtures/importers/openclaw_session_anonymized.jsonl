@@ -1,0 +1,4 @@
+{"type":"session","version":3,"id":"openclaw-session-synthetic","timestamp":"2026-04-12T12:00:00Z","cwd":"/workspace/garden-sensor"}
+{"type":"message","id":"u1","parentId":null,"timestamp":"2026-04-12T12:00:01Z","message":{"role":"user","content":"What remains?"}}
+{"type":"custom","id":"openclaw1","parentId":"u1","timestamp":"2026-04-12T12:00:02Z","customType":"openclaw.session-state","data":{"account":"private-account"}}
+{"type":"message","id":"a1","parentId":"openclaw1","timestamp":"2026-04-12T12:00:03Z","message":{"role":"assistant","provider":"example-provider","model":"example-model","content":[{"type":"text","text":"Seal the enclosure and record a baseline."}]}}

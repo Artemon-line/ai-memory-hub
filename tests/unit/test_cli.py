@@ -215,6 +215,14 @@ def test_parser_includes_core_commands() -> None:
         assert command in help_text
 
 
+def test_pi_session_import_cli_defaults_to_variant_autodetection() -> None:
+    args = cli.build_parser().parse_args(
+        ["import", "pi-session-jsonl", "session.jsonl"]
+    )
+
+    assert args.source is None
+
+
 def test_pyproject_exposes_aim_console_script() -> None:
     with open("pyproject.toml", "rb") as handle:
         pyproject = tomllib.load(handle)
@@ -400,6 +408,7 @@ def test_manual_import_cli_ingests_unified_payload(capsys, monkeypatch, tmp_path
             1,
         ),
         ("opencode-session-json", "opencode_session_anonymized.json", 1),
+        ("pi-session-jsonl", "pi_session_anonymized.jsonl", 1),
     ],
 )
 def test_export_import_cli_ingests_anonymized_fixtures(
