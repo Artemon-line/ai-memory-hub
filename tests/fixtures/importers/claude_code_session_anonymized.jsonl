@@ -5,6 +5,8 @@
 {"type":"user","uuid":"tool-result-1","sessionId":"claude-session-synthetic","timestamp":"2026-04-12T10:00:04Z","message":{"role":"user","content":[{"type":"tool_result","content":"Private tool output must not be imported."}]}}
 {"type":"progress","uuid":"progress-1","sessionId":"claude-session-synthetic","timestamp":"2026-04-12T10:00:05Z","data":{"message":"Private progress must not be imported."}}
 {"type":"file-history-snapshot","uuid":"snapshot-1","sessionId":"claude-session-synthetic","snapshot":{"private.py":"Private snapshot must not be imported."}}
+{"type":"system","subtype":"compact_boundary","uuid":"compact-boundary-1","sessionId":"claude-session-synthetic","timestamp":"2026-04-12T10:00:05.500Z"}
+{"type":"user","uuid":"compact-summary-1","parentUuid":"compact-boundary-1","sessionId":"claude-session-synthetic","timestamp":"2026-04-12T10:00:05.400Z","isCompactSummary":true,"isVisibleInTranscriptOnly":true,"message":{"role":"user","content":"Private compaction summary must not be imported."}}
 {"type":"user","uuid":"user-2","sessionId":"claude-session-synthetic","timestamp":"2026-04-12T10:00:06Z","message":{"role":"user","content":[{"type":"text","text":"Add a battery-check note."}]}}
 {"type":"assistant","uuid":"assistant-2","sessionId":"claude-session-synthetic","timestamp":"2026-04-12T10:00:07Z","message":{"role":"assistant","content":"Check the battery before each season."}}
 {"type":"future-record","private":"Unknown records must not be imported."}

@@ -335,7 +335,8 @@ transcript with `claude-code-session-jsonl`. The importer retains non-empty user
 and assistant text in file order, deduplicates repeated visible records by UUID,
 and records the session ID, working directory, Git branch, and model when
 present. It omits system prompts, thinking, tool calls and results, progress,
-usage, and file snapshots. Malformed JSON reports its line number. Claude
+usage, compaction summaries, and file snapshots. Malformed JSON reports its
+line number. Claude
 Code's `/export transcript.txt` output is suitable for the `manual` importer
 when a readable transcript is preferred, but it does not preserve the same
 structured provenance. Review the transcript for sensitive content before

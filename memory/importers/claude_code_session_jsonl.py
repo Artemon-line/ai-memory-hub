@@ -50,6 +50,8 @@ class ClaudeCodeSessionJsonlImporter(ConversationImporter):
             role = record.get("type")
             if role not in _ROLES:
                 continue
+            if record.get("isCompactSummary") is True:
+                continue
             message = record.get("message")
             if not isinstance(message, dict):
                 raise ValueError(
