@@ -1,0 +1,4 @@
+{"type":"session","version":0,"id":"dsh-child-synthetic","createdAt":1783352127669,"cwd":"/work/garden-sensor","parentSession":"dsh-root-synthetic","origin":"subagent","delegationDepth":1}
+{"type":"user/message","data":{"content":"Check the child parser.","source":{"kind":"user"},"role":"user","id":"dsh-child-user-1"},"surfaceOp":"append"}
+{"type":"assistant/message","data":{"content":"The child parser is valid.","role":"assistant","id":"dsh-child-assistant-1"},"surfaceOp":"append"}
+{"type":"future/descendant-event","data":{"content":"Ignored future payload"}}

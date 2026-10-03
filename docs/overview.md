@@ -252,6 +252,7 @@ python -m memory.cli reindex --json
 python -m memory.cli import manual copilot-chat.txt --source vscode-copilot --json
 python -m memory.cli import copilot-activity-csv copilot-activity-history.csv --json
 python -m memory.cli import copilot-cli-events-jsonl "$HOME/.copilot/session-state/<SESSION_ID>/events.jsonl" --json
+python -m memory.cli import deepseek-harness-session-jsonl dsh-session/session.v4.jsonl --json
 python -m memory.cli import deepseek-share-json deepseek-share.json --json
 python -m memory.cli import claude-code-session-jsonl "$HOME/.claude/projects/<PROJECT>/<SESSION_ID>.jsonl" --json
 python -m memory.cli import codex-rollout-jsonl "$CODEX_HOME/sessions/2026/04/12/rollout-<SESSION_ID>.jsonl" --json
@@ -341,6 +342,42 @@ For a reviewable manual fallback, run `/share file <PATH>` (or its `/export`
 alias) in Copilot CLI and import the resulting Markdown with `manual`. Review
 either artifact for sensitive prompts, paths, and output before copying or
 retaining it. Multipart HTTP upload remains outside the importer contract.
+
+DeepSeek Harness can download a session tree as
+`dsh-session-<SESSION_ID>.zip` from its `/export` browser page. Only extract an
+archive you generated or otherwise trust: inspect its entries first, reject
+absolute paths or `..` traversal entries, and extract it into a new empty
+directory rather than over existing files. The importer deliberately does not
+open ZIP archives or attachments. Pass the extracted root `session.jsonl` or
+`session.vN.jsonl` file to `deepseek-harness-session-jsonl`:
+
+```bash
+unzip -l dsh-session-<SESSION_ID>.zip
+mkdir -p dsh-session
+unzip -q dsh-session-<SESSION_ID>.zip -d dsh-session
+python -m memory.cli import deepseek-harness-session-jsonl dsh-session/session.v4.jsonl --json
+```
+
+Choose the root file actually present in the archive; unversioned version 0
+logs use `session.jsonl`, while later formats use `session.vN.jsonl`. Descendant
+agent logs under `subagents/<SESSION_ID>/` are independent conversations and
+may be imported separately with the same command. The importer records their
+parent session ID and descendant relationship but does not merge the tree.
+
+The bundled Draft 2020-12 schema supports canonical Harness session versions
+0 through 4. It keeps visible user and assistant text, while omitting system
+and request context, internal user messages, reasoning, commands, tools,
+compaction content, usage, attachments, duplicate message updates, and unknown
+event types. Exported logs with `seq` and `time` coordinates must contain a
+complete dense sequence; raw canonical files without coordinates retain their
+physical order. Mixed or non-monotonic ordering and malformed recognized
+records fail with their physical line number. Multipart archive upload remains
+outside this importer contract.
+
+This format is distinct from `deepseek-share-json`, which consumes the public
+DeepSeek chat share-content response. A future DeepSeek account-history CSV
+importer is tracked separately; neither format should be passed to the Harness
+session importer.
 
 For a public DeepSeek share link, save the response from its share-content API
 as JSON, then pass that file to `deepseek-share-json`. The importer keeps request

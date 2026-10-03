@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-memory-hub/schema/deepseek-harness-session.schema.json",
+  "title": "DeepSeek Harness Session Log",
+  "description": "Bounded header and message shapes consumed by the DeepSeek Harness session JSONL importer. Unknown event types remain forward-compatible and are ignored.",
+  "type": "object",
+  "additionalProperties": true,
+  "$defs": {
+    "sessionHeader": {
+      "type": "object",
+      "properties": {
+        "type": {"const": "session"},
+        "version": {"type": "integer", "enum": [0, 1, 2, 3, 4]},
+        "id": {"type": "string", "minLength": 1},
+        "createdAt": {"type": "integer", "minimum": 0},
+        "cwd": {"type": "string", "minLength": 1},
+        "parentSession": {"type": "string", "minLength": 1},
+        "isSeeded": {"type": "boolean"},
+        "origin": {"const": "subagent"},
+        "delegationDepth": {"type": "integer", "minimum": 0},
+        "agentPreset": {"type": "string", "minLength": 1}
+      },
+      "required": ["type", "version", "id", "createdAt"],
+      "allOf": [
+        {
+          "if": {"properties": {"version": {"minimum": 2}}, "required": ["version"]},
+          "then": {"required": ["isSeeded", "delegationDepth"]}
+        }
+      ],
+      "additionalProperties": true
+    },
+    "eventBase": {
+      "type": "object",
+      "properties": {
+        "type": {"type": "string", "minLength": 1},
+        "seq": {"type": "integer", "minimum": 0},
+        "time": {"type": "integer", "minimum": 0}
+      },
+      "required": ["type"],
+      "dependentRequired": {
+        "seq": ["time"],
+        "time": ["seq"]
+      },
+      "additionalProperties": true
+    },
+    "messageCandidate": {
+      "type": "object",
+      "properties": {
+        "type": {"enum": ["user/message", "assistant/message"]}
+      },
+      "required": ["type"],
+      "additionalProperties": true
+    },
+    "content": {
+      "oneOf": [
+        {"type": "string"},
+        {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "not": {
+                  "type": "object",
+                  "properties": {"type": {"const": "text"}},
+                  "required": ["type"]
+                }
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {"const": "text"},
+                  "text": {"type": "string"}
+                },
+                "required": ["type", "text"],
+                "additionalProperties": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "messageEnvelope": {
+      "type": "object",
+      "properties": {
+        "role": {"enum": ["user", "assistant"]},
+        "content": {"$ref": "#/$defs/content"},
+        "id": {"type": "string", "minLength": 1},
+        "source": {"type": "object"}
+      },
+      "required": ["content"],
+      "additionalProperties": true
+    },
+    "importableMessage": {
+      "type": "object",
+      "properties": {
+        "type": {"enum": ["user/message", "assistant/message"]},
+        "seq": {"type": "integer", "minimum": 0},
+        "time": {"type": "integer", "minimum": 0},
+        "id": {"type": "string", "minLength": 1},
+        "data": {
+          "type": "object",
+          "properties": {
+            "content": {"$ref": "#/$defs/content"},
+            "role": {"enum": ["user", "assistant"]},
+            "id": {"type": "string", "minLength": 1},
+            "source": {"type": "object"},
+            "message": {"$ref": "#/$defs/messageEnvelope"}
+          },
+          "anyOf": [
+            {"required": ["content"]},
+            {"required": ["message"]}
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": ["type", "data"],
+      "dependentRequired": {
+        "seq": ["time"],
+        "time": ["seq"]
+      },
+      "additionalProperties": true
+    },
+    "titleCandidate": {
+      "type": "object",
+      "properties": {"type": {"const": "session/title"}},
+      "required": ["type"],
+      "additionalProperties": true
+    },
+    "titleEvent": {
+      "type": "object",
+      "properties": {
+        "type": {"const": "session/title"},
+        "data": {
+          "type": "object",
+          "properties": {"title": {"type": "string", "minLength": 1}},
+          "required": ["title"],
+          "additionalProperties": true
+        }
+      },
+      "required": ["type", "data"],
+      "additionalProperties": true
+    }
+  }
+}
