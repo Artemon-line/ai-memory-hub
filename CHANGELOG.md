@@ -6,6 +6,10 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Added a schema-backed DeepSeek Harness canonical session JSONL importer for
+  extracted root and descendant logs, preserving safe session provenance while
+  excluding internal context, reasoning, tools, compaction, usage, and
+  attachments.
 - Added a schema-backed GitHub Copilot CLI `events.jsonl` importer that keeps
   top-level user and assistant text while excluding synthetic prompts,
   sub-agent traffic, reasoning, tools, compaction, usage, and telemetry.
