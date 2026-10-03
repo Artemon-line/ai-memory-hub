@@ -409,6 +409,16 @@ def test_manual_import_cli_ingests_unified_payload(capsys, monkeypatch, tmp_path
         ),
         ("opencode-session-json", "opencode_session_anonymized.json", 1),
         ("pi-session-jsonl", "pi_session_anonymized.jsonl", 1),
+        (
+            "qwen-code-session-export",
+            "qwen_code_session_anonymized.json",
+            1,
+        ),
+        (
+            "qwen-code-session-export",
+            "qwen_code_session_anonymized.jsonl",
+            1,
+        ),
     ],
 )
 def test_export_import_cli_ingests_anonymized_fixtures(

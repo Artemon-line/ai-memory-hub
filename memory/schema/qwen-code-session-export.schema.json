@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-memory-hub/schema/qwen-code-session-export.schema.json",
+  "title": "Qwen Code Session Export",
+  "description": "Bounded native JSON and JSONL record shapes consumed by the Qwen Code importer. Unknown message types remain forward-compatible and are ignored.",
+  "type": "object",
+  "additionalProperties": true,
+  "$defs": {
+    "sessionDocument": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "startTime": {
+          "type": "string",
+          "minLength": 1
+        },
+        "messages": {
+          "type": "array"
+        },
+        "metadata": {
+          "type": "object"
+        }
+      },
+      "required": ["sessionId", "startTime", "messages"],
+      "additionalProperties": true
+    },
+    "sessionMetadata": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "session_metadata"
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "startTime": {
+          "type": "string",
+          "minLength": 1
+        },
+        "exportTime": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cwd": {
+          "type": "string",
+          "minLength": 1
+        },
+        "gitRepo": {
+          "type": "string",
+          "minLength": 1
+        },
+        "gitBranch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "channel": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["type", "sessionId", "startTime"],
+      "additionalProperties": true
+    },
+    "messageCandidate": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": ["user", "assistant"]
+        }
+      },
+      "required": ["type"],
+      "additionalProperties": true
+    },
+    "importableMessage": {
+      "type": "object",
+      "properties": {
+        "uuid": {
+          "type": "string",
+          "minLength": 1
+        },
+        "parentUuid": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timestamp": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "enum": ["user", "assistant"]
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "object",
+          "properties": {
+            "role": {
+              "enum": ["user", "assistant"]
+            },
+            "content": {
+              "type": "string"
+            },
+            "parts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": ["text"],
+                "additionalProperties": true
+              }
+            }
+          },
+          "anyOf": [
+            {
+              "required": ["content"]
+            },
+            {
+              "required": ["parts"]
+            }
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": ["uuid", "timestamp", "type", "message"],
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "user"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "properties": {
+              "message": {
+                "properties": {
+                  "role": {
+                    "const": "user"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "assistant"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "properties": {
+              "message": {
+                "properties": {
+                  "role": {
+                    "const": "assistant"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

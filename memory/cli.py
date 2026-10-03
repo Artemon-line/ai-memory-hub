@@ -223,6 +223,11 @@ def build_parser() -> argparse.ArgumentParser:
             "Import a Pi, Oh My Pi, or OpenClaw session-tree JSONL file.",
             None,
         ),
+        (
+            "qwen-code-session-export",
+            "Import a native Qwen Code JSON or JSONL session export.",
+            "qwen-code",
+        ),
     )
     for importer_name, importer_help, default_source in import_formats:
         importer_parser = import_subparsers.add_parser(importer_name, help=importer_help)

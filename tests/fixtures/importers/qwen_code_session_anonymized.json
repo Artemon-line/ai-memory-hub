@@ -1,0 +1,101 @@
+{
+  "sessionId": "qwen-session-synthetic",
+  "startTime": "2026-04-12T10:00:00Z",
+  "messages": [
+    {
+      "uuid": "u1",
+      "timestamp": "2026-04-12T10:00:01Z",
+      "type": "user",
+      "message": {
+        "role": "user",
+        "parts": [
+          {"text": "Draft a setup checklist for a balcony temperature sensor."}
+        ]
+      }
+    },
+    {
+      "uuid": "a1",
+      "parentUuid": "u1",
+      "timestamp": "2026-04-12T10:00:02Z",
+      "type": "assistant",
+      "model": "qwen-example-model",
+      "message": {
+        "role": "assistant",
+        "content": "Mount the sensor in shade."
+      },
+      "usageMetadata": {"promptTokenCount": 100, "candidatesTokenCount": 20}
+    },
+    {
+      "uuid": "system1",
+      "timestamp": "2026-04-12T10:00:03Z",
+      "type": "system",
+      "message": {"role": "system", "content": "Private system instruction"},
+      "goalState": {"verdict": "private goal-state audit"}
+    },
+    {
+      "uuid": "tool1",
+      "timestamp": "2026-04-12T10:00:04Z",
+      "type": "tool_call",
+      "toolCall": {
+        "toolCallId": "call-1",
+        "kind": "read",
+        "title": "Read private.txt",
+        "status": "completed",
+        "rawInput": {"path": "private.txt"},
+        "rawOutput": "Private tool output"
+      }
+    },
+    {
+      "uuid": "a1",
+      "timestamp": "2026-04-12T10:00:05Z",
+      "type": "assistant",
+      "message": {
+        "role": "assistant",
+        "content": "Duplicate presentation"
+      }
+    },
+    {
+      "uuid": "u2",
+      "parentUuid": "a1",
+      "timestamp": "2026-04-12T10:00:06Z",
+      "type": "user",
+      "message": {
+        "role": "user",
+        "content": "Add a battery-check note.",
+        "unknownField": "ignored"
+      }
+    },
+    {
+      "uuid": "a2",
+      "parentUuid": "u2",
+      "timestamp": "2026-04-12T10:00:07Z",
+      "type": "assistant",
+      "message": {
+        "role": "assistant",
+        "parts": [
+          {"text": "Check the battery before each season."},
+          {"text": "Record the replacement date."}
+        ]
+      }
+    },
+    {
+      "uuid": "future1",
+      "timestamp": "2026-04-12T10:00:08Z",
+      "type": "future_event",
+      "privatePayload": "ignored"
+    }
+  ],
+  "metadata": {
+    "sessionId": "must-not-override-top-level",
+    "startTime": "2020-01-01T00:00:00Z",
+    "exportTime": "2026-04-12T10:05:00Z",
+    "cwd": "/workspace/garden-sensor",
+    "gitRepo": "garden-sensor",
+    "gitBranch": "feature/sensor-notes",
+    "model": "qwen-example-model",
+    "channel": "cli",
+    "promptCount": 2,
+    "totalTokens": 120,
+    "uniqueFiles": ["private.txt"]
+  }
+}

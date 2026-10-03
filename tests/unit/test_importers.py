@@ -15,6 +15,7 @@ from memory.importers import (
     ManualPasteImporter,
     OpenCodeSessionJsonImporter,
     PiSessionJsonlImporter,
+    QwenCodeSessionExportImporter,
     get_importer,
     importer_names,
 )
@@ -126,6 +127,7 @@ def test_importer_registry_exposes_manual_importer() -> None:
         "manual",
         "opencode-session-json",
         "pi-session-jsonl",
+        "qwen-code-session-export",
     )
     assert get_importer("manual").name == "manual"
 
@@ -136,7 +138,7 @@ def test_importer_registry_rejects_unknown_importer() -> None:
         match=(
             "claude-code-session-jsonl, codex-rollout-jsonl, copilot-activity-csv, "
             "deepseek-share-json, gemini-cli-session-json, manual, "
-            "opencode-session-json, pi-session-jsonl"
+            "opencode-session-json, pi-session-jsonl, qwen-code-session-export"
         ),
     ):
         get_importer("unknown")
@@ -325,6 +327,161 @@ def test_pi_session_rejects_invalid_or_corrupt_exports(
 
 def test_pi_session_rejects_non_text_and_oversized_input() -> None:
     importer = PiSessionJsonlImporter()
+    with pytest.raises(ValueError, match="must be text"):
+        importer.import_text(b"{}")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="exceeds 20000000 bytes"):
+        importer.import_text("x" * 20_000_001)
+
+
+def test_qwen_code_json_fixture_maps_text_and_safe_provenance() -> None:
+    text = (_FIXTURES / "qwen_code_session_anonymized.json").read_text(
+        encoding="utf-8"
+    )
+
+    payload = QwenCodeSessionExportImporter().import_text(text)[0]
+
+    assert payload == {
+        "source": "qwen-code",
+        "timestamp": "2026-04-12T10:00:00+00:00",
+        "messages": [
+            {
+                "role": "user",
+                "text": "Draft a setup checklist for a balcony temperature sensor.",
+            },
+            {"role": "assistant", "text": "Mount the sensor in shade."},
+            {"role": "user", "text": "Add a battery-check note."},
+            {
+                "role": "assistant",
+                "text": (
+                    "Check the battery before each season.\n\n"
+                    "Record the replacement date."
+                ),
+            },
+        ],
+        "metadata": {
+            "importer": "qwen-code-session-export",
+            "platform": "qwen-code",
+            "ingestion_method": "json-import",
+            "export_format": "json",
+            "source_session_id": "qwen-session-synthetic",
+            "directory": "/workspace/garden-sensor",
+            "git_repository": "garden-sensor",
+            "git_branch": "feature/sensor-notes",
+            "channel": "cli",
+            "model": "qwen-example-model",
+        },
+    }
+    serialized = json.dumps(payload)
+    assert "Private system" not in serialized
+    assert "Private tool" not in serialized
+    assert "goal-state" not in serialized
+    assert "Duplicate presentation" not in serialized
+    assert "uniqueFiles" not in serialized
+    assert "must-not-override" not in serialized
+
+
+def test_qwen_code_jsonl_fixture_maps_canonical_export() -> None:
+    text = (_FIXTURES / "qwen_code_session_anonymized.jsonl").read_text(
+        encoding="utf-8"
+    )
+
+    payload = QwenCodeSessionExportImporter().import_text(text)[0]
+
+    assert payload == {
+        "source": "qwen-code",
+        "timestamp": "2026-04-12T11:00:00+00:00",
+        "messages": [
+            {"role": "user", "text": "Summarize the installation."},
+            {
+                "role": "assistant",
+                "text": (
+                    "The sensor is mounted in shade.\n\n"
+                    "Its baseline is recorded."
+                ),
+            },
+        ],
+        "metadata": {
+            "importer": "qwen-code-session-export",
+            "platform": "qwen-code",
+            "ingestion_method": "jsonl-import",
+            "export_format": "jsonl",
+            "source_session_id": "qwen-jsonl-synthetic",
+            "directory": "/workspace/garden-sensor",
+            "git_repository": "garden-sensor",
+            "git_branch": "feature/jsonl-notes",
+            "channel": "cli",
+            "model": "qwen-jsonl-model",
+        },
+    }
+    serialized = json.dumps(payload)
+    assert "Private system" not in serialized
+    assert "Private tool" not in serialized
+    assert "secret.txt" not in serialized
+
+
+def test_qwen_code_message_only_jsonl_accepts_overrides_and_message_time() -> None:
+    text = "\n".join(
+        [
+            '{"uuid":"u1","timestamp":"2026-04-12T12:00:01Z","type":"user","message":{"content":"Question"}}',
+            '{"uuid":"a1","timestamp":"2026-04-12T12:00:02Z","type":"assistant","model":"qwen-model","message":{"role":"assistant","content":"Answer"}}',
+        ]
+    )
+
+    payload = QwenCodeSessionExportImporter().import_text(
+        text, source="custom-qwen", title="Imported session"
+    )[0]
+
+    assert payload["source"] == "custom-qwen"
+    assert payload["title"] == "Imported session"
+    assert payload["timestamp"] == "2026-04-12T12:00:01+00:00"
+    assert payload["metadata"]["title"] == "Imported session"
+    assert payload["metadata"]["model"] == "qwen-model"
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("not json", "line 1 must be valid JSON"),
+        ("[]", "JSON must be an object"),
+        (
+            '{"sessionId":"s","startTime":"2026-04-12T10:00:00Z"}',
+            "JSON document does not match the importer schema",
+        ),
+        (
+            '{"sessionId":"s","startTime":"2026-04-12T10:00:00Z","messages":[]}',
+            "contains no conversational text",
+        ),
+        (
+            '{"uuid":"u1","timestamp":"2026-04-12T10:00:01Z","type":"user","message":{"role":"assistant","content":"Wrong role"}}',
+            "message line 1 does not match the importer schema",
+        ),
+        (
+            '\n'.join(
+                [
+                    '{"type":"session_metadata","sessionId":"s","startTime":"2026-04-12T10:00:00Z"}',
+                    '{"type":"session_metadata","sessionId":"s","startTime":"2026-04-12T10:00:00Z"}',
+                ]
+            ),
+            "metadata is duplicated",
+        ),
+        (
+            '\n'.join(
+                [
+                    '{"uuid":"u1","timestamp":"2026-04-12T10:00:01Z","type":"user","message":{"role":"user","content":"Question"}}',
+                    '{"type":"session_metadata","sessionId":"s","startTime":"2026-04-12T10:00:00Z"}',
+                ]
+            ),
+            "metadata must be the first record",
+        ),
+    ],
+)
+def test_qwen_code_session_rejects_invalid_exports(text: str, message: str) -> None:
+    with pytest.raises(ValueError, match=message):
+        QwenCodeSessionExportImporter().import_text(text)
+
+
+def test_qwen_code_session_rejects_non_text_and_oversized_input() -> None:
+    importer = QwenCodeSessionExportImporter()
     with pytest.raises(ValueError, match="must be text"):
         importer.import_text(b"{}")  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="exceeds 20000000 bytes"):

@@ -6,6 +6,9 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Added a native Qwen Code session importer for `/export json` and
+  `/export jsonl` with schema-backed message validation, UUID deduplication,
+  and omission of system, goal-state, tool, usage, and unknown records.
 - Added a native Pi-family session JSONL importer for Pi, Oh My Pi, and
   archived/legacy OpenClaw transcripts with active-branch reconstruction and
   schema-backed tree validation.

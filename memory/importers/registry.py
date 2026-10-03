@@ -9,6 +9,7 @@ from memory.importers.gemini_cli_session_json import GeminiCliSessionJsonImporte
 from memory.importers.manual_paste import ManualPasteImporter
 from memory.importers.opencode_session_json import OpenCodeSessionJsonImporter
 from memory.importers.pi_session_jsonl import PiSessionJsonlImporter
+from memory.importers.qwen_code_session_export import QwenCodeSessionExportImporter
 
 _IMPORTERS: dict[str, ConversationImporter] = {
     ClaudeCodeSessionJsonlImporter.name: ClaudeCodeSessionJsonlImporter(),
@@ -19,6 +20,7 @@ _IMPORTERS: dict[str, ConversationImporter] = {
     ManualPasteImporter.name: ManualPasteImporter(),
     OpenCodeSessionJsonImporter.name: OpenCodeSessionJsonImporter(),
     PiSessionJsonlImporter.name: PiSessionJsonlImporter(),
+    QwenCodeSessionExportImporter.name: QwenCodeSessionExportImporter(),
 }
 
 

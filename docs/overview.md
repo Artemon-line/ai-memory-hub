@@ -259,6 +259,8 @@ opencode export <SESSION_ID> | python -m memory.cli import opencode-session-json
 python -m memory.cli import pi-session-jsonl "$HOME/.pi/agent/sessions/--work-project--/<SESSION_ID>.jsonl" --json
 python -m memory.cli import pi-session-jsonl "$HOME/.omp/agent/sessions/--work-project--/<SESSION_ID>.jsonl" --json
 python -m memory.cli import pi-session-jsonl openclaw-session.jsonl --source openclaw --json
+python -m memory.cli import qwen-code-session-export qwen-session.json --json
+python -m memory.cli import qwen-code-session-export qwen-session.jsonl --json
 python -m memory.cli search "local-first tools" --top-k 5 --json
 python -m memory.cli retrieve <MEMORY_ID> --json
 python -m memory.cli ask "What did I store about local-first tools?" --top-k 5 --json
@@ -393,6 +395,26 @@ other sensitive context. Review the JSON before sharing or retaining it outside
 the CLI's local state. The bundled importer schema accepts only the documented
 session-object and shared-history envelopes; malformed recognized messages fail
 with their message index.
+
+Qwen Code supports self-contained native transcript exports through
+`/export json` and `/export jsonl`. Import either format with
+`qwen-code-session-export`. The JSON form contains one session object; the
+canonical JSONL form begins with a `session_metadata` record followed by the
+same normalized message objects. A bounded message-only JSONL stream is also
+accepted when metadata was captured separately. The importer keeps textual
+`message.content` or `message.parts[].text` from user and assistant records,
+deduplicates repeated message UUIDs, and records the session ID, start time,
+working directory, Git repository and branch, model, and channel when present.
+
+The bundled Draft 2020-12 importer schema validates the JSON envelope, JSONL
+metadata, role matching, stable UUIDs, timestamps, and recognized message
+content before typed parsing. System records, goal-state audit data, tool calls
+and raw input/output, usage, aggregate file lists, and unknown future message
+types are not copied into canonical memory. `qwen sessions list --json` is a
+session metadata listing, not a transcript export; use `/export json` or
+`/export jsonl` for conversation content. HTML and Markdown exports are
+presentation-oriented and can be reviewed and imported with `manual` when a
+human-readable fallback is preferable.
 
 Review imported output before retaining sensitive conversations. The repository
 fixtures are synthetic and contain no text copied from personal exports.
