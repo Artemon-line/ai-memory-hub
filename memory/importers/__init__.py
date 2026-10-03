@@ -7,6 +7,7 @@ from memory.importers.gemini_cli_session_json import GeminiCliSessionJsonImporte
 from memory.importers.manual_paste import ManualPasteImporter
 from memory.importers.opencode_session_json import OpenCodeSessionJsonImporter
 from memory.importers.pi_session_jsonl import PiSessionJsonlImporter
+from memory.importers.qwen_code_session_export import QwenCodeSessionExportImporter
 from memory.importers.registry import get_importer, importer_names
 
 __all__ = [
@@ -19,6 +20,7 @@ __all__ = [
     "ManualPasteImporter",
     "OpenCodeSessionJsonImporter",
     "PiSessionJsonlImporter",
+    "QwenCodeSessionExportImporter",
     "get_importer",
     "importer_names",
 ]

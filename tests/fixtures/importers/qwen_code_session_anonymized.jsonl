@@ -1,0 +1,6 @@
+{"type":"session_metadata","sessionId":"qwen-jsonl-synthetic","startTime":"2026-04-12T11:00:00Z","exportTime":"2026-04-12T11:05:00Z","cwd":"/workspace/garden-sensor","gitRepo":"garden-sensor","gitBranch":"feature/jsonl-notes","model":"qwen-jsonl-model","channel":"cli","promptCount":1,"totalTokens":42,"uniqueFiles":["secret.txt"]}
+{"uuid":"u1","timestamp":"2026-04-12T11:00:01Z","type":"user","message":{"role":"user","content":"Summarize the installation."}}
+{"uuid":"system1","timestamp":"2026-04-12T11:00:02Z","type":"system","message":{"role":"system","content":"Private system instruction"}}
+{"uuid":"tool1","timestamp":"2026-04-12T11:00:03Z","type":"tool_call","toolCall":{"toolCallId":"call-1","kind":"read","title":"Read secret.txt","status":"completed","rawInput":"secret.txt","rawOutput":"Private tool output"}}
+{"uuid":"a1","parentUuid":"u1","timestamp":"2026-04-12T11:00:04Z","type":"assistant","message":{"role":"assistant","parts":[{"text":"The sensor is mounted in shade."},{"text":"Its baseline is recorded."}]}}
+{"uuid":"future1","timestamp":"2026-04-12T11:00:05Z","type":"future_event","privatePayload":"ignored"}
