@@ -390,6 +390,7 @@ def test_manual_import_cli_ingests_unified_payload(capsys, monkeypatch, tmp_path
 @pytest.mark.parametrize(
     ("importer", "fixture_name", "expected_count"),
     [
+        ("claude-code-session-jsonl", "claude_code_session_anonymized.jsonl", 1),
         ("codex-rollout-jsonl", "codex_rollout_anonymized.jsonl", 1),
         ("copilot-activity-csv", "copilot_activity_anonymized.csv", 2),
         ("deepseek-share-json", "deepseek_share_anonymized.json", 1),

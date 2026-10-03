@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from memory.importers import (
+    ClaudeCodeSessionJsonlImporter,
     CodexRolloutJsonlImporter,
     ConversationImporter,
     CopilotActivityCsvImporter,
@@ -115,6 +116,7 @@ def test_manual_paste_importer_rejects_oversized_input() -> None:
 
 def test_importer_registry_exposes_manual_importer() -> None:
     assert importer_names() == (
+        "claude-code-session-jsonl",
         "codex-rollout-jsonl",
         "copilot-activity-csv",
         "deepseek-share-json",
@@ -128,8 +130,8 @@ def test_importer_registry_rejects_unknown_importer() -> None:
     with pytest.raises(
         ValueError,
         match=(
-            "codex-rollout-jsonl, copilot-activity-csv, deepseek-share-json, manual, "
-            "opencode-session-json"
+            "claude-code-session-jsonl, codex-rollout-jsonl, copilot-activity-csv, "
+            "deepseek-share-json, manual, opencode-session-json"
         ),
     ):
         get_importer("unknown")
@@ -264,6 +266,96 @@ def test_codex_rollout_rich_fixture_keeps_visible_messages_only() -> None:
         role for _ in range(5) for role in ("user", "assistant", "assistant")
     ]
     assert payload["messages"][-1]["text"].startswith("The fictional workflow")
+
+
+def test_claude_code_session_fixture_keeps_visible_text_and_safe_provenance() -> None:
+    text = (_FIXTURES / "claude_code_session_anonymized.jsonl").read_text(
+        encoding="utf-8"
+    )
+
+    payload = ClaudeCodeSessionJsonlImporter().import_text(text)[0]
+
+    assert payload == {
+        "source": "claude-code",
+        "timestamp": "2026-04-12T10:00:01+00:00",
+        "messages": [
+            {
+                "role": "user",
+                "text": "Draft a setup checklist for a balcony temperature sensor.",
+            },
+            {
+                "role": "assistant",
+                "text": "Mount the sensor in shade.\n\nRecord a baseline reading.",
+            },
+            {"role": "user", "text": "Add a battery-check note."},
+            {
+                "role": "assistant",
+                "text": "Check the battery before each season.",
+            },
+        ],
+        "metadata": {
+            "importer": "claude-code-session-jsonl",
+            "platform": "claude-code",
+            "ingestion_method": "jsonl-import",
+            "source_session_id": "claude-session-synthetic",
+            "directory": "/workspace/garden-sensor",
+            "git_branch": "feature/sensor-notes",
+            "model": "claude-example-model",
+        },
+    }
+    serialized = json.dumps(payload)
+    assert "Private" not in serialized
+    assert "Duplicate presentation" not in serialized
+
+
+def test_claude_code_session_accepts_overrides() -> None:
+    payload = ClaudeCodeSessionJsonlImporter().import_text(
+        '{"type":"user","timestamp":"2026-04-12T10:00:01Z",'
+        '"message":{"role":"user","content":"Question"}}',
+        source="custom-claude",
+        title="Imported session",
+    )[0]
+
+    assert payload["source"] == "custom-claude"
+    assert payload["title"] == "Imported session"
+    assert payload["metadata"]["title"] == "Imported session"
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("not json", "line 1 must be valid JSON"),
+        ("[]", "line 1 must be an object"),
+        (
+            '{"type":"user","message":[]}',
+            "line 1 has an invalid envelope",
+        ),
+        (
+            '{"type":"user","message":{"role":"assistant","content":"wrong"}}',
+            "line 1 has an inconsistent role",
+        ),
+        (
+            '{"type":"assistant","message":{"role":"assistant","content":[]}}',
+            "contains no conversational text",
+        ),
+        (
+            '{"type":"user","timestamp":"not-a-time",'
+            '"message":{"role":"user","content":"Question"}}',
+            "timestamp on line 1 is invalid",
+        ),
+    ],
+)
+def test_claude_code_session_rejects_invalid_exports(text: str, message: str) -> None:
+    with pytest.raises(ValueError, match=message):
+        ClaudeCodeSessionJsonlImporter().import_text(text)
+
+
+def test_claude_code_session_rejects_non_text_and_oversized_input() -> None:
+    importer = ClaudeCodeSessionJsonlImporter()
+    with pytest.raises(ValueError, match="must be text"):
+        importer.import_text(b"{}")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="exceeds 20000000 bytes"):
+        importer.import_text("x" * 20_000_001)
 
 
 @pytest.mark.parametrize(

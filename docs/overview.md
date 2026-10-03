@@ -252,6 +252,7 @@ python -m memory.cli reindex --json
 python -m memory.cli import manual copilot-chat.txt --source vscode-copilot --json
 python -m memory.cli import copilot-activity-csv copilot-activity-history.csv --json
 python -m memory.cli import deepseek-share-json deepseek-share.json --json
+python -m memory.cli import claude-code-session-jsonl "$HOME/.claude/projects/<PROJECT>/<SESSION_ID>.jsonl" --json
 python -m memory.cli import codex-rollout-jsonl "$CODEX_HOME/sessions/2026/04/12/rollout-<SESSION_ID>.jsonl" --json
 opencode export <SESSION_ID> | python -m memory.cli import opencode-session-json - --json
 python -m memory.cli search "local-first tools" --top-k 5 --json
@@ -327,6 +328,18 @@ export order, skips internal reasoning, tool-only turns, and synthetic or
 ignored text parts, and records the OpenCode session ID, title, working
 directory, and model as provenance when present. Sanitized exports are also
 accepted; their redacted text remains redacted.
+
+Claude Code persists resumable session transcripts as JSONL under
+`~/.claude/projects/<project>/<session-id>.jsonl`. Import a copied, inactive
+transcript with `claude-code-session-jsonl`. The importer retains non-empty user
+and assistant text in file order, deduplicates repeated visible records by UUID,
+and records the session ID, working directory, Git branch, and model when
+present. It omits system prompts, thinking, tool calls and results, progress,
+usage, and file snapshots. Malformed JSON reports its line number. Claude
+Code's `/export transcript.txt` output is suitable for the `manual` importer
+when a readable transcript is preferred, but it does not preserve the same
+structured provenance. Review the transcript for sensitive content before
+copying or importing it.
 
 Review imported output before retaining sensitive conversations. The repository
 fixtures are synthetic and contain no text copied from personal exports.
