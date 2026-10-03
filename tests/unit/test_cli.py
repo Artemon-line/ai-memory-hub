@@ -401,6 +401,11 @@ def test_manual_import_cli_ingests_unified_payload(capsys, monkeypatch, tmp_path
         ("claude-code-session-jsonl", "claude_code_session_anonymized.jsonl", 1),
         ("codex-rollout-jsonl", "codex_rollout_anonymized.jsonl", 1),
         ("copilot-activity-csv", "copilot_activity_anonymized.csv", 2),
+        (
+            "copilot-cli-events-jsonl",
+            "copilot_cli_events_v1_anonymized.jsonl",
+            1,
+        ),
         ("deepseek-share-json", "deepseek_share_anonymized.json", 1),
         (
             "gemini-cli-session-json",

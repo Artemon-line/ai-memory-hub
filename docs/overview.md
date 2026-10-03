@@ -251,6 +251,7 @@ python -m memory.cli ingest conversation.json --json
 python -m memory.cli reindex --json
 python -m memory.cli import manual copilot-chat.txt --source vscode-copilot --json
 python -m memory.cli import copilot-activity-csv copilot-activity-history.csv --json
+python -m memory.cli import copilot-cli-events-jsonl "$HOME/.copilot/session-state/<SESSION_ID>/events.jsonl" --json
 python -m memory.cli import deepseek-share-json deepseek-share.json --json
 python -m memory.cli import claude-code-session-jsonl "$HOME/.claude/projects/<PROJECT>/<SESSION_ID>.jsonl" --json
 python -m memory.cli import codex-rollout-jsonl "$CODEX_HOME/sessions/2026/04/12/rollout-<SESSION_ID>.jsonl" --json
@@ -315,6 +316,31 @@ not enter canonical memory.
 Microsoft Copilot activity exports must use the columns `Conversation`, `Time`,
 `Author`, and `Message`. The importer groups rows by conversation and restores
 the chronological user/assistant order used by the hub.
+
+GitHub Copilot CLI stores resumable sessions under
+`$COPILOT_HOME/session-state/<session-id>/events.jsonl`, with
+`~/.copilot/session-state/` as the default location. Import a copied, inactive
+event log with `copilot-cli-events-jsonl`. This is separate from the Microsoft
+Copilot activity-history CSV importer above. The JSONL importer keeps visible,
+top-level `user.message` and `assistant.message` text in event order and
+deduplicates stable message or event IDs. It omits system and synthetic user
+prompts, reasoning, sub-agent messages, tool calls and results, permissions,
+compaction data, errors, usage, telemetry, and unknown event types.
+
+The bundled Draft 2020-12 importer schema covers both initial `session.start`
+and resumed-session metadata envelopes plus the observed minimal and current
+message envelopes. Safe provenance includes the session ID, start time, working
+directory, repository, Git root and branch, selected model, CLI version, and
+title when those fields are present. Recognized malformed records and invalid
+timestamps fail with their physical line number; unknown event types remain
+forward-compatible. A malformed JSONL file, including a historical tool result
+split across physical lines by an unescaped newline, fails instead of being
+silently repaired into a partial conversation.
+
+For a reviewable manual fallback, run `/share file <PATH>` (or its `/export`
+alias) in Copilot CLI and import the resulting Markdown with `manual`. Review
+either artifact for sensitive prompts, paths, and output before copying or
+retaining it. Multipart HTTP upload remains outside the importer contract.
 
 For a public DeepSeek share link, save the response from its share-content API
 as JSON, then pass that file to `deepseek-share-json`. The importer keeps request

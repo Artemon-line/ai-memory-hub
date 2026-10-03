@@ -6,6 +6,9 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Added a schema-backed GitHub Copilot CLI `events.jsonl` importer that keeps
+  top-level user and assistant text while excluding synthetic prompts,
+  sub-agent traffic, reasoning, tools, compaction, usage, and telemetry.
 - Added a native Qwen Code session importer for `/export json` and
   `/export jsonl` with schema-backed message validation, UUID deduplication,
   and omission of system, goal-state, tool, usage, and unknown records.

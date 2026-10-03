@@ -1,0 +1,5 @@
+{"type":"session.resume","data":{"sessionId":"copilot-resumed-synthetic","copilotVersion":"1.0.54","selectedModel":"copilot-resumed-model","title":"Resumed garden work","context":{"cwd":"/work/resumed-garden","repository":"resumed-garden","branch":"main"}},"timestamp":"2026-05-27T06:21:20Z"}
+{"type":"user.message","data":{"content":"Resume the garden notes."},"id":"legacy-user-1","timestamp":"2026-05-27T06:21:24Z"}
+{"type":"assistant.message","data":{"content":"The notes are ready.","model":"copilot-resumed-model"},"id":"legacy-assistant-1","timestamp":"2026-05-27T06:21:30Z"}
+{"type":"tool.call","data":{"content":"must not be imported"},"id":"legacy-tool"}
+{"type":"unknown.future_event","data":{"content":"must not be imported"},"id":"legacy-unknown"}
