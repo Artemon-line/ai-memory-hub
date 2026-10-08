@@ -15,6 +15,7 @@ from memory.importers import (
     DeepSeekShareJsonImporter,
     DroidExecJsonImporter,
     GeminiCliSessionJsonImporter,
+    HermesSessionJsonlImporter,
     ManualPasteImporter,
     OpenCodeSessionJsonImporter,
     PiSessionJsonlImporter,
@@ -130,6 +131,7 @@ def test_importer_registry_exposes_manual_importer() -> None:
         "deepseek-share-json",
         "droid-exec-json",
         "gemini-cli-session-json",
+        "hermes-session-jsonl",
         "manual",
         "opencode-session-json",
         "pi-session-jsonl",
@@ -144,12 +146,198 @@ def test_importer_registry_rejects_unknown_importer() -> None:
         match=(
             "claude-code-session-jsonl, codex-rollout-jsonl, copilot-activity-csv, "
             "copilot-cli-events-jsonl, deepseek-harness-session-jsonl, "
-            "deepseek-share-json, droid-exec-json, gemini-cli-session-json, manual, "
+            "deepseek-share-json, droid-exec-json, gemini-cli-session-json, "
+            "hermes-session-jsonl, manual, "
             "opencode-session-json, "
             "pi-session-jsonl, qwen-code-session-export"
         ),
     ):
         get_importer("unknown")
+
+
+def test_hermes_fixture_maps_live_text_and_safe_provenance() -> None:
+    first_line = (
+        _FIXTURES / "hermes_sessions_anonymized.jsonl"
+    ).read_text(encoding="utf-8").splitlines()[0]
+
+    payload = HermesSessionJsonlImporter().import_text(first_line)[0]
+
+    assert payload == {
+        "source": "hermes",
+        "title": "Garden authentication investigation",
+        "timestamp": "2023-11-14T22:13:20+00:00",
+        "messages": [
+            {"role": "user", "text": "Why does the garden login redirect fail?"},
+            {
+                "role": "assistant",
+                "text": "I will inspect the redirect configuration.",
+            },
+            {
+                "role": "assistant",
+                "text": "The configured redirect target is stale.",
+            },
+            {
+                "role": "user",
+                "text": "Earlier visible question retained after compaction.",
+            },
+            {
+                "role": "assistant",
+                "text": "Earlier visible answer retained after compaction.",
+            },
+        ],
+        "metadata": {
+            "importer": "hermes-session-jsonl",
+            "platform": "hermes",
+            "ingestion_method": "jsonl-import",
+            "source_session_id": "hermes-session-synthetic",
+            "hermes_source": "cli",
+            "model": "provider/example-model",
+            "directory": "/work/garden-app",
+            "git_repo_root": "/work/garden-app",
+            "git_branch": "feature/synthetic-auth",
+            "parent_session_id": "hermes-parent-synthetic",
+            "title": "Garden authentication investigation",
+        },
+    }
+    serialized = json.dumps(payload)
+    for excluded in (
+        "Private system",
+        "Private chain",
+        "Private tool",
+        "Removed by rewind",
+        "Synthetic compressed context",
+        "private-user",
+        "private-billing",
+        "private-message-id",
+    ):
+        assert excluded not in serialized
+
+
+def test_hermes_multi_session_fixture_preserves_boundaries() -> None:
+    text = (_FIXTURES / "hermes_sessions_anonymized.jsonl").read_text(
+        encoding="utf-8"
+    )
+
+    payloads = HermesSessionJsonlImporter().import_text(text)
+
+    assert len(payloads) == 2
+    assert [payload["metadata"]["source_session_id"] for payload in payloads] == [
+        "hermes-session-synthetic",
+        "hermes-session-telegram-synthetic",
+    ]
+    assert payloads[1]["metadata"]["hermes_source"] == "telegram"
+    assert payloads[1]["timestamp"] == "2023-11-14T22:15:00+00:00"
+
+
+def test_hermes_importer_applies_source_and_title_overrides_to_every_session() -> None:
+    text = (_FIXTURES / "hermes_sessions_anonymized.jsonl").read_text(
+        encoding="utf-8"
+    )
+
+    payloads = HermesSessionJsonlImporter().import_text(
+        text, source="archive", title="Reviewed Hermes export"
+    )
+
+    assert all(payload["source"] == "archive" for payload in payloads)
+    assert all(payload["title"] == "Reviewed Hermes export" for payload in payloads)
+    assert all(
+        payload["metadata"]["title"] == "Reviewed Hermes export"
+        for payload in payloads
+    )
+
+
+def test_hermes_importer_reports_malformed_json_line() -> None:
+    text = '{"id":"ok","messages":[]}\n{not json}'
+
+    with pytest.raises(ValueError, match="line 2 must be valid JSON"):
+        HermesSessionJsonlImporter().import_text(text)
+
+
+@pytest.mark.parametrize(
+    ("record", "message"),
+    [
+        ({"messages": []}, "'id' is a required property"),
+        ({"id": "session", "messages": "bad"}, "messages.*not of type 'array'"),
+        (
+            {"id": "session", "messages": [{"role": "user", "content": {}}]},
+            "message 1.*content",
+        ),
+        (
+            {
+                "id": "session",
+                "messages": [
+                    {"role": "assistant", "content": "text", "active": "yes"}
+                ],
+            },
+            "message 1.*active",
+        ),
+    ],
+)
+def test_hermes_importer_rejects_malformed_records(
+    record: dict[str, object], message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        HermesSessionJsonlImporter().import_text(json.dumps(record))
+
+
+@pytest.mark.parametrize(
+    "messages",
+    [
+        [],
+        [{"role": "system", "content": "instructions"}],
+        [{"role": "tool", "content": "result"}],
+        [{"role": "assistant", "content": "", "tool_calls": [{}]}],
+        [{"role": "user", "content": [{"type": "image", "url": "image"}]}],
+        [{"role": "user", "content": "removed", "active": 0, "compacted": 0}],
+    ],
+)
+def test_hermes_importer_rejects_sessions_without_conversational_text(
+    messages: list[dict[str, object]],
+) -> None:
+    record = {"id": "empty-session", "messages": messages}
+
+    with pytest.raises(ValueError, match="contains no conversational text"):
+        HermesSessionJsonlImporter().import_text(json.dumps(record))
+
+
+def test_hermes_importer_joins_textual_content_blocks() -> None:
+    record = {
+        "id": "structured-session",
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    "first",
+                    {"type": "text", "text": "second"},
+                    {"content": "third"},
+                    {"type": "image", "text": "not imported"},
+                ],
+            }
+        ],
+    }
+
+    payload = HermesSessionJsonlImporter().import_text(json.dumps(record))[0]
+
+    assert payload["messages"] == [
+        {"role": "user", "text": "first\n\nsecond\n\nthird"}
+    ]
+
+
+def test_hermes_importer_rejects_duplicate_session_ids() -> None:
+    line = json.dumps(
+        {"id": "duplicate", "messages": [{"role": "user", "content": "hi"}]}
+    )
+
+    with pytest.raises(ValueError, match="line 2 duplicates session id"):
+        HermesSessionJsonlImporter().import_text(f"{line}\n{line}")
+
+
+def test_hermes_importer_rejects_non_text_and_oversized_input() -> None:
+    importer = HermesSessionJsonlImporter()
+    with pytest.raises(ValueError, match="must be text"):
+        importer.import_text(b"{}")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="exceeds 20000000 bytes"):
+        importer.import_text("{}" + (" " * 20_000_000))
 
 
 def test_copilot_cli_v1_fixture_maps_text_and_safe_provenance() -> None:

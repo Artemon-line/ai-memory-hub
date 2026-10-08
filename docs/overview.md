@@ -254,6 +254,7 @@ python -m memory.cli import copilot-activity-csv copilot-activity-history.csv --
 python -m memory.cli import copilot-cli-events-jsonl "$HOME/.copilot/session-state/<SESSION_ID>/events.jsonl" --json
 python -m memory.cli import deepseek-harness-session-jsonl dsh-session/session.v4.jsonl --json
 python -m memory.cli import droid-exec-json droid-capture.json --json
+python -m memory.cli import hermes-session-jsonl hermes-backup.jsonl --json
 python -m memory.cli import deepseek-share-json deepseek-share.json --json
 python -m memory.cli import claude-code-session-jsonl "$HOME/.claude/projects/<PROJECT>/<SESSION_ID>.jsonl" --json
 python -m memory.cli import codex-rollout-jsonl "$CODEX_HOME/sessions/2026/04/12/rollout-<SESSION_ID>.jsonl" --json
@@ -576,6 +577,30 @@ human-readable fallback is preferable.
 
 Review imported output before retaining sensitive conversations. The repository
 fixtures are synthetic and contain no text copied from personal exports.
+
+Hermes Agent's `sessions export` command writes one complete session object per
+JSONL line. Import one session directly from standard input, or save and import
+a multi-session backup:
+
+```bash
+hermes sessions export - --session-id <SESSION_ID> --redact \
+  | python -m memory.cli import hermes-session-jsonl - --json
+
+hermes sessions export hermes-backup.jsonl --redact
+python -m memory.cli import hermes-session-jsonl hermes-backup.jsonl --json
+```
+
+Use `--redact` whenever an export may be shared or retained outside Hermes'
+local state. The importer preserves each exported session as a separate hub
+conversation and keeps safe provenance such as its session ID, Hermes source,
+title, model, working directory, Git root and branch, parent session ID, and
+UTC start time. It imports non-empty user and assistant text that remains in
+Hermes' visible history, including compaction-archived turns, while excluding
+rewound/edited-away rows and synthetic compressed context. System prompts,
+tool calls and results, reasoning, timings, billing and token data, user/chat
+identifiers, and unknown fields are not copied into canonical memory. Hermes
+Markdown exports are presentation formats; use the documented JSONL backup for
+structured import.
 
 Shared options include `--config <path>`, `--json`, `--quiet`, and `--verbose`.
 `search` also supports `--source`, `--date-from`, `--date-to`, repeated `--tags`,

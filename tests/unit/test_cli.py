@@ -418,6 +418,7 @@ def test_manual_import_cli_ingests_unified_payload(capsys, monkeypatch, tmp_path
             "gemini_cli_export_session_anonymized.json",
             1,
         ),
+        ("hermes-session-jsonl", "hermes_sessions_anonymized.jsonl", 2),
         ("opencode-session-json", "opencode_session_anonymized.json", 1),
         ("pi-session-jsonl", "pi_session_anonymized.jsonl", 1),
         (

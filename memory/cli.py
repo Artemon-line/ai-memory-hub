@@ -229,6 +229,11 @@ def build_parser() -> argparse.ArgumentParser:
             "gemini-cli",
         ),
         (
+            "hermes-session-jsonl",
+            "Import one or more native Hermes Agent JSONL session exports.",
+            "hermes",
+        ),
+        (
             "opencode-session-json",
             "Import JSON emitted by the OpenCode session export command.",
             "opencode",

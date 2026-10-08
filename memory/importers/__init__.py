@@ -9,6 +9,7 @@ from memory.importers.deepseek_harness_session_jsonl import (
 from memory.importers.deepseek_share_json import DeepSeekShareJsonImporter
 from memory.importers.droid_exec_json import DroidExecJsonImporter
 from memory.importers.gemini_cli_session_json import GeminiCliSessionJsonImporter
+from memory.importers.hermes_session_jsonl import HermesSessionJsonlImporter
 from memory.importers.manual_paste import ManualPasteImporter
 from memory.importers.opencode_session_json import OpenCodeSessionJsonImporter
 from memory.importers.pi_session_jsonl import PiSessionJsonlImporter
@@ -25,6 +26,7 @@ __all__ = [
     "DeepSeekShareJsonImporter",
     "DroidExecJsonImporter",
     "GeminiCliSessionJsonImporter",
+    "HermesSessionJsonlImporter",
     "ManualPasteImporter",
     "OpenCodeSessionJsonImporter",
     "PiSessionJsonlImporter",
