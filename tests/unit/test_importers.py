@@ -13,6 +13,7 @@ from memory.importers import (
     CopilotCliEventsJsonlImporter,
     DeepSeekHarnessSessionJsonlImporter,
     DeepSeekShareJsonImporter,
+    DroidExecJsonImporter,
     GeminiCliSessionJsonImporter,
     ManualPasteImporter,
     OpenCodeSessionJsonImporter,
@@ -127,6 +128,7 @@ def test_importer_registry_exposes_manual_importer() -> None:
         "copilot-cli-events-jsonl",
         "deepseek-harness-session-jsonl",
         "deepseek-share-json",
+        "droid-exec-json",
         "gemini-cli-session-json",
         "manual",
         "opencode-session-json",
@@ -142,7 +144,8 @@ def test_importer_registry_rejects_unknown_importer() -> None:
         match=(
             "claude-code-session-jsonl, codex-rollout-jsonl, copilot-activity-csv, "
             "copilot-cli-events-jsonl, deepseek-harness-session-jsonl, "
-            "deepseek-share-json, gemini-cli-session-json, manual, opencode-session-json, "
+            "deepseek-share-json, droid-exec-json, gemini-cli-session-json, manual, "
+            "opencode-session-json, "
             "pi-session-jsonl, qwen-code-session-export"
         ),
     ):
@@ -379,6 +382,216 @@ def test_deepseek_harness_importer_rejects_invalid_sessions(
 
 def test_deepseek_harness_importer_rejects_non_text_and_oversized_input() -> None:
     importer = DeepSeekHarnessSessionJsonlImporter()
+    with pytest.raises(ValueError, match="must be text"):
+        importer.import_text(b"{}")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="exceeds 20000000 bytes"):
+        importer.import_text("x" * 20_000_001)
+
+
+def test_droid_exec_one_shot_fixture_maps_prompt_result_and_provenance() -> None:
+    text = (_FIXTURES / "droid_exec_one_shot_anonymized.json").read_text(
+        encoding="utf-8"
+    )
+
+    payload = DroidExecJsonImporter().import_text(text)[0]
+
+    assert payload == {
+        "source": "droid",
+        "title": "Sensor test investigation",
+        "timestamp": "2026-10-02T09:15:23+00:00",
+        "messages": [
+            {"role": "user", "text": "Explain the failing fictional sensor test."},
+            {"role": "assistant", "text": "The synthetic fixture path is stale."},
+        ],
+        "metadata": {
+            "importer": "droid-exec-json",
+            "platform": "droid",
+            "ingestion_method": "json-import",
+            "capture_format": "ai-memory-hub.droid-exec-capture",
+            "capture_version": 1,
+            "capture_kind": "one-shot",
+            "source_session_id": "droid-session-synthetic",
+            "duration_ms": 5657,
+            "reported_turn_count": 1,
+            "directory": "/workspace/garden-sensor",
+            "model": "droid-example-model",
+            "title": "Sensor test investigation",
+        },
+    }
+
+
+def test_droid_exec_stream_fixture_coalesces_only_completed_visible_turns() -> None:
+    text = (_FIXTURES / "droid_exec_stream_anonymized.json").read_text(
+        encoding="utf-8"
+    )
+
+    payload = DroidExecJsonImporter().import_text(text)[0]
+
+    assert payload["source"] == "droid"
+    assert payload["timestamp"] == "2026-10-02T09:20:00+00:00"
+    assert payload["messages"] == [
+        {"role": "user", "text": "Check the sensor parser."},
+        {
+            "role": "assistant",
+            "text": "The parser accepts the fixture.\n\nNo private fields are retained.",
+        },
+        {"role": "user", "text": "What should run next?"},
+        {"role": "assistant", "text": "Run the focused importer tests."},
+    ]
+    assert payload["metadata"]["source_session_id"] == "droid-stream-session-synthetic"
+    assert payload["metadata"]["directory"] == "/workspace/garden-sensor"
+    assert payload["metadata"]["model"] == "droid-stream-model"
+    serialized = json.dumps(payload)
+    assert "Private reasoning" not in serialized
+    assert "Private tool output" not in serialized
+    assert "Private error detail" not in serialized
+    assert '"secret"' not in serialized
+
+
+def test_droid_exec_importer_accepts_source_and_title_overrides() -> None:
+    text = (_FIXTURES / "droid_exec_one_shot_anonymized.json").read_text(
+        encoding="utf-8"
+    )
+
+    payload = DroidExecJsonImporter().import_text(
+        text, source="custom-droid", title="Imported Droid run"
+    )[0]
+
+    assert payload["source"] == "custom-droid"
+    assert payload["title"] == "Imported Droid run"
+    assert payload["metadata"]["title"] == "Imported Droid run"
+
+
+@pytest.mark.parametrize(
+    ("document", "message"),
+    [
+        ("not json", "must be valid JSON"),
+        (
+            json.dumps(
+                {
+                    "type": "result",
+                    "subtype": "success",
+                    "is_error": False,
+                    "result": "Result only",
+                }
+            ),
+            "version 1 ai-memory-hub capture envelope",
+        ),
+        (
+            json.dumps(
+                {
+                    "format": "ai-memory-hub.droid-exec-capture",
+                    "version": 1,
+                    "kind": "one-shot",
+                    "result": {
+                        "type": "result",
+                        "subtype": "success",
+                        "is_error": False,
+                        "result": "Answer",
+                    },
+                }
+            ),
+            "version 1 ai-memory-hub capture envelope",
+        ),
+        (
+            json.dumps(
+                {
+                    "format": "ai-memory-hub.droid-exec-capture",
+                    "version": 2,
+                    "kind": "one-shot",
+                    "prompt": "Question",
+                    "result": {
+                        "type": "result",
+                        "subtype": "success",
+                        "is_error": False,
+                        "result": "Answer",
+                    },
+                }
+            ),
+            "version 1 ai-memory-hub capture envelope",
+        ),
+        (
+            json.dumps(
+                {
+                    "format": "ai-memory-hub.droid-exec-capture",
+                    "version": 1,
+                    "kind": "one-shot",
+                    "prompt": "Question",
+                    "result": {
+                        "type": "result",
+                        "subtype": "error_during_execution",
+                        "is_error": True,
+                        "result": "Partial private output",
+                    },
+                }
+            ),
+            "does not contain a successful result",
+        ),
+        (
+            json.dumps(
+                {
+                    "format": "ai-memory-hub.droid-exec-capture",
+                    "version": 1,
+                    "kind": "stream-jsonrpc",
+                    "frames": [
+                        {
+                            "direction": "client-to-droid",
+                            "message": {
+                                "jsonrpc": "2.0",
+                                "method": "droid.add_user_message",
+                                "params": {"text": "Question"},
+                            },
+                        },
+                        {
+                            "direction": "droid-to-client",
+                            "message": {
+                                "jsonrpc": "2.0",
+                                "method": "droid.session_notification",
+                                "params": {
+                                    "notification": {
+                                        "type": "assistant_text_delta",
+                                        "messageId": "a1",
+                                        "blockIndex": 0,
+                                    }
+                                },
+                            },
+                        },
+                    ],
+                }
+            ),
+            "frame 2 has an invalid assistant text delta",
+        ),
+        (
+            json.dumps(
+                {
+                    "format": "ai-memory-hub.droid-exec-capture",
+                    "version": 1,
+                    "kind": "stream-jsonrpc",
+                    "frames": [
+                        {
+                            "direction": "client-to-droid",
+                            "message": {
+                                "jsonrpc": "2.0",
+                                "method": "droid.add_user_message",
+                                "params": {"text": "Question"},
+                            },
+                        }
+                    ],
+                }
+            ),
+            "contains no completed conversational turns",
+        ),
+    ],
+)
+def test_droid_exec_importer_rejects_invalid_or_incomplete_captures(
+    document: str, message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        DroidExecJsonImporter().import_text(document)
+
+
+def test_droid_exec_importer_rejects_non_text_and_oversized_input() -> None:
+    importer = DroidExecJsonImporter()
     with pytest.raises(ValueError, match="must be text"):
         importer.import_text(b"{}")  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="exceeds 20000000 bytes"):

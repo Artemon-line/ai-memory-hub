@@ -253,6 +253,7 @@ python -m memory.cli import manual copilot-chat.txt --source vscode-copilot --js
 python -m memory.cli import copilot-activity-csv copilot-activity-history.csv --json
 python -m memory.cli import copilot-cli-events-jsonl "$HOME/.copilot/session-state/<SESSION_ID>/events.jsonl" --json
 python -m memory.cli import deepseek-harness-session-jsonl dsh-session/session.v4.jsonl --json
+python -m memory.cli import droid-exec-json droid-capture.json --json
 python -m memory.cli import deepseek-share-json deepseek-share.json --json
 python -m memory.cli import claude-code-session-jsonl "$HOME/.claude/projects/<PROJECT>/<SESSION_ID>.jsonl" --json
 python -m memory.cli import codex-rollout-jsonl "$CODEX_HOME/sessions/2026/04/12/rollout-<SESSION_ID>.jsonl" --json
@@ -342,6 +343,100 @@ For a reviewable manual fallback, run `/share file <PATH>` (or its `/export`
 alias) in Copilot CLI and import the resulting Markdown with `manual`. Review
 either artifact for sensitive prompts, paths, and output before copying or
 retaining it. Multipart HTTP upload remains outside the importer contract.
+
+Factory Droid does not currently document a portable export for historical
+interactive CLI sessions. The `droid-exec-json` importer therefore accepts only
+the versioned `ai-memory-hub.droid-exec-capture` envelope for headless
+`droid exec` runs. It rejects raw result-only JSON because that output omits the
+submitted prompt.
+
+For a one-shot run, record the exact submitted prompt and Droid's JSON result in
+one capture. This example uses `jq` only to assemble the local capture file:
+
+```bash
+prompt='Explain this repository'
+droid exec "$prompt" --output-format json > droid-result.json
+jq -n --arg prompt "$prompt" --slurpfile result droid-result.json \
+  '{
+    format: "ai-memory-hub.droid-exec-capture",
+    version: 1,
+    kind: "one-shot",
+    prompt: $prompt,
+    result: $result[0],
+    metadata: {cwd: "/workspace/project", model: "configured-model"}
+  }' > droid-capture.json
+python -m memory.cli import droid-exec-json droid-capture.json --json
+```
+
+Only a successful, non-empty one-shot result becomes an assistant message. The
+importer preserves safe session ID, duration, reported turn count, model, cwd,
+title, and timestamp metadata when supplied. Error results are rejected, and
+unknown result fields are ignored.
+
+For a multi-turn integration, launch the documented bidirectional protocol:
+
+```bash
+droid exec \
+  --input-format stream-jsonrpc \
+  --output-format stream-jsonrpc \
+  --auto low
+```
+
+The recorder must wrap each JSON-RPC object with its direction rather than
+concatenating stdin and stdout into an ambiguous log:
+
+```json
+{
+  "format": "ai-memory-hub.droid-exec-capture",
+  "version": 1,
+  "kind": "stream-jsonrpc",
+  "frames": [
+    {
+      "direction": "client-to-droid",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": "turn-1",
+        "method": "droid.add_user_message",
+        "params": {"text": "Explain this repository"}
+      }
+    },
+    {
+      "direction": "droid-to-client",
+      "message": {
+        "jsonrpc": "2.0",
+        "method": "droid.session_notification",
+        "params": {
+          "notification": {
+            "type": "assistant_text_delta",
+            "messageId": "assistant-1",
+            "blockIndex": 0,
+            "textDelta": "This repository..."
+          }
+        }
+      }
+    },
+    {
+      "direction": "droid-to-client",
+      "message": {
+        "jsonrpc": "2.0",
+        "method": "droid.session_notification",
+        "params": {
+          "notification": {"type": "agent_turn_completed", "reason": "completed"}
+        }
+      }
+    }
+  ]
+}
+```
+
+The importer pairs `droid.add_user_message` requests with successfully completed
+turns and coalesces `assistant_text_delta` values by message and block. It skips
+system prompts, thinking, tool calls and results, permissions, errors, usage,
+control traffic, incomplete turns, and unknown notifications. This contract
+does not scrape the Droid TUI, follow organization `/share` links, or import
+arbitrary historical Droid sessions. Raw-content OpenTelemetry export is not a
+normal capture path: it is opt-in, can expose sensitive content, and can
+truncate attributes. Multipart HTTP upload remains tracked separately.
 
 DeepSeek Harness can download a session tree as
 `dsh-session-<SESSION_ID>.zip` from its `/export` browser page. Only extract an

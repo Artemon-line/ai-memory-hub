@@ -219,6 +219,11 @@ def build_parser() -> argparse.ArgumentParser:
             "deepseek-harness",
         ),
         (
+            "droid-exec-json",
+            "Import a versioned capture of a Factory Droid Exec run.",
+            "droid",
+        ),
+        (
             "gemini-cli-session-json",
             "Import a Gemini CLI exported session or shared JSON history.",
             "gemini-cli",
