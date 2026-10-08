@@ -229,6 +229,11 @@ def build_parser() -> argparse.ArgumentParser:
             "gemini-cli",
         ),
         (
+            "hermes-session-jsonl",
+            "Import one or more native Hermes Agent JSONL session exports.",
+            "hermes",
+        ),
+        (
             "opencode-session-json",
             "Import JSON emitted by the OpenCode session export command.",
             "opencode",
@@ -257,6 +262,11 @@ def build_parser() -> argparse.ArgumentParser:
             "--title",
             default=None,
             help="Optional title override. CSV imports apply it to every conversation.",
+        )
+        importer_parser.add_argument(
+            "--schema",
+            default=None,
+            help="Optional path to a bounded parser-specific JSON override.",
         )
 
     handoff = subparsers.add_parser(
@@ -603,11 +613,24 @@ def _reindex(args: argparse.Namespace) -> int:
 
 
 def _import_conversations(args: argparse.Namespace) -> int:
+    from memory.importers.schema_override import (
+        parse_schema_override,
+        stamp_import_provenance,
+    )
+
     importer = get_importer(args.importer)
     text = _read_text(args.file)
-    payloads = importer.import_text(text, source=args.source, title=args.title)
+    schema = (
+        parse_schema_override(Path(args.schema).read_bytes())
+        if args.schema is not None
+        else None
+    )
+    payloads = importer.import_text_with_schema(
+        text, schema=schema, source=args.source, title=args.title
+    )
     if not payloads:
         raise ValueError(f"{args.importer} importer returned no conversations")
+    stamp_import_provenance(payloads, parser=args.importer, schema=schema)
 
     _configure_memory_runtime(args.config)
     results = [

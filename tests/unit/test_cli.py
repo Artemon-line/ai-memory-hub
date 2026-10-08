@@ -390,7 +390,11 @@ def test_manual_import_cli_ingests_unified_payload(capsys, monkeypatch, tmp_path
                 {"role": "user", "text": "Remember the blue deployment."},
                 {"role": "assistant", "text": "Noted."},
             ],
-            "metadata": {"importer": "manual"},
+                "metadata": {
+                    "importer": "manual",
+                    "import_parser": "manual",
+                    "import_schema_applied": False,
+                },
         }
     ]
 
@@ -418,6 +422,7 @@ def test_manual_import_cli_ingests_unified_payload(capsys, monkeypatch, tmp_path
             "gemini_cli_export_session_anonymized.json",
             1,
         ),
+        ("hermes-session-jsonl", "hermes_sessions_anonymized.jsonl", 2),
         ("opencode-session-json", "opencode_session_anonymized.json", 1),
         ("pi-session-jsonl", "pi_session_anonymized.jsonl", 1),
         (
@@ -457,6 +462,64 @@ def test_export_import_cli_ingests_anonymized_fixtures(
     assert body["imported"] == expected_count
     assert len(captured_payloads) == expected_count
     assert all(payload["metadata"]["importer"] == importer for payload in captured_payloads)
+
+
+def test_hermes_cli_schema_override_matches_importer_contract(
+    capsys, monkeypatch, tmp_path
+) -> None:
+    export_path = tmp_path / "custom-hermes.jsonl"
+    export_path.write_text(
+        json.dumps(
+            {
+                "session_key": "custom-session",
+                "turns": [
+                    {"speaker": "human", "body": "Remember the teal bridge."},
+                    {"speaker": "ai", "body": "Remembered."},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    schema_path = tmp_path / "schema.json"
+    schema_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "message_container": "turns",
+                "session_id_field": "session_key",
+                "role_field": "speaker",
+                "content_field": "body",
+                "role_map": {"human": "user", "ai": "assistant"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    captured_payloads = []
+    monkeypatch.setattr(cli, "_configure_memory_runtime", lambda config_path: None)
+    monkeypatch.setattr(
+        cli.mvp_ingestion,
+        "ingest_messages",
+        lambda payload: captured_payloads.append(payload)
+        or {"status": "ok", "id": "memory-1"},
+    )
+
+    exit_code = cli.main(
+        [
+            "import",
+            "hermes-session-jsonl",
+            str(export_path),
+            "--schema",
+            str(schema_path),
+            "--json",
+        ]
+    )
+
+    assert exit_code == 0, capsys.readouterr().out
+    payload = captured_payloads[0]
+    assert payload["messages"][0]["text"] == "Remember the teal bridge."
+    assert payload["metadata"]["import_schema_applied"] is True
+    assert payload["metadata"]["import_schema_version"] == 1
+    assert payload["metadata"]["import_schema_fingerprint"].startswith("sha256:")
 
 
 def test_manual_import_cli_stores_retrievable_conversation(capsys, tmp_path) -> None:

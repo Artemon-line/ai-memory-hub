@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-memory-hub/schema/hermes-session-import-override.schema.json",
+  "title": "Hermes Session Import Override",
+  "description": "Bounded top-level field aliases for compatible Hermes Agent JSONL exports.",
+  "type": "object",
+  "properties": {
+    "version": {"const": 1},
+    "message_container": {"$ref": "#/$defs/fieldName"},
+    "session_id_field": {"$ref": "#/$defs/fieldName"},
+    "source_field": {"$ref": "#/$defs/fieldName"},
+    "title_field": {"$ref": "#/$defs/fieldName"},
+    "model_field": {"$ref": "#/$defs/fieldName"},
+    "cwd_field": {"$ref": "#/$defs/fieldName"},
+    "git_repo_root_field": {"$ref": "#/$defs/fieldName"},
+    "git_branch_field": {"$ref": "#/$defs/fieldName"},
+    "parent_session_id_field": {"$ref": "#/$defs/fieldName"},
+    "role_field": {"$ref": "#/$defs/fieldName"},
+    "content_field": {"$ref": "#/$defs/fieldName"},
+    "role_map": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 16,
+      "propertyNames": {"pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"},
+      "additionalProperties": {"enum": ["user", "assistant"]}
+    },
+    "timestamp": {
+      "type": "object",
+      "properties": {
+        "field": {"$ref": "#/$defs/fieldName"},
+        "format": {"enum": ["iso8601", "unix_seconds", "unix_milliseconds"]}
+      },
+      "required": ["field", "format"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["version"],
+  "additionalProperties": false,
+  "$defs": {
+    "fieldName": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$"
+    }
+  }
+}

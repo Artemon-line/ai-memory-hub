@@ -12,6 +12,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
 
 from memory.api.connect_ui import connect_status, register_connect_routes
+from memory.api.import_service import (
+    ImportRequestError,
+    PreparedImport,
+    import_openapi_request_body,
+    prepare_import_request,
+)
 from memory.auth import (
     AUTH_ERROR_CODE_HEADER,
     AUTH_MISSING_SCOPES_HEADER,
@@ -444,44 +450,56 @@ def _register_api_routes(
             },
         )
 
+    def prepare_insert_payload(
+        conversation_payload: dict[str, Any],
+    ) -> tuple[dict[str, Any], str | None, InsertDisposition]:
+        _reject_raw_capture_artifacts(conversation_payload)
+        project_id = _pop_insert_project_id(conversation_payload)
+        metadata = conversation_payload.get("metadata")
+        if isinstance(metadata, dict):
+            value = metadata.get("project_id")
+            project_id = str(value) if value is not None else project_id
+        disposition = validate_insert_save_intent(
+            conversation_payload,
+            insert_policy=config.memory.insert_policy,
+        )
+        return conversation_payload, project_id, disposition
+
+    async def execute_insert(
+        prepared: tuple[dict[str, Any], str | None, InsertDisposition],
+        request: Request,
+    ) -> dict[str, Any]:
+        conversation_payload, project_id, disposition = prepared
+        if disposition == InsertDisposition.PENDING_REVIEW:
+            result = redact_content_hashes(
+                await agent.store_pending_review_memory(
+                    conversation_payload,
+                    owner_id=owner_id(request),
+                    project_id=project_id,
+                )
+            )
+        else:
+            result = redact_content_hashes(
+                await agent.ingest_messages(
+                    conversation_payload,
+                    owner_id=owner_id(request),
+                    project_id=project_id,
+                )
+            )
+        metrics.increment(
+            "memory_insert_total",
+            source=conversation_payload.get("source") or "unknown",
+            status=result.get("status") or "ok",
+            deduplicated=result.get("deduplicated", False),
+        )
+        return result
+
     async def memory_insert(
         conversation_json: InsertRequest, request: Request
     ) -> dict[str, Any]:
         try:
             conversation_payload = conversation_json.model_dump(exclude_none=True)
-            _reject_raw_capture_artifacts(conversation_payload)
-            project_id = _pop_insert_project_id(conversation_payload)
-            metadata = conversation_payload.get("metadata")
-            if isinstance(metadata, dict):
-                value = metadata.get("project_id")
-                project_id = str(value) if value is not None else project_id
-            disposition = validate_insert_save_intent(
-                conversation_payload,
-                insert_policy=config.memory.insert_policy,
-            )
-            if disposition == InsertDisposition.PENDING_REVIEW:
-                result = redact_content_hashes(
-                    await agent.store_pending_review_memory(
-                        conversation_payload,
-                        owner_id=owner_id(request),
-                        project_id=project_id,
-                    )
-                )
-            else:
-                result = redact_content_hashes(
-                    await agent.ingest_messages(
-                        conversation_payload,
-                        owner_id=owner_id(request),
-                        project_id=project_id,
-                    )
-                )
-            metrics.increment(
-                "memory_insert_total",
-                source=conversation_payload.get("source") or "unknown",
-                status=result.get("status") or "ok",
-                deduplicated=result.get("deduplicated", False),
-            )
-            return result
+            return await execute_insert(prepare_insert_payload(conversation_payload), request)
         except jsonschema.ValidationError as exc:
             raise HTTPException(status_code=400, detail=exc.message) from exc
         except SaveIntentError as exc:
@@ -500,6 +518,66 @@ def _register_api_routes(
             raise provider_failure("insert", "insert_failed", exc) from exc
 
     app.post("/memory/insert")(memory_insert)
+
+    async def memory_import(request: Request) -> dict[str, Any]:
+        try:
+            imported = await prepare_import_request(request)
+            prepared_payloads = [
+                prepare_insert_payload(payload) for payload in imported.payloads
+            ]
+            for payload, project_id, _disposition in prepared_payloads:
+                await agent.validate_messages(
+                    payload,
+                    owner_id=owner_id(request),
+                    project_id=project_id,
+                )
+            results: list[dict[str, Any]] = []
+            for index, prepared in enumerate(prepared_payloads):
+                try:
+                    result = await execute_insert(prepared, request)
+                except Exception as exc:
+                    if not results:
+                        raise
+                    results.append(
+                        _record_partial_import_failure(imported.parser, index, exc)
+                    )
+                    return _import_response(imported, results, status="partial")
+                results.append(_import_receipt(index, result))
+            return _import_response(imported, results, status="ok")
+        except ImportRequestError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+        except jsonschema.ValidationError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail="imported conversation failed canonical validation",
+            ) from exc
+        except SaveIntentError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error_code": exc.error_code,
+                    "error_message": str(exc),
+                },
+            ) from exc
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail="imported conversation failed validation",
+            ) from exc
+        except Exception as exc:
+            raise provider_failure("import", "import_failed", exc) from exc
+
+    app.post(
+        "/memory/import",
+        summary="Import an external conversation export",
+        description=(
+            "Upload UTF-8 export bytes and explicitly select a registered parser. "
+            "Filenames and media types are never used to infer the parser."
+        ),
+        openapi_extra=import_openapi_request_body(),
+    )(memory_import)
 
     async def memory_search(payload: SearchRequest, request: Request) -> dict[str, Any]:
         try:
@@ -730,6 +808,62 @@ def _pop_insert_project_id(conversation_json: dict[str, Any]) -> str | None:
         conversation_json["metadata"] = metadata
     metadata["project_id"] = str(value)
     return str(value)
+
+
+def _import_receipt(index: int, result: dict[str, Any]) -> dict[str, Any]:
+    status = str(result.get("status") or "ok")
+    if status == "ok":
+        status = "inserted"
+    return {
+        "index": index,
+        "id": result.get("id"),
+        "status": status,
+        "deduplicated": bool(result.get("deduplicated", False)),
+    }
+
+
+def _import_error_receipt(index: int, exc: Exception) -> dict[str, Any]:
+    if isinstance(exc, PermissionError):
+        error_code = "permission_denied"
+    elif isinstance(exc, (ValueError, jsonschema.ValidationError, SaveIntentError)):
+        error_code = "validation_failed"
+    else:
+        error_code = "insert_failed"
+    return {"index": index, "status": "error", "error_code": error_code}
+
+
+def _record_partial_import_failure(
+    parser: str, index: int, exc: Exception
+) -> dict[str, Any]:
+    logger.exception(
+        "multipart import stopped after an insertion failure",
+        extra={
+            "event": "memory_import_partial_failure",
+            "parser": parser,
+            "failed_index": index,
+        },
+    )
+    return _import_error_receipt(index, exc)
+
+
+def _import_response(
+    imported: PreparedImport,
+    results: list[dict[str, Any]],
+    *,
+    status: str,
+) -> dict[str, Any]:
+    response: dict[str, Any] = {
+        "status": status,
+        "parser": imported.parser,
+        "schema_applied": imported.schema_applied,
+        "conversation_count": len(imported.payloads),
+        "results": results,
+    }
+    if imported.schema_version is not None:
+        response["schema_version"] = imported.schema_version
+    if imported.schema_fingerprint is not None:
+        response["schema_fingerprint"] = imported.schema_fingerprint
+    return response
 
 
 def _reject_raw_capture_artifacts(payload: dict[str, Any]) -> None:
