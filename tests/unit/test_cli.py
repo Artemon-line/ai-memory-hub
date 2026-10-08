@@ -411,6 +411,7 @@ def test_manual_import_cli_ingests_unified_payload(capsys, monkeypatch, tmp_path
             "deepseek_harness_session_v4_anonymized.jsonl",
             1,
         ),
+        ("droid-exec-json", "droid_exec_one_shot_anonymized.json", 1),
         ("deepseek-share-json", "deepseek_share_anonymized.json", 1),
         (
             "gemini-cli-session-json",

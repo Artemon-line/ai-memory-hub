@@ -1,0 +1,190 @@
+{
+  "format": "ai-memory-hub.droid-exec-capture",
+  "version": 1,
+  "kind": "stream-jsonrpc",
+  "frames": [
+    {
+      "direction": "client-to-droid",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": "init-1",
+        "method": "droid.initialize_session",
+        "params": {
+          "machineId": "machine-synthetic",
+          "cwd": "/workspace/garden-sensor",
+          "modelId": "droid-stream-model"
+        }
+      }
+    },
+    {
+      "direction": "droid-to-client",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": "init-1",
+        "result": {
+          "sessionId": "droid-stream-session-synthetic",
+          "settings": {"modelId": "droid-stream-model"}
+        }
+      }
+    },
+    {
+      "direction": "client-to-droid",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": "turn-1",
+        "method": "droid.add_user_message",
+        "params": {"messageId": "user-1", "text": "Check the sensor parser."}
+      }
+    },
+    {
+      "direction": "droid-to-client",
+      "message": {
+        "jsonrpc": "2.0",
+        "method": "droid.session_notification",
+        "params": {
+          "notification": {
+            "type": "thinking_text_delta",
+            "messageId": "assistant-1",
+            "blockIndex": 0,
+            "textDelta": "Private reasoning must not be imported."
+          }
+        }
+      }
+    },
+    {
+      "direction": "droid-to-client",
+      "message": {
+        "jsonrpc": "2.0",
+        "method": "droid.session_notification",
+        "params": {
+          "notification": {
+            "type": "error",
+            "message": "Private error detail must not be imported.",
+            "errorType": "Error"
+          }
+        }
+      }
+    },
+    {
+      "direction": "droid-to-client",
+      "message": {
+        "jsonrpc": "2.0",
+        "method": "droid.session_notification",
+        "params": {
+          "notification": {
+            "type": "assistant_text_delta",
+            "messageId": "assistant-1",
+            "blockIndex": 0,
+            "textDelta": "The parser "
+          }
+        }
+      }
+    },
+    {
+      "direction": "droid-to-client",
+      "message": {
+        "jsonrpc": "2.0",
+        "method": "droid.session_notification",
+        "params": {
+          "notification": {
+            "type": "tool_result",
+            "toolUseId": "tool-synthetic",
+            "content": "Private tool output must not be imported.",
+            "isError": false
+          }
+        }
+      }
+    },
+    {
+      "direction": "droid-to-client",
+      "message": {
+        "jsonrpc": "2.0",
+        "method": "droid.session_notification",
+        "params": {
+          "notification": {
+            "type": "assistant_text_delta",
+            "messageId": "assistant-1",
+            "blockIndex": 0,
+            "textDelta": "accepts the fixture."
+          }
+        }
+      }
+    },
+    {
+      "direction": "droid-to-client",
+      "message": {
+        "jsonrpc": "2.0",
+        "method": "droid.session_notification",
+        "params": {
+          "notification": {
+            "type": "assistant_text_delta",
+            "messageId": "assistant-1",
+            "blockIndex": 1,
+            "textDelta": "No private fields are retained."
+          }
+        }
+      }
+    },
+    {
+      "direction": "droid-to-client",
+      "message": {
+        "jsonrpc": "2.0",
+        "method": "droid.session_notification",
+        "params": {"notification": {"type": "future_unknown_event", "secret": "private"}}
+      }
+    },
+    {
+      "direction": "droid-to-client",
+      "message": {
+        "jsonrpc": "2.0",
+        "method": "droid.session_notification",
+        "params": {
+          "notification": {
+            "type": "agent_turn_completed",
+            "reason": "completed",
+            "turnId": "turn-1"
+          }
+        }
+      }
+    },
+    {
+      "direction": "client-to-droid",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": "turn-2",
+        "method": "droid.add_user_message",
+        "params": {"text": "What should run next?"}
+      }
+    },
+    {
+      "direction": "droid-to-client",
+      "message": {
+        "jsonrpc": "2.0",
+        "method": "droid.session_notification",
+        "params": {
+          "notification": {
+            "type": "assistant_text_delta",
+            "messageId": "assistant-2",
+            "blockIndex": 0,
+            "textDelta": "Run the focused importer tests."
+          }
+        }
+      }
+    },
+    {
+      "direction": "droid-to-client",
+      "message": {
+        "jsonrpc": "2.0",
+        "method": "droid.session_notification",
+        "params": {
+          "notification": {
+            "type": "agent_turn_completed",
+            "reason": "completed",
+            "turnId": "turn-2"
+          }
+        }
+      }
+    }
+  ],
+  "metadata": {"title": "Droid stream capture", "timestamp": "2026-10-02T09:20:00Z"}
+}

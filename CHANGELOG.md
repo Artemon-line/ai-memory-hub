@@ -6,6 +6,9 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Added a versioned Factory Droid Exec capture importer for prompt/result and
+  bidirectional JSON-RPC recordings, preserving completed visible turns while
+  excluding reasoning, tools, errors, usage, and control frames.
 - Added a schema-backed DeepSeek Harness canonical session JSONL importer for
   extracted root and descendant logs, preserving safe session provenance while
   excluding internal context, reasoning, tools, compaction, usage, and

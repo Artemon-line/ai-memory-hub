@@ -9,6 +9,7 @@ from memory.importers.deepseek_harness_session_jsonl import (
     DeepSeekHarnessSessionJsonlImporter,
 )
 from memory.importers.deepseek_share_json import DeepSeekShareJsonImporter
+from memory.importers.droid_exec_json import DroidExecJsonImporter
 from memory.importers.gemini_cli_session_json import GeminiCliSessionJsonImporter
 from memory.importers.manual_paste import ManualPasteImporter
 from memory.importers.opencode_session_json import OpenCodeSessionJsonImporter
@@ -22,6 +23,7 @@ _IMPORTERS: dict[str, ConversationImporter] = {
     CopilotCliEventsJsonlImporter.name: CopilotCliEventsJsonlImporter(),
     DeepSeekHarnessSessionJsonlImporter.name: DeepSeekHarnessSessionJsonlImporter(),
     DeepSeekShareJsonImporter.name: DeepSeekShareJsonImporter(),
+    DroidExecJsonImporter.name: DroidExecJsonImporter(),
     GeminiCliSessionJsonImporter.name: GeminiCliSessionJsonImporter(),
     ManualPasteImporter.name: ManualPasteImporter(),
     OpenCodeSessionJsonImporter.name: OpenCodeSessionJsonImporter(),
