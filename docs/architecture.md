@@ -17,7 +17,8 @@ Related docs:
 
 Implemented and verified in the codebase:
 
-- Schema-first ingestion through HTTP `POST /memory/insert` and MCP `memory_insert`.
+- Schema-first ingestion through HTTP `POST /memory/insert`, registered-parser
+  uploads through `POST /memory/import`, and MCP `memory_insert`.
 - MCP validation/search/retrieve/ask tools, fact/profile/review/project helper
   tools, plus conversation, search, timeline, health resources and prompts.
 - MCP client smoke profiles for Codex, Gemini, VS Code Copilot, and opencode over the streamable HTTP transport.
@@ -133,6 +134,7 @@ Implemented storage safety:
 HTTP API:
 
 - `POST /memory/insert`
+- `POST /memory/import`
 - `POST /memory/search`
 - `POST /memory/retrieve`
 - `POST /memory/ask`

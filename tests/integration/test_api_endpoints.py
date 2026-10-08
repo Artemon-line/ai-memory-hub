@@ -6,7 +6,10 @@ import hmac
 import json
 import logging
 import time
+from pathlib import Path
 
+import jsonschema
+import pytest
 from fastapi.testclient import TestClient
 
 from memory.api.server import create_app
@@ -25,6 +28,8 @@ from memory.config import ensure_token_hash_secret, parse_config
 from memory.ingestion import mvp_ingestion
 from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
 from memory.observability.metrics import metrics
+
+_IMPORT_FIXTURES = Path(__file__).parents[1] / "fixtures" / "importers"
 
 
 class StubEmbedder(mvp_ingestion.EmbeddingProvider):
@@ -126,6 +131,22 @@ def _client() -> TestClient:
         ingestion_agent=agent,
     )
     return TestClient(app)
+
+
+def _import_client(
+    *, insert_policy: str = "permissive"
+) -> tuple[TestClient, StubMetadataStore, MVPIngestionAgent]:
+    runtime = _runtime()
+    store = runtime.metadata_store
+    config = {
+        "memory": {"insert_policy": insert_policy},
+        "providers": {"embeddings": "local", "vector_db": "in_memory"},
+    }
+    agent = MVPIngestionAgent(
+        config={**config, "interfaces": {"api": "true"}}, runtime=runtime
+    )
+    app = create_app(config=config, ingestion_agent=agent)
+    return TestClient(app), store, agent
 
 
 def _auth_client() -> tuple[TestClient, StubMetadataStore]:
@@ -499,6 +520,473 @@ def test_bearer_auth_rejects_missing_and_invalid_tokens() -> None:
     assert invalid.status_code == 401
     assert mcp_missing.status_code == 401
     assert missing.headers["www-authenticate"].startswith("Bearer")
+
+
+def test_multipart_import_preserves_hermes_session_boundaries_and_safe_receipts() -> None:
+    client, store, _ = _import_client()
+    export = (_IMPORT_FIXTURES / "hermes_sessions_anonymized.jsonl").read_bytes()
+
+    response = client.post(
+        "/memory/import",
+        data={"parser": "hermes-session-jsonl"},
+        files={"file": ("ignored/server/path.jsonl", export, "application/x-ndjson")},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["parser"] == "hermes-session-jsonl"
+    assert body["schema_applied"] is False
+    assert body["conversation_count"] == 2
+    assert [result["index"] for result in body["results"]] == [0, 1]
+    assert all(result["status"] == "inserted" for result in body["results"])
+    serialized = json.dumps(body)
+    assert "garden login" not in serialized
+    assert "fictional gate" not in serialized
+    assert len(store.rows) == 2
+    assert {
+        row["metadata"]["source_session_id"] for row in store.rows.values()
+    } == {"hermes-session-synthetic", "hermes-session-telegram-synthetic"}
+
+
+def test_multipart_import_schema_override_matches_cli_contract() -> None:
+    client, store, _ = _import_client()
+    export = json.dumps(
+        {
+            "session_key": "api-custom-session",
+            "created_at": 1791450000000,
+            "turns": [
+                {"speaker": "human", "body": "Remember the violet lighthouse."},
+                {"speaker": "ai", "body": "I will remember it."},
+            ],
+        }
+    ).encode()
+    schema = {
+        "version": 1,
+        "message_container": "turns",
+        "session_id_field": "session_key",
+        "role_field": "speaker",
+        "content_field": "body",
+        "role_map": {"human": "user", "ai": "assistant"},
+        "timestamp": {"field": "created_at", "format": "unix_milliseconds"},
+    }
+
+    response = client.post(
+        "/memory/import",
+        data={
+            "parser": "hermes-session-jsonl",
+            "source": "reviewed-hermes",
+            "title": "Reviewed custom session",
+        },
+        files={
+            "file": ("custom.jsonl", export, "application/x-ndjson"),
+            "schema": (
+                "schema.json",
+                json.dumps(schema).encode(),
+                "application/json",
+            ),
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["schema_applied"] is True
+    assert body["schema_version"] == 1
+    assert body["schema_fingerprint"].startswith("sha256:")
+    assert "turns" not in json.dumps(body)
+    stored = next(iter(store.rows.values()))
+    assert stored["source"] == "reviewed-hermes"
+    assert stored["title"] == "Reviewed custom session"
+    assert stored["metadata"]["source_session_id"] == "api-custom-session"
+    assert stored["metadata"]["import_schema_applied"] is True
+    assert stored["metadata"]["import_schema_fingerprint"] == body["schema_fingerprint"]
+    assert stored["messages"][0]["text"] == "Remember the violet lighthouse."
+
+
+@pytest.mark.parametrize(
+    ("parser", "fixture_name", "media_type"),
+    [
+        ("claude-code-session-jsonl", "claude_code_session_anonymized.jsonl", "application/x-ndjson"),
+        ("codex-rollout-jsonl", "codex_rollout_anonymized.jsonl", "application/x-ndjson"),
+        ("copilot-activity-csv", "copilot_activity_anonymized.csv", "text/csv"),
+        ("copilot-cli-events-jsonl", "copilot_cli_events_v1_anonymized.jsonl", "application/x-ndjson"),
+        ("deepseek-harness-session-jsonl", "deepseek_harness_session_v4_anonymized.jsonl", "application/x-ndjson"),
+        ("deepseek-share-json", "deepseek_share_anonymized.json", "application/json"),
+        ("droid-exec-json", "droid_exec_one_shot_anonymized.json", "application/json"),
+        ("gemini-cli-session-json", "gemini_cli_export_session_anonymized.json", "application/json"),
+        ("hermes-session-jsonl", "hermes_sessions_anonymized.jsonl", "application/x-ndjson"),
+        ("opencode-session-json", "opencode_session_anonymized.json", "application/json"),
+        ("pi-session-jsonl", "pi_session_anonymized.jsonl", "application/x-ndjson"),
+        ("qwen-code-session-export", "qwen_code_session_anonymized.json", "application/json"),
+    ],
+)
+def test_multipart_import_supports_registered_export_parsers(
+    parser: str, fixture_name: str, media_type: str
+) -> None:
+    client, _, _ = _import_client()
+
+    response = client.post(
+        "/memory/import",
+        data={"parser": parser},
+        files={"file": (fixture_name, (_IMPORT_FIXTURES / fixture_name).read_bytes(), media_type)},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["parser"] == parser
+
+
+def test_multipart_import_supports_manual_plain_text() -> None:
+    client, _, _ = _import_client()
+    response = client.post(
+        "/memory/import",
+        data={"parser": "manual"},
+        files={
+            "file": (
+                "transcript.txt",
+                b"User: Remember the copper moon.\nAssistant: Remembered.",
+                "text/plain",
+            )
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["conversation_count"] == 1
+
+
+def test_multipart_import_requires_write_scope_for_bearer_and_oauth() -> None:
+    bearer, _ = _auth_client()
+    missing = bearer.post(
+        "/memory/import",
+        data={"parser": "manual"},
+        files={"file": ("chat.txt", b"User: hi", "text/plain")},
+    )
+    accepted = bearer.post(
+        "/memory/import",
+        data={"parser": "manual"},
+        files={"file": ("chat.txt", b"User: hi", "text/plain")},
+        headers={"Authorization": "Bearer token-a"},
+    )
+    oauth = _oauth_client()
+    read_only = oauth.post(
+        "/memory/import",
+        data={"parser": "manual"},
+        files={"file": ("chat.txt", b"User: hi", "text/plain")},
+        headers={"Authorization": f"Bearer {_oauth_token(scope='memory:read')}"},
+    )
+
+    assert missing.status_code == 401
+    assert accepted.status_code == 200, accepted.text
+    assert read_only.status_code == 403
+    assert read_only.headers[AUTH_REQUIRED_SCOPES_HEADER] == "memory:write"
+
+
+@pytest.mark.parametrize(
+    ("data", "files", "status", "message"),
+    [
+        (
+            {"parser": "manual"},
+            {"schema": ("schema.json", b'{"version":1}', "application/json")},
+            400,
+            "file must be supplied",
+        ),
+        ({}, {"file": ("chat.txt", b"User: hi", "text/plain")}, 400, "parser is required"),
+        ({"parser": "unknown"}, {"file": ("chat.txt", b"User: hi", "text/plain")}, 400, "unknown importer"),
+        ({"parser": "manual"}, {"file": ("chat.txt", b"", "text/plain")}, 400, "must not be empty"),
+        ({"parser": "manual"}, {"file": ("chat.png", b"pixels", "image/png")}, 415, "unsupported file media type"),
+        ({"parser": "manual"}, {"file": ("chat.txt", b"\xff\xfe", "text/plain")}, 400, "valid UTF-8"),
+    ],
+)
+def test_multipart_import_rejects_invalid_fields_and_files(
+    data: dict[str, str], files: dict[str, tuple[str, bytes, str]], status: int, message: str
+) -> None:
+    client, _, _ = _import_client()
+
+    response = client.post("/memory/import", data=data, files=files)
+
+    assert response.status_code == status
+    assert message in response.text
+
+
+def test_multipart_import_rejects_duplicate_and_unknown_form_fields() -> None:
+    client, _, _ = _import_client()
+    duplicate = client.post(
+        "/memory/import",
+        files=[
+            ("parser", (None, "manual")),
+            ("parser", (None, "manual")),
+            ("file", ("chat.txt", b"User: hi", "text/plain")),
+        ],
+    )
+    unknown = client.post(
+        "/memory/import",
+        data={"parser": "manual", "path": "/server/secret"},
+        files={"file": ("chat.txt", b"User: hi", "text/plain")},
+    )
+
+    assert duplicate.status_code == 400
+    assert "duplicate multipart field: parser" in duplicate.text
+    assert unknown.status_code == 400
+    assert "unknown multipart field: path" in unknown.text
+
+
+def test_multipart_import_rejects_malformed_body_and_non_multipart_content() -> None:
+    client, _, _ = _import_client()
+    malformed = client.post(
+        "/memory/import",
+        content=b"not-a-valid-boundary",
+        headers={"Content-Type": "multipart/form-data; boundary=broken"},
+    )
+    wrong_type = client.post(
+        "/memory/import", content=b"{}", headers={"Content-Type": "application/json"}
+    )
+
+    assert malformed.status_code == 400
+    assert wrong_type.status_code == 415
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [
+        b"not-json",
+        b'{"version":2}',
+        b'{"version":1,"unknown_secret_field":true}',
+        b'{"version":1,"url":"https://private.example.com/schema"}',
+    ],
+)
+def test_multipart_import_rejects_invalid_schema(schema: bytes) -> None:
+    client, _, _ = _import_client()
+    response = client.post(
+        "/memory/import",
+        data={"parser": "hermes-session-jsonl"},
+        files={
+            "file": (
+                "session.jsonl",
+                b'{"id":"session","messages":[{"role":"user","content":"hi"}]}',
+                "application/x-ndjson",
+            ),
+            "schema": ("schema.json", schema, "application/json"),
+        },
+    )
+
+    assert response.status_code == 400
+    assert "schema" in response.text
+    assert "unknown_secret_field" not in response.text
+    assert "private.example.com" not in response.text
+
+
+def test_multipart_import_rejects_schema_for_unsupported_parser() -> None:
+    client, _, _ = _import_client()
+    response = client.post(
+        "/memory/import",
+        data={"parser": "manual", "schema": '{"version":1}'},
+        files={"file": ("chat.txt", b"User: hi", "text/plain")},
+    )
+
+    assert response.status_code == 400
+    assert "manual does not support schema overrides" in response.text
+
+
+def test_multipart_import_enforces_schema_and_request_size_limits() -> None:
+    client, _, _ = _import_client()
+    oversized_schema = b'{"version":1,"role_field":"' + (b"x" * 65_536) + b'"}'
+    schema_response = client.post(
+        "/memory/import",
+        data={"parser": "hermes-session-jsonl"},
+        files={
+            "file": (
+                "session.jsonl",
+                b'{"id":"session","messages":[{"role":"user","content":"hi"}]}',
+                "application/x-ndjson",
+            ),
+            "schema": ("schema.json", oversized_schema, "application/json"),
+        },
+    )
+    request_response = client.post(
+        "/memory/import",
+        content=b"tiny",
+        headers={
+            "Content-Type": "multipart/form-data; boundary=x",
+            "Content-Length": "20250001",
+        },
+    )
+
+    assert schema_response.status_code == 413
+    assert "schema exceeds" in schema_response.text
+    assert request_response.status_code == 413
+    assert "request exceeds" in request_response.text
+
+
+def test_multipart_import_enforces_file_part_limit(monkeypatch) -> None:
+    from memory.api import import_service
+
+    monkeypatch.setattr(import_service, "MAX_IMPORT_FILE_BYTES", 10)
+    client, _, _ = _import_client()
+    response = client.post(
+        "/memory/import",
+        data={"parser": "manual"},
+        files={"file": ("chat.txt", b"User: more than ten bytes", "text/plain")},
+    )
+
+    assert response.status_code == 413
+    assert "file exceeds 10 bytes" in response.text
+
+
+def test_multipart_import_preserves_owner_isolation(tmp_path) -> None:
+    client, _ = _sqlite_auth_client(tmp_path)
+    imported = client.post(
+        "/memory/import",
+        data={"parser": "manual"},
+        files={
+            "file": (
+                "chat.txt",
+                b"User: Remember the private bronze garden.\nAssistant: Remembered.",
+                "text/plain",
+            )
+        },
+        headers={"Authorization": "Bearer token-a"},
+    )
+    memory_id = imported.json()["results"][0]["id"]
+    owner_a = client.post(
+        "/memory/retrieve",
+        json={"id": memory_id},
+        headers={"Authorization": "Bearer token-a"},
+    )
+    owner_b = client.post(
+        "/memory/retrieve",
+        json={"id": memory_id},
+        headers={"Authorization": "Bearer token-b"},
+    )
+
+    assert imported.status_code == 200, imported.text
+    assert owner_a.status_code == 200
+    assert owner_b.status_code == 404
+
+
+def test_multipart_import_parses_all_sessions_before_inserting(monkeypatch) -> None:
+    client, _, agent = _import_client()
+    calls = 0
+
+    async def fake_ingest(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return {"status": "ok", "id": "unexpected"}
+
+    monkeypatch.setattr(agent, "ingest_messages", fake_ingest)
+    response = client.post(
+        "/memory/import",
+        data={"parser": "hermes-session-jsonl"},
+        files={
+            "file": (
+                "sessions.jsonl",
+                b'{"id":"valid","messages":[{"role":"user","content":"hi"}]}\n{bad}',
+                "application/x-ndjson",
+            )
+        },
+    )
+
+    assert response.status_code == 400
+    assert calls == 0
+
+
+def test_multipart_import_validates_all_sessions_before_inserting(monkeypatch) -> None:
+    client, _, agent = _import_client()
+    validations = 0
+    insertions = 0
+
+    async def fake_validate(*args, **kwargs):
+        nonlocal validations
+        validations += 1
+        if validations == 2:
+            raise jsonschema.ValidationError("private invalid payload detail")
+
+    async def fake_ingest(*args, **kwargs):
+        nonlocal insertions
+        insertions += 1
+        return {"status": "ok", "id": "unexpected"}
+
+    monkeypatch.setattr(agent, "validate_messages", fake_validate)
+    monkeypatch.setattr(agent, "ingest_messages", fake_ingest)
+    export = (_IMPORT_FIXTURES / "hermes_sessions_anonymized.jsonl").read_bytes()
+    response = client.post(
+        "/memory/import",
+        data={"parser": "hermes-session-jsonl"},
+        files={"file": ("sessions.jsonl", export, "application/x-ndjson")},
+    )
+
+    assert response.status_code == 400
+    assert validations == 2
+    assert insertions == 0
+    assert "private invalid payload detail" not in response.text
+
+
+def test_multipart_import_returns_indexed_receipt_after_partial_storage_failure(
+    monkeypatch,
+) -> None:
+    client, _, agent = _import_client()
+    calls = 0
+
+    async def fake_ingest(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise RuntimeError("private provider failure detail")
+        return {"status": "ok", "id": "first-memory", "deduplicated": False}
+
+    monkeypatch.setattr(agent, "ingest_messages", fake_ingest)
+    export = (_IMPORT_FIXTURES / "hermes_sessions_anonymized.jsonl").read_bytes()
+    response = client.post(
+        "/memory/import",
+        data={"parser": "hermes-session-jsonl"},
+        files={"file": ("sessions.jsonl", export, "application/x-ndjson")},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "partial"
+    assert body["results"] == [
+        {
+            "index": 0,
+            "id": "first-memory",
+            "status": "inserted",
+            "deduplicated": False,
+        },
+        {"index": 1, "status": "error", "error_code": "insert_failed"},
+    ]
+    assert "private provider failure detail" not in response.text
+
+
+def test_multipart_import_preserves_save_intent_policies() -> None:
+    strict, strict_store, _ = _import_client(insert_policy="require_save_intent")
+    pending, pending_store, _ = _import_client(insert_policy="review_pending")
+    request = {
+        "data": {"parser": "manual"},
+        "files": {"file": ("chat.txt", b"User: remember the amber arch", "text/plain")},
+    }
+
+    strict_response = strict.post("/memory/import", **request)
+    pending_response = pending.post("/memory/import", **request)
+
+    assert strict_response.status_code == 400
+    assert "save_intent_required" in strict_response.text
+    assert strict_store.rows == {}
+    assert pending_response.status_code == 200, pending_response.text
+    assert pending_response.json()["results"][0]["status"] == "pending_review"
+    assert len(pending_store.rows) == 1
+
+
+def test_multipart_import_is_documented_in_openapi() -> None:
+    schema = _client().get("/openapi.json").json()
+    operation = schema["paths"]["/memory/import"]["post"]
+    request_body = operation["requestBody"]["content"]["multipart/form-data"]["schema"]
+
+    assert set(request_body["required"]) == {"file", "parser"}
+    assert set(request_body["properties"]) == {
+        "file",
+        "parser",
+        "schema",
+        "source",
+        "title",
+    }
 
 
 def test_oauth_protected_resource_metadata_is_public_and_secret_free() -> None:

@@ -67,6 +67,7 @@ normalized web chat payloads to the existing insert API; see the
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `POST` | `/memory/insert` | Validate and store a conversation |
+| `POST` | `/memory/import` | Parse and store an uploaded external conversation export |
 | `POST` | `/memory/search` | Return ranked semantic matches |
 | `POST` | `/memory/retrieve` | Retrieve a stored conversation by ID |
 | `POST` | `/memory/ask` | Build an answer from retrieved memory or facts |
@@ -601,6 +602,82 @@ tool calls and results, reasoning, timings, billing and token data, user/chat
 identifiers, and unknown fields are not copied into canonical memory. Hermes
 Markdown exports are presentation formats; use the documented JSONL backup for
 structured import.
+
+### Multipart HTTP imports
+
+Authenticated API clients can use the same registered parsers as the CLI with
+`POST /memory/import`. The request must be `multipart/form-data` with an
+explicit `parser` text field and one uploaded `file` part. The server never
+guesses a parser from the filename or media type, and the uploaded filename is
+metadata only: it is never opened as a server path or treated as a URL.
+
+JSON, JSONL, CSV, and speaker-labelled plain-text examples:
+
+```bash
+curl -fsS -X POST http://127.0.0.1:8000/memory/import \
+  -H "Authorization: Bearer $MEMORY_API_TOKEN" \
+  -F "parser=opencode-session-json" \
+  -F "file=@opencode-session.json;type=application/json"
+
+curl -fsS -X POST http://127.0.0.1:8000/memory/import \
+  -H "Authorization: Bearer $MEMORY_API_TOKEN" \
+  -F "parser=hermes-session-jsonl" \
+  -F "file=@hermes-backup.jsonl;type=application/x-ndjson"
+
+curl -fsS -X POST http://127.0.0.1:8000/memory/import \
+  -H "Authorization: Bearer $MEMORY_API_TOKEN" \
+  -F "parser=copilot-activity-csv" \
+  -F "file=@copilot-activity.csv;type=text/csv"
+
+curl -fsS -X POST http://127.0.0.1:8000/memory/import \
+  -H "Authorization: Bearer $MEMORY_API_TOKEN" \
+  -F "parser=manual" \
+  -F "file=@transcript.txt;type=text/plain"
+```
+
+Optional `source` and `title` text fields have the same meaning as their CLI
+options. An optional `schema` JSON part is accepted only when the selected
+parser publishes a bounded override contract. Hermes currently supports
+version 1 top-level field aliases, role aliases, and explicit ISO 8601, Unix
+seconds, or Unix milliseconds timestamps:
+
+```json
+{
+  "version": 1,
+  "message_container": "turns",
+  "session_id_field": "session_key",
+  "role_field": "speaker",
+  "content_field": "body",
+  "role_map": {
+    "human": "user",
+    "ai": "assistant"
+  },
+  "timestamp": {
+    "field": "created_at",
+    "format": "iso8601"
+  }
+}
+```
+
+```bash
+curl -fsS -X POST http://127.0.0.1:8000/memory/import \
+  -H "Authorization: Bearer $MEMORY_API_TOKEN" \
+  -F "parser=hermes-session-jsonl" \
+  -F "file=@custom-hermes.jsonl;type=application/x-ndjson" \
+  -F "schema=@hermes-parser-schema.json;type=application/json"
+
+python -m memory.cli import hermes-session-jsonl custom-hermes.jsonl \
+  --schema hermes-parser-schema.json --json
+```
+
+Overrides cannot contain remote or filesystem references, code, templates,
+queries, or regular expressions, and cannot alter authentication, canonical
+validation, save-intent policy, sensitive-content handling, hashing, storage,
+or project ownership. The endpoint requires `memory:write`, accepts UTF-8 input
+only, limits files to 20,000,000 bytes, limits override schemas to 65,536 bytes,
+and returns bounded per-conversation IDs and statuses without echoing source
+text or schema contents. All sessions are parsed before insertion begins; if a
+later independent insertion fails, its index receives a redacted error receipt.
 
 Shared options include `--config <path>`, `--json`, `--quiet`, and `--verbose`.
 `search` also supports `--source`, `--date-from`, `--date-to`, repeated `--tags`,

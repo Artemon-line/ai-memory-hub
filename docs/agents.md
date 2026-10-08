@@ -54,7 +54,7 @@ Implemented:
   `memory://search/{query}`, `memory://timeline/{day}`, `memory://health`.
 - MCP prompts: `save_conversation`, `search_memory`, `ask_memory`,
   `summarize_conversation`, `create_handoff`, and `resume_handoff`.
-- HTTP memory endpoints: `POST /memory/insert`, `POST /memory/search`,
+- HTTP memory endpoints: `POST /memory/insert`, `POST /memory/import`, `POST /memory/search`,
   `POST /memory/retrieve`, `POST /memory/ask`, `POST /memory/facts/search`,
   `POST /memory/profile/get`, `POST /memory/facts/supersede`,
   `POST /memory/pending/approve`, `POST /memory/pending/reject`,
@@ -302,6 +302,7 @@ Prompts provide client guidance:
 Use HTTP when MCP is not available:
 
 - `POST /memory/insert`
+- `POST /memory/import` (explicit registered parser plus uploaded bytes; requires `memory:write`)
 - `POST /memory/search`
 - `POST /memory/retrieve`
 - `POST /memory/ask`

@@ -10,18 +10,29 @@ import jsonschema  # pyright: ignore[reportMissingModuleSource]
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from memory.importers.base import ConversationImporter
+from memory.importers.schema_override import validate_schema_override
 
 _MAX_INPUT_BYTES = 20_000_000
 _SCHEMA_PATH = (
     Path(__file__).resolve().parents[1] / "schema" / "hermes-session-export.schema.json"
 )
+_OVERRIDE_SCHEMA_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "schema"
+    / "hermes-session-import-override.schema.json"
+)
 _ROLES = {"user", "assistant"}
 
 
-def _load_record_validators() -> tuple[Any, Any, Any]:
-    with _SCHEMA_PATH.open("r", encoding="utf-8") as schema_handle:
+def _load_schema(path: Path) -> dict[str, Any]:
+    with path.open("r", encoding="utf-8") as schema_handle:
         schema = json.load(schema_handle)
     jsonschema.Draft202012Validator.check_schema(schema)
+    return schema
+
+
+def _load_record_validators() -> tuple[Any, Any, Any]:
+    schema = _load_schema(_SCHEMA_PATH)
     definitions = schema["$defs"]
     return tuple(
         jsonschema.Draft202012Validator(definitions[name])
@@ -32,6 +43,7 @@ def _load_record_validators() -> tuple[Any, Any, Any]:
 _SESSION_VALIDATOR, _MESSAGE_CANDIDATE_VALIDATOR, _MESSAGE_VALIDATOR = (
     _load_record_validators()
 )
+_OVERRIDE_SCHEMA = _load_schema(_OVERRIDE_SCHEMA_PATH)
 
 
 class _HermesSession(BaseModel):
@@ -53,6 +65,7 @@ class HermesSessionJsonlImporter(ConversationImporter):
     """Parse one or more native Hermes Agent JSONL session exports."""
 
     name = "hermes-session-jsonl"
+    schema_override_schema = _OVERRIDE_SCHEMA
 
     def import_text(
         self,
@@ -66,7 +79,38 @@ class HermesSessionJsonlImporter(ConversationImporter):
         if len(text.encode("utf-8")) > _MAX_INPUT_BYTES:
             raise ValueError("Hermes session input exceeds 20000000 bytes")
 
-        records = _parse_records(text)
+        return self._import_records(
+            _parse_records(text), source=source, title=title
+        )
+
+    def import_text_with_schema(
+        self,
+        text: str,
+        *,
+        schema: dict[str, Any] | None = None,
+        source: str | None = None,
+        title: str | None = None,
+    ) -> list[dict[str, Any]]:
+        if schema is None:
+            return self.import_text(text, source=source, title=title)
+        if not isinstance(text, str):
+            raise ValueError("Hermes session input must be text")
+        if len(text.encode("utf-8")) > _MAX_INPUT_BYTES:
+            raise ValueError("Hermes session input exceeds 20000000 bytes")
+        validate_schema_override(schema, self.schema_override_schema, parser=self.name)
+        records = [
+            (_apply_override(record, schema, line_number=line_number), line_number)
+            for record, line_number in _parse_records(text)
+        ]
+        return self._import_records(records, source=source, title=title)
+
+    def _import_records(
+        self,
+        records: list[tuple[dict[str, Any], int]],
+        *,
+        source: str | None,
+        title: str | None,
+    ) -> list[dict[str, Any]]:
         payloads: list[dict[str, Any]] = []
         seen_session_ids: set[str] = set()
         for record, line_number in records:
@@ -80,6 +124,82 @@ class HermesSessionJsonlImporter(ConversationImporter):
                 _payload(parsed, line_number=line_number, source=source, title=title)
             )
         return payloads
+
+
+def _apply_override(
+    record: dict[str, Any], schema: dict[str, Any], *, line_number: int
+) -> dict[str, Any]:
+    normalized = dict(record)
+    session_aliases = {
+        "id": "session_id_field",
+        "source": "source_field",
+        "title": "title_field",
+        "model": "model_field",
+        "cwd": "cwd_field",
+        "git_repo_root": "git_repo_root_field",
+        "git_branch": "git_branch_field",
+        "parent_session_id": "parent_session_id_field",
+    }
+    for canonical, setting in session_aliases.items():
+        _copy_alias(record, normalized, canonical, schema.get(setting))
+
+    timestamp = schema.get("timestamp")
+    if isinstance(timestamp, dict):
+        field = timestamp["field"]
+        if field in record:
+            normalized["started_at"] = _override_timestamp(
+                record[field], timestamp["format"], line_number=line_number
+            )
+
+    container = schema.get("message_container", "messages")
+    raw_messages = record.get(container)
+    if raw_messages is not None:
+        if not isinstance(raw_messages, list):
+            raise ValueError(
+                f"Hermes session message container on line {line_number} must be an array"
+            )
+        normalized["messages"] = [
+            _override_message(message, schema) for message in raw_messages
+        ]
+    return normalized
+
+
+def _copy_alias(
+    source: dict[str, Any], target: dict[str, Any], canonical: str, alias: Any
+) -> None:
+    if isinstance(alias, str) and alias in source:
+        target[canonical] = source[alias]
+
+
+def _override_message(message: Any, schema: dict[str, Any]) -> Any:
+    if not isinstance(message, dict):
+        return message
+    normalized = dict(message)
+    role_field = schema.get("role_field", "role")
+    content_field = schema.get("content_field", "content")
+    if role_field in message:
+        role = message[role_field]
+        role_map = schema.get("role_map", {})
+        normalized["role"] = role_map.get(role, role) if isinstance(role_map, dict) else role
+    if content_field in message:
+        normalized["content"] = message[content_field]
+    return normalized
+
+
+def _override_timestamp(value: Any, format_name: str, *, line_number: int) -> float:
+    try:
+        if format_name == "iso8601":
+            if not isinstance(value, str):
+                raise TypeError
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise TypeError
+        parsed = float(value)
+        return parsed / 1000 if format_name == "unix_milliseconds" else parsed
+    except (OverflowError, TypeError, ValueError) as exc:
+        raise ValueError(
+            f"Hermes session timestamp override on line {line_number} is invalid"
+        ) from exc
 
 
 def _parse_records(text: str) -> list[tuple[dict[str, Any], int]]:

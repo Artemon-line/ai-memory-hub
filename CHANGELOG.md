@@ -6,6 +6,10 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Added authenticated multipart `POST /memory/import` support for every
+  registered conversation parser, with explicit parser selection, bounded
+  uploads, safe indexed receipts, shared insertion policy enforcement, and a
+  declarative versioned schema-override contract for Hermes exports.
 - Added a schema-backed Hermes Agent JSONL importer for single-session and
   multi-session exports, preserving safe provenance and live conversational
   text while excluding system, tool, reasoning, rewound, synthetic summary,
