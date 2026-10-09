@@ -32,6 +32,19 @@ class BaseIngestionAgent(ABC):
     ) -> Dict[str, Any]:
         raise NotImplementedError("store_pending_review_memory is not implemented")
 
+    async def validate_messages(
+        self,
+        conversation_json: Dict[str, Any],
+        *,
+        owner_id: str | None = None,
+        project_id: str | None = None,
+    ) -> None:
+        """Preflight a conversation without writing it.
+
+        Custom agents may override this to apply their canonical validation. The
+        default preserves compatibility for agents that validate during ingest.
+        """
+
     def preprocess_messages(self, conversation_json: Dict[str, Any]) -> Dict[str, Any]:
         return conversation_json
 

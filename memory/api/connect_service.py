@@ -229,11 +229,19 @@ def connect_status(config: HubConfig) -> dict[str, object]:
         provider: provider_status(config, provider)
         for provider in config.api.connect.passport.providers
     }
+    external_oidc = {
+        "enabled": config.api.auth == "oidc_resource_server",
+        "issuer": config.api.oidc.issuer,
+        "discovery_url": config.api.oidc.discovery_url,
+        "jwks_configured": bool(config.api.oidc.jwks_url),
+        "audience": config.api.oidc.audience or config.api.oidc.client_id,
+    }
     return {
         "enabled": config.api.connect.enabled,
         "mcp_url": mcp_url_for_config(config),
         "passport": {"providers": providers},
         "google_oauth": providers.get("google", {}),
+        "external_oidc": external_oidc,
     }
 
 
@@ -251,6 +259,13 @@ def access_mode_model(config: HubConfig) -> dict[str, str]:
             "label": "Bearer/API key mode",
             "tone": "ok",
             "description": "Clients must send the configured secret in an Authorization or API-key header.",
+        }
+    if config.api.auth == "oidc_resource_server":
+        return {
+            "value": "oidc_resource_server",
+            "label": "External OIDC resource server",
+            "tone": "ok",
+            "description": "MCP clients authenticate through the configured external identity provider.",
         }
     return {
         "value": "oauth_resource_server",

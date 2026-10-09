@@ -1,0 +1,21 @@
+{
+  "format": "ai-memory-hub.droid-exec-capture",
+  "version": 1,
+  "kind": "one-shot",
+  "prompt": "Explain the failing fictional sensor test.",
+  "result": {
+    "type": "result",
+    "subtype": "success",
+    "is_error": false,
+    "duration_ms": 5657,
+    "num_turns": 1,
+    "result": "The synthetic fixture path is stale.",
+    "session_id": "droid-session-synthetic"
+  },
+  "metadata": {
+    "cwd": "/workspace/garden-sensor",
+    "model": "droid-example-model",
+    "title": "Sensor test investigation",
+    "timestamp": "2026-10-02T09:15:23Z"
+  }
+}

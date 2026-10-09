@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 import io
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from memory.importers.base import ConversationImporter
@@ -86,6 +86,7 @@ class CopilotActivityCsvImporter(ConversationImporter):
 
 def _parse_timestamp(value: str, *, row: int) -> datetime:
     try:
-        return datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
     except ValueError as exc:
         raise ValueError(f"Copilot activity row {row} has an invalid time") from exc
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
