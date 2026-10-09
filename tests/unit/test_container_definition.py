@@ -233,6 +233,8 @@ def test_postgres_service_images_are_digest_pinned() -> None:
 
         assert f"image: {PINNED_PGVECTOR_IMAGE}" in workflow
         assert "image: pgvector/pgvector:pg16\n" not in workflow
+        assert "username: ${{ secrets.DOCKERHUB_USERNAME }}" in workflow
+        assert "password: ${{ secrets.DOCKERHUB_TOKEN }}" in workflow
 
 
 def test_google_oauth_example_uses_uv_base_image() -> None:
@@ -356,6 +358,9 @@ def test_compose_example_smoke_exercises_default_and_oauth_configs() -> None:
     workflow = Path(".github/workflows/pipeline.yml").read_text(encoding="utf-8")
 
     assert "name: Compose Example Smoke" in workflow
+    assert "name: Log in to Docker Hub" in workflow
+    assert "if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''" in workflow
+    assert "docker/login-action@dbcb813823bdd20940b903addbd779551569679f" in workflow
     assert "docker compose -f \"$COMPOSE_FILE\" config" in workflow
     assert "Smoke default local stack" in workflow
     assert "amber-vector" in workflow
