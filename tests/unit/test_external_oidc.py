@@ -39,6 +39,8 @@ def _token(key: RSAKey, **overrides: object) -> str:
         "aud": "ai-memory-hub",
         "azp": "ai-memory-hub",
         "sub": "keycloak-user-123",
+        "preferred_username": "alice",
+        "name": "Alice Example",
         "email": "alice@example.test",
         "email_verified": True,
         "groups": ["memory-users"],
@@ -77,11 +79,53 @@ async def test_external_oidc_validates_keycloak_claims_and_maps_role_scopes(
     assert first is not None
     assert first.owner_id.startswith("oidc:")
     assert "keycloak-user-123" not in first.owner_id
+    assert first.provider.startswith("oidc_")
+    assert first.subject == "keycloak-user-123"
+    assert first.username == "alice"
+    assert first.email == "alice@example.test"
+    assert first.display_name == "Alice Example"
     assert first.token_id == "token-123"
     assert first.scopes == frozenset({"memory:read", "memory:write"})
     assert second is not None
     assert second.owner_id == first.owner_id
     assert len(requests) == 2
+
+
+@pytest.mark.asyncio
+async def test_external_oidc_uses_configured_profile_claims_and_ignores_unverified_email(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    key = RSAKey.generate_key(2048, parameters={"kid": "key-a", "alg": "RS256"})
+
+    async def fetch(url: str) -> dict[str, object]:
+        if url.endswith("openid-configuration"):
+            return {
+                "issuer": "https://keycloak.example.test/realms/home",
+                "jwks_uri": "https://keycloak.example.test/keys",
+            }
+        return {"keys": [key.as_dict(private=False)]}
+
+    monkeypatch.setattr(external_oidc, "_fetch_json", fetch)
+    validator = ExternalOIDCValidator(
+        _config(
+            allowed_domains=[],
+            username_claim="account.username",
+            display_name_claim="account.display_name",
+        ).api.oidc
+    )
+
+    claims = await validator.validate(
+        _token(
+            key,
+            account={"username": "alice-custom", "display_name": "Alice Custom"},
+            email_verified=False,
+        )
+    )
+
+    assert claims is not None
+    assert claims.username == "alice-custom"
+    assert claims.display_name == "Alice Custom"
+    assert claims.email is None
 
 
 @pytest.mark.asyncio
@@ -135,6 +179,7 @@ async def test_external_oidc_readiness_caches_provider_failure(
         {"azp": "another-client"},
         {"exp": 1},
         {"sub": ""},
+        {"sub": "x" * 256},
         {"email": "alice@other.example"},
         {"groups": ["other-group"]},
         {"realm_access": {"roles": ["other-role"]}},

@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import json
 import logging
+import sqlite3
 import time
 from pathlib import Path
 
@@ -194,7 +195,9 @@ def _oauth_client() -> TestClient:
     return TestClient(app)
 
 
-def _external_oidc_client(monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient, RSAKey]:
+def _external_oidc_client(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> tuple[TestClient, RSAKey, SQLiteMetadataStore]:
     key = RSAKey.generate_key(2048, parameters={"kid": "key-a", "alg": "RS256"})
 
     async def fetch(url: str) -> dict[str, object]:
@@ -207,6 +210,8 @@ def _external_oidc_client(monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient, 
 
     monkeypatch.setattr(external_oidc, "_fetch_json", fetch)
     runtime = _runtime()
+    store = SQLiteMetadataStore(tmp_path / "metadata.sqlite3")
+    runtime.metadata_store = store
     agent = MVPIngestionAgent(
         config={"providers": {"agent": "mvp"}, "interfaces": {"api": "true"}},
         runtime=runtime,
@@ -227,7 +232,7 @@ def _external_oidc_client(monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient, 
         },
         ingestion_agent=agent,
     )
-    return TestClient(app), key
+    return TestClient(app), key, store
 
 
 def _external_oidc_token(key: RSAKey, **claims: object) -> str:
@@ -236,6 +241,10 @@ def _external_oidc_token(key: RSAKey, **claims: object) -> str:
         "iss": "https://keycloak.example.test/realms/home",
         "aud": "ai-memory-hub",
         "sub": "keycloak-user-a",
+        "preferred_username": "alice",
+        "name": "Alice Example",
+        "email": "Alice@Example.Test",
+        "email_verified": True,
         "scope": "memory:read",
         "realm_access": {"roles": ["memory-user"]},
         "iat": now,
@@ -1146,8 +1155,9 @@ def test_oauth_auth_accepts_valid_token_and_enforces_scopes() -> None:
 
 def test_external_oidc_auth_uses_provider_metadata_and_keycloak_role_scopes(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
-    client, key = _external_oidc_client(monkeypatch)
+    client, key, store = _external_oidc_client(monkeypatch, tmp_path)
     read_token = _external_oidc_token(key)
     writer_token = _external_oidc_token(
         key,
@@ -1190,12 +1200,63 @@ def test_external_oidc_auth_uses_provider_metadata_and_keycloak_role_scopes(
     assert search.status_code == 200
     assert denied.status_code == 403
     assert inserted.status_code == 200
+    with sqlite3.connect(store.db_path) as conn:
+        identity = conn.execute(
+            "SELECT provider, provider_subject, user_id, username, email, display_name "
+            "FROM oauth_identities"
+        ).fetchone()
+    assert identity is not None
+    assert identity[0].startswith("oidc_")
+    assert "keycloak.example.test" not in identity[0]
+    assert identity[1] == "keycloak-user-a"
+    assert identity[2].startswith("oidc:")
+    assert identity[3:] == ("alice", "alice@example.test", "Alice Example")
+
+
+def test_external_oidc_refreshes_changed_profile_claims_without_changing_owner(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    client, key, store = _external_oidc_client(monkeypatch, tmp_path)
+
+    first = client.post(
+        "/memory/search",
+        json={"query": "hello"},
+        headers={"Authorization": f"Bearer {_external_oidc_token(key)}"},
+    )
+    updated = client.post(
+        "/memory/search",
+        json={"query": "hello"},
+        headers={
+            "Authorization": f"Bearer {_external_oidc_token(key, preferred_username='alice-2', name='Alice Updated', email='updated@example.test')}"
+        },
+    )
+    missing = client.post(
+        "/memory/search",
+        json={"query": "hello"},
+        headers={
+            "Authorization": f"Bearer {_external_oidc_token(key, preferred_username=None, name=None, email=None)}"
+        },
+    )
+
+    with sqlite3.connect(store.db_path) as conn:
+        rows = conn.execute(
+            "SELECT user_id, username, email, display_name FROM oauth_identities"
+        ).fetchall()
+
+    assert first.status_code == 200
+    assert updated.status_code == 200
+    assert missing.status_code == 200
+    assert len(rows) == 1
+    assert rows[0][0].startswith("oidc:")
+    assert rows[0][1:] == ("alice-2", "updated@example.test", "Alice Updated")
 
 
 def test_external_oidc_provider_failure_is_reported_without_failing_hub_readiness(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
-    client, _key = _external_oidc_client(monkeypatch)
+    client, _key, _store = _external_oidc_client(monkeypatch, tmp_path)
     requests: list[str] = []
 
     async def fetch(url: str) -> None:
@@ -1214,8 +1275,10 @@ def test_external_oidc_provider_failure_is_reported_without_failing_hub_readines
     assert len(requests) == 1
 
 
-def test_external_oidc_auth_rejects_wrong_audience(monkeypatch: pytest.MonkeyPatch) -> None:
-    client, key = _external_oidc_client(monkeypatch)
+def test_external_oidc_auth_rejects_wrong_audience(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    client, key, _store = _external_oidc_client(monkeypatch, tmp_path)
     token = _external_oidc_token(key, aud="another-service")
 
     response = client.post(

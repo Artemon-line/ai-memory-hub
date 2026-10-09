@@ -846,6 +846,40 @@ def test_sqlite_auth_token_id_migration_backfills_existing_rows(tmp_path: Path) 
     assert "token_hash" not in tokens[0]
 
 
+def test_sqlite_oauth_identity_migration_adds_username_without_losing_rows(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "metadata.sqlite3"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "CREATE TABLE users (id TEXT PRIMARY KEY, display_name TEXT, "
+            "created_at TEXT DEFAULT CURRENT_TIMESTAMP, disabled_at TEXT)"
+        )
+        conn.execute("INSERT INTO users (id, display_name) VALUES ('owner-a', 'Alice')")
+        conn.execute(
+            "CREATE TABLE oauth_identities (provider TEXT NOT NULL, "
+            "provider_subject TEXT NOT NULL, user_id TEXT NOT NULL, email TEXT, "
+            "display_name TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP, "
+            "last_login_at TEXT DEFAULT CURRENT_TIMESTAMP, "
+            "PRIMARY KEY(provider, provider_subject))"
+        )
+        conn.execute(
+            "INSERT INTO oauth_identities "
+            "(provider, provider_subject, user_id, email, display_name) "
+            "VALUES ('google', 'subject-a', 'owner-a', 'alice@example.test', 'Alice')"
+        )
+
+    SQLiteMetadataStore(db_path)
+
+    with sqlite3.connect(db_path) as conn:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(oauth_identities)")}
+        identity = conn.execute(
+            "SELECT provider_subject, username, email FROM oauth_identities"
+        ).fetchone()
+    assert "username" in columns
+    assert identity == ("subject-a", None, "alice@example.test")
+
+
 def test_inmemory_vector_dimension_validation_insert_and_search() -> None:
     store = InMemoryVectorStore(dimension=3)
 
@@ -3667,6 +3701,8 @@ class _PostgresMetadataRecordingCursor:
         self.state["params"].append(params)
         if normalized.startswith("SELECT id FROM projects"):
             self._current = []
+        elif normalized.startswith("SELECT provider, provider_subject, user_id, username"):
+            self._current = [self.state["oauth_identity_row"]]
         else:
             self._current = []
 
@@ -3699,6 +3735,50 @@ def _recording_postgres_metadata_store(state: dict[str, Any]) -> PostgresMetadat
     store = PostgresMetadataStore.__new__(PostgresMetadataStore)
     store._connect = lambda: _PostgresMetadataRecordingConnection(state)
     return store
+
+
+def test_postgres_external_identity_preserves_explicit_owner_and_profile_fields() -> None:
+    state: dict[str, Any] = {
+        "queries": [],
+        "params": [],
+        "oauth_identity_row": (
+            "oidc_provider",
+            "subject-a",
+            "oidc:owner-a",
+            "alice",
+            "alice@example.test",
+            "Alice",
+            "2026-01-01T00:00:00+00:00",
+            "2026-01-02T00:00:00+00:00",
+        ),
+    }
+    store = _recording_postgres_metadata_store(state)
+
+    identity = store.find_or_create_oauth_identity(
+        provider="oidc_provider",
+        provider_subject="subject-a",
+        user_id="oidc:owner-a",
+        username="alice",
+        email="Alice@Example.Test",
+        display_name="Alice",
+    )
+
+    insert_params = next(
+        params
+        for query, params in zip(state["queries"], state["params"])
+        if query.startswith("INSERT INTO oauth_identities")
+    )
+    assert insert_params == (
+        "oidc_provider",
+        "subject-a",
+        "oidc:owner-a",
+        "alice",
+        "alice@example.test",
+        "Alice",
+    )
+    assert identity["user_id"] == "oidc:owner-a"
+    assert identity["username"] == "alice"
+    assert identity["email"] == "alice@example.test"
 
 
 def test_postgres_create_handoff_matches_sqlite_record_shape() -> None:

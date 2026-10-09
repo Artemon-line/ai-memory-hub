@@ -22,6 +22,9 @@ api:
     audience: ai-memory-hub
     algorithms:
       - RS256
+    username_claim: preferred_username
+    email_claim: email
+    display_name_claim: name
     allowed_groups:
       - memory-users
     allowed_roles:

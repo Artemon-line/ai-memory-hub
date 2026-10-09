@@ -6105,6 +6105,8 @@ def find_or_create_oauth_identity(
     *,
     provider: str,
     provider_subject: str,
+    user_id: str | None = None,
+    username: str | None = None,
     email: str | None = None,
     display_name: str | None = None,
 ) -> dict[str, object]:
@@ -6114,6 +6116,8 @@ def find_or_create_oauth_identity(
     return store.find_or_create_oauth_identity(
         provider=provider,
         provider_subject=provider_subject,
+        user_id=user_id,
+        username=username,
         email=email,
         display_name=display_name,
     )

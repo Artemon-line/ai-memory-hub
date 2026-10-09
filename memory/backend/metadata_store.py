@@ -167,6 +167,7 @@ class SQLiteMetadataStore:
         ("auth_tokens", "display_name"): "TEXT",
         ("auth_tokens", "scopes"): "TEXT",
         ("auth_tokens", "last_used_at"): "TEXT",
+        ("oauth_identities", "username"): "TEXT",
         ("facts", "source_quality"): "TEXT",
         ("facts", "confidence_reason"): "TEXT",
         ("facts", "last_confirmed_at"): "TEXT",
@@ -265,6 +266,7 @@ class SQLiteMetadataStore:
                     provider TEXT NOT NULL,
                     provider_subject TEXT NOT NULL,
                     user_id TEXT NOT NULL,
+                    username TEXT,
                     email TEXT,
                     display_name TEXT,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -274,6 +276,7 @@ class SQLiteMetadataStore:
                 )
                 """
             )
+            self._ensure_column(conn, "oauth_identities", "username", "TEXT")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS web_sessions (
@@ -794,13 +797,17 @@ class SQLiteMetadataStore:
         *,
         provider: str,
         provider_subject: str,
+        user_id: str | None = None,
+        username: str | None = None,
         email: str | None = None,
         display_name: str | None = None,
     ) -> dict[str, Any]:
         provider_name = _validate_oauth_provider(provider)
         subject = _validate_oauth_subject(provider_subject)
         normalized_email = _normalize_email(email)
-        user_id = _oauth_user_id(provider_name, subject)
+        owner_id = _validate_owner_id(user_id) if user_id is not None else _oauth_user_id(
+            provider_name, subject
+        )
         with self._connect() as conn:
             conn.execute(
                 """
@@ -809,24 +816,25 @@ class SQLiteMetadataStore:
                 ON CONFLICT(id) DO UPDATE SET
                     display_name = COALESCE(excluded.display_name, users.display_name)
                 """,
-                (user_id, display_name or normalized_email),
+                (owner_id, display_name or username or normalized_email),
             )
-            self._ensure_default_project(conn, user_id)
+            self._ensure_default_project(conn, owner_id)
             conn.execute(
                 """
                 INSERT INTO oauth_identities
-                    (provider, provider_subject, user_id, email, display_name)
-                VALUES (?, ?, ?, ?, ?)
+                    (provider, provider_subject, user_id, username, email, display_name)
+                VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT(provider, provider_subject) DO UPDATE SET
-                    email = excluded.email,
+                    username = COALESCE(excluded.username, oauth_identities.username),
+                    email = COALESCE(excluded.email, oauth_identities.email),
                     display_name = COALESCE(excluded.display_name, oauth_identities.display_name),
                     last_login_at = CURRENT_TIMESTAMP
                 """,
-                (provider_name, subject, user_id, normalized_email, display_name),
+                (provider_name, subject, owner_id, username, normalized_email, display_name),
             )
             row = conn.execute(
                 """
-                SELECT provider, provider_subject, user_id, email, display_name,
+                SELECT provider, provider_subject, user_id, username, email, display_name,
                        created_at, last_login_at
                 FROM oauth_identities
                 WHERE provider = ? AND provider_subject = ?
@@ -2623,6 +2631,7 @@ class SQLiteMetadataStore:
             "provider": str(row["provider"]),
             "provider_subject": str(row["provider_subject"]),
             "user_id": str(row["user_id"]),
+            "username": row["username"],
             "email": row["email"],
             "display_name": row["display_name"],
             "created_at": str(row["created_at"]),

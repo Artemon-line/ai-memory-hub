@@ -194,6 +194,8 @@ class BaseIngestionAgent(ABC):
         *,
         provider: str,
         provider_subject: str,
+        user_id: str | None = None,
+        username: str | None = None,
         email: str | None = None,
         display_name: str | None = None,
     ) -> dict[str, object]:

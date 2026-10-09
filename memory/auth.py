@@ -14,7 +14,7 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
 
-from memory.api.external_oidc import ExternalOIDCValidator
+from memory.api.external_oidc import ExternalOIDCClaims, ExternalOIDCValidator
 from memory.config import HubConfig
 from memory.ingestion.base_agent import BaseIngestionAgent
 
@@ -135,6 +135,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
         self._config = config
         self._agent = agent
         self._external_oidc = external_oidc
+        self._external_identity_profiles: dict[
+            str, tuple[str | None, str | None, str | None]
+        ] = {}
 
     async def dispatch(
         self,
@@ -186,6 +189,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             claims = await self._external_oidc.validate(token)
             if claims is None:
                 return None
+            await self._sync_external_oidc_identity(claims)
             return AuthContext(
                 owner_id=claims.owner_id,
                 token_id=claims.token_id,
@@ -221,6 +225,22 @@ class AuthMiddleware(BaseHTTPMiddleware):
             scopes=frozenset(claims.scopes),
             auth_mode="oauth_resource_server",
         )
+
+    async def _sync_external_oidc_identity(self, claims: ExternalOIDCClaims) -> None:
+        profile = (claims.username, claims.email, claims.display_name)
+        if self._external_identity_profiles.get(claims.owner_id) == profile:
+            return
+        identity = await self._agent.find_or_create_oauth_identity(
+            provider=claims.provider,
+            provider_subject=claims.subject,
+            user_id=claims.owner_id,
+            username=claims.username,
+            email=claims.email,
+            display_name=claims.display_name,
+        )
+        if identity.get("user_id") != claims.owner_id:
+            raise RuntimeError("external OIDC identity owner mismatch")
+        self._external_identity_profiles[claims.owner_id] = profile
 
 
 @dataclass(frozen=True)

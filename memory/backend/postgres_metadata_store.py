@@ -132,6 +132,7 @@ CREATE TABLE IF NOT EXISTS oauth_identities (
     provider TEXT NOT NULL,
     provider_subject TEXT NOT NULL,
     user_id TEXT NOT NULL REFERENCES users(id),
+    username TEXT NULL,
     email TEXT NULL,
     display_name TEXT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -482,6 +483,9 @@ class PostgresMetadataStore:
                 cur.execute(CREATE_AUTH_TOKENS_OWNER_INDEX_SQL)
                 cur.execute(CREATE_AUTH_TOKENS_TOKEN_ID_INDEX_SQL)
                 cur.execute(CREATE_OAUTH_IDENTITIES_TABLE_SQL)
+                cur.execute(
+                    "ALTER TABLE oauth_identities ADD COLUMN IF NOT EXISTS username TEXT NULL"
+                )
                 cur.execute(CREATE_OAUTH_IDENTITIES_USER_INDEX_SQL)
                 cur.execute(CREATE_WEB_SESSIONS_TABLE_SQL)
                 cur.execute(CREATE_WEB_SESSIONS_USER_INDEX_SQL)
@@ -681,13 +685,17 @@ class PostgresMetadataStore:
         *,
         provider: str,
         provider_subject: str,
+        user_id: str | None = None,
+        username: str | None = None,
         email: str | None = None,
         display_name: str | None = None,
     ) -> dict[str, Any]:
         provider_name = _validate_oauth_provider(provider)
         subject = _validate_oauth_subject(provider_subject)
         normalized_email = _normalize_email(email)
-        user_id = _oauth_user_id(provider_name, subject)
+        owner_id = _validate_owner_id(user_id) if user_id is not None else _oauth_user_id(
+            provider_name, subject
+        )
         with self._connect() as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -697,24 +705,25 @@ class PostgresMetadataStore:
                     ON CONFLICT (id) DO UPDATE SET
                         display_name = COALESCE(EXCLUDED.display_name, users.display_name)
                     """,
-                    (user_id, display_name or normalized_email),
+                    (owner_id, display_name or username or normalized_email),
                 )
-                self._ensure_default_project(cur, user_id)
+                self._ensure_default_project(cur, owner_id)
                 cur.execute(
                     """
                     INSERT INTO oauth_identities
-                        (provider, provider_subject, user_id, email, display_name)
-                    VALUES (%s, %s, %s, %s, %s)
+                        (provider, provider_subject, user_id, username, email, display_name)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                     ON CONFLICT (provider, provider_subject) DO UPDATE SET
-                        email = EXCLUDED.email,
+                        username = COALESCE(EXCLUDED.username, oauth_identities.username),
+                        email = COALESCE(EXCLUDED.email, oauth_identities.email),
                         display_name = COALESCE(EXCLUDED.display_name, oauth_identities.display_name),
                         last_login_at = NOW()
                     """,
-                    (provider_name, subject, user_id, normalized_email, display_name),
+                    (provider_name, subject, owner_id, username, normalized_email, display_name),
                 )
                 cur.execute(
                     """
-                    SELECT provider, provider_subject, user_id, email, display_name,
+                    SELECT provider, provider_subject, user_id, username, email, display_name,
                            created_at::text, last_login_at::text
                     FROM oauth_identities
                     WHERE provider = %s AND provider_subject = %s
@@ -2547,10 +2556,11 @@ class PostgresMetadataStore:
             "provider": str(row[0]),
             "provider_subject": str(row[1]),
             "user_id": str(row[2]),
-            "email": row[3],
-            "display_name": row[4],
-            "created_at": str(row[5]),
-            "last_login_at": str(row[6]),
+            "username": row[3],
+            "email": row[4],
+            "display_name": row[5],
+            "created_at": str(row[6]),
+            "last_login_at": str(row[7]),
         }
 
     def _web_session_from_row(self, row: Any) -> dict[str, Any]:
