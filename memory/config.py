@@ -674,6 +674,101 @@ class OAuthConfig(BaseModel):
         return normalized
 
 
+class OIDCResourceServerConfig(BaseModel):
+    issuer: str = ""
+    discovery_url: str = ""
+    jwks_url: str = ""
+    audience: str = ""
+    client_id: str = ""
+    algorithms: list[str] = Field(default_factory=lambda: ["RS256"])
+    email_claim: str = "email"
+    groups_claim: str = "groups"
+    roles_claim: str = "roles"
+    allowed_domains: list[str] = Field(default_factory=list)
+    allowed_groups: list[str] = Field(default_factory=list)
+    allowed_roles: list[str] = Field(default_factory=list)
+    role_scopes: dict[str, list[str]] = Field(default_factory=dict)
+    scopes_supported: list[str] = Field(default_factory=lambda: ["memory:read", "memory:write"])
+    cache_ttl_seconds: int = Field(default=300, ge=30, le=86_400)
+    clock_skew_seconds: int = Field(default=60, ge=0, le=300)
+
+    @field_validator("issuer", "discovery_url", "jwks_url")
+    @classmethod
+    def validate_urls(cls, value: str, info: Any) -> str:
+        normalized = value.strip().rstrip("/")
+        if normalized:
+            _validate_absolute_uri(normalized, field_name=f"api.oidc.{info.field_name}")
+            parsed = urlparse(normalized)
+            if parsed.scheme != "https" and not (
+                parsed.scheme == "http" and parsed.hostname in {"127.0.0.1", "localhost", "::1"}
+            ):
+                raise ValueError(
+                    f"api.oidc.{info.field_name} must use https or loopback http"
+                )
+        return normalized
+
+    @field_validator("algorithms")
+    @classmethod
+    def validate_algorithms(cls, values: list[str]) -> list[str]:
+        allowed = {"RS256", "RS384", "RS512", "ES256", "ES384", "ES512", "EdDSA"}
+        normalized = [str(value).strip() for value in values if str(value).strip()]
+        if not normalized or any(value not in allowed for value in normalized):
+            raise ValueError(
+                "api.oidc.algorithms must contain only asymmetric signing algorithms"
+            )
+        return list(dict.fromkeys(normalized))
+
+    @field_validator("email_claim", "groups_claim", "roles_claim")
+    @classmethod
+    def validate_claim_names(cls, value: str, info: Any) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError(f"api.oidc.{info.field_name} must not be empty")
+        return normalized
+
+    @field_validator("allowed_domains", "allowed_groups", "allowed_roles")
+    @classmethod
+    def normalize_allowlists(cls, values: list[str], info: Any) -> list[str]:
+        normalized: list[str] = []
+        for value in values:
+            item = str(value).strip()
+            if info.field_name == "allowed_domains":
+                item = item.lower()
+            if item and item not in normalized:
+                normalized.append(item)
+        return normalized
+
+    @field_validator("role_scopes")
+    @classmethod
+    def normalize_role_scopes(cls, value: dict[str, list[str]]) -> dict[str, list[str]]:
+        normalized: dict[str, list[str]] = {}
+        for role, scopes in value.items():
+            role_name = str(role).strip()
+            scope_names = list(
+                dict.fromkeys(str(scope).strip() for scope in scopes if str(scope).strip())
+            )
+            if not role_name or not scope_names:
+                raise ValueError("api.oidc.role_scopes requires non-empty roles and scopes")
+            normalized[role_name] = scope_names
+        return normalized
+
+    @field_validator("scopes_supported")
+    @classmethod
+    def validate_scopes_supported(cls, values: list[str]) -> list[str]:
+        normalized = list(
+            dict.fromkeys(str(value).strip() for value in values if str(value).strip())
+        )
+        if not normalized:
+            raise ValueError("api.oidc.scopes_supported must not be empty")
+        return normalized
+
+    @model_validator(mode="after")
+    def derive_discovery_url(self) -> "OIDCResourceServerConfig":
+        if self.issuer and not self.discovery_url and not self.jwks_url:
+            self.discovery_url = f"{self.issuer}/.well-known/openid-configuration"
+        return self
+
+
 PASSPORT_PROVIDER_NAMES = {"google", "meta", "x"}
 
 
@@ -871,15 +966,22 @@ class APIConfig(BaseModel):
     cors_allow_origins: list[str] = Field(default_factory=list)
     token: APITokenConfig = Field(default_factory=APITokenConfig)
     oauth: OAuthConfig = Field(default_factory=OAuthConfig)
+    oidc: OIDCResourceServerConfig = Field(default_factory=OIDCResourceServerConfig)
     connect: ConnectUIConfig = Field(default_factory=ConnectUIConfig)
 
     @field_validator("auth")
     @classmethod
     def validate_auth(cls, v: str) -> str:
         value = v.lower()
-        if value not in {"none", "bearer_token", "oauth_resource_server"}:
+        if value not in {
+            "none",
+            "bearer_token",
+            "oauth_resource_server",
+            "oidc_resource_server",
+        }:
             raise ValueError(
-                "api.auth must be one of: none, bearer_token, oauth_resource_server"
+                "api.auth must be one of: none, bearer_token, oauth_resource_server, "
+                "oidc_resource_server"
             )
         return value
 
@@ -918,6 +1020,29 @@ class APIConfig(BaseModel):
                 raise ValueError(
                     "api.oauth.jwt_secret or api.oauth.jwt_secret_env is required for "
                     "oauth_resource_server"
+                )
+        if self.auth == "oidc_resource_server":
+            if not self.public_base_url:
+                raise ValueError("api.public_base_url is required for oidc_resource_server")
+            if not self.oidc.issuer:
+                raise ValueError("api.oidc.issuer is required for oidc_resource_server")
+            if not (self.oidc.audience or self.oidc.client_id):
+                raise ValueError(
+                    "api.oidc.audience or api.oidc.client_id is required for "
+                    "oidc_resource_server"
+                )
+            if any(
+                (
+                    self.oauth.authorization_servers,
+                    self.oauth.resource,
+                    self.oauth.issuer,
+                    self.oauth.audience,
+                    self.oauth.jwt_secret,
+                )
+            ):
+                raise ValueError(
+                    "api.oauth hub-issued token settings cannot be combined with "
+                    "oidc_resource_server"
                 )
         return self
 

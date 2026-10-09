@@ -568,6 +568,77 @@ def test_oauth_resource_server_config_derives_valid_defaults() -> None:
     ]
 
 
+def test_oidc_resource_server_config_derives_discovery_and_normalizes_access_rules() -> None:
+    config = parse_config(
+        {
+            "api": {
+                "auth": "oidc_resource_server",
+                "public_base_url": "https://memory.example.com",
+                "oidc": {
+                    "issuer": "https://keycloak.example.com/realms/home/",
+                    "client_id": "ai-memory-hub",
+                    "allowed_domains": ["Example.COM", "example.com"],
+                    "role_scopes": {"memory-writer": ["memory:write", "memory:write"]},
+                },
+            }
+        }
+    )
+
+    assert config.api.oidc.issuer == "https://keycloak.example.com/realms/home"
+    assert config.api.oidc.discovery_url == (
+        "https://keycloak.example.com/realms/home/.well-known/openid-configuration"
+    )
+    assert config.api.oidc.audience == ""
+    assert config.api.oidc.allowed_domains == ["example.com"]
+    assert config.api.oidc.role_scopes == {"memory-writer": ["memory:write"]}
+
+
+@pytest.mark.parametrize(
+    "oidc, message",
+    [
+        ({"client_id": "ai-memory-hub"}, "api.oidc.issuer"),
+        ({"issuer": "https://id.example.com"}, "api.oidc.audience or api.oidc.client_id"),
+        (
+            {
+                "issuer": "http://id.example.com",
+                "client_id": "ai-memory-hub",
+            },
+            "must use https or loopback http",
+        ),
+        (
+            {
+                "issuer": "https://id.example.com",
+                "client_id": "ai-memory-hub",
+                "algorithms": ["HS256"],
+            },
+            "asymmetric signing algorithms",
+        ),
+        (
+            {
+                "issuer": "https://id.example.com",
+                "client_id": "ai-memory-hub",
+            },
+            "hub-issued token settings cannot be combined",
+        ),
+    ],
+)
+def test_oidc_resource_server_config_rejects_incomplete_or_unsafe_settings(
+    oidc: dict[str, object], message: str
+) -> None:
+    oauth = {"issuer": "https://legacy.example.com"} if "combined" in message else {}
+    with pytest.raises(ValueError, match=message):
+        parse_config(
+            {
+                "api": {
+                    "auth": "oidc_resource_server",
+                    "public_base_url": "https://memory.example.com",
+                    "oidc": oidc,
+                    "oauth": oauth,
+                }
+            }
+        )
+
+
 def test_connect_ui_google_oauth_config_normalizes_allowlists() -> None:
     config = parse_config(
         {

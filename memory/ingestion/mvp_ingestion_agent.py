@@ -64,6 +64,21 @@ class MVPIngestionAgent(BaseIngestionAgent):
             raise
         return self.postprocess_result(result)
 
+    async def validate_messages(
+        self,
+        conversation_json: Dict[str, Any],
+        *,
+        owner_id: str | None = None,
+        project_id: str | None = None,
+    ) -> None:
+        payload = self.preprocess_messages(conversation_json)
+        await self._call_service(
+            self._service.validate_messages,
+            payload,
+            owner_id=owner_id,
+            project_id=project_id,
+        )
+
     async def store_pending_review_memory(
         self,
         conversation_json: Dict[str, Any],

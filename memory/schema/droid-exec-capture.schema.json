@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-memory-hub.local/schema/droid-exec-capture.schema.json",
+  "title": "AI Memory Hub Droid Exec capture",
+  "type": "object",
+  "required": ["format", "version", "kind"],
+  "properties": {
+    "format": {"const": "ai-memory-hub.droid-exec-capture"},
+    "version": {"const": 1},
+    "kind": {"enum": ["one-shot", "stream-jsonrpc"]},
+    "prompt": {"type": "string", "minLength": 1},
+    "result": {
+      "type": "object",
+      "required": ["type", "subtype", "is_error", "result"],
+      "properties": {
+        "type": {"const": "result"},
+        "subtype": {"type": "string", "minLength": 1},
+        "is_error": {"type": "boolean"},
+        "result": {"type": "string"},
+        "duration_ms": {"type": "number", "minimum": 0},
+        "num_turns": {"type": "integer", "minimum": 0},
+        "session_id": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": true
+    },
+    "frames": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100000,
+      "items": {
+        "type": "object",
+        "required": ["direction", "message"],
+        "properties": {
+          "direction": {"enum": ["client-to-droid", "droid-to-client"]},
+          "message": {
+            "type": "object",
+            "required": ["jsonrpc"],
+            "properties": {"jsonrpc": {"const": "2.0"}},
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "cwd": {"type": "string", "minLength": 1},
+        "model": {"type": "string", "minLength": 1},
+        "title": {"type": "string", "minLength": 1},
+        "timestamp": {"type": "string", "format": "date-time"},
+        "duration_ms": {"type": "number", "minimum": 0}
+      },
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"kind": {"const": "one-shot"}}},
+      "then": {
+        "required": ["prompt", "result"],
+        "not": {"required": ["frames"]}
+      }
+    },
+    {
+      "if": {"properties": {"kind": {"const": "stream-jsonrpc"}}},
+      "then": {
+        "required": ["frames"],
+        "not": {"anyOf": [{"required": ["prompt"]}, {"required": ["result"]}]}
+      }
+    }
+  ],
+  "additionalProperties": false
+}
