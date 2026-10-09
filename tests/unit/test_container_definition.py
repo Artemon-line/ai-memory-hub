@@ -361,6 +361,8 @@ def test_compose_example_smoke_exercises_default_and_oauth_configs() -> None:
     assert "name: Log in to Docker Hub" in workflow
     assert "if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''" in workflow
     assert "docker/login-action@dbcb813823bdd20940b903addbd779551569679f" in workflow
+    assert 'docker compose -f "$COMPOSE_FILE" pull --ignore-buildable' in workflow
+    assert workflow.count('docker compose -f "$COMPOSE_FILE" up -d --build --pull never') == 2
     assert "docker compose -f \"$COMPOSE_FILE\" config" in workflow
     assert "Smoke default local stack" in workflow
     assert "amber-vector" in workflow

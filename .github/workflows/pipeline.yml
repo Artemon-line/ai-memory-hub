@@ -463,7 +463,16 @@ jobs:
           }
           trap cleanup EXIT
 
-          docker compose -f "$COMPOSE_FILE" up -d --build
+          for attempt in 1 2 3; do
+            if docker compose -f "$COMPOSE_FILE" pull --ignore-buildable; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            sleep "$((attempt * 10))"
+          done
+          docker compose -f "$COMPOSE_FILE" up -d --build --pull never
           ready=false
           for attempt in $(seq 1 40); do
             if curl --max-time 5 -fsS http://127.0.0.1:8000/ready; then
@@ -538,7 +547,7 @@ jobs:
             "$example_dir/config.oauth-public.yaml" > "$example_dir/$AMH_CONFIG_FILE"
 
           docker compose -f "$COMPOSE_FILE" config
-          docker compose -f "$COMPOSE_FILE" up -d --build
+          docker compose -f "$COMPOSE_FILE" up -d --build --pull never
           ready=false
           for attempt in $(seq 1 50); do
             if curl --max-time 5 -fsS http://127.0.0.1:8000/ready; then
