@@ -67,6 +67,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       OLLAMA_IMAGE: >-
         ollama/ollama:0.22.1@sha256:3ca37ec2b9cb6341b62554074205c616778fe98abcf9e4fc50361b79a07407ae
 
@@ -95,8 +97,30 @@ jobs:
       - name: Install pinned OpenCode CLI
         run: npm install --global opencode-ai@1.18.34
 
+      - name: Log in to Docker Hub
+        if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
+        run: |
+          for attempt in 1 2 3; do
+            if printf '%s' "$DOCKERHUB_TOKEN" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            sleep "$((attempt * 10))"
+          done
+
       - name: Start pinned Ollama container
         run: |
+          for attempt in 1 2 3; do
+            if docker pull "$OLLAMA_IMAGE"; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            sleep "$((attempt * 10))"
+          done
           docker run -d \
             --name ollama-ci \
             -p 127.0.0.1:11434:11434 \
@@ -446,10 +470,16 @@ jobs:
 
       - name: Log in to Docker Hub
         if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        with:
-          username: ${{ env.DOCKERHUB_USERNAME }}
-          password: ${{ env.DOCKERHUB_TOKEN }}
+        run: |
+          for attempt in 1 2 3; do
+            if printf '%s' "$DOCKERHUB_TOKEN" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            sleep "$((attempt * 10))"
+          done
 
       - name: Validate compose file
         run: docker compose -f "$COMPOSE_FILE" config
@@ -506,6 +536,15 @@ jobs:
 
       - name: Start pinned Ollama container
         run: |
+          for attempt in 1 2 3; do
+            if docker pull "$OLLAMA_IMAGE"; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            sleep "$((attempt * 10))"
+          done
           docker run -d \
             --name ollama-compose-ci \
             -p 11434:11434 \
