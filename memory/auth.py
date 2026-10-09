@@ -14,6 +14,7 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
 
+from memory.api.external_oidc import ExternalOIDCValidator
 from memory.config import HubConfig
 from memory.ingestion.base_agent import BaseIngestionAgent
 
@@ -97,7 +98,7 @@ def build_www_authenticate_challenge(
     if scopes:
         scope_value = " ".join(sorted(scopes))
         challenge += f', scope="{scope_value}"'
-    if config.api.auth == "oauth_resource_server":
+    if config.api.auth in {"oauth_resource_server", "oidc_resource_server"}:
         challenge += f', resource_metadata="{_resource_metadata_url(config, request.url.path)}"'
     return challenge
 
@@ -115,6 +116,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self._config = config
         self._agent = agent
+        self._external_oidc = (
+            ExternalOIDCValidator(config.api.oidc)
+            if config.api.auth == "oidc_resource_server"
+            else None
+        )
 
     async def dispatch(
         self,
@@ -162,6 +168,16 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 scopes=frozenset(str(scope) for scope in scopes),
                 auth_mode="bearer_token",
             )
+        if self._external_oidc is not None:
+            claims = await self._external_oidc.validate(token)
+            if claims is None:
+                return None
+            return AuthContext(
+                owner_id=claims.owner_id,
+                token_id=claims.token_id,
+                scopes=claims.scopes,
+                auth_mode="oidc_resource_server",
+            )
         claims = validate_oauth_access_token(token, self._config)
         if claims is None:
             return None
@@ -206,6 +222,7 @@ def required_scopes_for_request(request: Request) -> set[str]:
     if path == "/mcp" or path.startswith("/mcp/"):
         return {READ_SCOPE}
     if path in {
+        "/memory/import",
         "/memory/insert",
         "/memory/facts/supersede",
         "/memory/pending/approve",
@@ -239,16 +256,27 @@ def validate_oauth_access_token(token: str, config: HubConfig) -> AccessTokenCla
 
 
 def protected_resource_metadata(config: HubConfig, *, resource_path: str = "/mcp") -> dict[str, object]:
+    authorization_servers = list(config.api.oauth.authorization_servers)
+    scopes_supported = list(config.api.oauth.scopes_supported)
+    if config.api.auth == "oidc_resource_server":
+        authorization_servers = [config.api.oidc.issuer]
+        scopes_supported = list(config.api.oidc.scopes_supported)
     return {
         "resource": _oauth_resource(config, resource_path=resource_path),
-        "authorization_servers": list(config.api.oauth.authorization_servers),
-        "scopes_supported": list(config.api.oauth.scopes_supported),
+        "authorization_servers": authorization_servers,
+        "scopes_supported": scopes_supported,
         "bearer_methods_supported": ["header"],
         "resource_documentation": f"{config.api.public_base_url.rstrip('/')}/docs",
     }
 
 
 def authorization_server_metadata(config: HubConfig) -> dict[str, object]:
+    if config.api.auth == "oidc_resource_server":
+        return {
+            "issuer": config.api.oidc.issuer,
+            "scopes_supported": list(config.api.oidc.scopes_supported),
+            "service_documentation": f"{config.api.public_base_url.rstrip('/')}/docs",
+        }
     base = config.api.public_base_url.rstrip("/") or f"http://{config.api.host}:{config.api.port}"
     resource = _oauth_resource(config, resource_path="/mcp")
     metadata: dict[str, object] = {
@@ -357,7 +385,7 @@ def _auth_error_body(
     if granted_scopes:
         body["granted_scopes"] = sorted(granted_scopes)
         body["missing_scopes"] = sorted(required_scopes - set(granted_scopes))
-    if config.api.auth == "oauth_resource_server":
+    if config.api.auth in {"oauth_resource_server", "oidc_resource_server"}:
         body["resource_metadata"] = _resource_metadata_url(config, request.url.path)
     return body
 
@@ -417,10 +445,17 @@ def _has_query_access_token(request: Request) -> bool:
 def _challenge_scopes_for_request(
     request: Request, config: HubConfig, required_scopes: set[str]
 ) -> set[str]:
-    if config.api.auth == "oauth_resource_server" and _is_mcp_path(request.url.path):
+    if config.api.auth in {"oauth_resource_server", "oidc_resource_server"} and _is_mcp_path(
+        request.url.path
+    ):
+        configured_scopes = (
+            config.api.oidc.scopes_supported
+            if config.api.auth == "oidc_resource_server"
+            else config.api.oauth.scopes_supported
+        )
         supported_scopes = {
             str(scope).strip()
-            for scope in config.api.oauth.scopes_supported
+            for scope in configured_scopes
             if str(scope).strip()
         }
         if supported_scopes:

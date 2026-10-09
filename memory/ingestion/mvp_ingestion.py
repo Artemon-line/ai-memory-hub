@@ -11,6 +11,7 @@ import urllib.error
 import urllib.request
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -1183,6 +1184,9 @@ class MVPIngestionService:
 
     def ingest_messages(self, conversation_json: Any, **kwargs: Any) -> dict[str, Any]:
         return self._call(ingest_messages, conversation_json, **kwargs)
+
+    def validate_messages(self, conversation_json: Any, **kwargs: Any) -> None:
+        self._call(validate_messages, conversation_json, **kwargs)
 
     def store_pending_review_memory(
         self, conversation_json: dict[str, Any], **kwargs: Any
@@ -2482,6 +2486,31 @@ def _is_luhn_payment_card(value: str) -> bool:
         total += number
         double = not double
     return total % 10 == 0
+
+
+def validate_messages(
+    conversation_json: Any,
+    *,
+    strict_transcript: bool = False,
+    owner_id: str | None = None,
+    project_id: str | None = None,
+) -> None:
+    """Validate an ingestion payload and its scope without persisting it."""
+    effective_project_id = _resolve_project(
+        owner_id=owner_id, project_id=project_id, required_role=PROJECT_ROLE_WRITER
+    )
+    normalized = normalize_conversation_json(
+        deepcopy(conversation_json), strict_transcript=strict_transcript
+    )
+    _stamp_owner(normalized, owner_id=owner_id)
+    _stamp_project(normalized, project_id=effective_project_id)
+    _scope_conversation_hash(normalized, project_id=effective_project_id)
+    validate_json(normalized)
+    _validate_lineage_parent(
+        normalized,
+        owner_id=owner_id,
+        project_id=effective_project_id,
+    )
 
 
 def ingest_messages(

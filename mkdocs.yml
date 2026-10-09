@@ -47,6 +47,7 @@ nav:
       - Technical Overview: docs/overview.md
       - Agent Integration: docs/agents.md
       - Connect UI and OAuth Setup: docs/connect_ui.md
+      - External OIDC and Keycloak: docs/external_oidc.md
       - Brand Assets: docs/brand_assets.md
       - Storage Provider Examples: docs/storage_provider_examples.md
       - Observability: docs/observability.md

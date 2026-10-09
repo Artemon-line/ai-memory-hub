@@ -67,6 +67,7 @@ normalized web chat payloads to the existing insert API; see the
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `POST` | `/memory/insert` | Validate and store a conversation |
+| `POST` | `/memory/import` | Parse and store an uploaded external conversation export |
 | `POST` | `/memory/search` | Return ranked semantic matches |
 | `POST` | `/memory/retrieve` | Retrieve a stored conversation by ID |
 | `POST` | `/memory/ask` | Build an answer from retrieved memory or facts |
@@ -252,6 +253,9 @@ python -m memory.cli reindex --json
 python -m memory.cli import manual copilot-chat.txt --source vscode-copilot --json
 python -m memory.cli import copilot-activity-csv copilot-activity-history.csv --json
 python -m memory.cli import copilot-cli-events-jsonl "$HOME/.copilot/session-state/<SESSION_ID>/events.jsonl" --json
+python -m memory.cli import deepseek-harness-session-jsonl dsh-session/session.v4.jsonl --json
+python -m memory.cli import droid-exec-json droid-capture.json --json
+python -m memory.cli import hermes-session-jsonl hermes-backup.jsonl --json
 python -m memory.cli import deepseek-share-json deepseek-share.json --json
 python -m memory.cli import claude-code-session-jsonl "$HOME/.claude/projects/<PROJECT>/<SESSION_ID>.jsonl" --json
 python -m memory.cli import codex-rollout-jsonl "$CODEX_HOME/sessions/2026/04/12/rollout-<SESSION_ID>.jsonl" --json
@@ -341,6 +345,136 @@ For a reviewable manual fallback, run `/share file <PATH>` (or its `/export`
 alias) in Copilot CLI and import the resulting Markdown with `manual`. Review
 either artifact for sensitive prompts, paths, and output before copying or
 retaining it. Multipart HTTP upload remains outside the importer contract.
+
+Factory Droid does not currently document a portable export for historical
+interactive CLI sessions. The `droid-exec-json` importer therefore accepts only
+the versioned `ai-memory-hub.droid-exec-capture` envelope for headless
+`droid exec` runs. It rejects raw result-only JSON because that output omits the
+submitted prompt.
+
+For a one-shot run, record the exact submitted prompt and Droid's JSON result in
+one capture. This example uses `jq` only to assemble the local capture file:
+
+```bash
+prompt='Explain this repository'
+droid exec "$prompt" --output-format json > droid-result.json
+jq -n --arg prompt "$prompt" --slurpfile result droid-result.json \
+  '{
+    format: "ai-memory-hub.droid-exec-capture",
+    version: 1,
+    kind: "one-shot",
+    prompt: $prompt,
+    result: $result[0],
+    metadata: {cwd: "/workspace/project", model: "configured-model"}
+  }' > droid-capture.json
+python -m memory.cli import droid-exec-json droid-capture.json --json
+```
+
+Only a successful, non-empty one-shot result becomes an assistant message. The
+importer preserves safe session ID, duration, reported turn count, model, cwd,
+title, and timestamp metadata when supplied. Error results are rejected, and
+unknown result fields are ignored.
+
+For a multi-turn integration, launch the documented bidirectional protocol:
+
+```bash
+droid exec \
+  --input-format stream-jsonrpc \
+  --output-format stream-jsonrpc \
+  --auto low
+```
+
+The recorder must wrap each JSON-RPC object with its direction rather than
+concatenating stdin and stdout into an ambiguous log:
+
+```json
+{
+  "format": "ai-memory-hub.droid-exec-capture",
+  "version": 1,
+  "kind": "stream-jsonrpc",
+  "frames": [
+    {
+      "direction": "client-to-droid",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": "turn-1",
+        "method": "droid.add_user_message",
+        "params": {"text": "Explain this repository"}
+      }
+    },
+    {
+      "direction": "droid-to-client",
+      "message": {
+        "jsonrpc": "2.0",
+        "method": "droid.session_notification",
+        "params": {
+          "notification": {
+            "type": "assistant_text_delta",
+            "messageId": "assistant-1",
+            "blockIndex": 0,
+            "textDelta": "This repository..."
+          }
+        }
+      }
+    },
+    {
+      "direction": "droid-to-client",
+      "message": {
+        "jsonrpc": "2.0",
+        "method": "droid.session_notification",
+        "params": {
+          "notification": {"type": "agent_turn_completed", "reason": "completed"}
+        }
+      }
+    }
+  ]
+}
+```
+
+The importer pairs `droid.add_user_message` requests with successfully completed
+turns and coalesces `assistant_text_delta` values by message and block. It skips
+system prompts, thinking, tool calls and results, permissions, errors, usage,
+control traffic, incomplete turns, and unknown notifications. This contract
+does not scrape the Droid TUI, follow organization `/share` links, or import
+arbitrary historical Droid sessions. Raw-content OpenTelemetry export is not a
+normal capture path: it is opt-in, can expose sensitive content, and can
+truncate attributes. Multipart HTTP upload remains tracked separately.
+
+DeepSeek Harness can download a session tree as
+`dsh-session-<SESSION_ID>.zip` from its `/export` browser page. Only extract an
+archive you generated or otherwise trust: inspect its entries first, reject
+absolute paths or `..` traversal entries, and extract it into a new empty
+directory rather than over existing files. The importer deliberately does not
+open ZIP archives or attachments. Pass the extracted root `session.jsonl` or
+`session.vN.jsonl` file to `deepseek-harness-session-jsonl`:
+
+```bash
+unzip -l dsh-session-<SESSION_ID>.zip
+mkdir -p dsh-session
+unzip -q dsh-session-<SESSION_ID>.zip -d dsh-session
+python -m memory.cli import deepseek-harness-session-jsonl dsh-session/session.v4.jsonl --json
+```
+
+Choose the root file actually present in the archive; unversioned version 0
+logs use `session.jsonl`, while later formats use `session.vN.jsonl`. Descendant
+agent logs under `subagents/<SESSION_ID>/` are independent conversations and
+may be imported separately with the same command. The importer records their
+parent session ID and descendant relationship but does not merge the tree.
+
+The bundled Draft 2020-12 schema supports canonical Harness session versions
+0 through 4. It keeps visible user and assistant text, while omitting system
+and request context, internal user messages, reasoning, commands, tools,
+compaction content, usage, attachments, duplicate message updates, and unknown
+event types. Exported logs with `seq` and `time` coordinates must contain a
+complete dense sequence; raw canonical files without coordinates retain their
+physical order. Mixed or non-monotonic ordering and malformed recognized
+records fail with their physical line number. Multipart archive upload remains
+outside this importer contract.
+
+This format is distinct from `deepseek-share-json`, which consumes the public
+DeepSeek chat share-content response. A future DeepSeek account-history CSV
+importer is tracked separately; neither format should be passed to the Harness
+session importer.
 
 For a public DeepSeek share link, save the response from its share-content API
 as JSON, then pass that file to `deepseek-share-json`. The importer keeps request
@@ -445,6 +579,106 @@ human-readable fallback is preferable.
 Review imported output before retaining sensitive conversations. The repository
 fixtures are synthetic and contain no text copied from personal exports.
 
+Hermes Agent's `sessions export` command writes one complete session object per
+JSONL line. Import one session directly from standard input, or save and import
+a multi-session backup:
+
+```bash
+hermes sessions export - --session-id <SESSION_ID> --redact \
+  | python -m memory.cli import hermes-session-jsonl - --json
+
+hermes sessions export hermes-backup.jsonl --redact
+python -m memory.cli import hermes-session-jsonl hermes-backup.jsonl --json
+```
+
+Use `--redact` whenever an export may be shared or retained outside Hermes'
+local state. The importer preserves each exported session as a separate hub
+conversation and keeps safe provenance such as its session ID, Hermes source,
+title, model, working directory, Git root and branch, parent session ID, and
+UTC start time. It imports non-empty user and assistant text that remains in
+Hermes' visible history, including compaction-archived turns, while excluding
+rewound/edited-away rows and synthetic compressed context. System prompts,
+tool calls and results, reasoning, timings, billing and token data, user/chat
+identifiers, and unknown fields are not copied into canonical memory. Hermes
+Markdown exports are presentation formats; use the documented JSONL backup for
+structured import.
+
+### Multipart HTTP imports
+
+Authenticated API clients can use the same registered parsers as the CLI with
+`POST /memory/import`. The request must be `multipart/form-data` with an
+explicit `parser` text field and one uploaded `file` part. The server never
+guesses a parser from the filename or media type, and the uploaded filename is
+metadata only: it is never opened as a server path or treated as a URL.
+
+JSON, JSONL, CSV, and speaker-labelled plain-text examples:
+
+```bash
+curl -fsS -X POST http://127.0.0.1:8000/memory/import \
+  -H "Authorization: Bearer $MEMORY_API_TOKEN" \
+  -F "parser=opencode-session-json" \
+  -F "file=@opencode-session.json;type=application/json"
+
+curl -fsS -X POST http://127.0.0.1:8000/memory/import \
+  -H "Authorization: Bearer $MEMORY_API_TOKEN" \
+  -F "parser=hermes-session-jsonl" \
+  -F "file=@hermes-backup.jsonl;type=application/x-ndjson"
+
+curl -fsS -X POST http://127.0.0.1:8000/memory/import \
+  -H "Authorization: Bearer $MEMORY_API_TOKEN" \
+  -F "parser=copilot-activity-csv" \
+  -F "file=@copilot-activity.csv;type=text/csv"
+
+curl -fsS -X POST http://127.0.0.1:8000/memory/import \
+  -H "Authorization: Bearer $MEMORY_API_TOKEN" \
+  -F "parser=manual" \
+  -F "file=@transcript.txt;type=text/plain"
+```
+
+Optional `source` and `title` text fields have the same meaning as their CLI
+options. An optional `schema` JSON part is accepted only when the selected
+parser publishes a bounded override contract. Hermes currently supports
+version 1 top-level field aliases, role aliases, and explicit ISO 8601, Unix
+seconds, or Unix milliseconds timestamps:
+
+```json
+{
+  "version": 1,
+  "message_container": "turns",
+  "session_id_field": "session_key",
+  "role_field": "speaker",
+  "content_field": "body",
+  "role_map": {
+    "human": "user",
+    "ai": "assistant"
+  },
+  "timestamp": {
+    "field": "created_at",
+    "format": "iso8601"
+  }
+}
+```
+
+```bash
+curl -fsS -X POST http://127.0.0.1:8000/memory/import \
+  -H "Authorization: Bearer $MEMORY_API_TOKEN" \
+  -F "parser=hermes-session-jsonl" \
+  -F "file=@custom-hermes.jsonl;type=application/x-ndjson" \
+  -F "schema=@hermes-parser-schema.json;type=application/json"
+
+python -m memory.cli import hermes-session-jsonl custom-hermes.jsonl \
+  --schema hermes-parser-schema.json --json
+```
+
+Overrides cannot contain remote or filesystem references, code, templates,
+queries, or regular expressions, and cannot alter authentication, canonical
+validation, save-intent policy, sensitive-content handling, hashing, storage,
+or project ownership. The endpoint requires `memory:write`, accepts UTF-8 input
+only, limits files to 20,000,000 bytes, limits override schemas to 65,536 bytes,
+and returns bounded per-conversation IDs and statuses without echoing source
+text or schema contents. All sessions are parsed before insertion begins; if a
+later independent insertion fails, its index receives a redacted error receipt.
+
 Shared options include `--config <path>`, `--json`, `--quiet`, and `--verbose`.
 `search` also supports `--source`, `--date-from`, `--date-to`, repeated `--tags`,
 `--thread-id`, and `--result-mode chunks|compact|conversations|threads`.
@@ -502,6 +736,11 @@ provider slots until their provider-specific flows are implemented. Client
 snippets remain marked `Unverified` until checked against current client
 releases. See the [Connect UI and OAuth setup guide](connect_ui.md) for
 packages, Docker setup, provider status, and client verification notes.
+
+For an external OpenID Connect provider such as Keycloak, use
+`api.auth: oidc_resource_server`. This mode validates asymmetric access tokens
+through provider discovery/JWKS and advertises the external issuer to MCP
+clients; see [External OIDC and Keycloak](external_oidc.md).
 
 Core tools:
 

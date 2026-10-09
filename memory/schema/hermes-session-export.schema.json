@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-memory-hub/schema/hermes-session-export.schema.json",
+  "title": "Hermes Agent Session JSONL Export",
+  "description": "The bounded subset of Hermes session backup records consumed by the importer. Unknown session and message fields remain forward-compatible and are ignored.",
+  "type": "object",
+  "additionalProperties": true,
+  "$defs": {
+    "sessionRecord": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "source": {"type": "string", "minLength": 1},
+        "model": {"type": "string", "minLength": 1},
+        "title": {"type": "string", "minLength": 1},
+        "started_at": {"type": "number"},
+        "cwd": {"type": "string", "minLength": 1},
+        "git_repo_root": {"type": "string", "minLength": 1},
+        "git_branch": {"type": "string", "minLength": 1},
+        "parent_session_id": {"type": "string", "minLength": 1},
+        "messages": {"type": "array"}
+      },
+      "required": ["id", "messages"],
+      "additionalProperties": true
+    },
+    "messageCandidate": {
+      "type": "object",
+      "properties": {
+        "role": {"enum": ["user", "assistant"]}
+      },
+      "required": ["role"],
+      "additionalProperties": true
+    },
+    "importableMessage": {
+      "type": "object",
+      "properties": {
+        "role": {"enum": ["user", "assistant"]},
+        "content": {
+          "oneOf": [
+            {"type": "string"},
+            {
+              "type": "array",
+              "items": {
+                "oneOf": [
+                  {"type": "string"},
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {"type": "string"},
+                      "text": {"type": "string"},
+                      "content": {"type": "string"}
+                    },
+                    "additionalProperties": true
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "active": {"oneOf": [{"type": "boolean"}, {"enum": [0, 1]}]},
+        "compacted": {"oneOf": [{"type": "boolean"}, {"enum": [0, 1]}]},
+        "_compressed_summary": {
+          "oneOf": [{"type": "boolean"}, {"enum": [0, 1]}]
+        }
+      },
+      "required": ["role", "content"],
+      "additionalProperties": true
+    }
+  }
+}
