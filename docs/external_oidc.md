@@ -28,6 +28,9 @@ api:
     client_id: ai-memory-hub
     audience: ai-memory-hub
     algorithms: [RS256]
+    username_claim: preferred_username
+    email_claim: email
+    display_name_claim: name
     allowed_groups: [memory-users]
     allowed_roles: [memory-user]
     role_scopes:
@@ -47,8 +50,20 @@ add hub scopes through `role_scopes`. Protected requests still require
 
 Identity ownership is derived from a SHA-256 digest of the issuer and subject.
 This keeps the same user stable across restarts while preventing subject
-collisions between providers. Access tokens and raw identity claims are not
-persisted or logged by this validation path.
+collisions between providers. On the first valid request, the hub creates the
+matching local user and default project. It stores only the subject and the
+configured `username_claim`, `email_claim`, and `display_name_claim` values in
+the OAuth identity profile; later tokens refresh changed values without
+changing ownership. Missing optional claims do not erase stored values, and an
+email explicitly marked `email_verified: false` is not stored. Access tokens,
+groups, roles, scopes, and other raw claims are not persisted or logged by this
+validation path.
+
+The profile claim names default to the standard Keycloak claims shown above
+and may use dotted paths for nested provider payloads. Claim synchronization is
+cached in-process for unchanged profiles to avoid a metadata write on every
+request. Restarting the hub or receiving changed profile values safely repeats
+the upsert.
 
 ## Keycloak client setup
 
@@ -94,7 +109,8 @@ or host rather than disabling certificate verification.
 
 ## Current boundary
 
-This first external-provider slice validates bearer access tokens and publishes
-MCP-compatible protected-resource metadata. It does not add a second browser
-login flow to `/connect`, provision Keycloak users into hub metadata, or manage
-Keycloak sessions. Those remain provider-owned concerns.
+External OIDC validates bearer access tokens, publishes MCP-compatible
+protected-resource metadata, and maintains a minimal local identity profile.
+It does not add a second browser login flow to `/connect` or manage Keycloak
+sessions. Interactive authorization, PKCE, refresh tokens, MFA, logout, and
+session policy remain provider- and MCP-client-owned concerns.

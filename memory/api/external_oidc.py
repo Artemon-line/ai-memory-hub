@@ -9,13 +9,23 @@ from typing import Any, cast
 
 from memory.config import OIDCResourceServerConfig
 
+_MAX_PROVIDER_SUBJECT_LENGTH = 255
+_MAX_USERNAME_LENGTH = 255
+_MAX_EMAIL_LENGTH = 320
+_MAX_DISPLAY_NAME_LENGTH = 1024
+
 
 @dataclass(frozen=True)
 class ExternalOIDCClaims:
     owner_id: str
+    provider: str
+    subject: str
     token_id: str | None
     scopes: frozenset[str]
     issuer: str
+    username: str | None
+    email: str | None
+    display_name: str | None
 
 
 class ExternalOIDCValidator:
@@ -57,11 +67,27 @@ class ExternalOIDCValidator:
         scopes = _scopes_from_claims(claims)
         for role in roles:
             scopes.update(self._config.role_scopes.get(role, []))
+        username = _optional_string_claim(
+            claims, self._config.username_claim, max_length=_MAX_USERNAME_LENGTH
+        )
+        email = _optional_string_claim(
+            claims, self._config.email_claim, max_length=_MAX_EMAIL_LENGTH
+        )
+        if claims.get("email_verified") is False:
+            email = None
+        display_name = _optional_string_claim(
+            claims, self._config.display_name_claim, max_length=_MAX_DISPLAY_NAME_LENGTH
+        )
         return ExternalOIDCClaims(
             owner_id=_qualified_owner_id(self._config.issuer, subject),
+            provider=_qualified_provider_id(self._config.issuer),
+            subject=subject,
             token_id=str(claims["jti"]) if claims.get("jti") is not None else None,
             scopes=frozenset(scopes),
             issuer=self._config.issuer,
+            username=username,
+            email=email,
+            display_name=display_name or username,
         )
 
     async def readiness(self) -> dict[str, bool]:
@@ -101,7 +127,11 @@ class ExternalOIDCValidator:
         ):
             return False
         subject = claims.get("sub")
-        if not isinstance(subject, str) or not subject.strip():
+        if (
+            not isinstance(subject, str)
+            or not subject.strip()
+            or len(subject.strip()) > _MAX_PROVIDER_SUBJECT_LENGTH
+        ):
             return False
 
         groups = _string_set(_claim_value(claims, self._config.groups_claim))
@@ -260,6 +290,21 @@ def _string_set(value: object) -> set[str]:
     if isinstance(value, list):
         return {str(item) for item in value if str(item).strip()}
     return set()
+
+
+def _optional_string_claim(
+    claims: dict[str, object], path: str, *, max_length: int
+) -> str | None:
+    value = _claim_value(claims, path)
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    return normalized if normalized and len(normalized) <= max_length else None
+
+
+def _qualified_provider_id(issuer: str) -> str:
+    digest = hashlib.sha256(issuer.encode()).hexdigest()
+    return f"oidc_{digest[:32]}"
 
 
 def _qualified_owner_id(issuer: str, subject: str) -> str:

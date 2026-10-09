@@ -9,7 +9,9 @@ should describe the supported public behavior for each tagged release.
 - Added a generic external OIDC resource-server mode with discovery/JWKS
   caching, asymmetric access-token validation, issuer-qualified identities,
   Keycloak role-to-scope mapping, allowlists, MCP authorization metadata, and
-  cached provider availability in readiness and Connect UI diagnostics.
+  cached provider availability in readiness and Connect UI diagnostics. Valid
+  external identities now synchronize configurable username, email, and
+  display-name claims into stable local user profiles.
 - Added authenticated multipart `POST /memory/import` support for every
   registered conversation parser, with explicit parser selection, bounded
   uploads, safe indexed receipts, shared insertion policy enforcement, and a

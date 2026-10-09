@@ -1700,12 +1700,14 @@ def test_google_subjects_map_to_stable_distinct_users(tmp_path, monkeypatch) -> 
     alice = store.find_or_create_oauth_identity(
         provider="google",
         provider_subject="google-subject-a",
+        username="alice",
         email="Alice@Example.com",
         display_name="Alice",
     )
     alice_again = store.find_or_create_oauth_identity(
         provider="google",
         provider_subject="google-subject-a",
+        username="alice-updated",
         email="alice@example.com",
         display_name="Alice Updated",
     )
@@ -1719,3 +1721,4 @@ def test_google_subjects_map_to_stable_distinct_users(tmp_path, monkeypatch) -> 
     assert alice["user_id"] == alice_again["user_id"]
     assert alice["user_id"] != bob["user_id"]
     assert alice_again["email"] == "alice@example.com"
+    assert alice_again["username"] == "alice-updated"

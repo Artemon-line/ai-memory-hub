@@ -681,7 +681,9 @@ class OIDCResourceServerConfig(BaseModel):
     audience: str = ""
     client_id: str = ""
     algorithms: list[str] = Field(default_factory=lambda: ["RS256"])
+    username_claim: str = "preferred_username"
     email_claim: str = "email"
+    display_name_claim: str = "name"
     groups_claim: str = "groups"
     roles_claim: str = "roles"
     allowed_domains: list[str] = Field(default_factory=list)
@@ -718,7 +720,13 @@ class OIDCResourceServerConfig(BaseModel):
             )
         return list(dict.fromkeys(normalized))
 
-    @field_validator("email_claim", "groups_claim", "roles_claim")
+    @field_validator(
+        "username_claim",
+        "email_claim",
+        "display_name_claim",
+        "groups_claim",
+        "roles_claim",
+    )
     @classmethod
     def validate_claim_names(cls, value: str, info: Any) -> str:
         normalized = value.strip()
