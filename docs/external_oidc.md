@@ -79,8 +79,13 @@ curl -fsS https://memory.example.internal/memory/search \
 ```
 
 `GET /ready` reports the external issuer, discovery URL, configured audience,
-and whether a direct JWKS URL is configured. It never returns tokens or client
-secrets.
+whether a direct JWKS URL is configured, and a live `provider_ready` signal.
+The Connect page shows the same provider availability. Successful checks use
+the configured JWKS cache lifetime; failed checks are cached for 30 seconds so
+an unavailable provider is not contacted on every readiness request. Provider
+failure does not make the hub's own readiness endpoint fail, because existing
+local operations and diagnostics must remain available. These surfaces never
+return tokens, claims, client secrets, or provider error responses.
 
 Use TLS even on a private LAN unless every hop is otherwise protected. Do not
 copy browser tokens into committed configuration or shell history. If Keycloak

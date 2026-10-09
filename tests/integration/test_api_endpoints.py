@@ -1185,10 +1185,33 @@ def test_external_oidc_auth_uses_provider_metadata_and_keycloak_role_scopes(
         ),
         "jwks_configured": False,
         "audience": "ai-memory-hub",
+        "provider_ready": True,
     }
     assert search.status_code == 200
     assert denied.status_code == 403
     assert inserted.status_code == 200
+
+
+def test_external_oidc_provider_failure_is_reported_without_failing_hub_readiness(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, _key = _external_oidc_client(monkeypatch)
+    requests: list[str] = []
+
+    async def fetch(url: str) -> None:
+        requests.append(url)
+        return None
+
+    monkeypatch.setattr(external_oidc, "_fetch_json", fetch)
+
+    first = client.get("/ready")
+    second = client.get("/ready")
+
+    assert first.status_code == 200
+    assert first.json()["status"] == "ok"
+    assert first.json()["connect_ui"]["external_oidc"]["provider_ready"] is False
+    assert second.json()["connect_ui"]["external_oidc"]["provider_ready"] is False
+    assert len(requests) == 1
 
 
 def test_external_oidc_auth_rejects_wrong_audience(monkeypatch: pytest.MonkeyPatch) -> None:

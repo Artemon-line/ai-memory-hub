@@ -17,6 +17,7 @@ from joserfc import jwt
 from joserfc.jwk import RSAKey
 from starlette.requests import Request
 
+from memory.api import external_oidc
 from memory.api.connect_service import (
     ClientVerificationStatus,
     client_snippet_models,
@@ -44,6 +45,7 @@ def _client(
     allowed_domains: list[str] | None = None,
     passport: dict[str, object] | None = None,
     api_auth: str = "oauth_resource_server",
+    oidc: dict[str, object] | None = None,
     observability: dict[str, object] | None = None,
     health_state: dict[str, object] | None = None,
 ) -> TestClient:
@@ -89,7 +91,10 @@ def _client(
                 "oauth": {
                     "authorization_servers": ["https://memory.example.com"],
                     "jwt_secret": "oauth-secret-for-connect-ui-tests",
-                },
+                }
+                if api_auth == "oauth_resource_server"
+                else {},
+                "oidc": oidc or {},
                 "connect": connect_config,
             },
             "observability": observability or {},
@@ -542,6 +547,36 @@ def test_connect_ui_renders_local_no_auth_mode_without_hiding_setup(tmp_path, mo
     assert "OpenTelemetry metrics" in connect.text
     assert "enabled" in connect.text
     assert "http://otel.example.local:4317" not in connect.text
+
+
+def test_connect_ui_reports_external_oidc_provider_availability(tmp_path, monkeypatch) -> None:
+    key = RSAKey.generate_key(2048, parameters={"kid": "key-a", "alg": "RS256"})
+
+    async def fetch(url: str) -> dict[str, object]:
+        if url.endswith("openid-configuration"):
+            return {
+                "issuer": "https://keycloak.example.test/realms/home",
+                "jwks_uri": "https://keycloak.example.test/keys",
+            }
+        return {"keys": [key.as_dict(private=False)]}
+
+    monkeypatch.setattr(external_oidc, "_fetch_json", fetch)
+    client = _client(
+        tmp_path,
+        monkeypatch,
+        api_auth="oidc_resource_server",
+        oidc={
+            "issuer": "https://keycloak.example.test/realms/home",
+            "client_id": "ai-memory-hub",
+        },
+    )
+
+    connect = client.get("/connect")
+
+    assert connect.status_code == 200
+    assert "External OIDC resource server" in connect.text
+    assert "Identity provider" in connect.text
+    assert "Ready" in connect.text
 
 
 def test_connect_ui_renders_configured_passport_providers(tmp_path, monkeypatch) -> None:

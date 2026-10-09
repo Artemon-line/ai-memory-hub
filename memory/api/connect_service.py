@@ -160,11 +160,16 @@ class ConnectService:
         mcp_url = mcp_url_for_config(self.config, request=request)
         health_state = redact_content_hashes(await self.agent.health())
         auth_mode = access_mode_model(self.config)
+        external_oidc_readiness: dict[str, bool] | None = None
+        external_oidc = getattr(request.app.state, "external_oidc_validator", None)
+        if external_oidc is not None:
+            external_oidc_readiness = await external_oidc.readiness()
         return {
             "request": request,
             "signed_in": session,
             "auth_label": "Signed in" if session else "Not signed in",
             "auth_mode": auth_mode,
+            "external_oidc_readiness": external_oidc_readiness,
             "identity": identity,
             "issued_token": issued_token,
             "csrf_token": csrf,
