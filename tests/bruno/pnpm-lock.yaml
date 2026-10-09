@@ -6,7 +6,7 @@ settings:
 
 overrides:
   '@faker-js/faker': 10.6.0
-  axios: 1.18.0
+  axios: 1.20.0
   csv-parse: 7.0.2
   fast-uri: 3.1.7
   form-data: 4.0.6
@@ -736,7 +736,7 @@ packages:
     resolution: {integrity: sha512-BlpjvRWiOi52k8bCeoSCTe5jKQQdSqAN18x07WR8sZghzGW6tvtuepz+72pPvImI2vCn2F5HiyLvOVAVjoha+g==}
     engines: {node: '>=16'}
     peerDependencies:
-      axios: 1.18.0
+      axios: 1.20.0
 
   aws4@1.13.2:
     resolution: {integrity: sha512-lHe62zvbTB5eEABUVi/AwVh0ZKY9rMMDhmm+eeyuuUQbQ3+J+fONVQOZyj+DdrvD4BY33uYniyRJ4UJIaSKAfw==}
@@ -744,8 +744,8 @@ packages:
   axios-ntlm@1.4.6:
     resolution: {integrity: sha512-4nR5cbVEBfPMTFkd77FEDpDuaR205JKibmrkaQyNwGcCx0szWNpRZaL0jZyMx4+mVY2PXHjRHuJafv9Oipl0Kg==}
 
-  axios@1.18.0:
-    resolution: {integrity: sha512-E32NzpYKp++W7XRe52rHiXV2ehxmh3wbdgO7MHeFM+vqxLBYHzt0ElkiImtOBxtOmyp0yoC8C6uESVV84Y2/hw==}
+  axios@1.20.0:
+    resolution: {integrity: sha512-r8aOh8j9cGKpgQAqpzrUHnSIc6a59Y3Xf/cv8sy1DrHCkZHzQGEuoq1tARk6qSyDdtQGSDgpb9kFlruzPvrgwg==}
 
   balanced-match@1.0.2:
     resolution: {integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==}
@@ -2931,8 +2931,8 @@ snapshots:
       '@usebruno/js': 0.52.0(debug@4.4.3)
       '@usebruno/lang': 0.40.0
       '@usebruno/requests': 0.21.0
-      aws4-axios: 3.4.0(axios@1.18.0)
-      axios: 1.18.0(debug@4.4.3)
+      aws4-axios: 3.4.0(axios@1.20.0)
+      axios: 1.20.0(debug@4.4.3)
       axios-ntlm: 1.4.6(debug@4.4.3)
       chai: 4.5.0
       chalk: 3.0.0
@@ -2991,7 +2991,7 @@ snapshots:
       ajv: 8.20.0
       ajv-formats: 2.1.1(ajv@8.20.0)
       atob: 2.1.2
-      axios: 1.18.0(debug@4.4.3)
+      axios: 1.20.0(debug@4.4.3)
       btoa: 1.2.1
       chai: 4.5.0
       chai-string: 1.6.0(chai@4.5.0)
@@ -3039,7 +3039,7 @@ snapshots:
       '@smithy/node-http-handler': 4.5.3
       '@types/qs': 6.15.1
       '@usebruno/common': 0.26.0
-      axios: 1.18.0(debug@4.4.3)
+      axios: 1.20.0(debug@4.4.3)
       debug: 4.4.3
       google-auth-library: 10.5.0
       google-protobuf: 4.0.3
@@ -3110,17 +3110,17 @@ snapshots:
 
   atob@2.1.2: {}
 
-  aws4-axios@3.4.0(axios@1.18.0):
+  aws4-axios@3.4.0(axios@1.20.0):
     dependencies:
       '@aws-sdk/client-sts': 3.1140.0
       aws4: 1.13.2
-      axios: 1.18.0(debug@4.4.3)
+      axios: 1.20.0(debug@4.4.3)
 
   aws4@1.13.2: {}
 
   axios-ntlm@1.4.6(debug@4.4.3):
     dependencies:
-      axios: 1.18.0(debug@4.4.3)
+      axios: 1.20.0(debug@4.4.3)
       des.js: 1.1.0
       dev-null: 0.1.1
       js-md4: 0.3.2
@@ -3128,7 +3128,7 @@ snapshots:
       - debug
       - supports-color
 
-  axios@1.18.0(debug@4.4.3):
+  axios@1.20.0(debug@4.4.3):
     dependencies:
       follow-redirects: 1.16.0(debug@4.4.3)
       form-data: 4.0.6
