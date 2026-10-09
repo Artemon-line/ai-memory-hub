@@ -85,6 +85,48 @@ async def test_external_oidc_validates_keycloak_claims_and_maps_role_scopes(
 
 
 @pytest.mark.asyncio
+async def test_external_oidc_readiness_reuses_successful_provider_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    key = RSAKey.generate_key(2048, parameters={"kid": "key-a", "alg": "RS256"})
+    requests: list[str] = []
+
+    async def fetch(url: str) -> dict[str, object]:
+        requests.append(url)
+        if url.endswith("openid-configuration"):
+            return {
+                "issuer": "https://keycloak.example.test/realms/home",
+                "jwks_uri": "https://keycloak.example.test/keys",
+            }
+        return {"keys": [key.as_dict(private=False)]}
+
+    monkeypatch.setattr(external_oidc, "_fetch_json", fetch)
+    validator = ExternalOIDCValidator(_config().api.oidc)
+
+    assert await validator.readiness() == {"provider_ready": True}
+    assert await validator.readiness() == {"provider_ready": True}
+    assert len(requests) == 2
+
+
+@pytest.mark.asyncio
+async def test_external_oidc_readiness_caches_provider_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requests: list[str] = []
+
+    async def fetch(url: str) -> None:
+        requests.append(url)
+        return None
+
+    monkeypatch.setattr(external_oidc, "_fetch_json", fetch)
+    validator = ExternalOIDCValidator(_config().api.oidc)
+
+    assert await validator.readiness() == {"provider_ready": False}
+    assert await validator.readiness() == {"provider_ready": False}
+    assert len(requests) == 1
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "overrides",
     [

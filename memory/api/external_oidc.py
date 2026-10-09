@@ -31,11 +31,13 @@ class ExternalOIDCValidator:
         self._config = config
         self._metadata_cache: tuple[int, dict[str, object]] | None = None
         self._jwks_cache: tuple[int, dict[str, object]] | None = None
+        self._readiness_cache: tuple[int, bool] | None = None
 
     async def validate(self, access_token: str) -> ExternalOIDCClaims | None:
         jwks = await self._jwks()
         if jwks is None:
             return None
+        self._cache_readiness(True)
         claims = _decode_token(access_token, jwks, self._config.algorithms)
         if claims is None and not _jwks_contains_token_key(access_token, jwks):
             # A single refresh handles normal signing-key rotation without making every
@@ -61,6 +63,19 @@ class ExternalOIDCValidator:
             scopes=frozenset(scopes),
             issuer=self._config.issuer,
         )
+
+    async def readiness(self) -> dict[str, bool]:
+        """Report provider availability without exposing provider response details."""
+        now = int(time.time())
+        if self._readiness_cache is not None and self._readiness_cache[0] > now:
+            return {"provider_ready": self._readiness_cache[1]}
+        provider_ready = await self._jwks() is not None
+        self._cache_readiness(provider_ready)
+        return {"provider_ready": provider_ready}
+
+    def _cache_readiness(self, provider_ready: bool) -> None:
+        ttl = self._config.cache_ttl_seconds if provider_ready else 30
+        self._readiness_cache = (int(time.time()) + ttl, provider_ready)
 
     def _validate_claims(self, claims: dict[str, object]) -> bool:
         now = int(time.time())

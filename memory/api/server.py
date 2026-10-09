@@ -172,6 +172,12 @@ def _register_health_routes(
     async def ready() -> dict[str, Any]:
         health_state = redact_content_hashes(await agent.health())
         record_health_metrics(health_state)
+        connect_ui = connect_status(config)
+        external_oidc = getattr(app.state, "external_oidc_validator", None)
+        if external_oidc is not None:
+            external_oidc_status = connect_ui.get("external_oidc")
+            if isinstance(external_oidc_status, dict):
+                external_oidc_status.update(await external_oidc.readiness())
         embedding_health = health_state.get("embedding_health")
         embedding_provider = None
         if isinstance(embedding_health, dict):
@@ -185,7 +191,7 @@ def _register_health_routes(
             "vector_provider": health_state.get("vector_provider"),
             "embedding_provider": embedding_provider,
             "telemetry_enabled": _telemetry_enabled(app),
-            "connect_ui": connect_status(config),
+            "connect_ui": connect_ui,
             "health": health_state,
         }
 

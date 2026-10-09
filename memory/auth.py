@@ -72,7 +72,18 @@ class AuthContext:
 def install_auth_middleware(app, *, config: HubConfig, agent: BaseIngestionAgent) -> None:
     if config.api.auth == "none":
         return
-    app.add_middleware(AuthMiddleware, config=config, agent=agent)
+    external_oidc = (
+        ExternalOIDCValidator(config.api.oidc)
+        if config.api.auth == "oidc_resource_server"
+        else None
+    )
+    app.state.external_oidc_validator = external_oidc
+    app.add_middleware(
+        AuthMiddleware,
+        config=config,
+        agent=agent,
+        external_oidc=external_oidc,
+    )
 
 
 def extract_bearer_token(request: Request) -> str | None:
@@ -112,15 +123,18 @@ def current_auth_context() -> AuthContext | None:
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, *, config: HubConfig, agent: BaseIngestionAgent):
+    def __init__(
+        self,
+        app,
+        *,
+        config: HubConfig,
+        agent: BaseIngestionAgent,
+        external_oidc: ExternalOIDCValidator | None = None,
+    ):
         super().__init__(app)
         self._config = config
         self._agent = agent
-        self._external_oidc = (
-            ExternalOIDCValidator(config.api.oidc)
-            if config.api.auth == "oidc_resource_server"
-            else None
-        )
+        self._external_oidc = external_oidc
 
     async def dispatch(
         self,

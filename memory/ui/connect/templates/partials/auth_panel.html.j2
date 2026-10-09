@@ -26,6 +26,14 @@
       <dd>{{ identity|e }}</dd>
     </div>
     {% endif %}
+    {% if external_oidc_readiness %}
+    <div>
+      <dt>Identity provider</dt>
+      <dd>
+        <span class="status-pill{% if external_oidc_readiness.provider_ready %} status-pill--ok{% else %} status-pill--pending{% endif %}">{% if external_oidc_readiness.provider_ready %}Ready{% else %}Unavailable{% endif %}</span>
+      </dd>
+    </div>
+    {% endif %}
   </dl>
   <p class="panel-note">{{ auth_mode.description|e }}</p>
 
