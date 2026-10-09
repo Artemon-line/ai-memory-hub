@@ -64,6 +64,8 @@
   </form>
   {% elif auth_mode.value == 'oauth_resource_server' %}
   {% include "partials/provider_buttons.html.j2" %}
+  {% elif auth_mode.value == 'oidc_resource_server' %}
+  <p class="muted">Sign in through the identity provider configured for this server.</p>
   {% elif auth_mode.value == 'bearer_token' %}
   <p class="muted">The Connect page intentionally does not render configured secrets.</p>
   {% else %}

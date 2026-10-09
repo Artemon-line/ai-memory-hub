@@ -737,6 +737,11 @@ snippets remain marked `Unverified` until checked against current client
 releases. See the [Connect UI and OAuth setup guide](connect_ui.md) for
 packages, Docker setup, provider status, and client verification notes.
 
+For an external OpenID Connect provider such as Keycloak, use
+`api.auth: oidc_resource_server`. This mode validates asymmetric access tokens
+through provider discovery/JWKS and advertises the external issuer to MCP
+clients; see [External OIDC and Keycloak](external_oidc.md).
+
 Core tools:
 
 - `memory_validate(conversation_json)`

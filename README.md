@@ -251,6 +251,11 @@ provider-specific flows are implemented. See the
 [Connect UI and OAuth setup guide](docs/connect_ui.md) for packages, provider
 status, and client verification notes.
 
+To use an external OpenID Connect provider such as Keycloak, select
+`api.auth: oidc_resource_server`. The hub validates asymmetric access tokens
+through discovery/JWKS and maps provider roles to memory scopes; see the
+[external OIDC guide](docs/external_oidc.md).
+
 ## Common Workflows
 
 Use the CLI during development:

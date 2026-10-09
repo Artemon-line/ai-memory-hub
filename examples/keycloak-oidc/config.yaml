@@ -1,0 +1,38 @@
+interfaces:
+  api: true
+  mcp: true
+
+paths:
+  data_dir: ./data
+  logs_dir: ./logs
+
+providers:
+  embeddings: local
+  vector_db: in_memory
+  metadata_db: sqlite
+
+api:
+  host: 127.0.0.1
+  port: 8000
+  auth: oidc_resource_server
+  public_base_url: https://memory.example.internal
+  oidc:
+    issuer: https://keycloak.example.internal/realms/home
+    client_id: ai-memory-hub
+    audience: ai-memory-hub
+    algorithms:
+      - RS256
+    allowed_groups:
+      - memory-users
+    allowed_roles:
+      - memory-user
+    role_scopes:
+      memory-reader:
+        - memory:read
+      memory-writer:
+        - memory:read
+        - memory:write
+
+mcp:
+  host: 127.0.0.1
+  port: 8765

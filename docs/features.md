@@ -51,7 +51,8 @@ distance modes, fallback behavior, health state, and secret redaction.
 
 - Auth modes are `none` for CI/maintainer loopback smoke tests,
   `bearer_token` for personal-token compatibility, and
-  `oauth_resource_server` for user-facing MCP OAuth setup.
+  `oauth_resource_server` for the hub-issued MCP OAuth flow, plus
+  `oidc_resource_server` for external OIDC discovery/JWKS validation.
 - Bearer-token authentication protects `/memory/*` and `/mcp/*` when auth is
   enabled.
 - Public `/health`, `/ready`, `/observability`, OAuth protected-resource
