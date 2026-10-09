@@ -11,7 +11,10 @@ from pathlib import Path
 import jsonschema
 import pytest
 from fastapi.testclient import TestClient
+from joserfc import jwt
+from joserfc.jwk import RSAKey
 
+from memory.api import external_oidc
 from memory.api.server import create_app
 from memory.auth import (
     AUTH_ERROR_CODE_HEADER,
@@ -189,6 +192,57 @@ def _oauth_client() -> TestClient:
         ingestion_agent=agent,
     )
     return TestClient(app)
+
+
+def _external_oidc_client(monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient, RSAKey]:
+    key = RSAKey.generate_key(2048, parameters={"kid": "key-a", "alg": "RS256"})
+
+    async def fetch(url: str) -> dict[str, object]:
+        if url.endswith("openid-configuration"):
+            return {
+                "issuer": "https://keycloak.example.test/realms/home",
+                "jwks_uri": "https://keycloak.example.test/realms/home/certs",
+            }
+        return {"keys": [key.as_dict(private=False)]}
+
+    monkeypatch.setattr(external_oidc, "_fetch_json", fetch)
+    runtime = _runtime()
+    agent = MVPIngestionAgent(
+        config={"providers": {"agent": "mvp"}, "interfaces": {"api": "true"}},
+        runtime=runtime,
+    )
+    app = create_app(
+        config={
+            "api": {
+                "auth": "oidc_resource_server",
+                "public_base_url": "https://memory.example.com",
+                "oidc": {
+                    "issuer": "https://keycloak.example.test/realms/home",
+                    "client_id": "ai-memory-hub",
+                    "allowed_roles": ["memory-user"],
+                    "role_scopes": {"memory-writer": ["memory:write"]},
+                },
+            },
+            "providers": {"embeddings": "local", "vector_db": "in_memory"},
+        },
+        ingestion_agent=agent,
+    )
+    return TestClient(app), key
+
+
+def _external_oidc_token(key: RSAKey, **claims: object) -> str:
+    now = int(time.time())
+    payload: dict[str, object] = {
+        "iss": "https://keycloak.example.test/realms/home",
+        "aud": "ai-memory-hub",
+        "sub": "keycloak-user-a",
+        "scope": "memory:read",
+        "realm_access": {"roles": ["memory-user"]},
+        "iat": now,
+        "exp": now + 300,
+        **claims,
+    }
+    return jwt.encode({"alg": "RS256", "kid": "key-a"}, payload, key)
 
 
 def _sqlite_oauth_client(tmp_path) -> tuple[TestClient, SQLiteMetadataStore]:
@@ -1088,6 +1142,68 @@ def test_oauth_auth_accepts_valid_token_and_enforces_scopes() -> None:
     assert "Client tool approval" in write_error["error_message"]
     assert "MCP client/server auth configuration" in write_error["auth_config_hint"]
     assert full_response.status_code == 200
+
+
+def test_external_oidc_auth_uses_provider_metadata_and_keycloak_role_scopes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, key = _external_oidc_client(monkeypatch)
+    read_token = _external_oidc_token(key)
+    writer_token = _external_oidc_token(
+        key,
+        realm_access={"roles": ["memory-user", "memory-writer"]},
+    )
+
+    metadata = client.get("/.well-known/oauth-protected-resource/mcp")
+    ready = client.get("/ready")
+    search = client.post(
+        "/memory/search",
+        json={"query": "hello"},
+        headers={"Authorization": f"Bearer {read_token}"},
+    )
+    denied = client.post(
+        "/memory/insert",
+        json=_conversation(),
+        headers={"Authorization": f"Bearer {read_token}"},
+    )
+    inserted = client.post(
+        "/memory/insert",
+        json=_conversation(),
+        headers={"Authorization": f"Bearer {writer_token}"},
+    )
+
+    assert metadata.status_code == 200
+    assert metadata.json()["authorization_servers"] == [
+        "https://keycloak.example.test/realms/home"
+    ]
+    assert ready.status_code == 200
+    assert ready.json()["connect_ui"]["external_oidc"] == {
+        "enabled": True,
+        "issuer": "https://keycloak.example.test/realms/home",
+        "discovery_url": (
+            "https://keycloak.example.test/realms/home/.well-known/openid-configuration"
+        ),
+        "jwks_configured": False,
+        "audience": "ai-memory-hub",
+    }
+    assert search.status_code == 200
+    assert denied.status_code == 403
+    assert inserted.status_code == 200
+
+
+def test_external_oidc_auth_rejects_wrong_audience(monkeypatch: pytest.MonkeyPatch) -> None:
+    client, key = _external_oidc_client(monkeypatch)
+    token = _external_oidc_token(key, aud="another-service")
+
+    response = client.post(
+        "/memory/search",
+        json={"query": "hello"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["auth_mode"] == "oidc_resource_server"
+    assert "keycloak-user-a" not in response.text
 
 
 def test_hub_oauth_token_cannot_widen_claim_scopes_from_stored_context(tmp_path) -> None:

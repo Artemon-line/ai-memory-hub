@@ -40,8 +40,8 @@ curl \
 
 ## Validator Status
 
-Current built-in validation supports HS256 JWTs through `api.oauth.jwt_secret`
-or `api.oauth.jwt_secret_env`. JWKS and introspection are the planned production
-adapters for third-party authorization servers; until those are implemented, put
-ai-memory-hub behind a trusted identity-aware proxy or use a local issuer that
-can mint HS256 tokens for this resource.
+This built-in authorization-server flow validates hub-issued HS256 JWTs through
+`api.oauth.jwt_secret` or `api.oauth.jwt_secret_env`. For third-party providers
+that publish OIDC discovery and JWKS, use `api.auth: oidc_resource_server`; see
+the `examples/keycloak-oidc` configuration. Token introspection for opaque access
+tokens is not implemented.
