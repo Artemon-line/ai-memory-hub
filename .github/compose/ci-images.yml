@@ -1,0 +1,5 @@
+services:
+  postgres:
+    image: mirror.gcr.io/pgvector/pgvector@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+  grafana:
+    image: mirror.gcr.io/grafana/grafana-oss:12.4.3@sha256:2e986801428cd689c2358605289c90ab37d2b39e24808874971f54c99bcdc412

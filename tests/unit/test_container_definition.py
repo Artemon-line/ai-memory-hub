@@ -19,6 +19,10 @@ PINNED_PGVECTOR_IMAGE = (
     "pgvector/pgvector:pg16"
     "@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b"
 )
+MIRRORED_PGVECTOR_IMAGE = (
+    "mirror.gcr.io/pgvector/pgvector"
+    "@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b"
+)
 LOCAL_STACK_PUBLIC_URL_PLACEHOLDER = "https://YOUR-CUSTOM-DOMAIN.app"
 _COMMIT_SHA = re.compile(r"^[^/@\s]+/[^@\s]+@[0-9a-f]{40}$")
 _CONTAINER_DIGEST = re.compile(r"^docker://[^@\s]+@sha256:[0-9a-f]{64}$")
@@ -231,7 +235,7 @@ def test_postgres_service_images_are_digest_pinned() -> None:
     ):
         workflow = workflow_path.read_text(encoding="utf-8")
 
-        assert f"image: {PINNED_PGVECTOR_IMAGE}" in workflow
+        assert f"image: {MIRRORED_PGVECTOR_IMAGE}" in workflow
         assert "image: pgvector/pgvector:pg16\n" not in workflow
 
 
@@ -354,17 +358,23 @@ def test_container_smoke_retains_stopped_container_for_logs() -> None:
 
 def test_compose_example_smoke_exercises_default_and_oauth_configs() -> None:
     workflow = Path(".github/workflows/pipeline.yml").read_text(encoding="utf-8")
+    ci_images = Path(".github/compose/ci-images.yml").read_text(encoding="utf-8")
 
     assert "name: Compose Example Smoke" in workflow
-    assert "docker compose -f \"$COMPOSE_FILE\" config" in workflow
+    assert workflow.count('docker pull "$OLLAMA_IMAGE"') == 2
+    assert "docker compose pull --ignore-buildable" in workflow
+    assert workflow.count("docker compose up -d --build --pull never") == 2
+    assert "docker compose config" in workflow
+    assert MIRRORED_PGVECTOR_IMAGE in ci_images
+    assert "mirror.gcr.io/grafana/grafana-oss:12.4.3@sha256:" in ci_images
     assert "Smoke default local stack" in workflow
     assert "amber-vector" in workflow
     assert "Smoke OAuth/Ollama local stack" in workflow
     assert "config.oauth-ci.yaml" in workflow
-    assert 'example_dir="$(dirname "$COMPOSE_FILE")"' in workflow
+    assert 'example_dir="$(dirname "$COMPOSE_BASE_FILE")"' in workflow
     assert "PUBLIC_BASE_URL:" in workflow
     assert '"iss": "https://ci-token-issuer.example.test"' in workflow
-    assert "ollama/ollama:0.22.1@sha256:" in workflow
+    assert "mirror.gcr.io/ollama/ollama:0.22.1@sha256:" in workflow
     assert "docker exec ollama-compose-ci ollama pull nomic-embed-text" in workflow
     assert "compose OAuth smoke phrase is blue-lantern" in workflow
     assert "Authorization: Bearer $CI_OAUTH_TOKEN" in workflow
