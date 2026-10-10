@@ -23,7 +23,7 @@ elasticsearch = [
     "elasticsearch>=9.5.1",
 ]
 milvus = [
-    "pymilvus>=3.0.1",
+    "pymilvus>=3.0.2",
     "setuptools>=84.0.0",
 ]
 mongodb = [
