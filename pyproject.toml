@@ -49,7 +49,7 @@ oauth = [
     "python-multipart>=0.0.32",
 ]
 postgres = [
-    "psycopg[binary]>=3.3.5",
+    "psycopg[binary]>=3.3.6",
 ]
 pinecone = [
     "pinecone>=7.0.0",
