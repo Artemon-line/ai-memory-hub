@@ -67,10 +67,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       OLLAMA_IMAGE: >-
-        ollama/ollama:0.22.1@sha256:3ca37ec2b9cb6341b62554074205c616778fe98abcf9e4fc50361b79a07407ae
+        mirror.gcr.io/ollama/ollama:0.22.1@sha256:3ca37ec2b9cb6341b62554074205c616778fe98abcf9e4fc50361b79a07407ae
 
     steps:
       - name: Checkout
@@ -96,19 +94,6 @@ jobs:
 
       - name: Install pinned OpenCode CLI
         run: npm install --global opencode-ai@1.18.34
-
-      - name: Log in to Docker Hub
-        if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
-        run: |
-          for attempt in 1 2 3; do
-            if printf '%s' "$DOCKERHUB_TOKEN" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin; then
-              exit 0
-            fi
-            if [ "$attempt" -eq 3 ]; then
-              exit 1
-            fi
-            sleep "$((attempt * 10))"
-          done
 
       - name: Start pinned Ollama container
         run: |
@@ -281,10 +266,7 @@ jobs:
     timeout-minutes: 20
     services:
       postgres:
-        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
-        credentials:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+        image: mirror.gcr.io/pgvector/pgvector@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
         env:
           POSTGRES_USER: test
           POSTGRES_PASSWORD: test
@@ -458,43 +440,29 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      COMPOSE_FILE: examples/local-stack/compose.yaml
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      COMPOSE_BASE_FILE: examples/local-stack/compose.yaml
+      COMPOSE_FILE: examples/local-stack/compose.yaml:.github/compose/ci-images.yml
       OLLAMA_IMAGE: >-
-        ollama/ollama:0.22.1@sha256:3ca37ec2b9cb6341b62554074205c616778fe98abcf9e4fc50361b79a07407ae
+        mirror.gcr.io/ollama/ollama:0.22.1@sha256:3ca37ec2b9cb6341b62554074205c616778fe98abcf9e4fc50361b79a07407ae
 
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Log in to Docker Hub
-        if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
-        run: |
-          for attempt in 1 2 3; do
-            if printf '%s' "$DOCKERHUB_TOKEN" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin; then
-              exit 0
-            fi
-            if [ "$attempt" -eq 3 ]; then
-              exit 1
-            fi
-            sleep "$((attempt * 10))"
-          done
-
       - name: Validate compose file
-        run: docker compose -f "$COMPOSE_FILE" config
+        run: docker compose config
 
       - name: Smoke default local stack
         run: |
           set -euo pipefail
           cleanup() {
-            docker compose -f "$COMPOSE_FILE" logs ai-memory-hub postgres > compose-default.log 2>&1 || true
-            docker compose -f "$COMPOSE_FILE" down -v || true
+            docker compose logs ai-memory-hub postgres > compose-default.log 2>&1 || true
+            docker compose down -v || true
           }
           trap cleanup EXIT
 
           for attempt in 1 2 3; do
-            if docker compose -f "$COMPOSE_FILE" pull --ignore-buildable; then
+            if docker compose pull --ignore-buildable; then
               break
             fi
             if [ "$attempt" -eq 3 ]; then
@@ -502,7 +470,7 @@ jobs:
             fi
             sleep "$((attempt * 10))"
           done
-          docker compose -f "$COMPOSE_FILE" up -d --build --pull never
+          docker compose up -d --build --pull never
           ready=false
           for attempt in $(seq 1 40); do
             if curl --max-time 5 -fsS http://127.0.0.1:8000/ready; then
@@ -576,17 +544,17 @@ jobs:
           GOOGLE_CLIENT_SECRET="$(openssl rand -hex 32)"
 
           cleanup() {
-            docker compose -f "$COMPOSE_FILE" logs ai-memory-hub postgres > compose-oauth.log 2>&1 || true
-            docker compose -f "$COMPOSE_FILE" down -v || true
+            docker compose logs ai-memory-hub postgres > compose-oauth.log 2>&1 || true
+            docker compose down -v || true
           }
           trap cleanup EXIT
 
-          example_dir="$(dirname "$COMPOSE_FILE")"
+          example_dir="$(dirname "$COMPOSE_BASE_FILE")"
           sed "s#https://YOUR-CUSTOM-DOMAIN.app#${PUBLIC_BASE_URL}#g" \
             "$example_dir/config.oauth-public.yaml" > "$example_dir/$AMH_CONFIG_FILE"
 
-          docker compose -f "$COMPOSE_FILE" config
-          docker compose -f "$COMPOSE_FILE" up -d --build --pull never
+          docker compose config
+          docker compose up -d --build --pull never
           ready=false
           for attempt in $(seq 1 50); do
             if curl --max-time 5 -fsS http://127.0.0.1:8000/ready; then
@@ -598,7 +566,7 @@ jobs:
           test "$ready" = "true"
           embeddings_ready=false
           for attempt in $(seq 1 30); do
-            if docker compose -f "$COMPOSE_FILE" exec -T ai-memory-hub \
+            if docker compose exec -T ai-memory-hub \
               /app/.venv/bin/python - <<'PY'
           import json
           import urllib.request
