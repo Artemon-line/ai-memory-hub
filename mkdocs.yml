@@ -44,6 +44,7 @@ nav:
   - Home: index.md
   - What Exists Now:
       - Current Features: docs/features.md
+      - Import Conversations: docs/importing_conversations.md
       - Technical Overview: docs/overview.md
       - Agent Integration: docs/agents.md
       - Connect UI and OAuth Setup: docs/connect_ui.md

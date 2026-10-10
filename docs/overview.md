@@ -272,6 +272,9 @@ python -m memory.cli ask "What did I store about local-first tools?" --top-k 5 -
 python -m memory.cli serve --host 127.0.0.1 --port 8000
 ```
 
+For short, source-by-source instructions and the default Linux, macOS, and
+Windows session locations, see [Import Conversations](importing_conversations.md).
+
 Manual imports accept multiline messages labelled with common speaker names such
 as `User:`, `You:`, `Human:`, `Assistant:`, `Copilot:`, `Claude:`, or `Gemini:`.
 Use `-` as the file name to read the transcript from stdin.
