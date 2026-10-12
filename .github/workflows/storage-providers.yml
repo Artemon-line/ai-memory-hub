@@ -71,7 +71,7 @@ jobs:
 
       - name: Upload provider contract reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: pytest-provider-contract-report
           path: reports/junit/*.xml
@@ -112,7 +112,7 @@ jobs:
           uv run pytest -q tests/integration/test_storage_features.py \
             -k live_qdrant_vector_contract \
             --junitxml=reports/junit/pytest-qdrant-live.xml
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
           name: pytest-qdrant-live-report
@@ -157,7 +157,7 @@ jobs:
           uv run pytest -q tests/integration/test_storage_features.py \
             -k live_mongodb_metadata_contract \
             --junitxml=reports/junit/pytest-mongodb-live.xml
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
           name: pytest-mongodb-live-report
@@ -206,7 +206,7 @@ jobs:
           uv run pytest -q tests/integration/test_storage_features.py \
             -k live_weaviate_vector_contract \
             --junitxml=reports/junit/pytest-weaviate-live.xml
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
           name: pytest-weaviate-live-report
@@ -252,7 +252,7 @@ jobs:
           uv run pytest -q tests/integration/test_storage_features.py \
             -k live_elasticsearch_vector_contract \
             --junitxml=reports/junit/pytest-elasticsearch-live.xml
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
           name: pytest-elasticsearch-live-report
@@ -298,7 +298,7 @@ jobs:
           uv run pytest -q tests/integration/test_storage_features.py \
             -k live_opensearch_vector_contract \
             --junitxml=reports/junit/pytest-opensearch-live.xml
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
           name: pytest-opensearch-live-report
@@ -340,7 +340,7 @@ jobs:
           uv run pytest -q tests/integration/test_storage_features.py \
             -k live_redis_vector_contract \
             --junitxml=reports/junit/pytest-redis-live.xml
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
           name: pytest-redis-live-report
@@ -388,7 +388,7 @@ jobs:
           uv run pytest -q tests/integration/test_storage_features.py \
             -k live_typesense_vector_contract \
             --junitxml=reports/junit/pytest-typesense-live.xml
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
           name: pytest-typesense-live-report
@@ -434,7 +434,7 @@ jobs:
       - name: Stop Milvus
         if: always()
         run: docker compose -f examples/storage_providers/milvus/compose.yaml down -v
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
           name: pytest-milvus-live-report
