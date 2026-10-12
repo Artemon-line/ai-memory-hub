@@ -39,7 +39,7 @@ observability = [
     "opentelemetry-instrumentation-fastapi>=0.50b0",
     "opentelemetry-instrumentation-httpx>=0.50b0",
     "opentelemetry-instrumentation-requests>=0.64b0",
-    "opentelemetry-instrumentation-psycopg>=0.50b0",
+    "opentelemetry-instrumentation-psycopg>=0.66b1",
 ]
 oauth = [
     "authlib>=1.8.0",
