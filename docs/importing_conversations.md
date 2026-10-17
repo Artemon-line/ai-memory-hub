@@ -85,6 +85,34 @@ a `results` list containing each memory ID, status, and deduplication result.
 | Factory Droid | Versioned Droid capture JSON | `droid-exec-json` |
 | Any readable transcript | Speaker-labelled text | `manual` |
 
+### Local source suggestions
+
+The Connect UI source chooser can use the following version 1 signatures to
+suggest an importer. Suggestions are advisory: you can change or clear them,
+and the upload request must still include an explicit registered `parser`.
+
+| Importer | High-confidence signature |
+| --- | --- |
+| `copilot-activity-csv` | Exact required `Conversation,Time,Author,Message` header |
+| `copilot-cli-events-jsonl` | `session.start` or `session.resume` record with a session ID and Copilot version, plus a message record |
+| `claude-code-session-jsonl` | Session-scoped UUID records including a system record and structured user or assistant message |
+| `codex-rollout-jsonl` | `session_meta` from `codex-tui` plus a `response_item` record |
+| `hermes-session-jsonl` | JSONL session records with IDs, source values, and message arrays |
+| `opencode-session-json` | `info.id` beginning with `ses_` plus a top-level message array |
+| `deepseek-share-json` | Successful share envelope containing a model type and message array under `data.biz_data` |
+| `deepseek-harness-session-jsonl` | Versioned session with delegation depth plus slash-style message record types |
+| `gemini-cli-session-json` | Export envelope with session ID, project hash, directories, and messages |
+| `pi-session-jsonl` | Version 3 session plus parent-linked structured message records |
+| `qwen-code-session-export` | Session envelope with CLI export metadata and typed UUID messages, or versioned JSONL export metadata |
+| `droid-exec-json` | `ai-memory-hub.droid-exec-capture` format marker, version 1, and a supported capture kind |
+
+Detection stays in the browser and reads at most 64 KiB, 32 non-empty JSONL
+records, and 12 JSON nesting levels, with a 25 ms processing budget. It does
+not use the filename extension, upload the inspected prefix, log it, or render
+conversation text. If zero or several signatures match, the chooser remains
+unselected and asks you to choose the source explicitly. Generic Gemini shared
+history arrays and manual transcripts intentionally have no automatic match.
+
 ## Prompt examples for supported agents
 
 These prompts tell the agent to transport the source file without reading it
