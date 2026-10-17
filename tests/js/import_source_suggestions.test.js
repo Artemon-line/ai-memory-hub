@@ -6,10 +6,19 @@ const test = require("node:test");
 const {
   DEFAULT_LIMITS,
   SIGNATURE_VERSION,
+  SourceSuggestionController,
   bindSourceSuggestion,
   detectImportSource,
   inspectImportFile,
 } = require("../../memory/ui/connect/static/import_source_suggestions.js");
+const {
+  PARSER,
+  SAMPLE_KIND,
+  SIGNATURES,
+} = require("../../memory/ui/connect/static/import_source_signatures.js");
+const {
+  ImportSourceDetector,
+} = require("../../memory/ui/connect/static/import_source_detector.js");
 
 const fixtures = path.join(__dirname, "..", "fixtures", "importers");
 
@@ -36,6 +45,38 @@ const expectedFixtures = {
   "qwen_code_session_anonymized.json": "qwen-code-session-export",
   "qwen_code_session_anonymized.jsonl": "qwen-code-session-export",
 };
+
+test("signature catalog is declarative and has unique IDs", () => {
+  const definitions = Object.values(SIGNATURES).flat();
+  const ids = definitions.map(({ id }) => id);
+
+  assert.equal(new Set(ids).size, ids.length);
+  assert.ok(
+    definitions.every(({ parser, matches }) => parser && typeof matches === "function")
+  );
+  assert.ok(
+    Object.values(PARSER).every((parser) =>
+      definitions.some((item) => item.parser === parser)
+    )
+  );
+});
+
+test("detector accepts an injected signature matcher", () => {
+  const calls = [];
+  const detector = new ImportSourceDetector({
+    findMatches(kind) {
+      calls.push(kind);
+      return kind === SAMPLE_KIND.JSON
+        ? [{ parser: "custom-parser", signature: "custom-v1" }]
+        : [];
+    },
+  });
+
+  const result = detector.detect("{}");
+
+  assert.equal(result.suggestedParser, "custom-parser");
+  assert.deepEqual(calls, [SAMPLE_KIND.CSV, SAMPLE_KIND.JSON]);
+});
 
 for (const [fixture, parser] of Object.entries(expectedFixtures)) {
   test(`verified fixture suggests ${parser}: ${fixture}`, () => {
@@ -189,6 +230,32 @@ test("bound controls let the user change or clear a suggestion", async () => {
   fileInput.files = [];
   await fileInput.dispatch("change");
   assert.equal(sourceSelect.value, "");
+});
+
+test("controller accepts an injected file inspector", async () => {
+  const fileInput = new FakeControl();
+  const sourceSelect = new FakeControl();
+  const statusElement = { textContent: "" };
+  const inspected = [];
+  const file = fakeFile("ignored");
+  fileInput.files = [file];
+  new SourceSuggestionController({
+    fileInput,
+    sourceSelect,
+    statusElement,
+    async inspectFile(received) {
+      inspected.push(received);
+      return {
+        status: "suggested",
+        suggestedParser: "injected-parser",
+      };
+    },
+  }).connect();
+
+  await fileInput.dispatch("change");
+
+  assert.deepEqual(inspected, [file]);
+  assert.equal(sourceSelect.value, "injected-parser");
 });
 
 class FakeControl {

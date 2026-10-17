@@ -405,6 +405,8 @@ def test_connect_routes_are_public_secret_free_and_use_configured_mcp_url(
     root = client.get("/", follow_redirects=False)
     connect = client.get("/connect")
     css = client.get("/connect/static/connect.css")
+    source_signatures = client.get("/connect/static/import_source_signatures.js")
+    source_detector = client.get("/connect/static/import_source_detector.js")
     source_suggestions = client.get("/connect/static/import_source_suggestions.js")
     callback = client.get("/auth/google/callback")
     logout = client.post("/auth/logout", follow_redirects=False)
@@ -412,7 +414,11 @@ def test_connect_routes_are_public_secret_free_and_use_configured_mcp_url(
     assert root.status_code == 307
     assert connect.status_code == 200
     assert css.status_code == 200
+    assert source_signatures.status_code == 200
+    assert source_detector.status_code == 200
     assert source_suggestions.status_code == 200
+    assert "findSignatureMatches" in source_signatures.text
+    assert "ImportSourceDetector" in source_detector.text
     assert "detectImportSource" in source_suggestions.text
     assert callback.status_code == 400
     assert logout.status_code == 303
