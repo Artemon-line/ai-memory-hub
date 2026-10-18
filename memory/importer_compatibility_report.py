@@ -25,6 +25,37 @@ class ReleaseContext:
     generated_on: date
 
 
+@dataclass(frozen=True)
+class _MarkdownTable:
+    columns: tuple[str, ...]
+    rows: tuple[tuple[str, ...], ...]
+
+    def render(self) -> str:
+        if not self.columns:
+            raise ValueError("Markdown tables require at least one column")
+        expected_width = len(self.columns)
+        if any(len(row) != expected_width for row in self.rows):
+            raise ValueError("Markdown table rows must match the column count")
+        separator = tuple("---" for _ in self.columns)
+        return "\n".join(
+            self._render_row(row) for row in (self.columns, separator, *self.rows)
+        )
+
+    @staticmethod
+    def _render_row(values: Sequence[str]) -> str:
+        return "| " + " | ".join(values) + " |"
+
+
+@dataclass(frozen=True)
+class _MarkdownSection:
+    title: str
+    paragraphs: tuple[str, ...] = ()
+    blocks: tuple[str, ...] = ()
+
+    def render(self) -> str:
+        return "\n\n".join((f"## {self.title}", *self.paragraphs, *self.blocks))
+
+
 class CompatibilityMatrixValidator:
     def __init__(self, repository_root: Path, registered_importers: Iterable[str]) -> None:
         self._repository_root = repository_root
@@ -175,54 +206,99 @@ class CompatibilityMarkdownRenderer:
         discovery_providers: Sequence[DiscoveryProvider] = DISCOVERY_PROVIDERS,
     ) -> str:
         ordered = sorted(entries, key=lambda entry: entry.importer.value)
-        lines = [
-            "# Importer Compatibility Matrix",
-            "",
-            "<!-- Generated during docs/release preparation; no checked-in copy exists. -->",
-            "",
-            f"Generated for ai-memory-hub `{release.version}` on {release.generated_on.isoformat()}.",
-            "Every source client has exactly one required pin. Exact release pins are used only",
-            "when fixture evidence identifies that release; otherwise the pin names the bounded",
-            "format, rolling-service endpoint, repository contract, or user-authored contract.",
-            "A pin is not a promise that unknown future client releases are compatible.",
-            "",
-            "## Client pins",
-            "",
-            "| Importer | Client | Pin type | Pin |",
-            "| --- | --- | --- | --- |",
-        ]
-        for entry in ordered:
-            for pin in sorted(entry.pins, key=lambda item: item.client.value):
-                lines.append(
-                    f"| `{entry.importer.value}` | {pin.client.value} | {pin.kind.value} | "
-                    f"`{pin.value.value}` |"
-                )
+        document_parts = (
+            self._render_introduction(release),
+            self._render_client_pins(ordered),
+            self._render_discovery_providers(discovery_providers),
+            self._render_detailed_evidence(ordered),
+        )
+        return "\n\n".join(document_parts).rstrip() + "\n"
 
-        lines.extend(
+    @staticmethod
+    def _render_introduction(release: ReleaseContext) -> str:
+        generated = (
+            f"Generated for ai-memory-hub `{release.version}` on "
+            f"{release.generated_on.isoformat()}."
+        )
+        scope = (
+            "Every source client has exactly one required pin. Exact release pins are used only "
+            "when fixture evidence identifies that release; otherwise the pin names the bounded "
+            "format, rolling-service endpoint, repository contract, or user-authored contract. "
+            "A pin is not a promise that unknown future client releases are compatible."
+        )
+        return "\n\n".join(
             (
-                "",
-                "## Latest-session discovery providers",
-                "",
-                "These providers back `aim import latest <source>`. Each row is exercised by",
-                "the linked provider-matrix test before this report is generated.",
-                "",
-                "| Source | Importer | Environment override | Default root | Artifact pattern | Test |",
-                "| --- | --- | --- | --- | --- | --- |",
+                "# Importer Compatibility Matrix",
+                "<!-- Generated during docs/release preparation; no checked-in copy exists. -->",
+                generated,
+                scope,
             )
         )
-        for provider in sorted(discovery_providers, key=lambda item: item.source.value):
-            default_root = "~/" + "/".join(part.value for part in provider.default_home_parts)
-            lines.append(
-                f"| `{provider.source.value}` | `{provider.importer.value}` | "
-                f"`{provider.environment_variable.value}` | `{default_root}` | "
-                f"{provider.artifact_pattern} | "
-                f"`{_DISCOVERY_TEST_FILE.as_posix()}::{provider.focused_test.value}` |"
-            )
 
-        lines.extend(("", "## Detailed evidence", ""))
-        for entry in ordered:
-            lines.extend(self._render_entry(entry))
-        return "\n".join(lines).rstrip() + "\n"
+    @staticmethod
+    def _render_client_pins(entries: Sequence[ImporterCompatibility]) -> str:
+        rows = tuple(
+            (
+                f"`{entry.importer.value}`",
+                pin.client.value,
+                pin.kind.value,
+                f"`{pin.value.value}`",
+            )
+            for entry in entries
+            for pin in sorted(entry.pins, key=lambda item: item.client.value)
+        )
+        table = _MarkdownTable(
+            columns=("Importer", "Client", "Pin type", "Pin"),
+            rows=rows,
+        )
+        return _MarkdownSection(title="Client pins", blocks=(table.render(),)).render()
+
+    @staticmethod
+    def _render_discovery_providers(
+        providers: Sequence[DiscoveryProvider],
+    ) -> str:
+        rows: list[tuple[str, ...]] = []
+        for provider in sorted(providers, key=lambda item: item.source.value):
+            default_root = "~/" + "/".join(
+                part.value for part in provider.default_home_parts
+            )
+            rows.append(
+                (
+                    f"`{provider.source.value}`",
+                    f"`{provider.importer.value}`",
+                    f"`{provider.environment_variable.value}`",
+                    f"`{default_root}`",
+                    provider.artifact_pattern,
+                    f"`{_DISCOVERY_TEST_FILE.as_posix()}::{provider.focused_test.value}`",
+                )
+            )
+        table = _MarkdownTable(
+            columns=(
+                "Source",
+                "Importer",
+                "Environment override",
+                "Default root",
+                "Artifact pattern",
+                "Test",
+            ),
+            rows=tuple(rows),
+        )
+        return _MarkdownSection(
+            title="Latest-session discovery providers",
+            paragraphs=(
+                "These providers back `aim import latest <source>`. Each row is exercised by "
+                "the linked provider-matrix test before this report is generated.",
+            ),
+            blocks=(table.render(),),
+        ).render()
+
+    def _render_detailed_evidence(
+        self, entries: Sequence[ImporterCompatibility]
+    ) -> str:
+        details = "\n".join(
+            line for entry in entries for line in self._render_entry(entry)
+        ).rstrip()
+        return _MarkdownSection(title="Detailed evidence", blocks=(details,)).render()
 
     def _render_entry(self, entry: ImporterCompatibility) -> list[str]:
         pins = ", ".join(
