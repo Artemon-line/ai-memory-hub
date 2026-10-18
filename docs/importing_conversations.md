@@ -1,8 +1,8 @@
 # Import Conversations
 
 Use this guide to move existing conversations into ai-memory-hub. First get the
-conversation file from the source. Then give it to an AI agent that can reach
-your hub, or upload it through the HTTP API yourself.
+conversation file from the source. For most people, the Connect UI is the
+recommended import workflow; agent and command-line workflows remain available.
 
 For the exact client/format pin, fixture evidence, known omissions, and
 unknown-format fallback for every importer, see the automatically generated
@@ -14,6 +14,28 @@ release receives the same report as a release asset.
     Conversation exports can contain prompts, answers, file names, and project
     paths. Keep exports private. Close the source app, or copy its session file,
     before importing a file that the app may still be writing.
+
+## Import with the Connect UI
+
+Open your hub's `/connect/import` page. For a local hub, that is normally:
+
+```text
+http://127.0.0.1:8000/connect/import
+```
+
+1. Sign in through Connect, or enter a bearer token with `memory:write` access.
+2. Choose the conversation source. The friendly source name maps to the hub's
+   registered parser; filenames are never used to choose a parser.
+3. Select or drag in one supported file, review the source-specific guidance,
+   and choose **Import conversations**.
+4. Review the imported, deduplicated, and failed counts. Receipts contain only
+   bounded status metadata and memory IDs, never conversation text.
+
+The page accepts one UTF-8 JSON, JSONL/NDJSON, CSV, or text file up to 20 MB and
+at most 100 conversations. Its optional source suggestion inspects only a
+bounded prefix in your browser. The file itself is uploaded directly to the
+existing authenticated `POST /memory/import` endpoint; the normal importer and
+ingestion pipeline still owns validation, hashing, deduplication, and storage.
 
 ## Ask your AI agent to import the file
 

@@ -10,11 +10,12 @@ from starlette.responses import RedirectResponse, Response
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 
+from memory.api.connect_import import import_source_options
 from memory.api.connect_oauth import ConnectOAuthRegistry
+from memory.api.connect_security import session_secret
 from memory.api.connect_service import (
     ConnectService,
     secure_cookie,
-    session_secret,
 )
 from memory.api.connect_service import (
     connect_status as _connect_status,
@@ -72,6 +73,12 @@ def register_connect_routes(app: FastAPI, *, agent: BaseIngestionAgent, config: 
             "connect.html.j2",
             model,
         )
+
+    @app.get("/connect/import", include_in_schema=False)
+    async def connect_import(request: Request) -> Response:
+        model = await service.page_model(request)
+        model["import_sources"] = import_source_options()
+        return templates.TemplateResponse(request, "import.html.j2", model)
 
     @app.get("/auth/{provider}", include_in_schema=False)
     async def auth_provider(provider: str, request: Request) -> Response:
