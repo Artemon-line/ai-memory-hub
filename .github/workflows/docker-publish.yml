@@ -69,6 +69,22 @@ jobs:
             echo "release_tag=$release_tag"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Generate importer compatibility matrix
+        run: python tools/prepare_mkdocs.py
+
+      - name: Attach importer compatibility matrix to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" \
+              ".docs-build/docs/importer_compatibility.md#Importer compatibility matrix" \
+              --clobber
+          else
+            echo "No GitHub release found for $RELEASE_TAG; skipping compatibility asset upload."
+          fi
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 

@@ -230,6 +230,17 @@ def test_hermes_multi_session_fixture_preserves_boundaries() -> None:
     assert payloads[1]["timestamp"] == "2023-11-14T22:15:00+00:00"
 
 
+def test_manual_transcript_fixture_returns_unified_payload() -> None:
+    text = (_FIXTURES / "manual_transcript_synthetic.txt").read_text(encoding="utf-8")
+
+    payload = ManualPasteImporter().import_text(text)[0]
+
+    assert payload["messages"] == [
+        {"role": "user", "text": "Which synthetic fixture should we use?"},
+        {"role": "assistant", "text": "Use the minimized garden-notes fixture."},
+    ]
+
+
 def test_hermes_importer_applies_source_and_title_overrides_to_every_session() -> None:
     text = (_FIXTURES / "hermes_sessions_anonymized.jsonl").read_text(
         encoding="utf-8"

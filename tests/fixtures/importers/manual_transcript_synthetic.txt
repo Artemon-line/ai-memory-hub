@@ -1,0 +1,2 @@
+Human: Which synthetic fixture should we use?
+Assistant: Use the minimized garden-notes fixture.
