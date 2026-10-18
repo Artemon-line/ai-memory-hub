@@ -6,6 +6,11 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Added safe `aim import latest <source>` discovery for Codex, Claude Code,
+  GitHub Copilot CLI, Pi, and Oh My Pi, including documented environment
+  overrides, active-file and ambiguity refusal, interactive preview,
+  non-interactive JSON output, provider-matrix tests, and generated report
+  evidence.
 - Added a generic external OIDC resource-server mode with discovery/JWKS
   caching, asymmetric access-token validation, issuer-qualified identities,
   Keycloak role-to-scope mapping, allowlists, MCP authorization metadata, and

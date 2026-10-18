@@ -4,10 +4,12 @@ from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
+from memory.import_discovery import DISCOVERY_PROVIDERS, build_discovery_service
 from memory.importer_compatibility import IMPORTER_COMPATIBILITY, SourceClient
 from memory.importer_compatibility_report import (
     CompatibilityMarkdownRenderer,
     CompatibilityMatrixValidator,
+    DiscoveryMatrixValidator,
     ReleaseContext,
 )
 from memory.importers.registry import importer_names
@@ -69,6 +71,20 @@ def test_renderer_includes_release_identity_and_typed_pins() -> None:
         "| `pi-session-jsonl` | OpenClaw | Format version | `openclaw-legacy-session-v3` |"
         in report
     )
+    assert "## Latest-session discovery providers" in report
+    assert (
+        "| `copilot-cli` | `copilot-cli-events-jsonl` | `COPILOT_HOME` | `~/.copilot` |"
+        in report
+    )
+
+
+def test_discovery_matrix_covers_every_adapter_and_registered_importer() -> None:
+    errors = DiscoveryMatrixValidator(_ROOT, importer_names()).validate(
+        DISCOVERY_PROVIDERS,
+        build_discovery_service(environment={}).sources,
+    )
+
+    assert errors == ()
 
 
 def test_docs_preparation_generates_matrix_without_checked_in_copy(tmp_path: Path) -> None:

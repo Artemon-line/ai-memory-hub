@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import tomllib
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -462,6 +465,73 @@ def test_export_import_cli_ingests_anonymized_fixtures(
     assert body["imported"] == expected_count
     assert len(captured_payloads) == expected_count
     assert all(payload["metadata"]["importer"] == importer for payload in captured_payloads)
+
+
+def test_import_latest_non_interactive_json_uses_registered_pipeline(
+    capsys, monkeypatch, tmp_path
+) -> None:
+    codex_home = tmp_path / "codex"
+    artifact = codex_home / "sessions" / "2026" / "04" / "12" / "rollout-test.jsonl"
+    artifact.parent.mkdir(parents=True)
+    fixture = Path(__file__).parents[1] / "fixtures" / "importers" / "codex_rollout_anonymized.jsonl"
+    shutil.copyfile(fixture, artifact)
+    old_time = (datetime.now(timezone.utc) - timedelta(minutes=10)).timestamp()
+    os.utime(artifact, (old_time, old_time))
+    captured_payloads = []
+    monkeypatch.setenv("CODEX_HOME", str(codex_home))
+    monkeypatch.setattr(cli, "_configure_memory_runtime", lambda config_path: None)
+    monkeypatch.setattr(
+        cli.mvp_ingestion,
+        "ingest_messages",
+        lambda payload: captured_payloads.append(payload)
+        or {"status": "ok", "id": "memory-1", "chunks": 1},
+    )
+
+    exit_code = cli.main(["import", "latest", "codex", "--non-interactive", "--json"])
+
+    body = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert body["importer"] == "codex-rollout-jsonl"
+    assert body["discovery"]["session_id"] == "0198f000-0000-7000-8000-000000000001"
+    assert body["discovery"]["path"] == str(artifact.resolve())
+    assert captured_payloads[0]["metadata"]["importer"] == "codex-rollout-jsonl"
+
+
+def test_import_latest_json_requires_explicit_non_interactive_flag(capsys) -> None:
+    exit_code = cli.main(["import", "latest", "codex", "--json"])
+
+    body = json.loads(capsys.readouterr().out)
+    assert exit_code == 1
+    assert body["error_code"] == "validation_error"
+    assert body["error_message"] == "--json requires --non-interactive for `aim import latest`"
+
+
+def test_import_latest_interactive_previews_exact_artifact(
+    capsys, monkeypatch, tmp_path
+) -> None:
+    pi_home = tmp_path / "pi-agent"
+    artifact = pi_home / "sessions" / "project" / "session.jsonl"
+    artifact.parent.mkdir(parents=True)
+    fixture = Path(__file__).parents[1] / "fixtures" / "importers" / "pi_session_anonymized.jsonl"
+    shutil.copyfile(fixture, artifact)
+    old_time = (datetime.now(timezone.utc) - timedelta(minutes=10)).timestamp()
+    os.utime(artifact, (old_time, old_time))
+    monkeypatch.setenv("PI_CODING_AGENT_DIR", str(pi_home))
+    monkeypatch.setattr("builtins.input", lambda prompt: "yes")
+    monkeypatch.setattr(cli, "_configure_memory_runtime", lambda config_path: None)
+    monkeypatch.setattr(
+        cli.mvp_ingestion,
+        "ingest_messages",
+        lambda payload: {"status": "ok", "id": "memory-1", "chunks": 1},
+    )
+
+    exit_code = cli.main(["import", "latest", "pi"])
+
+    output = capsys.readouterr().out
+    assert exit_code == 0
+    assert "session_id: pi-session-synthetic" in output
+    assert f"path: {artifact.resolve()}" in output
+    assert "imported 1 conversation(s) with pi-session-jsonl" in output
 
 
 def test_hermes_cli_schema_override_matches_importer_contract(
