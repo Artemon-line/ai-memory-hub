@@ -2,7 +2,14 @@ from __future__ import annotations
 
 import argparse
 import shutil
+import sys
+import tomllib
+from datetime import date
 from pathlib import Path
+
+_REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPOSITORY_ROOT))
 
 DEFAULT_OUTPUT_DIR = ".docs-build"
 ROOT_DOC_FILES = (
@@ -30,6 +37,52 @@ def prepare_docs(source_root: Path, output_dir: Path) -> None:
     _copy_license(source_root, output_dir)
     _copy_root_docs(source_root, output_dir)
     _copy_docs(source_root, output_dir)
+    if _is_project_checkout(source_root):
+        _write_importer_compatibility(source_root, output_dir)
+
+
+def _is_project_checkout(source_root: Path) -> bool:
+    return (source_root / "pyproject.toml").is_file() and (
+        source_root / "memory" / "importers" / "registry.py"
+    ).is_file()
+
+
+def _write_importer_compatibility(
+    source_root: Path,
+    output_dir: Path,
+) -> None:
+    from memory.importer_compatibility import IMPORTER_COMPATIBILITY, ImporterId
+    from memory.importer_compatibility_report import (
+        CompatibilityMarkdownRenderer,
+        CompatibilityMatrixValidator,
+        ReleaseContext,
+    )
+
+    errors = CompatibilityMatrixValidator(
+        source_root,
+        (importer.value for importer in ImporterId),
+    ).validate(IMPORTER_COMPATIBILITY)
+    if errors:
+        raise ValueError("invalid importer compatibility matrix:\n- " + "\n- ".join(errors))
+
+    version = _read_project_version(source_root / "pyproject.toml")
+    context = ReleaseContext(version=version, generated_on=date.today())
+    report = CompatibilityMarkdownRenderer().render(IMPORTER_COMPATIBILITY, context)
+    (output_dir / "docs" / "importer_compatibility.md").write_text(
+        report,
+        encoding="utf-8",
+        newline="\n",
+    )
+
+
+def _read_project_version(pyproject_path: Path) -> str:
+    project = tomllib.loads(pyproject_path.read_text(encoding="utf-8")).get("project")
+    if not isinstance(project, dict):
+        raise ValueError("pyproject.toml is missing [project]")
+    version = project.get("version")
+    if not isinstance(version, str) or not version:
+        raise ValueError("pyproject.toml is missing project.version")
+    return version
 
 
 def _copy_readme(source_root: Path, output_dir: Path) -> None:

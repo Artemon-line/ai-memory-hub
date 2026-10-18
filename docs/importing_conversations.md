@@ -4,9 +4,11 @@ Use this guide to move existing conversations into ai-memory-hub. First get the
 conversation file from the source. Then give it to an AI agent that can reach
 your hub, or upload it through the HTTP API yourself.
 
-For the exact format envelope, last verified upstream version, fixture evidence,
-known omissions, and unknown-format fallback for every importer, see the
-[Importer Compatibility Matrix](importer_compatibility.md).
+For the exact client/format pin, fixture evidence, known omissions, and
+unknown-format fallback for every importer, see the automatically generated
+[Importer Compatibility Matrix](importer_compatibility.md). Docs preparation
+regenerates it for the current ai-memory-hub version, and every published
+release receives the same report as a release asset.
 
 !!! warning "Review private data first"
     Conversation exports can contain prompts, answers, file names, and project
