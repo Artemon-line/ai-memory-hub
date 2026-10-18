@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
+from memory.import_discovery import DISCOVERY_PROVIDERS, DiscoveryProvider, DiscoverySource
 from memory.importer_compatibility import (
     ImporterCompatibility,
     PinValue,
@@ -15,6 +16,7 @@ from memory.importer_compatibility import (
 
 _FIXTURE_DIR = Path("tests/fixtures/importers")
 _FOCUSED_TEST_FILE = Path("tests/unit/test_importers.py")
+_DISCOVERY_TEST_FILE = Path("tests/unit/test_import_discovery.py")
 
 
 @dataclass(frozen=True)
@@ -112,11 +114,65 @@ class CompatibilityMatrixValidator:
         )
 
 
+class DiscoveryMatrixValidator:
+    def __init__(self, repository_root: Path, registered_importers: Iterable[str]) -> None:
+        self._repository_root = repository_root
+        self._registered_importers = frozenset(registered_importers)
+
+    def validate(
+        self,
+        providers: Sequence[DiscoveryProvider],
+        adapter_sources: Iterable[str],
+    ) -> tuple[str, ...]:
+        errors: list[str] = []
+        source_counts = Counter(provider.source for provider in providers)
+        duplicates = sorted(
+            (source.value for source, count in source_counts.items() if count != 1)
+        )
+        if duplicates:
+            errors.append(f"discovery providers must be unique: {', '.join(duplicates)}")
+        matrix_sources = {source.value for source in source_counts}
+        expected_sources = {source.value for source in DiscoverySource}
+        adapter_source_set = set(adapter_sources)
+        if missing := sorted(expected_sources - matrix_sources):
+            errors.append(f"discovery sources missing from matrix: {', '.join(missing)}")
+        if missing := sorted(matrix_sources - adapter_source_set):
+            errors.append(f"discovery sources missing adapters: {', '.join(missing)}")
+        if extra := sorted(adapter_source_set - matrix_sources):
+            errors.append(f"discovery adapters missing matrix entries: {', '.join(extra)}")
+
+        test_symbols = self._test_symbols(errors)
+        for provider in providers:
+            if provider.importer not in self._registered_importers:
+                errors.append(
+                    f"{provider.source.value}: unknown importer: {provider.importer}"
+                )
+            if provider.focused_test not in test_symbols:
+                errors.append(
+                    f"{provider.source.value}: missing symbol {provider.focused_test} "
+                    f"in {_DISCOVERY_TEST_FILE}"
+                )
+        return tuple(errors)
+
+    def _test_symbols(self, errors: list[str]) -> frozenset[str]:
+        path = self._repository_root / _DISCOVERY_TEST_FILE
+        if not path.is_file():
+            errors.append(f"missing discovery test file: {_DISCOVERY_TEST_FILE}")
+            return frozenset()
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        return frozenset(
+            node.name
+            for node in tree.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+        )
+
+
 class CompatibilityMarkdownRenderer:
     def render(
         self,
         entries: Sequence[ImporterCompatibility],
         release: ReleaseContext,
+        discovery_providers: Sequence[DiscoveryProvider] = DISCOVERY_PROVIDERS,
     ) -> str:
         ordered = sorted(entries, key=lambda entry: entry.importer.value)
         lines = [
@@ -141,6 +197,27 @@ class CompatibilityMarkdownRenderer:
                     f"| `{entry.importer.value}` | {pin.client.value} | {pin.kind.value} | "
                     f"`{pin.value.value}` |"
                 )
+
+        lines.extend(
+            (
+                "",
+                "## Latest-session discovery providers",
+                "",
+                "These providers back `aim import latest <source>`. Each row is exercised by",
+                "the linked provider-matrix test before this report is generated.",
+                "",
+                "| Source | Importer | Environment override | Default root | Artifact pattern | Test |",
+                "| --- | --- | --- | --- | --- | --- |",
+            )
+        )
+        for provider in sorted(discovery_providers, key=lambda item: item.source.value):
+            default_root = "~/" + "/".join(provider.default_home_parts)
+            lines.append(
+                f"| `{provider.source.value}` | `{provider.importer}` | "
+                f"`{provider.environment_variable}` | `{default_root}` | "
+                f"{provider.artifact_pattern} | "
+                f"`{_DISCOVERY_TEST_FILE.as_posix()}::{provider.focused_test}` |"
+            )
 
         lines.extend(("", "## Detailed evidence", ""))
         for entry in ordered:

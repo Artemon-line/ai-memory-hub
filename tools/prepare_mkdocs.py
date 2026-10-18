@@ -51,10 +51,12 @@ def _write_importer_compatibility(
     source_root: Path,
     output_dir: Path,
 ) -> None:
+    from memory.import_discovery import DISCOVERY_PROVIDERS, build_discovery_service
     from memory.importer_compatibility import IMPORTER_COMPATIBILITY, ImporterId
     from memory.importer_compatibility_report import (
         CompatibilityMarkdownRenderer,
         CompatibilityMatrixValidator,
+        DiscoveryMatrixValidator,
         ReleaseContext,
     )
 
@@ -64,6 +66,14 @@ def _write_importer_compatibility(
     ).validate(IMPORTER_COMPATIBILITY)
     if errors:
         raise ValueError("invalid importer compatibility matrix:\n- " + "\n- ".join(errors))
+    discovery_errors = DiscoveryMatrixValidator(
+        source_root,
+        (importer.value for importer in ImporterId),
+    ).validate(DISCOVERY_PROVIDERS, build_discovery_service(environment={}).sources)
+    if discovery_errors:
+        raise ValueError(
+            "invalid import discovery matrix:\n- " + "\n- ".join(discovery_errors)
+        )
 
     version = _read_project_version(source_root / "pyproject.toml")
     context = ReleaseContext(version=version, generated_on=date.today())

@@ -13,6 +13,7 @@ import jsonschema
 from memory.backend.log_safety import redact_secrets
 from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig, load_config
+from memory.import_discovery import build_discovery_service, discovery_source_names
 from memory.importers import get_importer
 from memory.ingestion import mvp_ingestion
 from memory.ingestion.thread_models import SearchResultMode
@@ -182,6 +183,17 @@ def build_parser() -> argparse.ArgumentParser:
     import_subparsers = import_command.add_subparsers(
         dest="importer", required=True, parser_class=CLIArgumentParser
     )
+    latest = import_subparsers.add_parser(
+        "latest", help="Safely discover and import the latest local client session."
+    )
+    _add_common_options(latest)
+    latest.add_argument("discovery_source", choices=discovery_source_names())
+    latest.add_argument(
+        "--non-interactive",
+        action="store_true",
+        help="Authorize import without a confirmation prompt (required with --json).",
+    )
+    latest.add_argument("--title", default=None, help="Optional imported conversation title.")
     import_formats = (
         (
             "manual",
@@ -613,20 +625,29 @@ def _reindex(args: argparse.Namespace) -> int:
 
 
 def _import_conversations(args: argparse.Namespace) -> int:
+    if args.importer == "latest":
+        return _import_latest(args)
+
+    result = _execute_import(args)
+    _emit_result(args, result, text_formatter=_format_import_text)
+    return EXIT_OK
+
+
+def _execute_import(args: argparse.Namespace, *, text: str | None = None) -> dict[str, Any]:
     from memory.importers.schema_override import (
         parse_schema_override,
         stamp_import_provenance,
     )
 
     importer = get_importer(args.importer)
-    text = _read_text(args.file)
+    source_text = _read_text(args.file) if text is None else text
     schema = (
         parse_schema_override(Path(args.schema).read_bytes())
-        if args.schema is not None
+        if getattr(args, "schema", None) is not None
         else None
     )
     payloads = importer.import_text_with_schema(
-        text, schema=schema, source=args.source, title=args.title
+        source_text, schema=schema, source=args.source, title=args.title
     )
     if not payloads:
         raise ValueError(f"{args.importer} importer returned no conversations")
@@ -637,13 +658,54 @@ def _import_conversations(args: argparse.Namespace) -> int:
         redact_content_hashes(mvp_ingestion.ingest_messages(payload))
         for payload in payloads
     ]
-    result = _envelope(
+    return _envelope(
         status="ok",
         results=results,
         importer=args.importer,
         imported=len(results),
     )
-    _emit_result(args, result, text_formatter=_format_import_text)
+
+
+def _import_latest(args: argparse.Namespace) -> int:
+    if args.json and not args.non_interactive:
+        raise ValueError("--json requires --non-interactive for `aim import latest`")
+
+    service = build_discovery_service()
+    artifact = service.discover_latest(args.discovery_source)
+    if not args.non_interactive:
+        print(f"source: {artifact.source}")
+        print(f"session_id: {artifact.session_id}")
+        print(f"timestamp: {artifact.timestamp.isoformat().replace('+00:00', 'Z')}")
+        print(f"path: {artifact.path}")
+        try:
+            confirmed = input("Import this artifact? [y/N] ").strip().lower()
+        except EOFError as exc:
+            raise ValueError(
+                "confirmation input is unavailable; use --non-interactive for automation"
+            ) from exc
+        if confirmed not in {"y", "yes"}:
+            raise ValueError("import cancelled; no conversation was stored")
+
+    service.verify_unchanged(artifact)
+    text = _read_text(str(artifact.path))
+    service.verify_unchanged(artifact)
+    import_args = argparse.Namespace(
+        importer=artifact.importer,
+        file=str(artifact.path),
+        source=artifact.stored_source,
+        title=args.title,
+        schema=None,
+        config=args.config,
+    )
+    import_result = _execute_import(import_args, text=text)
+    result = _envelope(
+        status="ok",
+        results=import_result["results"],
+        importer=artifact.importer,
+        imported=import_result["imported"],
+        discovery=artifact.as_dict(),
+    )
+    _emit_result(args, result, text_formatter=_format_latest_import_text)
     return EXIT_OK
 
 
@@ -1167,6 +1229,14 @@ def _format_reindex_text(result: dict[str, Any]) -> str:
 
 def _format_import_text(result: dict[str, Any]) -> str:
     return f"imported {result.get('imported', 0)} conversation(s) with {result.get('importer')}"
+
+
+def _format_latest_import_text(result: dict[str, Any]) -> str:
+    discovery = result.get("discovery", {})
+    return (
+        f"imported {result.get('imported', 0)} conversation(s) with {result.get('importer')} "
+        f"from {discovery.get('path')}"
+    )
 
 
 def _format_handoff_write_text(result: dict[str, Any]) -> str:

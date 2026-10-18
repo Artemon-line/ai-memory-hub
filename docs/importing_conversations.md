@@ -535,7 +535,46 @@ memory title and ID. Do not repeat private conversation text unnecessarily.
 Importing the same source file again is safe: normal hub hashing and
 deduplication rules still apply.
 
-## Local command-line fallback
+## Discover and import the latest local session
+
+For clients with stable local session files, the CLI can select the newest
+supported session without a hook hard-coding project or date directories:
+
+```bash
+uv run python -m memory.cli import latest codex
+uv run python -m memory.cli import latest claude-code
+uv run python -m memory.cli import latest copilot-cli
+uv run python -m memory.cli import latest pi
+uv run python -m memory.cli import latest oh-my-pi
+```
+
+Interactive use prints the resolved source, session ID, semantic timestamp,
+and exact path, then asks for confirmation. For a hook or other automation,
+both the non-interactive authorization and JSON output must be explicit:
+
+```bash
+uv run python -m memory.cli import latest codex --non-interactive --json
+```
+
+Discovery respects `CODEX_HOME`, `CLAUDE_CONFIG_DIR`, `COPILOT_HOME`, and
+`PI_CODING_AGENT_DIR`. Without an override it uses the platform-native home
+directory locations in [Where local sessions are stored](#where-local-sessions-are-stored).
+It only examines documented roots and file shapes, does not follow symlinks,
+orders sessions by the timestamp inside the artifact, and refuses ties. A
+non-terminal artifact must be unchanged for at least five minutes; this is a
+deliberately conservative check against importing a session that is still
+being written. The file identity is checked again immediately before parsing.
+
+Hermes, OpenCode, Gemini CLI, Qwen Code, and current OpenClaw sessions require
+a supported export. Passing one of those source names to `import latest`
+returns the appropriate export instruction instead of reading a live database
+or undocumented internal format.
+
+Every discovery adapter, environment override, default root, artifact pattern,
+and focused provider test is included in the generated
+[Importer Compatibility Matrix](importer_compatibility.md).
+
+## Import a specific local file
 
 If an agent cannot call the HTTP endpoint but you are working inside the
 ai-memory-hub repository, the local CLI uses the same registered importers:
