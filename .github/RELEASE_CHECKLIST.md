@@ -11,6 +11,9 @@ Use this checklist for release PRs and release candidate drills.
 - [ ] Confirm security/auth guidance is reachable from README.
 - [ ] Confirm known limitations are accurate.
 
+The release workflow generates and attaches the importer compatibility matrix
+from typed source records. There is no checked-in matrix or manual update step.
+
 ## Required Local Checks
 
 ```bash
