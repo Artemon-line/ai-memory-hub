@@ -143,13 +143,13 @@ class DiscoveryMatrixValidator:
 
         test_symbols = self._test_symbols(errors)
         for provider in providers:
-            if provider.importer not in self._registered_importers:
+            if provider.importer.value not in self._registered_importers:
                 errors.append(
-                    f"{provider.source.value}: unknown importer: {provider.importer}"
+                    f"{provider.source.value}: unknown importer: {provider.importer.value}"
                 )
-            if provider.focused_test not in test_symbols:
+            if provider.focused_test.value not in test_symbols:
                 errors.append(
-                    f"{provider.source.value}: missing symbol {provider.focused_test} "
+                    f"{provider.source.value}: missing symbol {provider.focused_test.value} "
                     f"in {_DISCOVERY_TEST_FILE}"
                 )
         return tuple(errors)
@@ -211,12 +211,12 @@ class CompatibilityMarkdownRenderer:
             )
         )
         for provider in sorted(discovery_providers, key=lambda item: item.source.value):
-            default_root = "~/" + "/".join(provider.default_home_parts)
+            default_root = "~/" + "/".join(part.value for part in provider.default_home_parts)
             lines.append(
-                f"| `{provider.source.value}` | `{provider.importer}` | "
-                f"`{provider.environment_variable}` | `{default_root}` | "
+                f"| `{provider.source.value}` | `{provider.importer.value}` | "
+                f"`{provider.environment_variable.value}` | `{default_root}` | "
                 f"{provider.artifact_pattern} | "
-                f"`{_DISCOVERY_TEST_FILE.as_posix()}::{provider.focused_test}` |"
+                f"`{_DISCOVERY_TEST_FILE.as_posix()}::{provider.focused_test.value}` |"
             )
 
         lines.extend(("", "## Detailed evidence", ""))

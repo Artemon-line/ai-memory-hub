@@ -9,49 +9,52 @@ import pytest
 
 from memory.import_discovery import (
     DISCOVERY_PROVIDERS,
+    DiscoveryEnvironmentVariable,
     DiscoveryError,
     DiscoverySource,
+    ExportOnlySource,
     build_discovery_service,
     default_root_for,
 )
+from memory.importer_compatibility import Fixture, ImporterId
 
 _FIXTURES = Path(__file__).parents[1] / "fixtures" / "importers"
 _NOW = datetime(2026, 10, 18, 12, 0, tzinfo=timezone.utc)
 
 _PROVIDER_CASES = (
     (
-        "codex",
-        "CODEX_HOME",
+        DiscoverySource.CODEX,
+        DiscoveryEnvironmentVariable.CODEX_HOME,
         Path("sessions/2026/04/12/rollout-synthetic.jsonl"),
-        "codex_rollout_anonymized.jsonl",
+        Fixture.CODEX_ROLLOUT,
         "0198f000-0000-7000-8000-000000000001",
     ),
     (
-        "claude-code",
-        "CLAUDE_CONFIG_DIR",
+        DiscoverySource.CLAUDE_CODE,
+        DiscoveryEnvironmentVariable.CLAUDE_CONFIG_DIR,
         Path("projects/project-hash/claude-session-synthetic.jsonl"),
-        "claude_code_session_anonymized.jsonl",
+        Fixture.CLAUDE_CODE_SESSION,
         "claude-session-synthetic",
     ),
     (
-        "copilot-cli",
-        "COPILOT_HOME",
+        DiscoverySource.COPILOT_CLI,
+        DiscoveryEnvironmentVariable.COPILOT_HOME,
         Path("session-state/copilot-session-synthetic/events.jsonl"),
-        "copilot_cli_events_v1_anonymized.jsonl",
+        Fixture.COPILOT_CLI_V1,
         "copilot-session-synthetic",
     ),
     (
-        "pi",
-        "PI_CODING_AGENT_DIR",
+        DiscoverySource.PI,
+        DiscoveryEnvironmentVariable.PI_CODING_AGENT_DIR,
         Path("sessions/project-hash/pi-session-synthetic.jsonl"),
-        "pi_session_anonymized.jsonl",
+        Fixture.PI_SESSION,
         "pi-session-synthetic",
     ),
     (
-        "oh-my-pi",
-        "PI_CODING_AGENT_DIR",
+        DiscoverySource.OH_MY_PI,
+        DiscoveryEnvironmentVariable.PI_CODING_AGENT_DIR,
         Path("sessions/project-hash/omp-session-synthetic.jsonl"),
-        "oh_my_pi_session_anonymized.jsonl",
+        Fixture.OH_MY_PI_SESSION,
         "omp-session-synthetic",
     ),
 )
@@ -63,31 +66,31 @@ _PROVIDER_CASES = (
 )
 def test_discovery_provider_matrix_finds_latest_safe_artifact(
     tmp_path: Path,
-    source: str,
-    environment_variable: str,
+    source: DiscoverySource,
+    environment_variable: DiscoveryEnvironmentVariable,
     relative_path: Path,
-    fixture: str,
+    fixture: Fixture,
     session_id: str,
 ) -> None:
-    configured_root = tmp_path / source
+    configured_root = tmp_path / source.value
     artifact = configured_root / relative_path
     artifact.parent.mkdir(parents=True)
     shutil.copyfile(_FIXTURES / fixture, artifact)
     old_time = (_NOW - timedelta(minutes=10)).timestamp()
     os.utime(artifact, (old_time, old_time))
     service = build_discovery_service(
-        environment={environment_variable: str(configured_root)}, home=tmp_path / "home"
+        environment={environment_variable.value: str(configured_root)}, home=tmp_path / "home"
     )
 
-    discovered = service.discover_latest(source, now=_NOW)
+    discovered = service.discover_latest(source.value, now=_NOW)
 
     assert discovered.path == artifact.resolve()
     assert discovered.session_id == session_id
     assert discovered.importer in {
-        "codex-rollout-jsonl",
-        "claude-code-session-jsonl",
-        "copilot-cli-events-jsonl",
-        "pi-session-jsonl",
+        ImporterId.CODEX_ROLLOUT_JSONL,
+        ImporterId.CLAUDE_CODE_SESSION_JSONL,
+        ImporterId.COPILOT_CLI_EVENTS_JSONL,
+        ImporterId.PI_SESSION_JSONL,
     }
     service.verify_unchanged(discovered)
 
@@ -96,13 +99,15 @@ def test_recent_non_terminal_artifact_is_refused_as_active(tmp_path: Path) -> No
     root = tmp_path / "codex"
     artifact = root / "sessions/2026/04/12/rollout-active.jsonl"
     artifact.parent.mkdir(parents=True)
-    shutil.copyfile(_FIXTURES / "codex_rollout_anonymized.jsonl", artifact)
+    shutil.copyfile(_FIXTURES / Fixture.CODEX_ROLLOUT, artifact)
     recent = (_NOW - timedelta(seconds=30)).timestamp()
     os.utime(artifact, (recent, recent))
-    service = build_discovery_service(environment={"CODEX_HOME": str(root)}, home=tmp_path)
+    service = build_discovery_service(
+        environment={DiscoveryEnvironmentVariable.CODEX_HOME: str(root)}, home=tmp_path
+    )
 
     with pytest.raises(DiscoveryError, match="may still be active"):
-        service.discover_latest("codex", now=_NOW)
+        service.discover_latest(DiscoverySource.CODEX, now=_NOW)
 
 
 def test_newer_active_artifact_does_not_fall_back_to_older_safe_session(tmp_path: Path) -> None:
@@ -110,34 +115,36 @@ def test_newer_active_artifact_does_not_fall_back_to_older_safe_session(tmp_path
     sessions = root / "sessions/2026/04/12"
     sessions.mkdir(parents=True)
     old_artifact = sessions / "rollout-old.jsonl"
-    shutil.copyfile(_FIXTURES / "codex_rollout_anonymized.jsonl", old_artifact)
+    shutil.copyfile(_FIXTURES / Fixture.CODEX_ROLLOUT, old_artifact)
     old_time = (_NOW - timedelta(minutes=10)).timestamp()
     os.utime(old_artifact, (old_time, old_time))
     active_artifact = sessions / "rollout-active.jsonl"
-    newer_text = (_FIXTURES / "codex_rollout_anonymized.jsonl").read_text(encoding="utf-8")
+    newer_text = (_FIXTURES / Fixture.CODEX_ROLLOUT).read_text(encoding="utf-8")
     active_artifact.write_text(
         newer_text.replace("2026-04-12T10:00:00Z", "2026-04-12T11:00:00Z", 1),
         encoding="utf-8",
     )
     recent = (_NOW - timedelta(seconds=30)).timestamp()
     os.utime(active_artifact, (recent, recent))
-    service = build_discovery_service(environment={"CODEX_HOME": str(root)}, home=tmp_path)
+    service = build_discovery_service(
+        environment={DiscoveryEnvironmentVariable.CODEX_HOME: str(root)}, home=tmp_path
+    )
 
     with pytest.raises(DiscoveryError, match="rollout-active.jsonl"):
-        service.discover_latest("codex", now=_NOW)
+        service.discover_latest(DiscoverySource.CODEX, now=_NOW)
 
 
 def test_terminal_copilot_artifact_is_safe_without_waiting(tmp_path: Path) -> None:
     root = tmp_path / "copilot"
     artifact = root / "session-state/id/events.jsonl"
     artifact.parent.mkdir(parents=True)
-    shutil.copyfile(_FIXTURES / "copilot_cli_events_v1_anonymized.jsonl", artifact)
+    shutil.copyfile(_FIXTURES / Fixture.COPILOT_CLI_V1, artifact)
     recent = (_NOW - timedelta(seconds=10)).timestamp()
     os.utime(artifact, (recent, recent))
 
     discovered = build_discovery_service(
-        environment={"COPILOT_HOME": str(root)}, home=tmp_path
-    ).discover_latest("copilot-cli", now=_NOW)
+        environment={DiscoveryEnvironmentVariable.COPILOT_HOME: str(root)}, home=tmp_path
+    ).discover_latest(DiscoverySource.COPILOT_CLI, now=_NOW)
 
     assert "terminal" in discovered.safe_reason
 
@@ -147,27 +154,29 @@ def test_equal_semantic_timestamps_are_ambiguous(tmp_path: Path) -> None:
     for project in ("one", "two"):
         artifact = root / "projects" / project / f"{project}.jsonl"
         artifact.parent.mkdir(parents=True)
-        shutil.copyfile(_FIXTURES / "claude_code_session_anonymized.jsonl", artifact)
+        shutil.copyfile(_FIXTURES / Fixture.CLAUDE_CODE_SESSION, artifact)
         old_time = (_NOW - timedelta(minutes=10)).timestamp()
         os.utime(artifact, (old_time, old_time))
 
     service = build_discovery_service(
-        environment={"CLAUDE_CONFIG_DIR": str(root)}, home=tmp_path
+        environment={DiscoveryEnvironmentVariable.CLAUDE_CONFIG_DIR: str(root)}, home=tmp_path
     )
 
     with pytest.raises(DiscoveryError, match="ambiguous latest claude-code session"):
-        service.discover_latest("claude-code", now=_NOW)
+        service.discover_latest(DiscoverySource.CLAUDE_CODE, now=_NOW)
 
 
 def test_changed_artifact_is_refused_before_import(tmp_path: Path) -> None:
     root = tmp_path / "codex"
     artifact = root / "sessions/2026/04/12/rollout-changed.jsonl"
     artifact.parent.mkdir(parents=True)
-    shutil.copyfile(_FIXTURES / "codex_rollout_anonymized.jsonl", artifact)
+    shutil.copyfile(_FIXTURES / Fixture.CODEX_ROLLOUT, artifact)
     old_time = (_NOW - timedelta(minutes=10)).timestamp()
     os.utime(artifact, (old_time, old_time))
-    service = build_discovery_service(environment={"CODEX_HOME": str(root)}, home=tmp_path)
-    discovered = service.discover_latest("codex", now=_NOW)
+    service = build_discovery_service(
+        environment={DiscoveryEnvironmentVariable.CODEX_HOME: str(root)}, home=tmp_path
+    )
+    discovered = service.discover_latest(DiscoverySource.CODEX, now=_NOW)
 
     artifact.write_text(artifact.read_text(encoding="utf-8") + "\n", encoding="utf-8")
 
@@ -179,14 +188,16 @@ def test_export_only_source_returns_actionable_instruction(tmp_path: Path) -> No
     service = build_discovery_service(environment={}, home=tmp_path)
 
     with pytest.raises(DiscoveryError, match=r"hermes sessions export"):
-        service.discover_latest("hermes", now=_NOW)
+        service.discover_latest(ExportOnlySource.HERMES, now=_NOW)
 
 
 def test_relative_environment_override_is_rejected(tmp_path: Path) -> None:
-    service = build_discovery_service(environment={"CODEX_HOME": "relative"}, home=tmp_path)
+    service = build_discovery_service(
+        environment={DiscoveryEnvironmentVariable.CODEX_HOME: "relative"}, home=tmp_path
+    )
 
     with pytest.raises(DiscoveryError, match="CODEX_HOME must be an absolute path"):
-        service.discover_latest("codex", now=_NOW)
+        service.discover_latest(DiscoverySource.CODEX, now=_NOW)
 
 
 def test_default_roots_preserve_posix_and_windows_path_semantics() -> None:
@@ -208,14 +219,16 @@ def test_discovery_does_not_follow_symlinked_session_file(tmp_path: Path) -> Non
     sessions = root / "sessions/2026/04/12"
     sessions.mkdir(parents=True)
     outside = tmp_path / "outside.jsonl"
-    shutil.copyfile(_FIXTURES / "codex_rollout_anonymized.jsonl", outside)
+    shutil.copyfile(_FIXTURES / Fixture.CODEX_ROLLOUT, outside)
     link = sessions / "rollout-linked.jsonl"
     try:
         link.symlink_to(outside)
     except OSError:
         pytest.skip("symlink creation is not available")
 
-    service = build_discovery_service(environment={"CODEX_HOME": str(root)}, home=tmp_path)
+    service = build_discovery_service(
+        environment={DiscoveryEnvironmentVariable.CODEX_HOME: str(root)}, home=tmp_path
+    )
 
     with pytest.raises(DiscoveryError, match="no supported codex session"):
-        service.discover_latest("codex", now=_NOW)
+        service.discover_latest(DiscoverySource.CODEX, now=_NOW)

@@ -13,7 +13,11 @@ import jsonschema
 from memory.backend.log_safety import redact_secrets
 from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig, load_config
-from memory.import_discovery import build_discovery_service, discovery_source_names
+from memory.import_discovery import (
+    DiscoveryCommand,
+    build_discovery_service,
+    discovery_source_names,
+)
 from memory.importers import get_importer
 from memory.ingestion import mvp_ingestion
 from memory.ingestion.thread_models import SearchResultMode
@@ -184,7 +188,8 @@ def build_parser() -> argparse.ArgumentParser:
         dest="importer", required=True, parser_class=CLIArgumentParser
     )
     latest = import_subparsers.add_parser(
-        "latest", help="Safely discover and import the latest local client session."
+        DiscoveryCommand.LATEST,
+        help="Safely discover and import the latest local client session.",
     )
     _add_common_options(latest)
     latest.add_argument("discovery_source", choices=discovery_source_names())
@@ -625,7 +630,7 @@ def _reindex(args: argparse.Namespace) -> int:
 
 
 def _import_conversations(args: argparse.Namespace) -> int:
-    if args.importer == "latest":
+    if args.importer == DiscoveryCommand.LATEST:
         return _import_latest(args)
 
     result = _execute_import(args)
