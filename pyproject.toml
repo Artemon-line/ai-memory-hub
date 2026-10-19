@@ -67,7 +67,7 @@ turbopuffer = [
     "turbopuffer>=2.9.0",
 ]
 vespa = [
-    "pyvespa>=0.50.0",
+    "pyvespa>=1.2.9",
 ]
 typesense = [
     "typesense>=0.21.0",
