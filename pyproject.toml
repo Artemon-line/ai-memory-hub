@@ -27,7 +27,7 @@ milvus = [
     "setuptools>=84.0.0",
 ]
 mongodb = [
-    "pymongo>=4.18.2",
+    "pymongo>=4.19.0",
 ]
 opensearch = [
     "opensearch-py>=2.7.0",
