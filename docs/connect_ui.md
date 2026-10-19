@@ -22,6 +22,7 @@ http://127.0.0.1:8000/connect
 The MCP client owns sign-in, reauthentication, and token storage:
 
 - `/connect` renders setup and client snippets.
+- `/connect/import` provides the signed-in conversation-file import workflow.
 - `/connect` does not ask humans to sign in or copy bearer tokens.
 - Clients should use the MCP OAuth metadata and authorization flow when auth is
   needed.

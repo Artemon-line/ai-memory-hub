@@ -14,6 +14,7 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
 
+from memory.api.connect_security import CONNECT_CSRF_HEADER, csrf_matches, hash_secret
 from memory.api.external_oidc import ExternalOIDCClaims, ExternalOIDCValidator
 from memory.config import HubConfig
 from memory.ingestion.base_agent import BaseIngestionAgent
@@ -21,6 +22,7 @@ from memory.ingestion.base_agent import BaseIngestionAgent
 PUBLIC_PATHS = {
     "/",
     "/connect",
+    "/connect/import",
     "/auth/google",
     "/auth/google/callback",
     "/auth/logout",
@@ -148,13 +150,16 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         if _has_query_access_token(request):
             return _unauthorized(request, self._config, "invalid_request")
-        token = extract_bearer_token(request)
-        if token is None:
-            return _unauthorized(request, self._config, "invalid_request")
         required_scopes = required_scopes_for_request(request)
-        auth = await self._authenticate(request, token)
+        token = extract_bearer_token(request)
+        auth = (
+            await self._authenticate(request, token)
+            if token is not None
+            else await self._authenticate_connect_session(request)
+        )
         if auth is None:
-            return _unauthorized(request, self._config, "invalid_token")
+            error = "invalid_token" if token is not None else "invalid_request"
+            return _unauthorized(request, self._config, error)
         if not _has_required_scopes(auth.scopes, required_scopes):
             return _forbidden(
                 request,
@@ -170,6 +175,31 @@ class AuthMiddleware(BaseHTTPMiddleware):
         finally:
             _CURRENT_AUTH_CONTEXT.reset(auth_token)
             _CURRENT_OWNER_ID.reset(owner_token)
+
+    async def _authenticate_connect_session(self, request: Request) -> AuthContext | None:
+        if (
+            self._config.api.auth != "oauth_resource_server"
+            or request.method != "POST"
+            or request.url.path != "/memory/import"
+        ):
+            return None
+        session_id = request.cookies.get(self._config.api.connect.session_cookie_name)
+        if not session_id:
+            return None
+        session = await self._agent.web_session_for_hash(
+            hash_secret(session_id, self._config, purpose="connect-session")
+        )
+        csrf_token = request.headers.get(CONNECT_CSRF_HEADER, "")
+        if session is None or not csrf_matches(session, csrf_token, config=self._config):
+            return None
+        owner_id = session.get("user_id")
+        if not isinstance(owner_id, str) or not owner_id:
+            return None
+        return AuthContext(
+            owner_id=owner_id,
+            scopes=frozenset({WRITE_SCOPE}),
+            auth_mode="connect_session",
+        )
 
     async def _authenticate(self, request: Request, token: str) -> AuthContext | None:
         if self._config.api.auth == "bearer_token":

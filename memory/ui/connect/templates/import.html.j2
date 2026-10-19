@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Import conversations · ai-memory-hub</title>
+  <link rel="icon" href="/connect/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/connect/static/connect.css">
+</head>
+<body>
+<main class="connect-shell import-shell">
+  <nav class="page-nav" aria-label="Connect navigation">
+    <a href="/connect">← Back to Connect</a>
+  </nav>
+
+  <section class="hero import-hero" aria-labelledby="import-title">
+    <div>
+      <img class="brand-mark" src="/connect/static/ai-memory-hub-mark.svg" alt="" width="64" height="64">
+      <p class="eyebrow">Private file import</p>
+      <h1 id="import-title">Import conversations</h1>
+      <p class="hero-copy">Select the source yourself, then upload one export. Parsing, validation, deduplication, ownership, and storage stay in the hub.</p>
+    </div>
+    <div class="hero-panel" aria-label="Import limits">
+      <strong>Before you upload</strong>
+      <ul class="plain-list">
+        <li>One UTF-8 JSON, JSONL, NDJSON, CSV, or text file</li>
+        <li>20 MB maximum file size</li>
+        <li>100 conversations maximum per file</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="import-layout">
+    <form id="import-form" class="panel import-form" novalidate>
+      <div class="panel-header">
+        <span class="panel-icon" aria-hidden="true">IN</span>
+        <div>
+          <h2>Choose and upload</h2>
+          <p>Conversation text is sent only to your hub and is never rendered by this page.</p>
+        </div>
+      </div>
+
+      <label class="field-label" for="import-source">Conversation source</label>
+      <select id="import-source" name="source-choice" required>
+        <option value="">Choose a source…</option>
+        {% for source in import_sources %}
+        <option value="{{ source.parser|e }}" data-guidance="{{ source.guidance|e }}">{{ source.label|e }}</option>
+        {% endfor %}
+      </select>
+      <p id="source-guidance" class="field-help">Choose the app or export format you obtained the file from.</p>
+
+      <label class="drop-zone" for="import-file" id="import-drop-zone">
+        <strong>Select or drop one file</strong>
+        <span id="file-summary">JSON, JSONL, NDJSON, CSV, or text · up to 20 MB</span>
+        <input id="import-file" name="file" type="file" required accept=".json,.jsonl,.ndjson,.csv,.txt,application/json,application/x-ndjson,text/csv,text/plain">
+      </label>
+      <p id="source-suggestion" class="field-help" aria-live="polite">Choose a source to continue.</p>
+
+      {% if auth_mode.value != 'none' and not signed_in %}
+      <label class="field-label" for="import-token">Bearer token</label>
+      <input id="import-token" type="password" autocomplete="off" spellcheck="false" aria-describedby="token-help">
+      <p id="token-help" class="field-help">
+        {% if auth_mode.value == 'oauth_resource_server' %}<a href="/connect">Sign in through Connect</a>, or use a token with <code>memory:write</code>. {% endif %}The token is used only for this request and is not stored by the page.
+      </p>
+      {% elif signed_in %}
+      <p class="auth-notice"><span class="status-pill status-pill--ok">Signed in</span> Importing as {{ identity|e }} with <code>memory:write</code>.</p>
+      {% endif %}
+
+      <input id="import-csrf" type="hidden" value="{{ csrf_token|default('', true)|e }}">
+      <div id="import-error" class="message message--error" role="alert" hidden></div>
+      <button id="import-submit" class="button button--primary" type="submit">Import conversations</button>
+    </form>
+
+    <aside class="panel guidance-panel" aria-labelledby="guidance-title">
+      <div class="panel-header">
+        <span class="panel-icon" aria-hidden="true">?</span>
+        <div>
+          <h2 id="guidance-title">Getting the right file</h2>
+          <p>Use the source's export or copy guidance. Do not rename a different format to make it look supported.</p>
+        </div>
+      </div>
+      <dl class="guidance-list">
+        {% for source in import_sources %}
+        <div><dt>{{ source.label|e }}</dt><dd>{{ source.guidance|e }}</dd></div>
+        {% endfor %}
+      </dl>
+    </aside>
+  </section>
+
+  <section id="import-result" class="panel import-result" aria-live="polite" hidden>
+    <div class="panel-header">
+      <span class="panel-icon" aria-hidden="true">OK</span>
+      <div><h2>Import receipt</h2><p id="import-result-status"></p></div>
+    </div>
+    <div class="receipt-counts" id="import-counts"></div>
+    <ol class="receipt-list" id="import-receipts"></ol>
+  </section>
+</main>
+<script src="/connect/static/import_source_signatures.js"></script>
+<script src="/connect/static/import_source_detector.js"></script>
+<script src="/connect/static/import_source_suggestions.js"></script>
+<script src="/connect/static/import.js"></script>
+</body>
+</html>

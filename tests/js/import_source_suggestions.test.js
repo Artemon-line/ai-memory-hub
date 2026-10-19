@@ -19,6 +19,15 @@ const {
 const {
   ImportSourceDetector,
 } = require("../../memory/ui/connect/static/import_source_detector.js");
+const {
+  CSRF_HEADER,
+  ImportClient,
+  MAX_FILE_BYTES,
+  MAX_RECEIPTS,
+  errorMessage,
+  summarizeImport,
+  validateSelection,
+} = require("../../memory/ui/connect/static/import.js");
 
 const fixtures = path.join(__dirname, "..", "fixtures", "importers");
 
@@ -256,6 +265,103 @@ test("controller accepts an injected file inspector", async () => {
 
   assert.deepEqual(inspected, [file]);
   assert.equal(sourceSelect.value, "injected-parser");
+});
+
+test("import client uses the existing multipart contract with bearer auth", async () => {
+  const fields = [];
+  const requests = [];
+  const client = new ImportClient({
+    formDataFactory: () => ({ append: (name, value) => fields.push([name, value]) }),
+    async fetchImpl(url, options) {
+      requests.push({ url, options });
+      return { ok: true, json: async () => ({ status: "ok", results: [] }) };
+    },
+  });
+  const file = { name: "history.jsonl", size: 42 };
+
+  await client.upload({
+    parser: "codex-rollout-jsonl",
+    file,
+    token: "private-bearer-token",
+    csrfToken: "ignored-csrf",
+  });
+
+  assert.deepEqual(fields, [
+    ["parser", "codex-rollout-jsonl"],
+    ["file", file],
+  ]);
+  assert.equal(requests[0].url, "/memory/import");
+  assert.equal(requests[0].options.method, "POST");
+  assert.equal(requests[0].options.headers.Authorization, "Bearer private-bearer-token");
+  assert.equal(requests[0].options.headers[CSRF_HEADER], undefined);
+  assert.equal(requests[0].options.credentials, "same-origin");
+});
+
+test("import client uses Connect session CSRF without an authorization header", async () => {
+  let request;
+  const client = new ImportClient({
+    formDataFactory: () => ({ append() {} }),
+    async fetchImpl(_url, options) {
+      request = options;
+      return { ok: true };
+    },
+  });
+
+  await client.upload({
+    parser: "manual",
+    file: { name: "chat.txt", size: 8 },
+    token: "",
+    csrfToken: "browser-csrf",
+  });
+
+  assert.deepEqual(request.headers, { [CSRF_HEADER]: "browser-csrf" });
+});
+
+test("file validation rejects missing sources, unsupported files, and oversized uploads", () => {
+  assert.match(
+    validateSelection({ parser: "", file: { name: "chat.txt", size: 10 } }),
+    /Choose the conversation source/
+  );
+  assert.match(
+    validateSelection({ parser: "manual", file: { name: "chat.zip", size: 10 } }),
+    /JSON, JSONL, NDJSON, CSV, or text/
+  );
+  assert.match(
+    validateSelection({
+      parser: "manual",
+      file: { name: "chat.txt", size: MAX_FILE_BYTES + 1 },
+    }),
+    /20 MB/
+  );
+});
+
+test("receipt summaries are bounded and never copy conversation or error content", () => {
+  const privateText = "private conversation text must not render";
+  const results = Array.from({ length: MAX_RECEIPTS + 5 }, (_, index) => ({
+    index,
+    id: `memory-${index}`,
+    status: index === 2 ? "error" : "inserted",
+    deduplicated: index === 1,
+    text: privateText,
+    error_message: privateText,
+  }));
+
+  const summary = summarizeImport({ status: "partial", results });
+
+  assert.equal(summary.results.length, MAX_RECEIPTS);
+  assert.equal(summary.imported, MAX_RECEIPTS - 1);
+  assert.equal(summary.deduplicated, 1);
+  assert.equal(summary.failed, 1);
+  assert.equal(summary.partial, true);
+  assert.equal(JSON.stringify(summary).includes(privateText), false);
+});
+
+test("HTTP errors map to actionable messages without rendering server details", () => {
+  assert.match(errorMessage(401), /valid bearer token/);
+  assert.match(errorMessage(403), /memory:write/);
+  assert.match(errorMessage(413), /20 MB/);
+  assert.match(errorMessage(415), /file type/);
+  assert.match(errorMessage(400), /selected source/);
 });
 
 class FakeControl {

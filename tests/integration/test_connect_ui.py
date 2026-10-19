@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import json
 import re
 import sqlite3
 import time
@@ -408,6 +409,8 @@ def test_connect_routes_are_public_secret_free_and_use_configured_mcp_url(
     source_signatures = client.get("/connect/static/import_source_signatures.js")
     source_detector = client.get("/connect/static/import_source_detector.js")
     source_suggestions = client.get("/connect/static/import_source_suggestions.js")
+    import_script = client.get("/connect/static/import.js")
+    import_page = client.get("/connect/import")
     callback = client.get("/auth/google/callback")
     logout = client.post("/auth/logout", follow_redirects=False)
 
@@ -417,9 +420,18 @@ def test_connect_routes_are_public_secret_free_and_use_configured_mcp_url(
     assert source_signatures.status_code == 200
     assert source_detector.status_code == 200
     assert source_suggestions.status_code == 200
+    assert import_script.status_code == 200
+    assert import_page.status_code == 200
     assert "findSignatureMatches" in source_signatures.text
     assert "ImportSourceDetector" in source_detector.text
     assert "detectImportSource" in source_suggestions.text
+    assert 'action="/memory/import"' not in import_page.text
+    assert 'value="codex-rollout-jsonl"' in import_page.text
+    assert 'value="manual"' in import_page.text
+    assert "20 MB maximum file size" in import_page.text
+    assert "100 conversations maximum" in import_page.text
+    assert "google-secret" not in import_page.text
+    assert "oauth-secret" not in import_page.text
     assert callback.status_code == 400
     assert logout.status_code == 303
     assert "https://memory.example.com/mcp" in connect.text
@@ -471,6 +483,92 @@ def test_connect_routes_are_public_secret_free_and_use_configured_mcp_url(
     assert "local / local" in connect.text
     assert "OpenTelemetry traces" in connect.text
     assert "disabled" in connect.text
+
+
+def test_connect_import_accepts_bearer_token_with_write_scope(tmp_path, monkeypatch) -> None:
+    client = _client(tmp_path, monkeypatch, api_auth="bearer_token")
+    SQLiteMetadataStore(tmp_path / "metadata.sqlite3").create_auth_token(
+        owner_id="bearer-import-owner",
+        token="write-token",
+        scopes=["memory:write"],
+    )
+
+    page = client.get("/connect/import")
+    imported = client.post(
+        "/memory/import",
+        headers={"Authorization": "Bearer write-token"},
+        data={"parser": "manual"},
+        files={
+            "file": (
+                "conversation.txt",
+                b"User: Remember the quiet harbor.\nAssistant: Remembered.",
+                "text/plain",
+            )
+        },
+    )
+
+    assert page.status_code == 200
+    assert 'id="import-token"' in page.text
+    assert imported.status_code == 200, imported.text
+    assert imported.json()["conversation_count"] == 1
+
+
+def test_connect_session_import_requires_csrf_and_preserves_owner_isolation(
+    tmp_path, monkeypatch
+) -> None:
+    client = _client(tmp_path, monkeypatch)
+    alice = TestClient(client.app, base_url="https://memory.example.com")
+    start = alice.get("/auth/google", follow_redirects=False)
+    state = parse_qs(urlparse(start.headers["location"]).query)["state"][0]
+    callback = alice.get(f"/auth/google/callback?code=fake-code&state={state}")
+    csrf = alice.cookies.get("amh_csrf")
+    request = {
+        "data": {"parser": "manual"},
+        "files": {
+            "file": (
+                "alice.txt",
+                b"User: Remember the silver inlet.\nAssistant: Remembered.",
+                "text/plain",
+            )
+        },
+    }
+
+    missing_csrf = alice.post("/memory/import", **request)
+    alice_import = alice.post(
+        "/memory/import",
+        headers={"X-Ai-Memory-Hub-CSRF": str(csrf)},
+        **request,
+    )
+
+    client.app.state.google_oauth_exchange = _google_exchange_b
+    bob = TestClient(client.app, base_url="https://memory.example.com")
+    bob_start = bob.get("/auth/google", follow_redirects=False)
+    bob_state = parse_qs(urlparse(bob_start.headers["location"]).query)["state"][0]
+    bob_callback = bob.get(f"/auth/google/callback?code=fake-code&state={bob_state}")
+    bob_csrf = bob.cookies.get("amh_csrf")
+    bob_import = bob.post(
+        "/memory/import",
+        headers={"X-Ai-Memory-Hub-CSRF": str(bob_csrf)},
+        data={"parser": "manual"},
+        files={
+            "file": (
+                "bob.txt",
+                b"User: Remember the amber cove.\nAssistant: Remembered.",
+                "text/plain",
+            )
+        },
+    )
+
+    with sqlite3.connect(tmp_path / "metadata.sqlite3") as conn:
+        payloads = [json.loads(row[0]) for row in conn.execute("SELECT payload FROM conversations")]
+    owners = {payload["metadata"]["owner_id"] for payload in payloads}
+
+    assert callback.status_code == 200
+    assert bob_callback.status_code == 200
+    assert missing_csrf.status_code == 401
+    assert alice_import.status_code == 200, alice_import.text
+    assert bob_import.status_code == 200, bob_import.text
+    assert len(owners) == 2
 
 
 def test_logout_rejects_oversized_form_without_revoking_session(tmp_path, monkeypatch) -> None:

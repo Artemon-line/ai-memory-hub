@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import hmac
 import json
 import os
 import secrets
@@ -13,12 +12,11 @@ from typing import Any, TypedDict
 
 from fastapi import HTTPException, Request
 
+from memory.api.connect_security import csrf_matches, hash_secret
 from memory.auth import READ_SCOPE, WRITE_SCOPE
 from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig
 from memory.ingestion.base_agent import BaseIngestionAgent
-
-SECRET_HASH_ITERATIONS = 210_000
 
 
 class ClientVerificationStatus(str, Enum):
@@ -427,28 +425,6 @@ def env_secret(env_name: str) -> str:
 def secure_cookie(config: HubConfig) -> bool:
     base = config.api.public_base_url
     return bool(base.startswith("https://") and "localhost" not in base and "127.0.0.1" not in base)
-
-
-def csrf_matches(session: dict[str, object], csrf_token: str, *, config: HubConfig) -> bool:
-    expected = str(session.get("csrf_token_hash") or "")
-    actual = hash_secret(csrf_token, config, purpose="connect-csrf")
-    return bool(csrf_token) and hmac.compare_digest(expected, actual)
-
-
-def hash_secret(value: str, config: HubConfig, *, purpose: str) -> str:
-    secret = session_secret(config)
-    salt = f"ai-memory-hub:{purpose}:{secret}".encode("utf-8")
-    digest = hashlib.pbkdf2_hmac(
-        "sha256",
-        value.encode("utf-8"),
-        salt,
-        SECRET_HASH_ITERATIONS,
-    ).hex()
-    return "pbkdf2-sha256:" + digest
-
-
-def session_secret(config: HubConfig) -> str:
-    return config.api.connect.session_secret or os.environ.get(config.api.connect.session_secret_env, "")
 
 
 def validate_provider_claims(
