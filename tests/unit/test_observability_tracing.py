@@ -120,7 +120,7 @@ def test_observability_extra_declares_otel_dependencies() -> None:
         "opentelemetry-instrumentation-fastapi",
         "opentelemetry-instrumentation-httpx",
         "opentelemetry-instrumentation-requests",
-        "opentelemetry-instrumentation-psycopg",
+        "opentelemetry-instrumentation-dbapi",
     }
 
     assert expected <= {dependency.split(">=")[0] for dependency in dependencies}

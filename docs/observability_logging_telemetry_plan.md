@@ -30,7 +30,7 @@ Not implemented yet:
 - [x] Request or operation correlation IDs.
 - [x] Trace IDs in logs.
 - [x] OpenTelemetry SDK setup.
-- [x] FastAPI, HTTP client, and psycopg instrumentation.
+- [x] FastAPI, HTTP client, and PostgreSQL DB-API instrumentation.
 - [x] Manual spans around MCP tools and ingestion stages.
 - [x] Metrics for tool/API latency, insert/search/ask outcomes, provider failures,
   vector rows, and fallback state.
@@ -181,7 +181,7 @@ observability = [
   "opentelemetry-instrumentation-fastapi",
   "opentelemetry-instrumentation-httpx",
   "opentelemetry-instrumentation-requests",
-  "opentelemetry-instrumentation-psycopg",
+  "opentelemetry-instrumentation-dbapi",
 ]
 ```
 
@@ -202,7 +202,7 @@ observability:
 
 - [x] FastAPI request spans.
 - [x] HTTP client spans for OpenAI/Ollama embedding requests.
-- [x] Psycopg spans for Postgres and PGVector SQL.
+- [x] PostgreSQL DB-API spans for Postgres and PGVector SQL.
 
 ### Manual Spans
 
@@ -378,7 +378,7 @@ Local smoke:
 2. Health/readiness endpoints.
 3. MCP/API exception logging tests.
 4. OpenTelemetry optional dependencies and config.
-5. FastAPI + HTTP + psycopg instrumentation.
+5. FastAPI + HTTP + PostgreSQL DB-API instrumentation.
 6. Manual spans around MCP and ingestion stages.
 7. Metrics.
 8. Observability Compose profile.

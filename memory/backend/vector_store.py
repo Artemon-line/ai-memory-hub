@@ -2664,15 +2664,9 @@ class PGVectorStore:
     def _connect(self):
         if self._connect_fn is not None:
             return self._connect_fn(self._dsn)
-        try:
-            import importlib
+        from memory.backend.postgres_driver import connect as connect_postgres
 
-            psycopg = importlib.import_module("psycopg")
-        except ImportError as exc:
-            raise RuntimeError(
-                "psycopg package is required for providers.vector_db=pgvector"
-            ) from exc
-        return psycopg.connect(self._dsn)
+        return connect_postgres(self._dsn)
 
     def _init_db(self) -> None:
         with self._connect() as conn:

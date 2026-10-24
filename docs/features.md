@@ -111,7 +111,7 @@ The service now has a practical local observability baseline:
   names, and provider context where available.
 - HTTP request-id middleware.
 - `/health`, `/ready`, and `/observability` endpoints.
-- Optional OpenTelemetry tracing for FastAPI, HTTP clients, and psycopg.
+- Optional OpenTelemetry tracing for FastAPI, HTTP clients, and PostgreSQL DB-API calls.
 - Metrics for API/MCP outcomes, latency, health, vector rows, provider failures,
   and fallback state.
 - A local observability compose example with OpenTelemetry Collector, Jaeger,

@@ -3661,6 +3661,10 @@ class _UniqueViolation(Exception):
     sqlstate = "23505"
 
 
+class _Pg8000UniqueViolation(Exception):
+    pass
+
+
 class _UniqueViolationCursor:
     def __enter__(self):
         return self
@@ -3939,6 +3943,13 @@ def test_postgres_insert_new_deduplicates_same_id_same_hash() -> None:
     store.get = lambda memory_id: payload
 
     assert store.insert_new(payload) == (payload["id"], False)
+
+
+def test_postgres_recognizes_pg8000_unique_violation() -> None:
+    store = PostgresMetadataStore.__new__(PostgresMetadataStore)
+    exc = _Pg8000UniqueViolation({"C": "23505", "M": "duplicate key"})
+
+    assert store._is_unique_violation(exc) is True
 
 
 def test_postgres_insert_new_rejects_same_id_different_hash() -> None:
