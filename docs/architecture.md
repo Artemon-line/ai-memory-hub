@@ -193,10 +193,19 @@ MCP tool responses use a stable envelope with `status`, `id`, `results`, `cursor
 Implemented retrieval flow:
 
 1. Embed the query.
-2. Search the active vector store.
-3. Fetch matching conversations from metadata storage.
-4. Enrich rows with conversation-level score and match count.
-5. Return grouped, deterministic top-k results.
+2. Build typed vector filters from trusted authorization scope and request filters.
+3. Push owner/project constraints into vector providers that advertise support,
+   so authorization scope is applied before vector `top_k` selection.
+4. Use bounded adaptive oversampling for unsupported residual constraints, then
+   validate every candidate against authoritative metadata.
+5. Enrich rows with conversation-level score and match count.
+6. Return grouped, deterministic top-k results.
+
+Provider capabilities report the fields supported for vector-side filtering.
+Runtime health reports those fields and the bounded residual-fallback policy;
+filtered search diagnostics report pushed and residual fields, attempt count,
+and the final candidate limit. Self-query output never supplies owner or project
+scope.
 
 `memory_ask` builds a simple answer from the selected search rows and returns:
 

@@ -916,6 +916,16 @@ Useful options:
 - `--include-inactive` also recalculates vectors for `pending_review` or
   `rejected` conversations. The default only reindexes active memory.
 
+The same reindex command is the compatibility path when enabling vector filter
+pushdown for an index created before owner/project payload fields were present.
+Back up the vector destination, deploy the updated provider schema or mapping,
+and reindex every project whose vectors predate those fields. Until reindexing
+is complete, use a fresh vector destination or a provider configuration that
+reports no native filter fields; the hub will use bounded metadata-validated
+fallback retrieval instead of trusting incomplete payloads. Check the active
+mode with `aim storage-check --json` or the `/health` response under
+`vector_filtering`.
+
 7. Verify the new index before removing the old one:
 
 ```bash

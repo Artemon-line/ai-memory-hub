@@ -16,7 +16,7 @@ from uuid import uuid4
 
 import pytest
 
-from memory.backend.contracts import ProviderCapabilities
+from memory.backend.contracts import ProviderCapabilities, VectorSearchFilters
 from memory.backend.errors import (
     NotSupportedError,
     OAuthClientQuotaExceeded,
@@ -893,6 +893,43 @@ def test_inmemory_vector_dimension_validation_insert_and_search() -> None:
         store.search([1.0, 2.0], top_k=5)
 
 
+def test_inmemory_vector_filter_is_applied_before_top_k() -> None:
+    store = InMemoryVectorStore(dimension=2)
+    for index in range(120):
+        store.insert(
+            f"distractor-{index}",
+            [
+                {
+                    "chunk_index": 0,
+                    "role": "user",
+                    "text": "distractor",
+                    "project_id": "project-b",
+                    "vector": [1.0, 0.0],
+                }
+            ],
+        )
+    store.insert(
+        "target",
+        [
+            {
+                "chunk_index": 0,
+                "role": "user",
+                "text": "target",
+                "project_id": "project-a",
+                "vector": [0.0, 1.0],
+            }
+        ],
+    )
+
+    matches = store.search(
+        [1.0, 0.0],
+        top_k=1,
+        filters=VectorSearchFilters(equals={"project_id": "project-a"}),
+    )
+
+    assert [match["memory_id"] for match in matches] == ["target"]
+
+
 def test_chroma_metadata_model_rejects_unknown_keys() -> None:
     with pytest.raises(ValueError):
         ChromaMetadata.from_query(
@@ -1000,6 +1037,11 @@ def _assert_vector_store_contract(store: Any) -> None:
         "fake",
     }
     assert stats["rows"] is None or stats["rows"] >= 3
+
+    capabilities = store.capabilities()
+    if stats["provider"] != "fake":
+        assert capabilities.supports_vector_filtering is True
+        assert capabilities.vector_filter_fields == ("owner_id", "project_id")
 
     store.delete([first_id])
     deleted_matches = [
