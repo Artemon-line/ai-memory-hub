@@ -61,9 +61,18 @@ def test_connection_kwargs_supports_unix_socket_directory() -> None:
     assert kwargs["unix_sock"] == "/var/run/postgresql/.s.PGSQL.5544"
 
 
+class _RecordingCursor:
+    def __init__(self, events: list[str]) -> None:
+        self.events = events
+
+    def close(self) -> None:
+        self.events.append("cursor_close")
+
+
 class _RecordingConnection:
     def __init__(self) -> None:
         self.events: list[str] = []
+        self.raw_cursor = _RecordingCursor(self.events)
 
     def commit(self) -> None:
         self.events.append("commit")
@@ -74,17 +83,18 @@ class _RecordingConnection:
     def close(self) -> None:
         self.events.append("close")
 
-    def cursor(self) -> str:
-        return "cursor"
+    def cursor(self) -> _RecordingCursor:
+        return self.raw_cursor
 
 
 def test_transaction_connection_commits_and_closes_on_success() -> None:
     raw = _RecordingConnection()
 
     with TransactionConnection(raw) as connection:
-        assert connection.cursor() == "cursor"
+        with connection.cursor() as cursor:
+            assert cursor is raw.raw_cursor
 
-    assert raw.events == ["commit", "close"]
+    assert raw.events == ["cursor_close", "commit", "close"]
 
 
 def test_transaction_connection_rolls_back_and_closes_on_error() -> None:

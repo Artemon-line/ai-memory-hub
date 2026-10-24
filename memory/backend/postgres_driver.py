@@ -4,6 +4,7 @@ import getpass
 import os
 import posixpath
 import ssl
+from importlib import import_module
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
 
@@ -21,7 +22,7 @@ _SUPPORTED_SSL_MODES = {
 def connect(dsn: str) -> Any:
     """Open a synchronous DB-API connection from a libpq-style PostgreSQL URL."""
     try:
-        from pg8000 import dbapi
+        dbapi = import_module("pg8000.dbapi")
     except ImportError as exc:
         raise RuntimeError(
             "pg8000 package is required for PostgreSQL and PGVector providers"
@@ -38,6 +39,9 @@ class TransactionConnection:
     def __getattr__(self, name: str) -> Any:
         return getattr(self._connection, name)
 
+    def cursor(self, *args: Any, **kwargs: Any) -> CursorContext:
+        return CursorContext(self._connection.cursor(*args, **kwargs))
+
     def __enter__(self) -> TransactionConnection:
         return self
 
@@ -49,6 +53,23 @@ class TransactionConnection:
                 self._connection.rollback()
         finally:
             self._connection.close()
+        return False
+
+
+class CursorContext:
+    """Add deterministic context-manager cleanup to pg8000 cursors."""
+
+    def __init__(self, cursor: Any):
+        self._cursor = cursor
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._cursor, name)
+
+    def __enter__(self) -> Any:
+        return self._cursor
+
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> bool:
+        self._cursor.close()
         return False
 
 
