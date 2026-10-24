@@ -42,7 +42,7 @@ observability = [
     "opentelemetry-instrumentation-dbapi>=0.50b0",
 ]
 oauth = [
-    "authlib>=1.8.0",
+    "authlib>=1.9.1",
     "cryptography>=50.0.1",
     "httpx>=0.28.1",
     "joserfc>=1.7.5",
