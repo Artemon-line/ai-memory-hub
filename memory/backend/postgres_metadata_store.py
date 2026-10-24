@@ -44,6 +44,7 @@ from memory.backend.metadata_store import (
     normalize_index_state,
     update_index_chunks_payload,
 )
+from memory.backend.postgres_driver import connect as connect_postgres
 
 CREATE_CONVERSATIONS_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS conversations (
@@ -435,15 +436,7 @@ class PostgresMetadataStore:
     def _connect(self):
         if self._connect_fn is not None:
             return self._connect_fn(self._dsn)
-        try:
-            import importlib
-
-            psycopg = importlib.import_module("psycopg")
-        except ImportError as exc:
-            raise RuntimeError(
-                "psycopg package is required for providers.metadata_db=postgres"
-            ) from exc
-        return psycopg.connect(self._dsn)
+        return connect_postgres(self._dsn)
 
     def _init_db(self) -> None:
         with self._connect() as conn:
@@ -2230,6 +2223,8 @@ class PostgresMetadataStore:
             return True
         if getattr(exc, "pgcode", None) == "23505":
             return True
+        if exc.args and isinstance(exc.args[0], dict):
+            return exc.args[0].get("C") == "23505"
         return exc.__class__.__name__ == "UniqueViolation"
 
     def _handle_insert_new_error(

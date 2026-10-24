@@ -92,9 +92,10 @@ def _configure_opentelemetry(config: TracingConfig, *, app: Any | None) -> Traci
     HTTPXClientInstrumentor = import_module(
         "opentelemetry.instrumentation.httpx"
     ).HTTPXClientInstrumentor
-    PsycopgInstrumentor = import_module(
-        "opentelemetry.instrumentation.psycopg"
-    ).PsycopgInstrumentor
+    trace_dbapi = import_module(
+        "opentelemetry.instrumentation.dbapi"
+    ).trace_integration
+    pg8000_dbapi = import_module("pg8000.dbapi")
     RequestsInstrumentor = import_module(
         "opentelemetry.instrumentation.requests"
     ).RequestsInstrumentor
@@ -125,7 +126,12 @@ def _configure_opentelemetry(config: TracingConfig, *, app: Any | None) -> Traci
         FastAPIInstrumentor.instrument_app(app, tracer_provider=provider)
     HTTPXClientInstrumentor().instrument(tracer_provider=provider)
     RequestsInstrumentor().instrument(tracer_provider=provider)
-    PsycopgInstrumentor().instrument(tracer_provider=provider)
+    trace_dbapi(
+        pg8000_dbapi,
+        "connect",
+        "postgresql",
+        tracer_provider=provider,
+    )
 
     logger.info(
         "OpenTelemetry tracing configured",

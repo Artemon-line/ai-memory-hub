@@ -39,17 +39,17 @@ observability = [
     "opentelemetry-instrumentation-fastapi>=0.50b0",
     "opentelemetry-instrumentation-httpx>=0.50b0",
     "opentelemetry-instrumentation-requests>=0.66b1",
-    "opentelemetry-instrumentation-psycopg>=0.50b0",
+    "opentelemetry-instrumentation-dbapi>=0.50b0",
 ]
 oauth = [
-    "authlib>=1.8.0",
+    "authlib>=1.9.1",
     "cryptography>=50.0.1",
     "httpx>=0.28.1",
     "joserfc>=1.7.5",
     "python-multipart>=0.0.32",
 ]
 postgres = [
-    "psycopg[binary]>=3.3.6",
+    "pg8000>=1.31.5",
 ]
 pinecone = [
     "pinecone>=7.0.0",

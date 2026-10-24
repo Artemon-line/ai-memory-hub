@@ -13,7 +13,7 @@ default.
 | Trace context | Trace and span IDs are included in logs when OpenTelemetry tracing is active. |
 | Health | `/health`, `/ready`, CLI health, and `memory://health` surfaces. |
 | Runtime summary | `/observability` returns redacted runtime and telemetry configuration. |
-| Tracing | Optional OpenTelemetry setup with FastAPI, HTTP client, requests, and psycopg instrumentation. |
+| Tracing | Optional OpenTelemetry setup with FastAPI, HTTP client, requests, and PostgreSQL DB-API instrumentation. |
 | Metrics | API/MCP outcome and latency metrics, health metrics, provider failure counts, vector row gauges, fallback state, and local-stack Postgres exporter metrics. |
 | Local stack | `examples/local-stack` compose profile with OpenTelemetry Collector, Jaeger, Prometheus, Postgres exporter, and a provisioned Grafana dashboard. |
 
