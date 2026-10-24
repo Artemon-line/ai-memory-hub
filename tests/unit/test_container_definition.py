@@ -396,7 +396,7 @@ def test_supply_chain_workflow_blocks_high_and_critical_vulnerabilities() -> Non
     assert "exit-code: \"0\"" in workflow
     assert "format: cyclonedx" in workflow
     assert "ai-memory-hub.cdx.json" in workflow
-    assert "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7" in workflow
+    assert "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7" in workflow
 
 
 def test_dependency_review_workflow_blocks_disallowed_dependency_changes() -> None:
