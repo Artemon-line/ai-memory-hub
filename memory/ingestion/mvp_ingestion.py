@@ -25,6 +25,7 @@ from memory.advanced_memory import (
     advanced_relevance_boost,
     extract_memory_graph,
 )
+from memory.backend.contracts import VectorDateRange, VectorSearchFilters
 from memory.backend.dry_run import DryRunMetadataStore, DryRunVectorStore
 from memory.backend.errors import SchemaVersionError, VectorDimensionError
 from memory.backend.log_safety import redact_secrets
@@ -526,6 +527,7 @@ def reset_audit_context(token: Token[AuditContext]) -> None:
 
 
 _SEARCH_CANDIDATE_MULTIPLIER = 3
+_MAX_FILTER_FALLBACK_CANDIDATES = 1_000
 _CONVERSATION_GROUP_SCORE_WINDOW = 0.25
 _MAX_MESSAGES = 10_000
 _MAX_MESSAGE_BYTES = 1_000_000
@@ -3290,10 +3292,26 @@ def search(
     candidate_multiplier = max(
         1, int(getattr(runtime, "retrieval_candidate_multiplier", _SEARCH_CANDIDATE_MULTIPLIER))
     )
-    candidate_k = 100 if filters.has_filters else max(top_k, min(top_k * candidate_multiplier, 100))
+    vector_filters = _vector_search_filters(
+        owner_id=owner_id,
+        requested_project_id=project_id,
+        effective_project_id=effective_project_id,
+        memory_status=status_filter,
+        filters=filters,
+    )
     vector_provider = str(runtime.health_state.get("vector_provider") or "unknown")
     started = time.perf_counter()
-    matches = runtime.vector_store.search(query_vector, top_k=candidate_k)
+    matches, vector_filter_diagnostics = _filtered_vector_candidates(
+        runtime=runtime,
+        query_vector=query_vector,
+        top_k=top_k,
+        candidate_multiplier=candidate_multiplier,
+        owner_id=owner_id,
+        project_id=effective_project_id,
+        memory_status=status_filter,
+        conversation_filters=filters,
+        vector_filters=vector_filters,
+    )
     metrics.observe(
         "memory_vector_search_duration_ms",
         (time.perf_counter() - started) * 1000,
@@ -3391,8 +3409,14 @@ def search(
         "status": "ok",
         "results": _apply_result_mode(grouped, result_mode)[:top_k],
     }
+    if (
+        filters.has_filters
+        or status_filter != _MEMORY_STATUS_ACTIVE
+        or vector_filter_diagnostics["attempts"] > 1
+    ):
+        payload["diagnostics"] = {"vector_filtering": vector_filter_diagnostics}
     if graph_diagnostics["enabled"] and graph_diagnostics["candidate_count"]:
-        payload["diagnostics"] = {"graph": graph_diagnostics}
+        payload.setdefault("diagnostics", {})["graph"] = graph_diagnostics
     _record_audit_event(
         "memory.searched",
         owner_id=owner_id,
@@ -3415,6 +3439,130 @@ def search(
         },
     )
     return payload
+
+
+def _vector_search_filters(
+    *,
+    owner_id: str | None,
+    requested_project_id: str | None,
+    effective_project_id: str,
+    memory_status: str,
+    filters: ConversationFilters,
+) -> VectorSearchFilters:
+    equalities: dict[str, str] = {
+        "project_id": effective_project_id,
+        "memory_status": memory_status,
+    }
+    if owner_id is not None and requested_project_id is None:
+        equalities["owner_id"] = owner_id
+    if filters.source:
+        equalities["source"] = filters.source
+    if filters.thread_id:
+        equalities["thread_id"] = filters.thread_id
+    if filters.source_client:
+        equalities["source_client"] = filters.source_client
+    if filters.source_session_id:
+        equalities["source_session_id"] = filters.source_session_id
+    ranges = {}
+    if filters.date_from or filters.date_to:
+        ranges["timestamp"] = VectorDateRange(
+            from_value=filters.date_from,
+            to_value=filters.date_to,
+        )
+    return VectorSearchFilters(
+        equals=equalities,
+        any_of={"tags": filters.tags} if filters.tags else {},
+        booleans={"handoff": True} if filters.handoff_only else {},
+        date_ranges=ranges,
+    )
+
+
+def _filtered_vector_candidates(
+    *,
+    runtime: RuntimeDependencies,
+    query_vector: list[float],
+    top_k: int,
+    candidate_multiplier: int,
+    owner_id: str | None,
+    project_id: str,
+    memory_status: str,
+    conversation_filters: ConversationFilters,
+    vector_filters: VectorSearchFilters,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    supported_fields = _vector_filter_fields(runtime.vector_store)
+    pushed = vector_filters.only(supported_fields)
+    residual = vector_filters.without(supported_fields)
+    candidate_k = max(top_k, top_k * candidate_multiplier)
+    if not residual.is_empty:
+        candidate_k = min(candidate_k, _MAX_FILTER_FALLBACK_CANDIDATES)
+
+    attempts = 0
+    matches: list[dict[str, Any]] = []
+    while True:
+        attempts += 1
+        search_kwargs: dict[str, Any] = {"top_k": candidate_k}
+        if not pushed.is_empty:
+            search_kwargs["filters"] = pushed
+        matches = runtime.vector_store.search(query_vector, **search_kwargs)
+        if residual.is_empty or _matching_vector_candidate_count(
+            matches,
+            metadata_store=runtime.metadata_store,
+            owner_id=owner_id,
+            project_id=project_id,
+            memory_status=memory_status,
+            filters=conversation_filters,
+        ) >= top_k:
+            break
+        if len(matches) < candidate_k or candidate_k >= _MAX_FILTER_FALLBACK_CANDIDATES:
+            break
+        candidate_k = min(candidate_k * 2, _MAX_FILTER_FALLBACK_CANDIDATES)
+
+    diagnostics = {
+        "supported_fields": sorted(supported_fields),
+        "pushed_fields": sorted(pushed.fields),
+        "residual_fields": sorted(residual.fields),
+        "fallback_active": not residual.is_empty,
+        "candidate_limit": candidate_k,
+        "attempts": attempts,
+    }
+    return matches, diagnostics
+
+
+def _vector_filter_fields(vector_store: Any) -> frozenset[str]:
+    capabilities = getattr(vector_store, "capabilities", None)
+    if not callable(capabilities):
+        return frozenset()
+    reported = capabilities()
+    if not bool(getattr(reported, "supports_vector_filtering", False)):
+        return frozenset()
+    return frozenset(str(field) for field in getattr(reported, "vector_filter_fields", ()))
+
+
+def _matching_vector_candidate_count(
+    matches: Sequence[Mapping[str, Any]],
+    *,
+    metadata_store: Any,
+    owner_id: str | None,
+    project_id: str,
+    memory_status: str,
+    filters: ConversationFilters,
+) -> int:
+    ids = _unique_strings([str(match["memory_id"]) for match in matches])
+    conversations = metadata_store.get_many(ids)
+    return sum(
+        1
+        for match in matches
+        if _conversation_visible(
+            conversations.get(str(match["memory_id"])),
+            owner_id,
+            project_id,
+            memory_status,
+        )
+        and _conversation_matches_filters(
+            conversations.get(str(match["memory_id"])),
+            filters,
+        )
+    )
 
 
 def _validate_result_mode(result_mode: str) -> None:
@@ -7132,8 +7280,15 @@ def runtime_health() -> dict[str, Any]:
         runtime.metadata_store.health() if hasattr(runtime.metadata_store, "health") else {}
     )
     vector_health = runtime.vector_store.health() if hasattr(runtime.vector_store, "health") else {}
+    vector_filter_fields = sorted(_vector_filter_fields(runtime.vector_store))
     return {
         **runtime.health_state,
+        "vector_filtering": {
+            "pushdown_supported": bool(vector_filter_fields),
+            "supported_fields": vector_filter_fields,
+            "residual_fallback": "bounded_adaptive_oversampling",
+            "max_fallback_candidates": _MAX_FILTER_FALLBACK_CANDIDATES,
+        },
         "metadata_health": metadata_health,
         "vector_health": vector_health,
     }

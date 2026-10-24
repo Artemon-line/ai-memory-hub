@@ -8,6 +8,7 @@ from typing import Any
 import jsonschema
 import pytest
 
+from memory.backend.contracts import ProviderCapabilities, VectorSearchFilters
 from memory.backend.metadata_store import IndexChunkField, IndexState, MetadataField
 from memory.ingestion import mvp_ingestion
 from memory.ingestion import validate as ingestion_validate
@@ -65,6 +66,9 @@ class StubMetadataStore:
 class StubVectorStore:
     def __init__(self):
         self.rows: list[dict[str, Any]] = []
+        self.search_limits: list[int] = []
+        self.last_filters: VectorSearchFilters | None = None
+        self.supports_filters = False
 
     def insert(self, metadata_id: str, embeddings: list[dict[str, Any]], replace: bool = False) -> None:
         if replace:
@@ -73,8 +77,18 @@ class StubVectorStore:
         for item in embeddings:
             self.rows.append({"memory_id": metadata_id, **item})
 
-    def search(self, query_vector: list[float], top_k: int = 5):
+    def search(
+        self,
+        query_vector: list[float],
+        top_k: int = 5,
+        filters: VectorSearchFilters | None = None,
+    ):
         _ = query_vector
+        self.search_limits.append(top_k)
+        self.last_filters = filters
+        rows = self.rows
+        if filters is not None:
+            rows = [row for row in rows if filters.matches(row)]
         return [
             {
                 "memory_id": row["memory_id"],
@@ -83,8 +97,16 @@ class StubVectorStore:
                 "text": row["text"],
                 "score": float(index),
             }
-            for index, row in enumerate(self.rows[:top_k])
+            for index, row in enumerate(rows[:top_k])
         ]
+
+    def capabilities(self) -> ProviderCapabilities:
+        if not self.supports_filters:
+            return ProviderCapabilities()
+        return ProviderCapabilities(
+            supports_vector_filtering=True,
+            vector_filter_fields=("owner_id", "project_id"),
+        )
 
     def get_indexed_chunk_ids(self, memory_id: str) -> list[str]:
         return [
@@ -1508,6 +1530,107 @@ def test_ask_applies_conversation_filters_before_answering() -> None:
     assert result["latest"]["author"] == "opencode"
     assert "Cobalt" in result["answer"]
     assert "Amber" not in result["answer"]
+
+
+def test_search_pushes_trusted_project_scope_before_vector_top_k() -> None:
+    metadata, vectors = _configure_stubs(retrieval_keyword_enabled=False)
+    vectors.supports_filters = True
+    for index in range(120):
+        _seed_vector_candidate(
+            metadata,
+            vectors,
+            memory_id=f"distractor-{index}",
+            project_id="project-b",
+            source="manual",
+            text="needle distractor",
+        )
+    _seed_vector_candidate(
+        metadata,
+        vectors,
+        memory_id="target",
+        project_id="local-default",
+        source="manual",
+        text="needle target",
+    )
+
+    result = mvp_ingestion.search("needle", top_k=1)
+
+    assert [row["id"] for row in result["results"]] == ["target"]
+    assert vectors.last_filters is not None
+    assert vectors.last_filters.equals == {"project_id": "local-default"}
+    assert vectors.search_limits == [3]
+    assert mvp_ingestion.runtime_health()["vector_filtering"] == {
+        "pushdown_supported": True,
+        "supported_fields": ["owner_id", "project_id"],
+        "residual_fallback": "bounded_adaptive_oversampling",
+        "max_fallback_candidates": 1000,
+    }
+
+
+def test_search_adaptively_expands_for_unsupported_residual_filter() -> None:
+    metadata, vectors = _configure_stubs(retrieval_keyword_enabled=False)
+    vectors.supports_filters = True
+    for index in range(120):
+        _seed_vector_candidate(
+            metadata,
+            vectors,
+            memory_id=f"distractor-{index}",
+            project_id="local-default",
+            source="other",
+            text="needle distractor",
+        )
+    _seed_vector_candidate(
+        metadata,
+        vectors,
+        memory_id="target",
+        project_id="local-default",
+        source="manual",
+        text="needle target",
+    )
+
+    result = mvp_ingestion.search(
+        "needle",
+        top_k=1,
+        source="manual",
+    )
+
+    assert [row["id"] for row in result["results"]] == ["target"]
+    diagnostics = result["diagnostics"]["vector_filtering"]
+    assert diagnostics["pushed_fields"] == ["project_id"]
+    assert diagnostics["residual_fields"] == ["memory_status", "source"]
+    assert diagnostics["fallback_active"] is True
+    assert vectors.search_limits[-1] > 100
+
+
+def _seed_vector_candidate(
+    metadata: StubMetadataStore,
+    vectors: StubVectorStore,
+    *,
+    memory_id: str,
+    project_id: str,
+    source: str,
+    text: str,
+) -> None:
+    metadata.by_id[memory_id] = {
+        "id": memory_id,
+        "source": source,
+        "timestamp": "2026-01-01T00:00:00Z",
+        "messages": [{"role": "user", "text": text}],
+        "metadata": {"project_id": project_id},
+    }
+    vectors.rows.append(
+        {
+            "memory_id": memory_id,
+            "project_id": project_id,
+            "owner_id": "",
+            "chunk_id": f"{memory_id}:0",
+            "chunk_index": 0,
+            "message_hash": "",
+            "role": "user",
+            "text": text,
+            "vector": [1.0, 0.0],
+        }
+    )
 
 
 def test_group_conversation_results_keeps_nearby_chunks_together() -> None:

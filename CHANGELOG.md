@@ -6,6 +6,9 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Added capability-aware filtered vector search with trusted owner/project
+  pushdown, bounded metadata-validated fallback for unsupported constraints,
+  filter diagnostics, and a documented persistent-index reindex path.
 - Added safe `aim import latest <source>` discovery for Codex, Claude Code,
   GitHub Copilot CLI, Pi, and Oh My Pi, including documented environment
   overrides, active-file and ambiguity refusal, interactive preview,

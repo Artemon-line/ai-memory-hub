@@ -14,7 +14,7 @@ from urllib.parse import urlparse
 import pyarrow as pa
 from pydantic import BaseModel, ConfigDict
 
-from memory.backend.contracts import ProviderCapabilities
+from memory.backend.contracts import ProviderCapabilities, VectorSearchFilters
 from memory.backend.errors import NotSupportedError, VectorDimensionError
 from memory.provider_models import (
     ChromaClientMode,
@@ -75,7 +75,12 @@ class VectorStore(Protocol):
         self, metadata_id: str, embeddings: list[dict[str, Any]], replace: bool = False
     ) -> None: ...
 
-    def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]: ...
+    def search(
+        self,
+        query_vector: list[float],
+        top_k: int = 5,
+        filters: VectorSearchFilters | None = None,
+    ) -> list[dict[str, Any]]: ...
 
     def delete(self, ids: list[str]) -> None: ...
 
@@ -141,16 +146,27 @@ class ChromaDBVectorStore:
                 metadatas=metadatas,
             )
 
-    def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
+    def search(
+        self,
+        query_vector: list[float],
+        top_k: int = 5,
+        filters: VectorSearchFilters | None = None,
+    ) -> list[dict[str, Any]]:
         self._validate_dimension(query_vector, operation="search")
-        result = self._collection.query(
-            query_embeddings=[query_vector],
-            n_results=top_k,
-            include=[
+        query_kwargs: dict[str, Any] = {
+            "query_embeddings": [query_vector],
+            "n_results": top_k,
+            "include": [
                 ChromaQueryKey.METADATAS.value,
                 ChromaQueryKey.DOCUMENTS.value,
                 ChromaQueryKey.DISTANCES.value,
             ],
+        }
+        where = _chroma_filter(filters)
+        if where:
+            query_kwargs["where"] = where
+        result = self._collection.query(
+            **query_kwargs,
         )
         return self._normalize_query_result(result)
 
@@ -176,7 +192,7 @@ class ChromaDBVectorStore:
         }
 
     def capabilities(self) -> ProviderCapabilities:
-        return ProviderCapabilities(supports_metadata_indexing=True)
+        return _metadata_filter_capabilities()
 
     def health(self) -> dict[str, Any]:
         return {
@@ -331,9 +347,18 @@ class QdrantVectorStore:
         if points:
             self._client.upsert(collection_name=self.collection_name, points=points)
 
-    def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
+    def search(
+        self,
+        query_vector: list[float],
+        top_k: int = 5,
+        filters: VectorSearchFilters | None = None,
+    ) -> list[dict[str, Any]]:
         self._validate_dimension(query_vector, operation="search")
-        points = self._search_points(query_vector=query_vector, top_k=top_k)
+        points = self._search_points(
+            query_vector=query_vector,
+            top_k=top_k,
+            filters=filters,
+        )
         rows: list[dict[str, Any]] = []
         for point in points:
             payload = dict(getattr(point, "payload", {}) or {})
@@ -371,10 +396,7 @@ class QdrantVectorStore:
         }
 
     def capabilities(self) -> ProviderCapabilities:
-        return ProviderCapabilities(
-            supports_batch_insert=True,
-            supports_metadata_indexing=True,
-        )
+        return _metadata_filter_capabilities(supports_batch_insert=True)
 
     def health(self) -> dict[str, Any]:
         return {
@@ -456,22 +478,37 @@ class QdrantVectorStore:
             return first
         return vectors
 
-    def _search_points(self, *, query_vector: list[float], top_k: int) -> list[Any]:
+    def _search_points(
+        self,
+        *,
+        query_vector: list[float],
+        top_k: int,
+        filters: VectorSearchFilters | None,
+    ) -> list[Any]:
+        query_filter = _qdrant_filter(self._models, filters)
         if hasattr(self._client, "query_points"):
+            kwargs: dict[str, Any] = {
+                "collection_name": self.collection_name,
+                "query": query_vector,
+                "limit": top_k,
+                "with_payload": True,
+            }
+            if query_filter is not None:
+                kwargs["query_filter"] = query_filter
             result = self._client.query_points(
-                collection_name=self.collection_name,
-                query=query_vector,
-                limit=top_k,
-                with_payload=True,
+                **kwargs,
             )
             return list(getattr(result, "points", result) or [])
+        kwargs = {
+            "collection_name": self.collection_name,
+            "query_vector": query_vector,
+            "limit": top_k,
+            "with_payload": True,
+        }
+        if query_filter is not None:
+            kwargs["query_filter"] = query_filter
         return list(
-            self._client.search(
-                collection_name=self.collection_name,
-                query_vector=query_vector,
-                limit=top_k,
-                with_payload=True,
-            )
+            self._client.search(**kwargs)
             or []
         )
 
@@ -543,17 +580,26 @@ class MilvusVectorStore:
             self._client.upsert(collection_name=self.collection_name, data=rows)
             self._flush_collection()
 
-    def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
+    def search(
+        self,
+        query_vector: list[float],
+        top_k: int = 5,
+        filters: VectorSearchFilters | None = None,
+    ) -> list[dict[str, Any]]:
         _validate_vector_length(
             query_vector, expected=self.expected_dimensionality, operation="search"
         )
-        result = self._client.search(
-            collection_name=self.collection_name,
-            data=[query_vector],
-            anns_field=VectorPayloadKey.VECTOR.value,
-            limit=top_k,
-            output_fields=_vector_payload_fields(),
-        )
+        kwargs: dict[str, Any] = {
+            "collection_name": self.collection_name,
+            "data": [query_vector],
+            "anns_field": VectorPayloadKey.VECTOR.value,
+            "limit": top_k,
+            "output_fields": _vector_payload_fields(),
+        }
+        expression = _milvus_filter(filters)
+        if expression:
+            kwargs["filter"] = expression
+        result = self._client.search(**kwargs)
         return self._normalize_search_result(result)
 
     def delete(self, ids: list[str]) -> None:
@@ -583,10 +629,7 @@ class MilvusVectorStore:
         }
 
     def capabilities(self) -> ProviderCapabilities:
-        return ProviderCapabilities(
-            supports_batch_insert=True,
-            supports_metadata_indexing=True,
-        )
+        return _metadata_filter_capabilities(supports_batch_insert=True)
 
     def health(self) -> dict[str, Any]:
         return {
@@ -761,18 +804,25 @@ class MongoDBAtlasVectorStore:
         if docs:
             self._collection.insert_many(docs)
 
-    def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
+    def search(
+        self,
+        query_vector: list[float],
+        top_k: int = 5,
+        filters: VectorSearchFilters | None = None,
+    ) -> list[dict[str, Any]]:
         self._validate_dimension(query_vector, operation="search")
+        vector_search: dict[str, Any] = {
+            "index": self.index_name,
+            "path": VectorPayloadKey.VECTOR.value,
+            "queryVector": query_vector,
+            "numCandidates": max(top_k * 10, top_k),
+            "limit": top_k,
+        }
+        native_filter = _mongodb_filter(filters)
+        if native_filter:
+            vector_search["filter"] = native_filter
         pipeline = [
-            {
-                "$vectorSearch": {
-                    "index": self.index_name,
-                    "path": VectorPayloadKey.VECTOR.value,
-                    "queryVector": query_vector,
-                    "numCandidates": max(top_k * 10, top_k),
-                    "limit": top_k,
-                }
-            },
+            {"$vectorSearch": vector_search},
             {"$set": {VectorPayloadKey.SCORE.value: {"$meta": "vectorSearchScore"}}},
         ]
         return [
@@ -799,10 +849,7 @@ class MongoDBAtlasVectorStore:
         }
 
     def capabilities(self) -> ProviderCapabilities:
-        return ProviderCapabilities(
-            supports_batch_insert=True,
-            supports_metadata_indexing=True,
-        )
+        return _metadata_filter_capabilities(supports_batch_insert=True)
 
     def health(self) -> dict[str, Any]:
         return {
@@ -913,18 +960,27 @@ class ElasticsearchVectorStore:
                 refresh=True,
             )
 
-    def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
+    def search(
+        self,
+        query_vector: list[float],
+        top_k: int = 5,
+        filters: VectorSearchFilters | None = None,
+    ) -> list[dict[str, Any]]:
         _validate_vector_length(
             query_vector, expected=self.expected_dimensionality, operation="search"
         )
-        result = self._client.search(
-            index=self.index_name,
-            knn={
+        knn: dict[str, Any] = {
                 SearchQueryKey.FIELD.value: VectorPayloadKey.VECTOR.value,
                 SearchQueryKey.QUERY_VECTOR.value: query_vector,
                 SearchQueryKey.K.value: top_k,
                 SearchQueryKey.NUM_CANDIDATES.value: max(top_k * 10, top_k),
-            },
+        }
+        native_filter = _search_engine_filter(filters)
+        if native_filter:
+            knn["filter"] = native_filter
+        result = self._client.search(
+            index=self.index_name,
+            knn=knn,
             size=top_k,
         )
         return _rows_from_search_hits(result)
@@ -959,10 +1015,7 @@ class ElasticsearchVectorStore:
         }
 
     def capabilities(self) -> ProviderCapabilities:
-        return ProviderCapabilities(
-            supports_batch_insert=False,
-            supports_metadata_indexing=True,
-        )
+        return _metadata_filter_capabilities()
 
     def health(self) -> dict[str, Any]:
         return {
@@ -1111,20 +1164,29 @@ class OpenSearchVectorStore:
                 refresh=True,
             )
 
-    def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
+    def search(
+        self,
+        query_vector: list[float],
+        top_k: int = 5,
+        filters: VectorSearchFilters | None = None,
+    ) -> list[dict[str, Any]]:
         _validate_vector_length(
             query_vector, expected=self.expected_dimensionality, operation="search"
         )
+        vector_query: dict[str, Any] = {
+            VectorPayloadKey.VECTOR.value: query_vector,
+            SearchQueryKey.K.value: top_k,
+        }
+        native_filter = _search_engine_filter(filters)
+        if native_filter:
+            vector_query["filter"] = {"bool": {"filter": native_filter}}
         result = self._client.search(
             index=self.index_name,
             body={
                 SearchQueryKey.SIZE.value: top_k,
                 SearchQueryKey.QUERY.value: {
                     SearchQueryKey.KNN.value: {
-                        VectorPayloadKey.VECTOR.value: {
-                            VectorPayloadKey.VECTOR.value: query_vector,
-                            SearchQueryKey.K.value: top_k,
-                        }
+                        VectorPayloadKey.VECTOR.value: vector_query
                     }
                 },
             },
@@ -1163,10 +1225,7 @@ class OpenSearchVectorStore:
         }
 
     def capabilities(self) -> ProviderCapabilities:
-        return ProviderCapabilities(
-            supports_batch_insert=False,
-            supports_metadata_indexing=True,
-        )
+        return _metadata_filter_capabilities()
 
     def health(self) -> dict[str, Any]:
         return {
@@ -1377,12 +1436,17 @@ class RedisVectorStore:
         self.delete([metadata_id])
         self.insert(metadata_id, chunks)
 
-    def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
+    def search(
+        self,
+        query_vector: list[float],
+        top_k: int = 5,
+        filters: VectorSearchFilters | None = None,
+    ) -> list[dict[str, Any]]:
         _validate_vector_length(
             query_vector, expected=self.expected_dimensionality, operation="search"
         )
         query = (
-            f"(*)=>[KNN {int(top_k)} @{RedisVectorField.VECTOR.value} "
+            f"({_redis_scope_filter(filters)})=>[KNN {int(top_k)} @{RedisVectorField.VECTOR.value} "
             f"$vector AS {RedisVectorField.DISTANCE.value}]"
         )
         result = self._client.ft(self.index_name).search(
@@ -1391,7 +1455,7 @@ class RedisVectorStore:
         )
         rows = [_row_from_redis_document(document) for document in result.docs]
         if not rows:
-            rows = self._fallback_scan_search(query_vector)
+            rows = self._fallback_scan_search(query_vector, filters=filters)
         rows.sort(key=lambda row: float(row.get(RedisVectorField.DISTANCE.value, 0.0)))
         return rows[:top_k]
 
@@ -1414,7 +1478,7 @@ class RedisVectorStore:
         }
 
     def capabilities(self) -> ProviderCapabilities:
-        return ProviderCapabilities(supports_metadata_indexing=True)
+        return _metadata_filter_capabilities()
 
     def health(self) -> dict[str, Any]:
         return {
@@ -1481,10 +1545,17 @@ class RedisVectorStore:
         except Exception:
             logger.debug("Redis explicit hash indexing failed", exc_info=True)
 
-    def _fallback_scan_search(self, query_vector: list[float]) -> list[dict[str, Any]]:
+    def _fallback_scan_search(
+        self,
+        query_vector: list[float],
+        *,
+        filters: VectorSearchFilters | None = None,
+    ) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []
         for payload in self._scan_payloads():
             vector_bytes = payload.pop(RedisVectorField.VECTOR.value, b"")
+            if filters is not None and not filters.matches(payload):
+                continue
             if not isinstance(vector_bytes, bytes):
                 continue
             vector = _float32_vector_from_bytes(vector_bytes)
@@ -1618,15 +1689,26 @@ class PineconeVectorStore:
         self.delete([metadata_id])
         self.insert(metadata_id, chunks)
 
-    def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
+    def search(
+        self,
+        query_vector: list[float],
+        top_k: int = 5,
+        filters: VectorSearchFilters | None = None,
+    ) -> list[dict[str, Any]]:
         _validate_vector_length(
             query_vector, expected=self.expected_dimensionality, operation="search"
         )
+        kwargs: dict[str, Any] = {
+            "vector": query_vector,
+            "top_k": top_k,
+            "namespace": self.namespace,
+            "include_metadata": True,
+        }
+        native_filter = _pinecone_filter(filters)
+        if native_filter:
+            kwargs["filter"] = native_filter
         result = self._index.query(
-            vector=query_vector,
-            top_k=top_k,
-            namespace=self.namespace,
-            include_metadata=True,
+            **kwargs,
         )
         return [_row_from_pinecone_match(match) for match in _pinecone_matches(result)]
 
@@ -1656,7 +1738,7 @@ class PineconeVectorStore:
         }
 
     def capabilities(self) -> ProviderCapabilities:
-        return ProviderCapabilities(supports_metadata_indexing=True)
+        return _metadata_filter_capabilities()
 
     def health(self) -> dict[str, Any]:
         return {
@@ -1750,15 +1832,24 @@ class TurbopufferVectorStore:
         self.delete([metadata_id])
         self.insert(metadata_id, chunks)
 
-    def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
+    def search(
+        self,
+        query_vector: list[float],
+        top_k: int = 5,
+        filters: VectorSearchFilters | None = None,
+    ) -> list[dict[str, Any]]:
         _validate_vector_length(
             query_vector, expected=self.expected_dimensionality, operation="search"
         )
-        result = self._namespace.query(
-            rank_by=(VectorPayloadKey.VECTOR.value, "ANN", query_vector),
-            limit=top_k,
-            include_attributes=_vector_payload_fields(),
-        )
+        kwargs: dict[str, Any] = {
+            "rank_by": (VectorPayloadKey.VECTOR.value, "ANN", query_vector),
+            "limit": top_k,
+            "include_attributes": _vector_payload_fields(),
+        }
+        native_filter = _turbopuffer_filter(filters)
+        if native_filter is not None:
+            kwargs["filters"] = native_filter
+        result = self._namespace.query(**kwargs)
         return [_row_from_turbopuffer_match(match) for match in _turbopuffer_rows(result)]
 
     def delete(self, ids: list[str]) -> None:
@@ -1784,7 +1875,7 @@ class TurbopufferVectorStore:
         }
 
     def capabilities(self) -> ProviderCapabilities:
-        return ProviderCapabilities(supports_metadata_indexing=True)
+        return _metadata_filter_capabilities()
 
     def health(self) -> dict[str, Any]:
         return {
@@ -1879,15 +1970,21 @@ class VespaVectorStore:
         self.delete([metadata_id])
         self.insert(metadata_id, chunks)
 
-    def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
+    def search(
+        self,
+        query_vector: list[float],
+        top_k: int = 5,
+        filters: VectorSearchFilters | None = None,
+    ) -> list[dict[str, Any]]:
         _validate_vector_length(
             query_vector, expected=self.expected_dimensionality, operation="search"
         )
+        scope_filter = _vespa_filter(filters)
         body = {
             "yql": (
                 f"select * from {self.schema} where "
                 f"({{targetHits:{int(top_k)}}}nearestNeighbor("
-                f"{VectorPayloadKey.VECTOR.value}, q))"
+                f"{VectorPayloadKey.VECTOR.value}, q)){scope_filter}"
             ),
             "hits": int(top_k),
             "ranking": self.rank_profile,
@@ -1928,7 +2025,7 @@ class VespaVectorStore:
         }
 
     def capabilities(self) -> ProviderCapabilities:
-        return ProviderCapabilities(supports_metadata_indexing=True)
+        return _metadata_filter_capabilities()
 
     def health(self) -> dict[str, Any]:
         return {
@@ -2047,20 +2144,27 @@ class TypesenseVectorStore:
         self.delete([metadata_id])
         self.insert(metadata_id, chunks)
 
-    def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
+    def search(
+        self,
+        query_vector: list[float],
+        top_k: int = 5,
+        filters: VectorSearchFilters | None = None,
+    ) -> list[dict[str, Any]]:
         _validate_vector_length(
             query_vector, expected=self.expected_dimensionality, operation="search"
         )
         vector = ",".join(str(float(value)) for value in query_vector)
-        result = self._collection().documents.search(
-            {
+        params: dict[str, Any] = {
                 "q": "*",
                 "query_by": VectorPayloadKey.TEXT.value,
                 "vector_query": (f"{VectorPayloadKey.VECTOR.value}:([{vector}], k:{int(top_k)})"),
                 "per_page": int(top_k),
                 "exclude_fields": VectorPayloadKey.VECTOR.value,
-            }
-        )
+        }
+        native_filter = _typesense_filter(filters)
+        if native_filter:
+            params["filter_by"] = native_filter
+        result = self._collection().documents.search(params)
         return [_row_from_typesense_hit(hit) for hit in result.get("hits", [])]
 
     def delete(self, ids: list[str]) -> None:
@@ -2086,7 +2190,7 @@ class TypesenseVectorStore:
         }
 
     def capabilities(self) -> ProviderCapabilities:
-        return ProviderCapabilities(supports_metadata_indexing=True)
+        return _metadata_filter_capabilities()
 
     def health(self) -> dict[str, Any]:
         return {
@@ -2184,7 +2288,12 @@ class WeaviateVectorStore:
                 vector=vector,
             )
 
-    def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
+    def search(
+        self,
+        query_vector: list[float],
+        top_k: int = 5,
+        filters: VectorSearchFilters | None = None,
+    ) -> list[dict[str, Any]]:
         _validate_vector_length(
             query_vector, expected=self.expected_dimensionality, operation="search"
         )
@@ -2192,6 +2301,9 @@ class WeaviateVectorStore:
         metadata_query = self._metadata_query()
         if metadata_query is not None:
             kwargs["return_metadata"] = metadata_query
+        native_filter = self._scope_filter(filters)
+        if native_filter is not None:
+            kwargs["filters"] = native_filter
         result = self._collection.query.near_vector(**kwargs)
         rows: list[dict[str, Any]] = []
         for obj in getattr(result, "objects", result) or []:
@@ -2227,10 +2339,7 @@ class WeaviateVectorStore:
         }
 
     def capabilities(self) -> ProviderCapabilities:
-        return ProviderCapabilities(
-            supports_batch_insert=False,
-            supports_metadata_indexing=True,
-        )
+        return _metadata_filter_capabilities()
 
     def health(self) -> dict[str, Any]:
         return {
@@ -2354,6 +2463,22 @@ class WeaviateVectorStore:
             return {VectorPayloadKey.MEMORY_ID.value: ids}
         return query_classes.Filter.by_property(VectorPayloadKey.MEMORY_ID.value).contains_any(ids)
 
+    def _scope_filter(self, filters: VectorSearchFilters | None) -> Any | None:
+        equalities = _native_scope_equalities(filters)
+        if not equalities:
+            return None
+        query_classes = self._classes.get("query") if isinstance(self._classes, dict) else None
+        if query_classes is None:
+            return dict(equalities)
+        clauses = [
+            query_classes.Filter.by_property(key).equal(value)
+            for key, value in equalities.items()
+        ]
+        combined = clauses[0]
+        for clause in clauses[1:]:
+            combined = combined & clause
+        return combined
+
 
 class LanceDBVectorStore:
     def __init__(
@@ -2455,9 +2580,18 @@ class LanceDBVectorStore:
             self._table.add(rows)
             self._ensure_index()
 
-    def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
+    def search(
+        self,
+        query_vector: list[float],
+        top_k: int = 5,
+        filters: VectorSearchFilters | None = None,
+    ) -> list[dict[str, Any]]:
         self._validate_dimension(query_vector, operation="search")
-        result = self._table.search(query_vector).limit(top_k).to_list()
+        query = self._table.search(query_vector)
+        where = _lancedb_filter(filters)
+        if where:
+            query = query.where(where, prefilter=True)
+        result = query.limit(top_k).to_list()
         normalized: list[dict[str, Any]] = []
         for row in result:
             normalized.append(
@@ -2491,7 +2625,7 @@ class LanceDBVectorStore:
         }
 
     def capabilities(self) -> ProviderCapabilities:
-        return ProviderCapabilities(supports_metadata_indexing=True)
+        return _metadata_filter_capabilities()
 
     def health(self) -> dict[str, Any]:
         return {
@@ -2558,10 +2692,17 @@ class InMemoryVectorStore:
                 }
             )
 
-    def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
+    def search(
+        self,
+        query_vector: list[float],
+        top_k: int = 5,
+        filters: VectorSearchFilters | None = None,
+    ) -> list[dict[str, Any]]:
         self._validate_dimension(query_vector, operation="search")
         scored: list[tuple[float, dict[str, Any]]] = []
         for row in self._rows:
+            if filters is not None and not filters.matches(row):
+                continue
             score = _cosine_distance(query_vector, row["vector"])
             scored.append((score, row))
 
@@ -2602,7 +2743,7 @@ class InMemoryVectorStore:
         }
 
     def capabilities(self) -> ProviderCapabilities:
-        return ProviderCapabilities()
+        return _metadata_filter_capabilities()
 
     def health(self) -> dict[str, Any]:
         return {
@@ -2777,8 +2918,14 @@ class PGVectorStore:
                         row,
                     )
 
-    def search(self, query_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
+    def search(
+        self,
+        query_vector: list[float],
+        top_k: int = 5,
+        filters: VectorSearchFilters | None = None,
+    ) -> list[dict[str, Any]]:
         self._validate_dimension(query_vector, operation="search")
+        where_sql, filter_params = _pgvector_filter(filters)
         with self._connect() as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -2786,10 +2933,16 @@ class PGVectorStore:
                     SELECT memory_id, chunk_id, project_id, owner_id, chunk_index, message_hash, role, text,
                            vector {self._operator} %s::vector AS distance
                     FROM {self.table_name}
+                    {where_sql}
                     ORDER BY vector {self._operator} %s::vector
                     LIMIT %s
                     """,
-                    (_vector_literal(query_vector), _vector_literal(query_vector), int(top_k)),
+                    (
+                        _vector_literal(query_vector),
+                        *filter_params,
+                        _vector_literal(query_vector),
+                        int(top_k),
+                    ),
                 )
                 rows = cur.fetchall()
         return [self._search_row(row) for row in rows]
@@ -2863,10 +3016,7 @@ class PGVectorStore:
         }
 
     def capabilities(self) -> ProviderCapabilities:
-        return ProviderCapabilities(
-            supports_batch_insert=True,
-            supports_metadata_indexing=True,
-        )
+        return _metadata_filter_capabilities(supports_batch_insert=True)
 
     def health(self) -> dict[str, Any]:
         return {
@@ -2913,6 +3063,134 @@ def _cosine_distance(a: list[float], b: list[float]) -> float:
 
 def _vector_literal(vector: list[float]) -> str:
     return "[" + ",".join(str(float(value)) for value in vector) + "]"
+
+
+_NATIVE_SCOPE_FILTER_FIELDS = (
+    VectorPayloadKey.OWNER_ID.value,
+    VectorPayloadKey.PROJECT_ID.value,
+)
+
+
+def _metadata_filter_capabilities(
+    *, supports_batch_insert: bool = False
+) -> ProviderCapabilities:
+    return ProviderCapabilities(
+        supports_batch_insert=supports_batch_insert,
+        supports_metadata_indexing=True,
+        supports_vector_filtering=True,
+        vector_filter_fields=_NATIVE_SCOPE_FILTER_FIELDS,
+    )
+
+
+def _native_scope_equalities(
+    filters: VectorSearchFilters | None,
+) -> dict[str, str | int | float | bool]:
+    if filters is None:
+        return {}
+    return {
+        key: value
+        for key, value in filters.equals.items()
+        if key in _NATIVE_SCOPE_FILTER_FIELDS
+    }
+
+
+def _chroma_filter(filters: VectorSearchFilters | None) -> dict[str, Any]:
+    clauses = [{key: {"$eq": value}} for key, value in _native_scope_equalities(filters).items()]
+    if not clauses:
+        return {}
+    if len(clauses) == 1:
+        return clauses[0]
+    return {"$and": clauses}
+
+
+def _qdrant_filter(models: Any, filters: VectorSearchFilters | None) -> Any | None:
+    conditions = [
+        models.FieldCondition(key=key, match=models.MatchValue(value=value))
+        for key, value in _native_scope_equalities(filters).items()
+    ]
+    return models.Filter(must=conditions) if conditions else None
+
+
+def _milvus_filter(filters: VectorSearchFilters | None) -> str:
+    clauses = [
+        f'{key} == "{str(value).replace(chr(92), chr(92) * 2).replace(chr(34), chr(92) + chr(34))}"'
+        for key, value in _native_scope_equalities(filters).items()
+    ]
+    return " and ".join(clauses)
+
+
+def _mongodb_filter(filters: VectorSearchFilters | None) -> dict[str, Any]:
+    return dict(_native_scope_equalities(filters))
+
+
+def _search_engine_filter(filters: VectorSearchFilters | None) -> list[dict[str, Any]]:
+    return [
+        {"term": {key: value}}
+        for key, value in _native_scope_equalities(filters).items()
+    ]
+
+
+def _lancedb_filter(filters: VectorSearchFilters | None) -> str:
+    clauses = []
+    for key, value in _native_scope_equalities(filters).items():
+        escaped = str(value).replace("'", "''")
+        clauses.append(f"{key} = '{escaped}'")
+    return " AND ".join(clauses)
+
+
+def _pgvector_filter(filters: VectorSearchFilters | None) -> tuple[str, tuple[Any, ...]]:
+    equalities = _native_scope_equalities(filters)
+    if not equalities:
+        return "", ()
+    clauses = [f"{key} = %s" for key in equalities]
+    return "WHERE " + " AND ".join(clauses), tuple(equalities.values())
+
+
+def _redis_scope_filter(filters: VectorSearchFilters | None) -> str:
+    clauses = [
+        f"@{key}:{{{_redis_tag_escape(str(value))}}}"
+        for key, value in _native_scope_equalities(filters).items()
+    ]
+    return " ".join(clauses) if clauses else "*"
+
+
+def _pinecone_filter(filters: VectorSearchFilters | None) -> dict[str, Any]:
+    clauses = [
+        {key: {"$eq": value}}
+        for key, value in _native_scope_equalities(filters).items()
+    ]
+    if not clauses:
+        return {}
+    if len(clauses) == 1:
+        return clauses[0]
+    return {"$and": clauses}
+
+
+def _turbopuffer_filter(filters: VectorSearchFilters | None) -> Any | None:
+    clauses = [
+        (key, "Eq", value)
+        for key, value in _native_scope_equalities(filters).items()
+    ]
+    if not clauses:
+        return None
+    if len(clauses) == 1:
+        return clauses[0]
+    return ("And", clauses)
+
+
+def _vespa_filter(filters: VectorSearchFilters | None) -> str:
+    clauses = []
+    for key, value in _native_scope_equalities(filters).items():
+        escaped = str(value).replace("\\", "\\\\").replace('"', '\\"')
+        clauses.append(f'{key} contains "{escaped}"')
+    return " and " + " and ".join(clauses) if clauses else ""
+
+
+def _typesense_filter(filters: VectorSearchFilters | None) -> str:
+    return " && ".join(
+        f"{key}:={_typesense_filter_escape(str(value))}"
+        for key, value in _native_scope_equalities(filters).items()
+    )
 
 
 def _stable_point_id(memory_id: str, chunk_id: str) -> str:
