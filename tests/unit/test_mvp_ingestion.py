@@ -188,6 +188,29 @@ def _configure_stubs(
     return metadata, vectors
 
 
+def test_search_and_ask_share_one_query_planning_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    _configure_stubs(retrieval_keyword_enabled=False)
+    planner_calls: list[str] = []
+
+    def planner(query: str, _base: object) -> dict[str, str]:
+        planner_calls.append(query)
+        return {"semantic_query": "rewritten retrieval query"}
+
+    mvp_ingestion._runtime().query_planner = planner
+    monkeypatch.setattr(mvp_ingestion, "_answer_from_facts", lambda *_args, **_kwargs: None)
+
+    search_result = mvp_ingestion.search("ambiguous search", include_query_plan=True)
+    ask_result = mvp_ingestion.ask("ambiguous question", include_query_plan=True)
+
+    assert planner_calls == ["ambiguous search", "ambiguous question"]
+    assert search_result["diagnostics"]["query_plan"]["semantic_query"] == (
+        "rewritten retrieval query"
+    )
+    assert ask_result["diagnostics"]["query_plan"]["semantic_query"] == (
+        "rewritten retrieval query"
+    )
+
+
 def test_generated_summary_model_rejects_unknown_keys() -> None:
     with pytest.raises(ValueError):
         GeneratedSummary(

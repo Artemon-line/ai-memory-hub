@@ -6,6 +6,9 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Added shared typed query planning for search and ask, including deterministic
+  source, date, tag, thread, handoff, intent, and temporal parsing; safe optional
+  model-assisted planning; explicit-filter merge rules; and opt-in diagnostics.
 - Added capability-aware filtered vector search with trusted owner/project
   pushdown, bounded metadata-validated fallback for unsupported constraints,
   filter diagnostics, and a documented persistent-index reindex path.

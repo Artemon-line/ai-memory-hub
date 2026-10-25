@@ -205,7 +205,8 @@ reading from a separate handoff store.
   "date_to": "2026-12-31T23:59:59Z",
   "tags": ["preferences"],
   "thread_id": "codex:session-42",
-  "handoff_only": false
+  "handoff_only": false,
+  "include_query_plan": false
 }
 ```
 
@@ -214,6 +215,20 @@ Notes:
 - `top_k` controls retrieval breadth.
 - `limit` and `cursor` support paginated MCP output.
 - `source`, `date_from`, `date_to`, `tags`, and `thread_id` are optional filters.
+- Search and ask share deterministic query planning for known source names,
+  explicit and relative dates, tags, thread references, handoff language, and
+  latest-versus-historical intent. The remaining text becomes the semantic
+  query used for retrieval.
+- Explicit scalar filters override values parsed from natural language.
+  Explicit and parsed tags are combined, so adding tags can only narrow the
+  result set. `handoff_only=true` is also narrowing and cannot be undone by a
+  parsed plan.
+- Set `include_query_plan=true` to return the plan under
+  `diagnostics.query_plan`. Diagnostics contain the original and rewritten
+  queries, retrieval intent, conversation filters, exact terms, preferred
+  fields, temporal preference, and planning mode. Authorization owner/project
+  scope, memory-status permissions, and sensitivity controls are never planner
+  inputs or diagnostics fields.
 - `response_format` defaults to `concise`, which returns matched text, compact
   citations, and generated summary text without embedding the full conversation.
   Use `detailed` only when an agent or admin needs the audit-friendly stored
@@ -247,7 +262,8 @@ Ask a question over retrieved memory.
   "question": "What tool preference did the user mention?",
   "top_k": 5,
   "response_format": "concise",
-  "max_context_tokens": 1200
+  "max_context_tokens": 1200,
+  "include_query_plan": false
 }
 ```
 
@@ -264,6 +280,10 @@ Expected success includes:
 Use `response_format: "detailed"` when a client needs the full `results`,
 `citations`, `evidence`, `structured_evidence`, `provenance`, or token-budget
 diagnostics.
+
+`memory_ask` uses the same query plan and filter merge rules as
+`memory_search`. Query-plan diagnostics are opt-in and remain available in both
+concise and detailed MCP responses when `include_query_plan=true`.
 
 `memory_retrieve`, `memory_fact_search`, and `memory_profile_get` also accept
 `response_format: "concise"` or `"detailed"`; fact/profile reads also accept an

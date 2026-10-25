@@ -78,6 +78,7 @@ from memory.ingestion.handoff_models import (
     HandoffResumeHint,
     HandoffStatus,
 )
+from memory.ingestion.query_planning import RetrievalQueryPlan, plan_retrieval_query
 from memory.ingestion.summary_models import (
     GeneratedSummary,
     GeneratedSummaryProvenance,
@@ -239,6 +240,8 @@ class RuntimeDependencies:
     retrieval_keyword_weight: float = 0.25
     retrieval_metadata_weight: float = 0.15
     retrieval_candidate_multiplier: int = 3
+    query_planner: Any | None = None
+    query_planner_timeout_seconds: float = 0.5
     fact_extractor: Any | None = None
     graph_enabled: bool = False
     retrieval_graph_enabled: bool = False
@@ -3271,24 +3274,33 @@ def search(
     handoff_only: bool = False,
     source_client: str | None = None,
     source_session_id: str | None = None,
+    include_query_plan: bool = False,
+    _query_plan: RetrievalQueryPlan | None = None,
 ) -> dict[str, Any]:
     _validate_result_mode(result_mode)
     status_filter = _validate_memory_status_filter(memory_status)
-    filters = ConversationFilters.from_options(
-        source=source,
-        date_from=date_from,
-        date_to=date_to,
-        tags=tags,
-        thread_id=thread_id,
-        handoff_only=handoff_only,
-        source_client=source_client,
-        source_session_id=source_session_id,
-    )
     runtime = _runtime()
+    query_plan = _query_plan or plan_retrieval_query(
+        query,
+        explicit_filters={
+            "source": source,
+            "date_from": date_from,
+            "date_to": date_to,
+            "tags": tags,
+            "thread_id": thread_id,
+            "handoff_only": handoff_only,
+            "source_client": source_client,
+            "source_session_id": source_session_id,
+        },
+        planner=runtime.query_planner,
+        planner_timeout_seconds=runtime.query_planner_timeout_seconds,
+    )
+    filters = ConversationFilters.from_options(**query_plan.filters.model_dump())
+    semantic_query = query_plan.semantic_query
     effective_project_id = _resolve_project(
         owner_id=owner_id, project_id=project_id, required_role=PROJECT_ROLE_READER
     )
-    query_vector = runtime.embedding_provider.embed_texts([query])[0]
+    query_vector = runtime.embedding_provider.embed_texts([semantic_query])[0]
     candidate_multiplier = max(
         1, int(getattr(runtime, "retrieval_candidate_multiplier", _SEARCH_CANDIDATE_MULTIPLIER))
     )
@@ -3321,7 +3333,7 @@ def search(
     ids = [str(match["memory_id"]) for match in matches]
     keyword_conversations = _keyword_conversations(
         runtime.metadata_store,
-        query,
+        semantic_query,
         enabled=runtime.retrieval_keyword_enabled,
         limit=runtime.retrieval_keyword_candidate_limit,
         owner_id=owner_id,
@@ -3364,7 +3376,7 @@ def search(
             "conversation": conversation,
         }
         if _passes_retrieval_threshold(
-            query=query,
+            query=semantic_query,
             row=row,
             threshold=runtime.retrieval_vector_score_threshold,
         ):
@@ -3389,7 +3401,7 @@ def search(
             existing_keys.add(key)
 
     graph_rows, graph_diagnostics = _graph_candidate_rows(
-        query=query,
+        query=semantic_query,
         owner_id=owner_id,
         project_id=effective_project_id,
         existing_keys=existing_keys,
@@ -3399,7 +3411,7 @@ def search(
     results.extend(graph_rows)
 
     ranked = _rank_retrieval_results(
-        query,
+        semantic_query,
         results,
         keyword_weight=runtime.retrieval_keyword_weight,
         metadata_weight=runtime.retrieval_metadata_weight,
@@ -3417,6 +3429,8 @@ def search(
         payload["diagnostics"] = {"vector_filtering": vector_filter_diagnostics}
     if graph_diagnostics["enabled"] and graph_diagnostics["candidate_count"]:
         payload.setdefault("diagnostics", {})["graph"] = graph_diagnostics
+    if include_query_plan:
+        payload.setdefault("diagnostics", {})["query_plan"] = query_plan.diagnostics()
     _record_audit_event(
         "memory.searched",
         owner_id=owner_id,
@@ -4070,18 +4084,26 @@ def ask(
     handoff_only: bool = False,
     source_client: str | None = None,
     source_session_id: str | None = None,
+    include_query_plan: bool = False,
 ) -> dict[str, Any]:
     _validate_result_mode(result_mode)
-    filters = ConversationFilters.from_options(
-        source=source,
-        date_from=date_from,
-        date_to=date_to,
-        tags=tags,
-        thread_id=thread_id,
-        handoff_only=handoff_only,
-        source_client=source_client,
-        source_session_id=source_session_id,
+    runtime = _runtime()
+    query_plan = plan_retrieval_query(
+        question,
+        explicit_filters={
+            "source": source,
+            "date_from": date_from,
+            "date_to": date_to,
+            "tags": tags,
+            "thread_id": thread_id,
+            "handoff_only": handoff_only,
+            "source_client": source_client,
+            "source_session_id": source_session_id,
+        },
+        planner=runtime.query_planner,
+        planner_timeout_seconds=runtime.query_planner_timeout_seconds,
     )
+    filters = ConversationFilters.from_options(**query_plan.filters.model_dump())
     effective_project_id = _resolve_project(
         owner_id=owner_id, project_id=project_id, required_role=PROJECT_ROLE_READER
     )
@@ -4107,7 +4129,9 @@ def ask(
                 "memory_status": status_filter,
             },
         )
-        return fact_answer
+        return _with_query_plan_diagnostics(
+            fact_answer, query_plan=query_plan, include=include_query_plan
+        )
 
     retrieval_result_mode = (
         SearchResultMode.CHUNKS.value
@@ -4122,10 +4146,10 @@ def ask(
         project_id=effective_project_id,
         memory_status=status_filter,
         filters=filters,
+        query_plan=query_plan,
     )
     matches = search_result.get("results", [])
     if result_mode == SearchResultMode.HANDOFF:
-        runtime = _runtime()
         token_budget = (
             max_context_tokens
             if max_context_tokens is not None
@@ -4135,7 +4159,7 @@ def ask(
             question=question,
             matches=matches[:top_k],
             project_id=effective_project_id,
-            thread_id=thread_id,
+            thread_id=filters.thread_id,
             token_budget=token_budget,
             encoding=runtime.tokenizer_encoding,
         )
@@ -4151,7 +4175,9 @@ def ask(
                 "memory_status": status_filter,
             },
         )
-        return result
+        return _with_query_plan_diagnostics(
+            result, query_plan=query_plan, include=include_query_plan
+        )
     if not matches:
         _record_audit_event(
             "memory.asked",
@@ -4166,7 +4192,7 @@ def ask(
                 "memory_status": status_filter,
             },
         )
-        return _enum_keyed_payload(
+        result = _enum_keyed_payload(
             {
                 _AskResponseKey.STATUS: _AskResponseStatus.OK.value,
                 _AskResponseKey.RESULTS: [],
@@ -4185,8 +4211,10 @@ def ask(
                 ),
             }
         )
+        return _with_query_plan_diagnostics(
+            result, query_plan=query_plan, include=include_query_plan
+        )
 
-    runtime = _runtime()
     budget_enabled = runtime.tokenizer_enabled or max_context_tokens is not None
     if not budget_enabled:
         result = _ask_from_matches(matches, top_k=top_k, question=question)
@@ -4202,7 +4230,9 @@ def ask(
                 "memory_status": status_filter,
             },
         )
-        return result
+        return _with_query_plan_diagnostics(
+            result, query_plan=query_plan, include=include_query_plan
+        )
 
     token_budget = (
         max_context_tokens if max_context_tokens is not None else runtime.ask_max_context_tokens
@@ -4243,7 +4273,9 @@ def ask(
             "chunks_dropped": chunks_dropped,
         },
     )
-    return result
+    return _with_query_plan_diagnostics(
+        result, query_plan=query_plan, include=include_query_plan
+    )
 
 
 def _search_for_ask(
@@ -4255,6 +4287,7 @@ def _search_for_ask(
     project_id: str | None = None,
     memory_status: str = _MEMORY_STATUS_ACTIVE,
     filters: ConversationFilters | None = None,
+    query_plan: RetrievalQueryPlan | None = None,
 ) -> dict[str, Any]:
     filters = filters or ConversationFilters()
     try:
@@ -4273,11 +4306,20 @@ def _search_for_ask(
             handoff_only=filters.handoff_only,
             source_client=filters.source_client,
             source_session_id=filters.source_session_id,
+            _query_plan=query_plan,
         )
     except TypeError:
         if result_mode != SearchResultMode.CHUNKS:
             raise
         return search(query=question, top_k=top_k)
+
+
+def _with_query_plan_diagnostics(
+    payload: dict[str, Any], *, query_plan: RetrievalQueryPlan, include: bool
+) -> dict[str, Any]:
+    if include:
+        payload.setdefault("diagnostics", {})["query_plan"] = query_plan.diagnostics()
+    return payload
 
 
 def _next_chunk_index(conversation: dict[str, Any], *, fallback_start_index: int) -> int:
