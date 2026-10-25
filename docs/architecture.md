@@ -198,8 +198,14 @@ Implemented retrieval flow:
    so authorization scope is applied before vector `top_k` selection.
 4. Use bounded adaptive oversampling for unsupported residual constraints, then
    validate every candidate against authoritative metadata.
-5. Enrich rows with conversation-level score and match count.
-6. Return grouped, deterministic top-k results.
+5. Gather independent dense, lexical, fact, and optionally graph candidate lists.
+6. Fuse list positions with reciprocal rank fusion; provider-specific raw score
+   scales are not mixed into the fused rank.
+7. Prioritize exact identifiers, quoted phrases, and rare exact terms, then run
+   an optional bounded semantic reranker over redacted chunk projections.
+8. Apply deterministic recency, importance, pin, access, and stable tie ordering.
+9. Enrich rows with conversation-level rank and match count, then return grouped
+   deterministic top-k results.
 
 Provider capabilities report the fields supported for vector-side filtering.
 Runtime health reports those fields and the bounded residual-fallback policy;
@@ -215,7 +221,10 @@ scope.
 
 When budgeting is enabled, `memory_ask` selects, truncates, or drops context chunks within the configured budget and may return `context_tokens_used`, `chunks_selected`, `chunks_dropped`, and `tokenizer_used`.
 
-Hybrid keyword/vector scoring, similarity thresholds, and metadata-aware reranking are not yet implemented.
+Semantic reranking is optional. With no reranker, on timeout, or on invalid
+reranker output, retrieval uses the same deterministic fused ordering. Inputs
+to a configured reranker contain only a bounded query and bounded projections
+of the chunk, source, timestamp, and tags; secrets are redacted first.
 
 ## Bring Your Own Stack Model
 

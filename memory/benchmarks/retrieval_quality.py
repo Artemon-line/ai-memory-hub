@@ -116,9 +116,11 @@ def run_evaluation(
         "tuned_retrieval_config": {
             "vector_score_threshold": 7.5,
             "keyword_enabled": True,
-            "keyword_weight": 0.25,
-            "metadata_weight": 0.15,
             "candidate_multiplier": 3,
+            "rank_fusion_k": 60,
+            "dense_candidate_weight": 1.0,
+            "lexical_candidate_weight": 1.0,
+            "fact_candidate_weight": 0.75,
         },
     }
     return report

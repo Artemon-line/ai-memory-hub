@@ -2365,6 +2365,20 @@ def test_fact_search_query_filters_across_fact_text() -> None:
     assert [fact["object"] for fact in result["results"]] == ["a teal macro lens"]
 
 
+def test_search_fuses_fact_candidates_without_vector_or_lexical_candidates() -> None:
+    _, vectors = _configure_stubs(retrieval_keyword_enabled=False)
+    conversation = _valid_conversation()
+    conversation["messages"] = [{"role": "user", "text": "I own a teal macro lens."}]
+    mvp_ingestion.ingest_messages(conversation)
+    vectors.rows = []
+
+    result = mvp_ingestion.search("teal macro lens", include_query_plan=True)
+
+    assert result["results"][0]["id"] == conversation["id"]
+    assert result["results"][0]["text"] == "I own a teal macro lens."
+    assert result["diagnostics"]["ranking"]["source_candidate_counts"]["fact"] == 1
+
+
 def test_fact_search_query_requires_identifier_match() -> None:
     _configure_stubs()
     marker = "QA_MARKER_SCOPELESS"
