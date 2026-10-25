@@ -48,6 +48,13 @@ jobs:
           uv run pytest tests/unit tests/integration \
             --junitxml=reports/junit/pytest-unit-integration.xml
 
+      - name: Run retrieval and extraction quality gate
+        env:
+          PYTHONHASHSEED: '0'
+        run: >-
+          uv run python -m memory.benchmarks.quality_gate
+          --output reports/quality/quality-gate.json
+
       - name: Publish unit and integration test results
         uses: EnricoMi/publish-unit-test-result-action@7622c5bf3d112a72ab4fa3951c2aa5723d8ab92d # v2
         if: >-
@@ -68,6 +75,14 @@ jobs:
         with:
           name: pytest-unit-integration-report
           path: reports/junit/*.xml
+          if-no-files-found: warn
+
+      - name: Upload quality gate report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: memory-quality-gate-report
+          path: reports/quality/quality-gate.json
           if-no-files-found: warn
 
   e2e:
