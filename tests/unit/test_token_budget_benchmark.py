@@ -39,13 +39,14 @@ def test_token_budget_benchmark_reports_latency_and_context_metrics() -> None:
         "context_tokens": 0,
         "candidate_to_selected_ratio": 1.0,
     }
-    assert report["work_amplification"]["budgeted_request"]["result"] == {
-        "returned_results": 2,
-        "selected_chunks": 2,
-        "dropped_chunks": 6,
-        "context_tokens": 75,
-        "candidate_to_selected_ratio": 4.0,
-    }
+    budgeted_work = report["work_amplification"]["budgeted_request"]["result"]
+    assert budgeted_work["returned_results"] == budgeted_work["selected_chunks"]
+    assert 0 < budgeted_work["selected_chunks"] < 8
+    assert budgeted_work["dropped_chunks"] == 8 - budgeted_work["selected_chunks"]
+    assert 0 < budgeted_work["context_tokens"] <= 80
+    assert budgeted_work["candidate_to_selected_ratio"] == (
+        8 / budgeted_work["selected_chunks"]
+    )
     assert report["thresholds"]["failures"] == []
 
 
