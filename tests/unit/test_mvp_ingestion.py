@@ -2112,13 +2112,15 @@ def test_fact_from_assistant_statement_exposes_source_quality() -> None:
 
     result = mvp_ingestion.ask("Who created Velvet Lantern?", top_k=5)
 
-    assert result["answer_basis"] == "fact_layer"
+    assert result["answer_basis"] == "mixed"
     assert result["facts"][0]["source_quality"] == "assistant_statement"
     assert result["facts"][0]["confidence"] == "medium"
     assert result["facts"][0]["confidence_score"] == 0.5
     assert result["facts"][0]["confidence_reason"] == (
         "Assistant-derived evidence requires user corroboration."
     )
+    assert result["structured_evidence"]["facts"]
+    assert result["structured_evidence"]["results"]
 
 
 def test_fact_answer_uses_normalized_object_without_rewriting_raw_value() -> None:
@@ -2464,6 +2466,80 @@ def test_conflicting_active_facts_return_conflict_basis() -> None:
     assert "black Fender" in result["answer"]
 
 
+def test_assistant_fact_is_corroborated_by_direct_user_memory() -> None:
+    _configure_stubs()
+    assistant = _valid_conversation()
+    assistant["id"] = "11111111-1111-4111-8111-111111111111"
+    assistant["messages"] = [{"role": "assistant", "text": "The creator is Ada Lovelace."}]
+    user = _valid_conversation()
+    user["id"] = "22222222-2222-4222-8222-222222222222"
+    user["timestamp"] = "2026-01-02T00:00:00Z"
+    user["messages"] = [
+        {"role": "user", "text": "I checked the credits: Ada Lovelace created this project."}
+    ]
+    mvp_ingestion.ingest_messages(assistant)
+    mvp_ingestion.ingest_messages(user)
+
+    result = mvp_ingestion.ask("Who is the creator?", top_k=5, max_context_tokens=50)
+
+    assert result["answer_basis"] == "mixed"
+    assert result["confidence_reason"] == (
+        "Weak normalized facts were corroborated by direct user conversation evidence."
+    )
+    assert result["facts"][0]["source_quality"] == "assistant_statement"
+    assert any(row["role"] == "user" for row in result["results"])
+    assert result["structured_evidence"]["facts"]
+    assert result["structured_evidence"]["results"]
+    assert {item["type"] for item in result["evidence"]} == {"fact", "chunk"}
+    assert result["chunks_selected"] >= 1
+    assert result["context_tokens_used"] <= 50
+
+
+def test_direct_user_memory_conflicting_with_assistant_fact_returns_both_sides() -> None:
+    _configure_stubs()
+    assistant = _valid_conversation()
+    assistant["id"] = "11111111-1111-4111-8111-111111111111"
+    assistant["messages"] = [{"role": "assistant", "text": "The creator is Ada Lovelace."}]
+    user = _valid_conversation()
+    user["id"] = "22222222-2222-4222-8222-222222222222"
+    user["timestamp"] = "2026-01-02T00:00:00Z"
+    user["messages"] = [
+        {"role": "user", "text": "I checked the credits: Grace Hopper created this project."}
+    ]
+    mvp_ingestion.ingest_messages(assistant)
+    mvp_ingestion.ingest_messages(user)
+
+    result = mvp_ingestion.ask("Who is the creator?", top_k=5)
+
+    assert result["answer_basis"] == "conflict"
+    assert result["confidence"] == "low"
+    assert "Ada Lovelace" in result["answer"]
+    assert "Grace Hopper" in result["answer"]
+    assert result["structured_evidence"]["facts"]
+    assert any(row["role"] == "user" for row in result["structured_evidence"]["results"])
+    assert {
+        item["conversation_id"] for item in result["provenance"]
+    } == {assistant["id"], user["id"]}
+
+
+def test_high_confidence_direct_fact_keeps_fast_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["messages"] = [{"role": "user", "text": "The creator is Ada Lovelace."}]
+    mvp_ingestion.ingest_messages(conversation)
+    monkeypatch.setattr(
+        mvp_ingestion,
+        "_search_for_ask",
+        lambda **_kwargs: pytest.fail("authoritative fact should use the fast path"),
+    )
+
+    result = mvp_ingestion.ask("Who is the creator?", top_k=5)
+
+    assert result["answer_basis"] == "fact_layer"
+    assert result["answer"] == "Ada Lovelace"
+    assert result["results"] == []
+
+
 def test_ask_returns_latest_fact_by_memory_timestamp() -> None:
     _configure_stubs()
     first = _valid_conversation()
@@ -2559,6 +2635,32 @@ def test_fact_answer_can_include_retrieval_context_as_mixed() -> None:
     assert "compact camera" in result["answer"]
     assert "Context from memory" in result["answer"]
     assert result["results"]
+
+
+def test_corrected_fact_outranks_stale_chunk_during_context_arbitration() -> None:
+    _configure_stubs()
+    old = _valid_conversation()
+    old["id"] = "11111111-1111-4111-8111-111111111111"
+    old["messages"] = [{"role": "user", "text": "I own a compact camera with zoom lens, cherry."}]
+    correction = _valid_conversation()
+    correction["id"] = "22222222-2222-4222-8222-222222222222"
+    correction["timestamp"] = "2026-01-02T00:00:00Z"
+    correction["messages"] = [
+        {"role": "user", "text": "Actually, my compact camera is TV yellow, not cherry."}
+    ]
+    mvp_ingestion.ingest_messages(old)
+    mvp_ingestion.ingest_messages(correction)
+
+    result = mvp_ingestion.ask(
+        "What camera do I own and what context/source discussed it?",
+        top_k=5,
+    )
+
+    assert result["answer_basis"] == "mixed"
+    assert result["facts"][0]["object_normalized"] == "compact camera is TV yellow"
+    assert result["facts"][0]["source_quality"] == "corrected_by_user"
+    assert not result["answer"].startswith("Evidence disagrees:")
+    assert result["structured_evidence"]["results"]
 
 
 def test_profile_and_recurring_topic_facts_are_extracted() -> None:

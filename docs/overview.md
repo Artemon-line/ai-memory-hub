@@ -225,6 +225,12 @@ Use `response_format="detailed"` for the full redacted stored record. HTTP
   from `metadata.save_intent: client_auto_save` use lower confidence than
   explicit user-requested saves.
 
+`memory_ask` compares weak, assistant-derived, or conflicting normalized facts
+with ranked conversation chunks before choosing `answer_basis`. A corroborated
+fact-and-chunk answer uses `mixed`; disagreement uses `conflict` and includes
+both sides in `evidence` and `structured_evidence`. Unambiguous high-confidence
+direct-user and corrected facts retain the low-latency `fact_layer` fast path.
+
 Newly extracted facts are validated against their source message before they
 become active. Detailed fact responses include the supporting `evidence_span`,
 `source_role`, assertion and temporal classifications, numeric

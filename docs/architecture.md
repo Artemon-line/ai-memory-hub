@@ -252,6 +252,18 @@ scope.
 - `answer`: human-readable summary text.
 - `citations`: provenance for included chunks.
 
+Before choosing an answer basis, `memory_ask` now places normalized facts and
+ranked conversation chunks into a common evidence-candidate stage. Candidates
+retain their type-specific payload while being ordered by direct support,
+correction status, source quality, confidence, freshness, and relevance. A
+single high-confidence direct-user or corrected fact can use the existing fast
+path. Conflicting facts, weak or assistant-derived facts, and questions that ask
+for context retrieve chunks before the basis is selected. Matching direct-user
+chunks corroborate weak facts; disagreements return `answer_basis: conflict`
+with both fact and chunk evidence. Corrected current facts remain authoritative
+over stale historical chunks. Context budgeting is applied to the selected
+chunk evidence after arbitration.
+
 When budgeting is enabled, `memory_ask` selects, truncates, or drops context chunks within the configured budget and may return `context_tokens_used`, `chunks_selected`, `chunks_dropped`, and `tokenizer_used`.
 
 Semantic reranking is optional. With no reranker, on timeout, or on invalid

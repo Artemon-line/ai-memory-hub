@@ -645,6 +645,12 @@ assistant statements and inferred topics do not crowd out profile evidence.
 Request a predicate or `source_quality` explicitly when those supporting facts
 are needed. Detailed reads preserve the full timestamped fact history. The
 summary is stored separately from raw messages, chunks, and normalized facts.
+For `memory_ask`, do not assume the presence of a matching fact always implies
+`answer_basis: fact_layer`. Weak and assistant-derived facts are compared with
+ranked direct-memory chunks when available. Corroborated evidence can produce
+`mixed`; disagreement produces `conflict` with fact and chunk provenance in the
+detailed response. Current corrected facts continue to outrank stale source
+statements.
 Use `memory_lookup` for general recall when the client should not need to choose
 between ask, search, fact search, and profile retrieval first.
 
