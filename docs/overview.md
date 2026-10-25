@@ -143,7 +143,8 @@ preserving each original thread/session boundary.
 `/memory/search` returns ranked chunk matches in `results`. Each result includes:
 
 - `id`: canonical conversation ID
-- `score`: vector distance, where lower is better
+- `score`: the source provider's vector distance, retained for compatibility;
+  fused ordering does not compare this value with lexical or metadata scores
 - `chunk_index`, `role`, and `text`: the matched chunk
 - `conversation`: the stored conversation payload, including
   `metadata.generated_summary` when a server-generated conversation summary is
@@ -1358,9 +1359,15 @@ retrieval:
   vector_score_threshold: 7.5
   keyword_enabled: true
   keyword_candidate_limit: 50
-  keyword_weight: 0.25
-  metadata_weight: 0.15
   candidate_multiplier: 3
+  rank_fusion_k: 60
+  dense_candidate_weight: 1.0
+  lexical_candidate_weight: 1.0
+  fact_candidate_weight: 0.75
+  fact_candidate_limit: 25
+  reranker_candidate_limit: 25
+  reranker_timeout_seconds: 0.5
+  reranker_projection_text_limit: 2000
 
 memory:
   insert_policy: permissive
@@ -1397,11 +1404,22 @@ Set `chunking.strategy: token` to split long messages into token windows with
 `chunking.max_tokens` and `chunking.overlap_tokens`. Token chunking is opt-in and
 uses `tiktoken` when available, with a deterministic local heuristic fallback.
 
-Retrieval first gathers vector candidates, filters low-confidence vector matches
-with `retrieval.vector_score_threshold`, then applies deterministic keyword and
-metadata reranking. `retrieval.keyword_enabled` also allows exact keyword matches
-from metadata storage to supplement vector candidates when the active metadata
-store supports text lookup.
+Retrieval gathers dense vector, lexical, fact, and optional graph candidate
+lists, then combines their positions with reciprocal rank fusion. It never
+subtracts lexical or metadata boosts from provider-specific raw vector scores.
+Exact identifiers, quoted phrases, and rare exact terms remain high-signal,
+followed by an optional bounded semantic reranker and deterministic metadata
+signals. The no-model path and all reranker timeout/error paths are deterministic.
+Reranker projections are size-limited, redact secrets, and omit arbitrary
+conversation metadata.
+
+For migration, `retrieval.keyword_weight` and `retrieval.metadata_weight` are
+still accepted so existing configuration files start unchanged, but they no
+longer affect ordering. Replace `keyword_weight` with
+`lexical_candidate_weight`; tune `dense_candidate_weight`,
+`fact_candidate_weight`, and `graph_weight` only as source-list weights. Raw
+`score` remains in responses for compatibility, while result order comes from
+the fused rank.
 
 `tokenizer.encoding` is an encoding name such as `cl100k_base`, not a model file
 path. ai-memory-hub does not download tokenizer files itself. When the optional

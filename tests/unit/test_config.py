@@ -474,6 +474,11 @@ def test_retrieval_config_defaults_and_validation():
     assert config.retrieval.keyword_enabled is True
     assert config.retrieval.keyword_candidate_limit == 50
     assert config.retrieval.candidate_multiplier == 3
+    assert config.retrieval.rank_fusion_k == 60
+    assert config.retrieval.dense_candidate_weight == 1.0
+    assert config.retrieval.lexical_candidate_weight == 1.0
+    assert config.retrieval.fact_candidate_weight == 0.75
+    assert config.retrieval.reranker_candidate_limit == 25
 
     tuned = parse_config(
         {
@@ -484,6 +489,14 @@ def test_retrieval_config_defaults_and_validation():
                 "keyword_weight": 0.5,
                 "metadata_weight": 0.25,
                 "candidate_multiplier": 5,
+                "rank_fusion_k": 30,
+                "dense_candidate_weight": 0.8,
+                "lexical_candidate_weight": 1.2,
+                "fact_candidate_weight": 0.6,
+                "fact_candidate_limit": 10,
+                "reranker_candidate_limit": 12,
+                "reranker_timeout_seconds": 0.2,
+                "reranker_projection_text_limit": 512,
             }
         }
     )
@@ -493,9 +506,19 @@ def test_retrieval_config_defaults_and_validation():
     assert tuned.retrieval.keyword_weight == 0.5
     assert tuned.retrieval.metadata_weight == 0.25
     assert tuned.retrieval.candidate_multiplier == 5
+    assert tuned.retrieval.rank_fusion_k == 30
+    assert tuned.retrieval.dense_candidate_weight == 0.8
+    assert tuned.retrieval.lexical_candidate_weight == 1.2
+    assert tuned.retrieval.fact_candidate_weight == 0.6
+    assert tuned.retrieval.fact_candidate_limit == 10
+    assert tuned.retrieval.reranker_candidate_limit == 12
+    assert tuned.retrieval.reranker_timeout_seconds == 0.2
+    assert tuned.retrieval.reranker_projection_text_limit == 512
 
     with pytest.raises(ValueError, match="retrieval.vector_score_threshold"):
         parse_config({"retrieval": {"vector_score_threshold": -1}})
+    with pytest.raises(ValueError, match="retrieval.reranker_candidate_limit"):
+        parse_config({"retrieval": {"reranker_candidate_limit": 0}})
 
 
 def test_memory_insert_policy_defaults_and_validation() -> None:

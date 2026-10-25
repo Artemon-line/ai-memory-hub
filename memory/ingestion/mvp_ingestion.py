@@ -79,6 +79,7 @@ from memory.ingestion.handoff_models import (
     HandoffStatus,
 )
 from memory.ingestion.query_planning import RetrievalQueryPlan, plan_retrieval_query
+from memory.ingestion.retrieval_ranking import SemanticReranker, rank_candidate_lists
 from memory.ingestion.summary_models import (
     GeneratedSummary,
     GeneratedSummaryProvenance,
@@ -240,6 +241,15 @@ class RuntimeDependencies:
     retrieval_keyword_weight: float = 0.25
     retrieval_metadata_weight: float = 0.15
     retrieval_candidate_multiplier: int = 3
+    retrieval_rank_fusion_k: int = 60
+    retrieval_dense_candidate_weight: float = 1.0
+    retrieval_lexical_candidate_weight: float = 1.0
+    retrieval_fact_candidate_weight: float = 0.75
+    retrieval_fact_candidate_limit: int = 25
+    semantic_reranker: SemanticReranker | None = None
+    reranker_candidate_limit: int = 25
+    reranker_timeout_seconds: float = 0.5
+    reranker_projection_text_limit: int = 2000
     query_planner: Any | None = None
     query_planner_timeout_seconds: float = 0.5
     fact_extractor: Any | None = None
@@ -1010,6 +1020,14 @@ def build_runtime(
         retrieval_keyword_weight=cfg.retrieval.keyword_weight,
         retrieval_metadata_weight=cfg.retrieval.metadata_weight,
         retrieval_candidate_multiplier=cfg.retrieval.candidate_multiplier,
+        retrieval_rank_fusion_k=cfg.retrieval.rank_fusion_k,
+        retrieval_dense_candidate_weight=cfg.retrieval.dense_candidate_weight,
+        retrieval_lexical_candidate_weight=cfg.retrieval.lexical_candidate_weight,
+        retrieval_fact_candidate_weight=cfg.retrieval.fact_candidate_weight,
+        retrieval_fact_candidate_limit=cfg.retrieval.fact_candidate_limit,
+        reranker_candidate_limit=cfg.retrieval.reranker_candidate_limit,
+        reranker_timeout_seconds=cfg.retrieval.reranker_timeout_seconds,
+        reranker_projection_text_limit=cfg.retrieval.reranker_projection_text_limit,
         graph_enabled=cfg.memory.graph_enabled,
         retrieval_graph_enabled=cfg.retrieval.graph_enabled,
         retrieval_graph_quality_gate_passed=cfg.retrieval.graph_quality_gate_passed,
@@ -3358,7 +3376,7 @@ def search(
                 _with_generated_summary_metadata(conversation) or conversation
             )
 
-    results: list[dict[str, Any]] = []
+    dense_rows: list[dict[str, Any]] = []
     for match in matches:
         memory_id = str(match["memory_id"])
         score = float(match["score"])
@@ -3380,9 +3398,9 @@ def search(
             row=row,
             threshold=runtime.retrieval_vector_score_threshold,
         ):
-            results.append(row)
+            dense_rows.append(row)
 
-    existing_keys = {(str(row["id"]), int(row["chunk_index"]), str(row["text"])) for row in results}
+    lexical_rows: list[dict[str, Any]] = []
     for conversation in keyword_conversations:
         memory_id = str(conversation.get("id", ""))
         if not memory_id:
@@ -3394,29 +3412,52 @@ def search(
         row = _keyword_result_row(
             conversation,
             score=runtime.retrieval_vector_score_threshold,
+            query=semantic_query,
         )
-        key = (str(row["id"]), int(row["chunk_index"]), str(row["text"]))
-        if key not in existing_keys:
-            results.append(row)
-            existing_keys.add(key)
+        lexical_rows.append(row)
 
     graph_rows, graph_diagnostics = _graph_candidate_rows(
         query=semantic_query,
         owner_id=owner_id,
         project_id=effective_project_id,
-        existing_keys=existing_keys,
+        existing_keys=set(),
         score=runtime.retrieval_vector_score_threshold,
         limit=top_k,
     )
-    results.extend(graph_rows)
-
-    ranked = _rank_retrieval_results(
+    fact_rows = _fact_candidate_rows(
         semantic_query,
-        results,
-        keyword_weight=runtime.retrieval_keyword_weight,
-        metadata_weight=runtime.retrieval_metadata_weight,
+        owner_id=owner_id,
+        project_id=effective_project_id,
+        memory_status=status_filter,
+        filters=filters,
+        limit=runtime.retrieval_fact_candidate_limit,
+        score=runtime.retrieval_vector_score_threshold,
     )
-    grouped = group_conversation_results(ranked)
+    candidate_lists = {
+        "dense": dense_rows,
+        "lexical": lexical_rows,
+        "fact": fact_rows,
+        "graph": graph_rows,
+    }
+    deterministic_boosts = _deterministic_ranking_boosts(semantic_query, candidate_lists)
+    ranking_result = rank_candidate_lists(
+        semantic_query,
+        candidate_lists,
+        source_weights={
+            "dense": runtime.retrieval_dense_candidate_weight,
+            "lexical": runtime.retrieval_lexical_candidate_weight,
+            "fact": runtime.retrieval_fact_candidate_weight,
+            "graph": runtime.retrieval_graph_weight,
+        },
+        fusion_k=runtime.retrieval_rank_fusion_k,
+        exact_terms=query_plan.exact_terms,
+        reranker=runtime.semantic_reranker,
+        reranker_timeout_seconds=runtime.reranker_timeout_seconds,
+        reranker_candidate_limit=runtime.reranker_candidate_limit,
+        projection_text_limit=runtime.reranker_projection_text_limit,
+        deterministic_boosts=deterministic_boosts,
+    )
+    grouped = group_conversation_results(ranking_result.rows)
     payload: dict[str, Any] = {
         "status": "ok",
         "results": _apply_result_mode(grouped, result_mode)[:top_k],
@@ -3429,6 +3470,8 @@ def search(
         payload["diagnostics"] = {"vector_filtering": vector_filter_diagnostics}
     if graph_diagnostics["enabled"] and graph_diagnostics["candidate_count"]:
         payload.setdefault("diagnostics", {})["graph"] = graph_diagnostics
+    if include_query_plan or runtime.semantic_reranker is not None:
+        payload.setdefault("diagnostics", {})["ranking"] = ranking_result.diagnostics
     if include_query_plan:
         payload.setdefault("diagnostics", {})["query_plan"] = query_plan.diagnostics()
     _record_audit_event(
@@ -3671,6 +3714,7 @@ def _strip_internal_ranking_fields(row: dict[str, Any]) -> dict[str, Any]:
     cleaned.pop("_grouped_score", None)
     cleaned.pop("_original_rank", None)
     cleaned.pop("_ranking_score", None)
+    cleaned.pop("_ranking_position", None)
     cleaned.pop("_ranking_boost", None)
     cleaned.pop("_graph_boost", None)
     cleaned.pop("_graph_relationship_id", None)
@@ -3690,6 +3734,7 @@ def _conversation_result_text(conversation: Any, evidence: list[dict[str, Any]])
 def group_conversation_results(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     group_scores: dict[str, float] = {}
     group_counts: dict[str, int] = {}
+    group_positions: dict[str, int] = {}
     for row in rows:
         memory_id = str(row.get("id", ""))
         if not memory_id:
@@ -3697,6 +3742,11 @@ def group_conversation_results(rows: list[dict[str, Any]]) -> list[dict[str, Any
         score = float(row.get("_ranking_score", row.get("score", 0.0)))
         group_scores[memory_id] = min(score, group_scores.get(memory_id, score))
         group_counts[memory_id] = group_counts.get(memory_id, 0) + 1
+        position = row.get("_ranking_position")
+        if isinstance(position, int):
+            group_positions[memory_id] = min(
+                position, group_positions.get(memory_id, position)
+            )
 
     enriched: list[dict[str, Any]] = []
     for index, row in enumerate(rows):
@@ -3704,7 +3754,16 @@ def group_conversation_results(rows: list[dict[str, Any]]) -> list[dict[str, Any
         row_score = float(row.get("_ranking_score", row.get("score", 0.0)))
         conversation_score = group_scores.get(memory_id, row_score)
         grouped_score = row_score
-        if row_score - conversation_score <= _CONVERSATION_GROUP_SCORE_WINDOW:
+        ranking_position = row.get("_ranking_position")
+        position_is_nearby = (
+            isinstance(ranking_position, int)
+            and memory_id in group_positions
+            and ranking_position - group_positions[memory_id] <= 2
+        )
+        if position_is_nearby or (
+            ranking_position is None
+            and row_score - conversation_score <= _CONVERSATION_GROUP_SCORE_WINDOW
+        ):
             grouped_score = conversation_score
         enriched_row = dict(row)
         enriched_row["conversation_score"] = conversation_score
@@ -3719,7 +3778,11 @@ def group_conversation_results(rows: list[dict[str, Any]]) -> list[dict[str, Any
             float(row["_grouped_score"]),
             -float(row.get("_ranking_boost", 0.0)),
             str(row.get("id", "")),
-            float(row.get("score", 0.0)),
+            (
+                float(row.get("score", 0.0))
+                if row.get("_ranking_position") is None
+                else 0.0
+            ),
             int(row.get("chunk_index", 0)),
             int(row["_original_rank"]),
         ),
@@ -3728,10 +3791,17 @@ def group_conversation_results(rows: list[dict[str, Any]]) -> list[dict[str, Any
         row.pop("_grouped_score", None)
         row.pop("_original_rank", None)
         row.pop("_ranking_score", None)
+        row.pop("_ranking_position", None)
         row.pop("_ranking_boost", None)
         row.pop("_graph_boost", None)
         row.pop("_graph_relationship_id", None)
         row.pop("_graph_predicate", None)
+        row.pop("_fusion_score", None)
+        row.pop("_candidate_sources", None)
+        row.pop("_exact_priority", None)
+        row.pop("_reranker_score", None)
+        row.pop("_deterministic_boost", None)
+        row.pop("_fact_id", None)
     return grouped
 
 
@@ -3755,13 +3825,42 @@ def _keyword_conversations(
             candidates = metadata_store.search_text(query, limit=limit, project_id=project_id)
         except TypeError:
             candidates = metadata_store.search_text(query, limit=limit)
-        return [
+        matches = [
             item
             for item in candidates
             if isinstance(item, dict)
             and _conversation_visible(item, owner_id, project_id, status_filter)
             and _conversation_matches_filters(item, filters)
         ]
+        query_tokens = _query_tokens(query)
+        if matches or len(query_tokens) < 2:
+            return matches
+
+        expanded: dict[str, dict[str, Any]] = {}
+        for token in query_tokens:
+            try:
+                token_candidates = metadata_store.search_text(
+                    token, limit=limit, project_id=project_id
+                )
+            except TypeError:
+                token_candidates = metadata_store.search_text(token, limit=limit)
+            for item in token_candidates:
+                if (
+                    isinstance(item, dict)
+                    and _conversation_visible(item, owner_id, project_id, status_filter)
+                    and _conversation_matches_filters(item, filters)
+                ):
+                    expanded[str(item.get("id", ""))] = item
+        return sorted(
+            expanded.values(),
+            key=lambda item: (
+                -sum(
+                    token in _conversation_search_text(item).casefold()
+                    for token in query_tokens
+                ),
+                str(item.get("id", "")),
+            ),
+        )[:limit]
     rows = getattr(metadata_store, "by_id", None) or getattr(metadata_store, "rows", None)
     if not isinstance(rows, dict):
         return []
@@ -3780,6 +3879,82 @@ def _keyword_conversations(
         if all(token in text for token in tokens):
             matches.append(conversation)
     return matches[:limit]
+
+
+def _fact_candidate_rows(
+    query: str,
+    *,
+    owner_id: str | None,
+    project_id: str,
+    memory_status: str,
+    filters: ConversationFilters,
+    limit: int,
+    score: float,
+) -> list[dict[str, Any]]:
+    facts = fact_search(
+        query=query,
+        owner_id=owner_id,
+        project_id=project_id,
+        source=filters.source,
+        date_from=filters.date_from,
+        date_to=filters.date_to,
+    ).get("results", [])
+    rows: list[dict[str, Any]] = []
+    store = _runtime().metadata_store
+    seen: set[tuple[str, int]] = set()
+    for fact in facts:
+        if not isinstance(fact, dict):
+            continue
+        memory_id = str(fact.get(FactField.SOURCE_CONVERSATION_ID.value, ""))
+        if not memory_id:
+            continue
+        conversation = _with_generated_summary_metadata(store.get(memory_id))
+        if not _conversation_visible(conversation, owner_id, project_id, memory_status):
+            continue
+        if not _conversation_matches_filters(conversation, filters):
+            continue
+        messages = conversation.get("messages", []) if isinstance(conversation, dict) else []
+        if not isinstance(messages, list) or not messages:
+            continue
+        source_indexes = fact.get(FactField.SOURCE_MESSAGE_INDEXES.value, [])
+        allowed_indexes = [
+            int(index)
+            for index in source_indexes
+            if isinstance(index, int) and 0 <= index < len(messages)
+        ] if isinstance(source_indexes, list) else []
+        candidate_indexes = allowed_indexes or list(range(len(messages)))
+        query_tokens = set(_query_tokens(query, limit=None))
+        chunk_index = min(
+            candidate_indexes,
+            key=lambda index: (
+                -len(
+                    query_tokens.intersection(
+                        _query_tokens(str(messages[index].get("text", "")), limit=None)
+                    )
+                )
+                if isinstance(messages[index], dict)
+                else 0,
+                index,
+            ),
+        )
+        message = messages[chunk_index]
+        if not isinstance(message, dict) or (memory_id, chunk_index) in seen:
+            continue
+        seen.add((memory_id, chunk_index))
+        rows.append(
+            {
+                "id": memory_id,
+                "score": float(score),
+                "chunk_index": chunk_index,
+                "role": str(message.get("role", "")),
+                "text": str(message.get("text", "")),
+                "conversation": conversation,
+                "_fact_id": fact.get(FactField.ID.value),
+            }
+        )
+        if len(rows) >= limit:
+            break
+    return rows
 
 
 def _graph_candidate_rows(
@@ -3817,7 +3992,7 @@ def _graph_candidate_rows(
         conversation = retrieve(conversation_id, owner_id=owner_id, project_id=project_id)
         if not isinstance(conversation, dict):
             continue
-        row = _keyword_result_row(conversation, score=score)
+        row = _keyword_result_row(conversation, score=score, query=query)
         row["_graph_boost"] = float(runtime.retrieval_graph_weight)
         row["_graph_relationship_id"] = relationship.get("id")
         row["_graph_predicate"] = relationship.get("predicate")
@@ -3857,45 +4032,24 @@ def _passes_retrieval_threshold(*, query: str, row: dict[str, Any], threshold: f
     score = float(row.get("score", 0.0))
     if score <= threshold:
         return True
-    return _keyword_overlap(query, row) > 0 or _metadata_overlap(query, row.get("conversation")) > 0
+    return _chunk_keyword_overlap(query, row) > 0
 
 
-def _rank_retrieval_results(
+def _deterministic_ranking_boosts(
     query: str,
-    rows: list[dict[str, Any]],
-    *,
-    keyword_weight: float,
-    metadata_weight: float,
-) -> list[dict[str, Any]]:
-    ranked: list[dict[str, Any]] = []
-    for index, row in enumerate(rows):
-        keyword_overlap = _keyword_overlap(query, row)
-        metadata_overlap = _metadata_overlap(query, row.get("conversation"))
-        ranking_score = float(row.get("score", 0.0))
-        advanced_boost = _advanced_scoring_boost(row)
-        ranking_boost = (
-            min(keyword_overlap, 3) * keyword_weight
-            + min(metadata_overlap, 3) * metadata_weight
-            + float(row.get("_graph_boost", 0.0))
-            + advanced_boost
-        )
-        ranking_score -= ranking_boost
-        enriched = dict(row)
-        if advanced_boost:
-            enriched["score"] = max(0.0, float(enriched.get("score", 0.0)) - advanced_boost)
-        enriched["_ranking_score"] = max(0.0, ranking_score)
-        enriched["_ranking_boost"] = ranking_boost
-        enriched["_original_rank"] = index
-        ranked.append(enriched)
-    return sorted(
-        ranked,
-        key=lambda row: (
-            float(row["_ranking_score"]),
-            str(row.get("id", "")),
-            int(row.get("chunk_index", 0)),
-            int(row["_original_rank"]),
-        ),
-    )
+    candidate_lists: Mapping[str, Sequence[dict[str, Any]]],
+) -> dict[str, float]:
+    boosts: dict[str, float] = {}
+    keyword_enabled = _runtime().retrieval_keyword_enabled
+    for rows in candidate_lists.values():
+        for row in rows:
+            key = f"{row.get('id', '')}:{int(row.get('chunk_index', 0))}"
+            chunk_signal = (
+                float(min(_chunk_keyword_overlap(query, row), 3)) if keyword_enabled else 0.0
+            )
+            boost = chunk_signal + _advanced_scoring_boost(row)
+            boosts[key] = max(boosts.get(key, 0.0), boost)
+    return boosts
 
 
 def _advanced_scoring_boost(row: dict[str, Any]) -> float:
@@ -3928,47 +4082,45 @@ def _advanced_scoring_boost(row: dict[str, Any]) -> float:
     return float(scoring["boost"])
 
 
-def _keyword_result_row(conversation: dict[str, Any], *, score: float) -> dict[str, Any]:
+def _keyword_result_row(
+    conversation: dict[str, Any], *, score: float, query: str | None = None
+) -> dict[str, Any]:
     messages = conversation.get("messages", [])
-    first_message = messages[0] if isinstance(messages, list) and messages else {}
-    if not isinstance(first_message, dict):
-        first_message = {}
+    message_rows = messages if isinstance(messages, list) else []
+    indexed_messages = [
+        (index, message)
+        for index, message in enumerate(message_rows)
+        if isinstance(message, dict)
+    ]
+    if query and indexed_messages:
+        query_tokens = set(_query_tokens(query, limit=None))
+        chunk_index, first_message = min(
+            indexed_messages,
+            key=lambda item: (
+                -len(query_tokens.intersection(_query_tokens(str(item[1].get("text", "")), limit=None))),
+                item[0],
+            ),
+        )
+    elif indexed_messages:
+        chunk_index, first_message = indexed_messages[0]
+    else:
+        chunk_index, first_message = 0, {}
     return {
         "id": str(conversation["id"]),
         "score": float(score),
-        "chunk_index": 0,
+        "chunk_index": chunk_index,
         "role": str(first_message.get("role", "")),
         "text": str(first_message.get("text", "")),
         "conversation": conversation,
     }
 
 
-def _keyword_overlap(query: str, row: dict[str, Any]) -> int:
+def _chunk_keyword_overlap(query: str, row: Mapping[str, Any]) -> int:
     tokens = set(_query_tokens(query))
     if not tokens:
         return 0
-    text = str(row.get("text", "")).lower()
-    conversation = row.get("conversation")
-    if isinstance(conversation, dict):
-        text += " " + _conversation_search_text(conversation).lower()
-    return sum(1 for token in tokens if token in text)
-
-
-def _metadata_overlap(query: str, conversation: Any) -> int:
-    if not isinstance(conversation, dict):
-        return 0
-    tokens = set(_query_tokens(query))
-    if not tokens:
-        return 0
-    metadata = conversation.get("metadata", {})
-    metadata_values: list[str] = [
-        str(conversation.get("source", "")),
-        str(conversation.get("title", "")),
-    ]
-    if isinstance(metadata, dict):
-        metadata_values.extend(_metadata_search_values(metadata))
-    text = " ".join(metadata_values).lower()
-    return sum(1 for token in tokens if token in text)
+    text_tokens = set(_query_tokens(str(row.get("text", "")), limit=None))
+    return len(tokens.intersection(text_tokens))
 
 
 def _conversation_search_text(conversation: dict[str, Any]) -> str:

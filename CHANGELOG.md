@@ -6,6 +6,9 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Added provider-scale-independent reciprocal rank fusion for dense, lexical,
+  fact, and graph candidates, exact-match prioritization, and an optional
+  bounded redaction-safe semantic reranker with deterministic fallback.
 - Added shared typed query planning for search and ask, including deterministic
   source, date, tag, thread, handoff, intent, and temporal parsing; safe optional
   model-assisted planning; explicit-filter merge rules; and opt-in diagnostics.
