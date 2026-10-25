@@ -2114,7 +2114,11 @@ def test_fact_from_assistant_statement_exposes_source_quality() -> None:
 
     assert result["answer_basis"] == "fact_layer"
     assert result["facts"][0]["source_quality"] == "assistant_statement"
-    assert result["facts"][0]["confidence_reason"] == "Extracted from an assistant statement."
+    assert result["facts"][0]["confidence"] == "medium"
+    assert result["facts"][0]["confidence_score"] == 0.5
+    assert result["facts"][0]["confidence_reason"] == (
+        "Assistant-derived evidence requires user corroboration."
+    )
 
 
 def test_fact_answer_uses_normalized_object_without_rewriting_raw_value() -> None:
@@ -2200,6 +2204,9 @@ def test_fact_correction_supersedes_old_fact() -> None:
     assert any(fact["superseded_at"] for fact in audit["results"] if fact["superseded_by"])
     assert result["facts"][0]["source_quality"] == "corrected_by_user"
     assert result["facts"][0]["confidence_reason"] == "Extracted from a direct user correction."
+    assert result["facts"][0]["confidence_score"] == 0.98
+    assert result["facts"][0]["assertion_type"] == "asserted"
+    assert result["facts"][0]["validation_status"] == "validated"
     assert result["evidence"][0]["source_quality"] == "corrected_by_user"
 
 
@@ -2679,14 +2686,182 @@ def test_external_fact_extractor_hook_adds_normalized_facts() -> None:
     metadata, vectors = _configure_stubs()
     runtime = mvp_ingestion._runtime()
     runtime.fact_extractor = lambda conversation, messages: [
-        {"subject": "user", "predicate": "profile_identity", "object": "a tester"}
+        {
+            "subject": "user",
+            "predicate": "profile_identity",
+            "object": "a tester",
+            "source_message_indexes": [0],
+            "evidence_span": {"message_index": 0, "start": 0, "end": 22},
+            "extractor_name": "test-extractor",
+            "extractor_version": "1.0",
+            "rule_identifier": "identity-v1",
+        }
     ]
     conversation = _valid_conversation()
-    conversation["messages"] = [{"role": "user", "text": "no deterministic profile fact"}]
+    conversation["messages"] = [{"role": "user", "text": "I identify as a tester."}]
 
     mvp_ingestion.ingest_messages(conversation)
 
     assert metadata._facts[0]["object"] == "a tester"
+    public = mvp_ingestion.fact_search(predicate="profile_identity")["results"][0]
+    assert public["extractor_name"] == "test-extractor"
+    assert public["extractor_version"] == "1.0"
+    assert public["rule_identifier"] == "identity-v1"
+    assert public["validation_status"] == "validated"
+
+
+def test_fact_validation_metadata_is_deterministic() -> None:
+    conversation = _valid_conversation()
+    conversation["messages"] = [{"role": "user", "text": "My favorite color is teal."}]
+
+    first = mvp_ingestion.extract_facts(conversation)[0]
+    second = mvp_ingestion.extract_facts(conversation)[0]
+
+    stable_fields = ("id", "subject", "predicate", "object", "confidence", "confidence_reason")
+    assert {field: first[field] for field in stable_fields} == {
+        field: second[field] for field in stable_fields
+    }
+    assert first["qualifiers"]["extraction"] == second["qualifiers"]["extraction"]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "I am not a tester.",
+        "If I own a cobalt camera, remind me to insure it.",
+    ],
+)
+def test_negated_and_hypothetical_candidates_are_not_stored(text: str) -> None:
+    metadata, _ = _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["messages"] = [{"role": "user", "text": text}]
+
+    mvp_ingestion.ingest_messages(conversation)
+
+    assert getattr(metadata, "_facts", []) == []
+
+
+@pytest.mark.parametrize(
+    ("text", "assertion_type", "confidence", "score", "temporal_scope"),
+    [
+        (
+            "My favorite color is teal.",
+            "asserted",
+            "high",
+            0.9,
+            "ongoing",
+        ),
+        (
+            'Someone said "I own a cobalt camera."',
+            "quoted",
+            "low",
+            0.3,
+            "ongoing",
+        ),
+        (
+            "I think My favorite color is teal.",
+            "uncertain",
+            "low",
+            0.4,
+            "ongoing",
+        ),
+        (
+            "For now, My favorite editor is Vim.",
+            "temporary",
+            "medium",
+            0.6,
+            "temporary",
+        ),
+    ],
+)
+def test_assertion_context_calibrates_fact_confidence(
+    text: str,
+    assertion_type: str,
+    confidence: str,
+    score: float,
+    temporal_scope: str,
+) -> None:
+    _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["messages"] = [{"role": "user", "text": text}]
+
+    mvp_ingestion.ingest_messages(conversation)
+
+    fact = mvp_ingestion.fact_search()["results"][0]
+    assert fact["assertion_type"] == assertion_type
+    assert fact["confidence"] == confidence
+    assert fact["confidence_score"] == score
+    assert fact["temporal_scope"] == temporal_scope
+    assert fact["validation_status"] == "validated"
+    assert fact["extractor_name"] == "deterministic_rules"
+    assert fact["extractor_version"] == "1"
+    assert fact["rule_identifier"].startswith("rule:")
+    assert fact["source_role"] == "user"
+    assert fact["evidence_span"]["message_index"] == 0
+    assert text[fact["evidence_span"]["start"] : fact["evidence_span"]["end"]]
+
+
+@pytest.mark.parametrize(
+    "raw_fact",
+    [
+        {
+            "subject": "user",
+            "predicate": "profile_identity",
+            "object": "a tester",
+            "source_message_indexes": [0],
+            "extractor_name": "test-extractor",
+            "extractor_version": "1.0",
+            "rule_identifier": "identity-v1",
+        },
+        {
+            "subject": "user",
+            "predicate": "profile_identity",
+            "object": "a tester",
+            "source_message_indexes": [0, 99],
+            "evidence_span": {"message_index": 0, "start": 0, "end": 22},
+            "extractor_name": "test-extractor",
+            "extractor_version": "1.0",
+            "rule_identifier": "identity-v1",
+        },
+        {
+            "subject": "user",
+            "predicate": "profile_identity",
+            "object": "unsupported claim",
+            "source_message_indexes": [0],
+            "evidence_span": {"message_index": 0, "start": 0, "end": 22},
+            "extractor_name": "test-extractor",
+            "extractor_version": "1.0",
+            "rule_identifier": "identity-v1",
+        },
+    ],
+)
+def test_external_fact_extractor_rejects_malformed_or_unsupported_output(
+    raw_fact: dict[str, Any],
+) -> None:
+    metadata, _ = _configure_stubs()
+    mvp_ingestion._runtime().fact_extractor = lambda **_kwargs: [raw_fact]
+    conversation = _valid_conversation()
+    conversation["messages"] = [{"role": "user", "text": "I identify as a tester."}]
+
+    mvp_ingestion.ingest_messages(conversation)
+
+    assert getattr(metadata, "_facts", []) == []
+
+
+def test_legacy_fact_is_exposed_without_inventing_evidence() -> None:
+    public = mvp_ingestion._public_fact(
+        {
+            "id": "fact-legacy",
+            "subject": "user",
+            "predicate": "profile_name",
+            "object": "Taylor",
+            "qualifiers": {},
+        }
+    )
+
+    assert public["validation_status"] == "legacy"
+    assert "evidence_span" not in public
+    assert "confidence_score" not in public
 
 
 def test_graph_extraction_is_opt_in_for_ingestion() -> None:

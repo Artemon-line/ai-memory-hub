@@ -69,6 +69,12 @@ from memory.ingestion.fact_timeline import (
     MemoryField,
     temporal_fact_source_metadata,
 )
+from memory.ingestion.fact_validation import (
+    ExternalFactCandidate,
+    classify_assertion,
+    extraction_public_fields,
+    validate_fact_candidate,
+)
 from memory.ingestion.handoff_models import (
     HandoffChangedFile,
     HandoffCitation,
@@ -439,6 +445,7 @@ class _FactQualifierKey(StrEnum):
     SAVE_INTENT_EVIDENCE = "save_intent_evidence"
     SAVE_INTENT_SOURCE = "save_intent_source"
     SOURCE_ROLE = "source_role"
+    EXTRACTION = "extraction"
     TOPIC = "topic"
 
 
@@ -5173,7 +5180,19 @@ def extract_facts_from_messages(
     facts.extend(
         _external_extracted_facts(conversation, messages, start_message_index=start_message_index)
     )
-    return _dedupe_facts(facts)
+    validated = [
+        validated_fact
+        for fact in facts
+        if (
+            validated_fact := validate_fact_candidate(
+                fact,
+                messages,
+                start_message_index=start_message_index,
+            )
+        )
+        is not None
+    ]
+    return _dedupe_facts(validated)
 
 
 def _extract_message_facts(
@@ -5196,6 +5215,13 @@ def _extract_message_facts(
                 message_index=message_index,
                 qualifiers=_fact_correction_qualifiers(correction),
                 source_role=source_role,
+                **_fact_extraction_metadata(
+                    text,
+                    message_index=message_index,
+                    source_role=source_role,
+                    evidence_span=correction.span,
+                    rule_identifier="correction:direct",
+                ),
             )
         )
     for rule_name, pattern in _FACT_RULES:
@@ -5213,6 +5239,13 @@ def _extract_message_facts(
                         message_index=message_index,
                         qualifiers=_owned_item_qualifiers(object_value),
                         source_role=source_role,
+                        **_fact_extraction_metadata(
+                            text,
+                            message_index=message_index,
+                            source_role=source_role,
+                            evidence_span=match.span(),
+                            rule_identifier=f"rule:{rule_name.value}",
+                        ),
                     )
                 )
             elif rule_name == _FactRuleName.FAVORITE:
@@ -5228,6 +5261,13 @@ def _extract_message_facts(
                         conversation=conversation,
                         message_index=message_index,
                         source_role=source_role,
+                        **_fact_extraction_metadata(
+                            text,
+                            message_index=message_index,
+                            source_role=source_role,
+                            evidence_span=match.span(),
+                            rule_identifier=f"rule:{rule_name.value}",
+                        ),
                     )
                 )
             elif rule_name == _FactRuleName.LIKES:
@@ -5240,6 +5280,13 @@ def _extract_message_facts(
                         message_index=message_index,
                         qualifiers={_FactQualifierKey.PREFERENCE.value: "positive"},
                         source_role=source_role,
+                        **_fact_extraction_metadata(
+                            text,
+                            message_index=message_index,
+                            source_role=source_role,
+                            evidence_span=match.span(),
+                            rule_identifier=f"rule:{rule_name.value}",
+                        ),
                     )
                 )
             elif rule_name == _FactRuleName.SUBJECT_CREATOR:
@@ -5251,6 +5298,13 @@ def _extract_message_facts(
                         conversation=conversation,
                         message_index=message_index,
                         source_role=source_role,
+                        **_fact_extraction_metadata(
+                            text,
+                            message_index=message_index,
+                            source_role=source_role,
+                            evidence_span=match.span(),
+                            rule_identifier=f"rule:{rule_name.value}",
+                        ),
                     )
                 )
             elif rule_name in {
@@ -5266,6 +5320,13 @@ def _extract_message_facts(
                         conversation=conversation,
                         message_index=message_index,
                         source_role=source_role,
+                        **_fact_extraction_metadata(
+                            text,
+                            message_index=message_index,
+                            source_role=source_role,
+                            evidence_span=match.span(),
+                            rule_identifier=f"rule:{rule_name.value}",
+                        ),
                     )
                 )
             elif rule_name in {
@@ -5285,6 +5346,13 @@ def _extract_message_facts(
                         conversation=conversation,
                         message_index=message_index,
                         source_role=source_role,
+                        **_fact_extraction_metadata(
+                            text,
+                            message_index=message_index,
+                            source_role=source_role,
+                            evidence_span=match.span(),
+                            rule_identifier=f"rule:{rule_name.value}",
+                        ),
                     )
                 )
             elif rule_name in {
@@ -5303,6 +5371,13 @@ def _extract_message_facts(
                         conversation=conversation,
                         message_index=message_index,
                         source_role=source_role,
+                        **_fact_extraction_metadata(
+                            text,
+                            message_index=message_index,
+                            source_role=source_role,
+                            evidence_span=match.span(),
+                            rule_identifier=f"rule:{rule_name.value}",
+                        ),
                     )
                 )
     return _dedupe_facts(facts)
@@ -5375,14 +5450,38 @@ def _topic_facts(
     topics = infer_topics(messages)
     facts: list[dict[str, Any]] = []
     for topic in topics:
+        evidence = next(
+            (
+                (offset, match, str(message.get("role", "")), text)
+                for offset, message in enumerate(messages)
+                if isinstance(message, dict)
+                for text in [str(message.get("text", ""))]
+                for candidate_topic, pattern in _TOPIC_PATTERNS
+                if candidate_topic == topic
+                if (match := pattern.search(text)) is not None
+            ),
+            None,
+        )
+        if evidence is None:
+            continue
+        offset, match, source_role, text = evidence
+        message_index = start_message_index + offset
         facts.append(
             _fact(
                 subject=_FactSubject.USER.value,
                 predicate=_FactPredicate.RECURRING_TOPIC.value,
                 object_value=topic,
                 conversation=conversation,
-                message_index=start_message_index,
+                message_index=message_index,
                 qualifiers={_FactQualifierKey.TOPIC.value: topic},
+                source_role=source_role,
+                **_fact_extraction_metadata(
+                    text,
+                    message_index=message_index,
+                    source_role=source_role,
+                    evidence_span=match.span(),
+                    rule_identifier=f"topic:{topic}",
+                ),
             )
         )
     return facts
@@ -5397,36 +5496,78 @@ def _external_extracted_facts(
     extractor = _runtime().fact_extractor
     if not callable(extractor):
         return []
-    raw_facts = extractor(conversation=conversation, messages=messages)
+    try:
+        raw_facts = extractor(conversation=conversation, messages=messages)
+    except Exception:
+        return []
     if not isinstance(raw_facts, list):
         return []
     facts: list[dict[str, Any]] = []
-    for raw in raw_facts:
-        if not isinstance(raw, dict):
+    for raw in raw_facts[:100]:
+        try:
+            candidate = ExternalFactCandidate.model_validate(raw)
+        except ValueError:
             continue
-        subject = str(raw.get(FactField.SUBJECT.value, "")).strip()
-        predicate = str(raw.get(FactField.PREDICATE.value, "")).strip()
-        object_value = str(raw.get(FactField.OBJECT.value, "")).strip()
-        if not subject or not predicate or not object_value:
+        if any(index >= len(messages) for index in candidate.source_message_indexes):
             continue
-        indexes = raw.get("source_message_indexes")
-        if isinstance(indexes, list) and indexes:
-            message_index = int(indexes[0])
-        else:
-            message_index = start_message_index
+        relative_index = candidate.evidence_span.message_index
+        if relative_index >= len(messages):
+            continue
+        message = messages[relative_index]
+        if not isinstance(message, dict):
+            continue
+        message_index = start_message_index + relative_index
+        source_role = str(message.get("role", ""))
+        text = str(message.get("text", ""))
         facts.append(
             _fact(
-                subject=subject,
-                predicate=predicate,
-                object_value=object_value,
+                subject=candidate.subject,
+                predicate=candidate.predicate,
+                object_value=candidate.object,
                 conversation=conversation,
                 message_index=message_index,
-                qualifiers=raw.get(FactField.QUALIFIERS.value)
-                if isinstance(raw.get(FactField.QUALIFIERS.value), dict)
-                else None,
+                source_message_indexes=[
+                    start_message_index + index
+                    for index in candidate.source_message_indexes
+                    if index < len(messages)
+                ],
+                qualifiers=candidate.qualifiers,
+                source_role=source_role,
+                **_fact_extraction_metadata(
+                    text,
+                    message_index=message_index,
+                    source_role=source_role,
+                    evidence_span=(candidate.evidence_span.start, candidate.evidence_span.end),
+                    extractor_name=candidate.extractor_name,
+                    extractor_version=candidate.extractor_version,
+                    rule_identifier=candidate.rule_identifier,
+                ),
             )
         )
     return facts
+
+
+def _fact_extraction_metadata(
+    text: str,
+    *,
+    message_index: int,
+    source_role: str,
+    evidence_span: tuple[int, int],
+    rule_identifier: str,
+    extractor_name: str = "deterministic_rules",
+    extractor_version: str = "1",
+) -> dict[str, Any]:
+    return {
+        "assertion_type": classify_assertion(text, evidence_span).value,
+        "evidence_span": {
+            "message_index": message_index,
+            "start": evidence_span[0],
+            "end": evidence_span[1],
+        },
+        "extractor_name": extractor_name,
+        "extractor_version": extractor_version,
+        "rule_identifier": rule_identifier,
+    }
 
 
 def _fact(
@@ -5436,8 +5577,14 @@ def _fact(
     object_value: str,
     conversation: dict[str, Any],
     message_index: int,
+    source_message_indexes: Sequence[int] | None = None,
     qualifiers: dict[str, Any] | None = None,
     source_role: str | None = None,
+    assertion_type: str,
+    evidence_span: dict[str, int],
+    extractor_name: str,
+    extractor_version: str,
+    rule_identifier: str,
 ) -> dict[str, Any]:
     now = _utc_now_iso()
     source_id = str(conversation.get("id", ""))
@@ -5446,6 +5593,14 @@ def _fact(
     normalized_qualifiers = dict(qualifiers or {})
     if source_role in {_FactSourceRole.USER.value, _FactSourceRole.ASSISTANT.value}:
         normalized_qualifiers.setdefault(_FactQualifierKey.SOURCE_ROLE.value, source_role)
+    normalized_qualifiers[_FactQualifierKey.EXTRACTION.value] = {
+        FactField.ASSERTION_TYPE.value: assertion_type,
+        FactField.EVIDENCE_SPAN.value: evidence_span,
+        FactField.EXTRACTOR_NAME.value: extractor_name,
+        FactField.EXTRACTOR_VERSION.value: extractor_version,
+        FactField.RULE_IDENTIFIER.value: rule_identifier,
+        FactField.SOURCE_ROLE.value: source_role or "",
+    }
     normalized_qualifiers.update(_save_intent_qualifiers(conversation))
     object_normalized, normalization = _normalize_fact_object(
         predicate=predicate, object_value=object_value
@@ -5458,14 +5613,12 @@ def _fact(
         FactField.PREDICATE.value: predicate,
         FactField.OBJECT.value: object_value,
         FactField.QUALIFIERS.value: normalized_qualifiers,
-        FactField.CONFIDENCE.value: "medium"
-        if normalized_qualifiers.get(_FactQualifierKey.SAVE_INTENT.value) == "client_auto_save"
-        else "high",
+        FactField.CONFIDENCE.value: "medium",
         FactField.LAST_CONFIRMED_AT.value: now,
         FactField.SOURCE_CONVERSATION_ID.value: source_id,
         "owner_id": _owner_id_from_conversation(conversation),
         "project_id": _project_id_from_conversation(conversation),
-        FactField.SOURCE_MESSAGE_INDEXES.value: [message_index],
+        FactField.SOURCE_MESSAGE_INDEXES.value: list(source_message_indexes or [message_index]),
         FactField.CREATED_AT.value: now,
         FactField.UPDATED_AT.value: now,
         FactField.SUPERSEDED_BY.value: None,
@@ -7177,6 +7330,7 @@ def _public_fact(fact: dict[str, Any]) -> dict[str, Any]:
         public[FactField.OBJECT_RAW.value] = public.get(FactField.OBJECT.value)
     if not public.get(FactField.OBJECT_NORMALIZED.value):
         public[FactField.OBJECT_NORMALIZED.value] = _normalized_fact_object(public)
+    public.update(extraction_public_fields(public.get(FactField.QUALIFIERS.value)))
     public.update(_fact_save_intent_fields(public))
     public.update(temporal_fact_source_metadata(public, _source_conversation_for_fact(public)))
     public.setdefault(FactField.SUPERSEDED_AT.value, None)
@@ -7193,8 +7347,20 @@ def _source_conversation_for_fact(fact: dict[str, Any]) -> dict[str, Any] | None
 
 def _source_quality_for_fact(fact: dict[str, Any]) -> str:
     qualifiers = fact.get(FactField.QUALIFIERS.value)
+    extraction = (
+        qualifiers.get(_FactQualifierKey.EXTRACTION.value)
+        if isinstance(qualifiers, dict)
+        else None
+    )
+    assertion_type = (
+        extraction.get(FactField.ASSERTION_TYPE.value)
+        if isinstance(extraction, dict)
+        else None
+    )
     source_role = (
-        qualifiers.get(_FactQualifierKey.SOURCE_ROLE.value)
+        extraction.get(FactField.SOURCE_ROLE.value)
+        if isinstance(extraction, dict)
+        else qualifiers.get(_FactQualifierKey.SOURCE_ROLE.value)
         if isinstance(qualifiers, dict)
         else None
     )
@@ -7206,6 +7372,10 @@ def _source_quality_for_fact(fact: dict[str, Any]) -> str:
         return "corrected_by_user"
     if fact.get(FactField.PREDICATE.value) == "recurring_topic":
         return "inferred_from_conversation"
+    if assertion_type == "quoted":
+        return "quoted_statement"
+    if assertion_type == "uncertain":
+        return "uncertain_statement"
     if source_role == _FactSourceRole.ASSISTANT.value:
         return "assistant_statement"
     return "direct_user_statement"

@@ -6,6 +6,9 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Added source-span validation and calibrated confidence for extracted facts,
+  including assertion/temporal classification, bounded external extractor
+  output, assistant corroboration semantics, and legacy fact compatibility.
 - Added provider-scale-independent reciprocal rank fusion for dense, lexical,
   fact, and graph candidates, exact-match prioritization, and an optional
   bounded redaction-safe semantic reranker with deterministic fallback.

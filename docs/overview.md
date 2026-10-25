@@ -225,6 +225,15 @@ Use `response_format="detailed"` for the full redacted stored record. HTTP
   from `metadata.save_intent: client_auto_save` use lower confidence than
   explicit user-requested saves.
 
+Newly extracted facts are validated against their source message before they
+become active. Detailed fact responses include the supporting `evidence_span`,
+`source_role`, assertion and temporal classifications, numeric
+`confidence_score`, extractor/rule identifiers, and `validation_status`.
+Negated and hypothetical candidates are rejected; quoted, uncertain, temporary,
+inferred, and assistant-derived facts are retained with lower confidence as
+appropriate. Older fact rows remain readable as `validation_status: legacy`
+without synthetic evidence fields.
+
 Pass `max_context_tokens` to `/memory/ask` to build the answer from only the
 chunks that fit the requested context budget. When budgeting is active, the
 response can include `context_tokens_used`, `chunks_selected`, `chunks_dropped`,
