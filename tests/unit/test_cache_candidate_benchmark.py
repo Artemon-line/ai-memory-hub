@@ -18,6 +18,10 @@ def test_cache_candidate_benchmark_reports_ranked_operations() -> None:
     assert report["candidates"]
     assert "operation" in report["candidates"][0]
     assert "cache_when" in report["candidates"][0]
+    assert all(
+        set(values) >= {"first_call_ms", "p50_ms", "p95_ms", "p99_ms"}
+        for values in report["operations"].values()
+    )
 
 
 def test_cache_candidate_benchmark_rejects_invalid_iterations() -> None:

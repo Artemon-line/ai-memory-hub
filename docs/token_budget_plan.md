@@ -216,7 +216,12 @@ Additional details:
 - Benchmark module is `memory/benchmarks/token_budget.py`.
 - Run it with `python -m memory.benchmarks.token_budget --iterations 200`.
 - The benchmark uses a fixed in-memory retrieval corpus to avoid storage, embedding, and network variance.
-- The JSON report includes default unbudgeted ask latency, request-budgeted ask latency, config-enabled ask latency, selected context size, dropped chunk counts, and token chunking output.
+- The JSON report separates first-call from warm measurements, reports warm
+  average/p50/p95/p99/min/max latency, and includes per-request search,
+  candidate, audit-write, selected-context, dropped-chunk, and token
+  amplification alongside token chunking output.
+- The benchmark uses a bounded in-memory audit sink so expected audit writes are
+  counted without exception-log amplification or profile distortion.
 - Optional CLI thresholds `--max-budgeted-ratio` and `--max-config-enabled-ratio` can fail the benchmark when budgeted paths exceed a local slowdown limit.
 - Unit coverage for benchmark structure and threshold failures is in `tests/unit/test_token_budget_benchmark.py`.
 
