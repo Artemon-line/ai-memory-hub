@@ -1562,8 +1562,12 @@ Benchmarks and evaluation helpers:
 ```bash
 uv run python -m memory.benchmarks.token_budget --iterations 200
 uv run python -m memory.benchmarks.retrieval_quality
+uv run python -m memory.benchmarks.quality_gate --output reports/quality/quality-gate.json
 uv run python -m memory.benchmarks.cache_candidates --iterations 1000
 ```
+
+The [representative quality gate](quality_evaluation.md) is credential-free in
+CI and also accepts optional provider/model observations for comparable reports.
 
 Container CI verifies Hadolint, image build, packaged `aim serve` startup,
 `/ready`, MCP initialize at `/mcp/`, arbitrary non-root UID behavior, and

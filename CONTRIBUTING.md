@@ -26,6 +26,7 @@ For Python changes, run the focused tests first, then broaden as needed:
 uv run python -m ruff check memory tests tools
 uv run pytest tests/unit tests/integration -q
 uv run python -m pyright
+uv run python -m memory.benchmarks.quality_gate --output reports/quality/quality-gate.json
 ```
 
 For documentation changes:

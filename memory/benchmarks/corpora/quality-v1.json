@@ -1,0 +1,270 @@
+{
+  "schema_version": "1.0",
+  "id": "ai-memory-hub-quality-v1",
+  "data_classification": "synthetic",
+  "description": "Synthetic representative memory cases. No production conversations are included.",
+  "threshold_policy": {
+    "rationale": "Initial gates tolerate one difficult case per category while preventing broad regressions. Latency is intentionally generous for shared CI runners; fallback rate is capped while fallback correctness remains strict. Any threshold edit must include a before/after JSON report and rationale in the pull request.",
+    "baseline": {
+      "runner": "deterministic-ci",
+      "corpus": "ai-memory-hub-quality-v1",
+      "expected_gate": "pass"
+    }
+  },
+  "documents": [
+    {
+      "id": "exact-zx481",
+      "source": "manual",
+      "title": "Device inventory",
+      "text": "The active controller identifier is ZX-481 and its firmware channel is stable.",
+      "tags": ["inventory"]
+    },
+    {
+      "id": "semantic-car",
+      "source": "chatgpt",
+      "title": "Transport preference",
+      "text": "The preferred car for the road trip is the compact electric model.",
+      "tags": ["travel"]
+    },
+    {
+      "id": "security-codex",
+      "source": "codex",
+      "title": "Credential rotation",
+      "text": "Rotate the service token before the next release and verify the audit record.",
+      "tags": ["security", "release"]
+    },
+    {
+      "id": "security-manual",
+      "source": "manual",
+      "title": "Credential glossary",
+      "text": "A token is a credential used by a service.",
+      "tags": ["security"]
+    },
+    {
+      "id": "spanish-project",
+      "source": "opencode",
+      "title": "Proyecto Estrella",
+      "text": "El coche del proyecto Estrella usa una batería azul.",
+      "tags": ["multilingual", "project"]
+    },
+    {
+      "id": "ranking-a",
+      "source": "manual",
+      "title": "Hybrid ranking design",
+      "text": "Rank fusion combines dense lexical and fact candidates for memory retrieval.",
+      "tags": ["retrieval", "ranking"]
+    },
+    {
+      "id": "ranking-b",
+      "source": "codex",
+      "title": "Rank fusion fallback",
+      "text": "When semantic reranking times out rank fusion preserves deterministic retrieval.",
+      "tags": ["retrieval", "fallback"]
+    },
+    {
+      "id": "filtered-target",
+      "source": "codex",
+      "title": "Sparse sentinel",
+      "text": "The filter sentinel for project Nova is stored in this conversation.",
+      "tags": ["sparse"]
+    },
+    {
+      "id": "quote-memory",
+      "source": "manual",
+      "title": "Quoted phrase",
+      "text": "The exact deployment phrase is velvet comet protocol.",
+      "tags": ["deployment"]
+    },
+    {
+      "id": "noise-observability",
+      "source": "manual",
+      "title": "Metrics",
+      "text": "Latency histograms track request duration without storing payloads.",
+      "tags": ["observability"]
+    }
+  ],
+  "generated_distractors": [
+    {
+      "count": 120,
+      "id_prefix": "sparse-decoy",
+      "source": "manual",
+      "title": "Project Nova filter sentinel",
+      "text": "filter sentinel project Nova filter sentinel project Nova",
+      "tags": ["noise"]
+    }
+  ],
+  "retrieval_cases": [
+    {
+      "name": "exact_identifier",
+      "query": "Find ZX-481",
+      "relevant_ids": ["exact-zx481"],
+      "k": 3,
+      "score_scale": "similarity"
+    },
+    {
+      "name": "semantic_paraphrase",
+      "query": "Which automobile was preferred for travel?",
+      "relevant_ids": ["semantic-car"],
+      "k": 3,
+      "score_scale": "distance"
+    },
+    {
+      "name": "metadata_filter",
+      "query": "Find token rotation #security",
+      "relevant_ids": ["security-codex"],
+      "k": 3,
+      "score_scale": "wide_similarity",
+      "filtered": true
+    },
+    {
+      "name": "natural_language_source_filter",
+      "query": "Find my codex conversations about token rotation",
+      "relevant_ids": ["security-codex"],
+      "k": 3,
+      "score_scale": "similarity",
+      "filtered": true
+    },
+    {
+      "name": "sparse_beyond_top_100",
+      "query": "Find my codex conversations about filter sentinel project Nova",
+      "relevant_ids": ["filtered-target"],
+      "k": 3,
+      "score_scale": "similarity",
+      "filtered": true
+    },
+    {
+      "name": "multilingual",
+      "query": "¿Qué coche usa el proyecto Estrella?",
+      "relevant_ids": ["spanish-project"],
+      "k": 3,
+      "score_scale": "distance"
+    },
+    {
+      "name": "rank_fusion_timeout",
+      "query": "dense lexical fact rank fusion retrieval",
+      "relevant_ids": ["ranking-a", "ranking-b"],
+      "k": 3,
+      "score_scale": "wide_similarity",
+      "reranker": "timeout"
+    },
+    {
+      "name": "quoted_exact_fallback",
+      "query": "Find \"velvet comet protocol\"",
+      "relevant_ids": ["quote-memory"],
+      "k": 3,
+      "score_scale": "similarity",
+      "reranker": "error"
+    }
+  ],
+  "extraction_cases": [
+    {
+      "name": "direct_preference",
+      "conversation": {
+        "id": "10000000-0000-4000-8000-000000000001",
+        "source": "manual",
+        "timestamp": "2026-01-01T00:00:00Z",
+        "title": "Synthetic preference",
+        "messages": [{"role": "user", "text": "My favorite color is cobalt."}],
+        "metadata": {"tags": []}
+      },
+      "expected_facts": [["user", "favorite_color", "cobalt"]]
+    },
+    {
+      "name": "correction",
+      "conversation": {
+        "id": "10000000-0000-4000-8000-000000000002",
+        "source": "manual",
+        "timestamp": "2026-01-02T00:00:00Z",
+        "title": "Synthetic correction",
+        "messages": [{"role": "user", "text": "Actually, my favorite drink is pear tea, not lime soda."}],
+        "metadata": {"tags": []}
+      },
+      "expected_facts": [["user", "favorite_drink", "pear tea"]]
+    },
+    {
+      "name": "negated_claim",
+      "conversation": {
+        "id": "10000000-0000-4000-8000-000000000003",
+        "source": "manual",
+        "timestamp": "2026-01-03T00:00:00Z",
+        "title": "Synthetic negation",
+        "messages": [{"role": "user", "text": "I do not own an amber submarine."}],
+        "metadata": {"tags": []}
+      },
+      "expected_facts": []
+    },
+    {
+      "name": "uncertain_quote",
+      "conversation": {
+        "id": "10000000-0000-4000-8000-000000000004",
+        "source": "manual",
+        "timestamp": "2026-01-04T00:00:00Z",
+        "title": "Synthetic uncertainty",
+        "messages": [{"role": "user", "text": "Someone said, 'I own a lunar bicycle,' but I am not sure."}],
+        "metadata": {"tags": []}
+      },
+      "expected_facts": []
+    },
+    {
+      "name": "assistant_claim",
+      "conversation": {
+        "id": "10000000-0000-4000-8000-000000000005",
+        "source": "assistant",
+        "timestamp": "2026-01-05T00:00:00Z",
+        "title": "Synthetic assistant claim",
+        "messages": [{"role": "assistant", "text": "The creator is Ada Example."}],
+        "metadata": {"tags": []}
+      },
+      "expected_facts": [
+        ["Synthetic assistant claim", "creator", "Ada Example"],
+        ["The", "creator", "Ada Example"],
+        ["The creator", "description", "Ada Example"]
+      ]
+    }
+  ],
+  "temporal_cases": [
+    {
+      "name": "latest_correction",
+      "facts": [
+        {"id": "fact-old", "subject": "user", "predicate": "favorite_color", "object": "amber", "stored_at": "2026-01-01T00:00:00Z", "author": "user"},
+        {"id": "fact-new", "subject": "user", "predicate": "favorite_color", "object": "cobalt", "stored_at": "2026-02-01T00:00:00Z", "author": "user"}
+      ],
+      "latest_values": ["cobalt"],
+      "conflict": false
+    },
+    {
+      "name": "same_time_conflict",
+      "facts": [
+        {"id": "fact-a", "subject": "project", "predicate": "index", "object": "dense", "stored_at": "2026-03-01T00:00:00Z", "author": "codex"},
+        {"id": "fact-b", "subject": "project", "predicate": "index", "object": "hybrid", "stored_at": "2026-03-01T00:00:00Z", "author": "opencode"}
+      ],
+      "latest_values": ["dense", "hybrid"],
+      "conflict": true
+    },
+    {
+      "name": "history_preserved",
+      "facts": [
+        {"id": "fact-1", "subject": "service", "predicate": "port", "object": "7000", "stored_at": "2026-01-01T00:00:00Z"},
+        {"id": "fact-2", "subject": "service", "predicate": "port", "object": "8000", "stored_at": "2026-04-01T00:00:00Z"}
+      ],
+      "latest_values": ["8000"],
+      "conflict": false
+    }
+  ],
+  "answer_cases": [
+    {
+      "name": "concise_latest",
+      "temporal_case": "latest_correction",
+      "mode": "concise",
+      "expected_answer": "cobalt",
+      "expected_evidence_ids": ["fact-new"]
+    },
+    {
+      "name": "detailed_conflict",
+      "temporal_case": "same_time_conflict",
+      "mode": "detailed",
+      "expected_answer": "Conflicting latest values: dense; hybrid",
+      "expected_evidence_ids": ["fact-a", "fact-b"]
+    }
+  ]
+}

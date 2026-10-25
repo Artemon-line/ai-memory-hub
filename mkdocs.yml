@@ -54,6 +54,7 @@ nav:
       - Storage Provider Examples: docs/storage_provider_examples.md
       - PostgreSQL Driver Decision: docs/postgres_driver_decision.md
       - Observability: docs/observability.md
+      - Quality Evaluation: docs/quality_evaluation.md
       - Architecture: docs/architecture.md
   - What Is Planned:
       - Planned Features: docs/planned_features.md

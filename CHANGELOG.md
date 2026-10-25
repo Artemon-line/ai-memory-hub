@@ -6,6 +6,10 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Added a versioned synthetic retrieval and extraction quality corpus with a
+  credential-free CI gate, comparable provider/model reports, auditable
+  thresholds, ranking/filter/fact/temporal metrics, latency percentiles, and
+  reranker fallback coverage.
 - Added fact/direct-memory evidence arbitration for `memory_ask`, including
   assistant-claim corroboration, cross-layer conflict provenance, corrected-fact
   precedence, and a high-confidence fact fast path.
