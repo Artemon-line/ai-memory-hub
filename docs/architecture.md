@@ -87,6 +87,39 @@ Steps:
 11. Store vectors and mark chunk indexing state.
 12. Return deterministic outcome fields, including `deduplicated`, `appended_messages`, and `embedded_chunks`.
 
+### Fact validation and confidence
+
+Fact extraction is a two-stage path: deterministic rules or the optional
+external extractor produce candidates, then a shared validator checks evidence
+before any candidate is stored. New facts must cite a non-empty character span
+inside a declared source message. The validator classifies the surrounding
+statement as asserted, negated, hypothetical, quoted, uncertain, or temporary;
+negated and hypothetical candidates are discarded. Quoted, uncertain,
+temporary, inferred, auto-saved, and assistant-derived facts receive calibrated
+confidence. Assistant-derived facts remain non-authoritative until supported by
+user evidence.
+
+The confidence rubric is deterministic: quoted `0.30` (low), uncertain `0.40` (low),
+assistant-derived `0.50` (medium), inferred topic `0.55` (medium), temporary
+`0.60` (medium), client auto-save `0.65` (medium), direct user assertion `0.90`
+(high), and direct user correction `0.98` (high). A matching direct user fact is
+the authoritative corroboration for an assistant-authored claim; the original
+assistant-derived row remains medium-confidence provenance.
+
+Validated fact responses expose `evidence_span`, `source_role`,
+`assertion_type`, `temporal_scope`, `confidence_score`, `confidence_reason`,
+`extractor_name`, `extractor_version`, `rule_identifier`, and
+`validation_status`. Existing stored facts are returned with
+`validation_status: legacy` and do not receive invented evidence spans.
+
+External extractor output is schema-bound and capped at 100 candidates per
+ingestion call. Each candidate must include bounded subject, predicate, object,
+source message indexes, evidence span, and extractor/rule identifiers. Message
+indexes are relative to the message batch passed to the extractor and are
+translated to conversation indexes after validation. Unknown fields, invalid
+indexes or spans, unsupported claims, oversized values, and extractor failures
+are ignored without blocking deterministic ingestion.
+
 ## Normalization Layer
 
 The normalization layer enforces one runtime shape across clients and storage backends.

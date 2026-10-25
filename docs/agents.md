@@ -605,6 +605,13 @@ for approval.
 Extracted facts retain `save_intent` and `save_intent_source` provenance from
 their source memory. Fact and profile reads can filter on those fields; facts
 derived from `client_auto_save` memories are exposed with reduced confidence.
+New fact rows also retain a validated source-message character span, source
+role, assertion and temporal classifications, numeric confidence score, and
+extractor/rule version. Negated and hypothetical candidates are not activated.
+Treat quoted, uncertain, temporary, inferred, or assistant-derived facts as
+supporting context; assistant-derived facts require user corroboration before
+they are authoritative. Legacy facts remain readable but have
+`validation_status: legacy` and no invented evidence span.
 Conversation read tools default to `memory_status: active`; clients that are
 building review flows may pass `pending_review`, `quarantined`, `rejected`, or
 `all` to search, retrieve, or ask calls. Inserts containing likely secrets or
