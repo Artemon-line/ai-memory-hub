@@ -68,6 +68,7 @@ class BaseIngestionAgent(ABC):
         handoff_only: bool = False,
         source_client: str | None = None,
         source_session_id: str | None = None,
+        include_query_plan: bool = False,
     ) -> Dict[str, Any]:
         raise NotImplementedError("search is not implemented")
 
@@ -99,6 +100,7 @@ class BaseIngestionAgent(ABC):
         handoff_only: bool = False,
         source_client: str | None = None,
         source_session_id: str | None = None,
+        include_query_plan: bool = False,
     ) -> Dict[str, Any]:
         raise NotImplementedError("ask is not implemented")
 

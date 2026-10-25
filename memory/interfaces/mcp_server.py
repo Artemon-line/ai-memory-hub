@@ -1123,6 +1123,7 @@ def build_tool_handlers(
         handoff_only: bool = False,
         source_client: str | None = None,
         source_session_id: str | None = None,
+        include_query_plan: bool = False,
         ctx: FastMCPContext | None = None,
     ) -> dict[str, Any]:
         if not isinstance(query, str) or not query.strip():
@@ -1171,6 +1172,7 @@ def build_tool_handlers(
                 handoff_only=handoff_only,
                 source_client=unwrap_array(source_client),
                 source_session_id=unwrap_array(source_session_id),
+                include_query_plan=include_query_plan,
             )
             matches = result.get("results", [])
             if not isinstance(matches, list):
@@ -1188,7 +1190,10 @@ def build_tool_handlers(
                 )
             result["results"] = paged_rows
             result["cursor"] = next_cursor
+            query_plan_diagnostics = result.get("diagnostics", {}).get("query_plan")
             result = format_search_response(result, response_format)
+            if include_query_plan and query_plan_diagnostics is not None:
+                result.setdefault("diagnostics", {})["query_plan"] = query_plan_diagnostics
         except ValueError as exc:
             return _envelope(
                 status="error",
@@ -1293,6 +1298,7 @@ def build_tool_handlers(
         handoff_only: bool = False,
         source_client: str | None = None,
         source_session_id: str | None = None,
+        include_query_plan: bool = False,
         ctx: FastMCPContext | None = None,
     ) -> dict[str, Any]:
         if not isinstance(question, str) or not question.strip():
@@ -1370,6 +1376,7 @@ def build_tool_handlers(
                 handoff_only=handoff_only,
                 source_client=unwrap_array(source_client),
                 source_session_id=unwrap_array(source_session_id),
+                include_query_plan=include_query_plan,
             )
         except ValueError as exc:
             return _envelope(
@@ -1403,7 +1410,10 @@ def build_tool_handlers(
                 error_code="ask_failed",
                 error_message=redact_secrets(str(exc)),
             )
+        query_plan_diagnostics = result.get("diagnostics", {}).get("query_plan")
         formatted = format_ask_response(result, response_format)
+        if include_query_plan and query_plan_diagnostics is not None:
+            formatted.setdefault("diagnostics", {})["query_plan"] = query_plan_diagnostics
         response = _with_envelope_defaults(formatted)
         if response_format == MCPResponseFormat.CONCISE.value and "results" not in formatted:
             response.pop("results", None)

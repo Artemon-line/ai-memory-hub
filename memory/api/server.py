@@ -76,6 +76,7 @@ class SearchRequest(BaseModel):
     handoff_only: bool = False
     source_client: str | None = None
     source_session_id: str | None = None
+    include_query_plan: bool = False
 
 
 class RetrieveRequest(BaseModel):
@@ -99,6 +100,7 @@ class AskRequest(BaseModel):
     handoff_only: bool = False
     source_client: str | None = None
     source_session_id: str | None = None
+    include_query_plan: bool = False
 
 
 class InsertRequest(BaseModel):
@@ -603,6 +605,7 @@ def _register_api_routes(
                     handoff_only=payload.handoff_only,
                     source_client=payload.source_client,
                     source_session_id=payload.source_session_id,
+                    include_query_plan=payload.include_query_plan,
                 )
             )
         except PermissionError as exc:
@@ -651,6 +654,7 @@ def _register_api_routes(
                     handoff_only=payload.handoff_only,
                     source_client=payload.source_client,
                     source_session_id=payload.source_session_id,
+                    include_query_plan=payload.include_query_plan,
                 )
             )
         except PermissionError as exc:

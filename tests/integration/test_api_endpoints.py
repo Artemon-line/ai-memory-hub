@@ -1952,6 +1952,43 @@ def test_memory_search_and_retrieve() -> None:
     assert "conversation_hash" not in retrieve.json()["memory"]["metadata"]
 
 
+def test_search_and_ask_apply_shared_natural_language_query_plan() -> None:
+    client = _client()
+    chatgpt = _conversation()
+    opencode = _conversation()
+    opencode["id"] = "22222222-2222-4222-8222-222222222222"
+    opencode["source"] = "opencode"
+    opencode["timestamp"] = "2026-02-01T00:00:00Z"
+    opencode["messages"] = [{"role": "user", "text": "hello from opencode"}]
+    client.post("/memory/insert", json=chatgpt)
+    client.post("/memory/insert", json=opencode)
+
+    natural_query = (
+        "find my ChatGPT conversations about hello "
+        "from 2026-01-01 to 2026-01-01"
+    )
+    search = client.post(
+        "/memory/search",
+        json={"query": natural_query, "include_query_plan": True},
+    )
+    ask = client.post(
+        "/memory/ask",
+        json={"question": natural_query, "include_query_plan": True},
+    )
+
+    assert search.status_code == 200
+    assert ask.status_code == 200
+    for body in (search.json(), ask.json()):
+        assert [row["id"] for row in body["results"]] == [chatgpt["id"]]
+        plan = body["diagnostics"]["query_plan"]
+        assert plan["semantic_query"] == "hello"
+        assert plan["filters"]["source"] == "chatgpt"
+        assert plan["filters"]["date_from"] == "2026-01-01T00:00:00Z"
+        assert plan["filters"]["date_to"] == "2026-01-01T23:59:59.999999Z"
+        assert "owner_id" not in plan
+        assert "project_id" not in plan
+
+
 def test_memory_ask() -> None:
     client = _client()
     payload = _conversation()
