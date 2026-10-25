@@ -6,6 +6,9 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Added fact/direct-memory evidence arbitration for `memory_ask`, including
+  assistant-claim corroboration, cross-layer conflict provenance, corrected-fact
+  precedence, and a high-confidence fact fast path.
 - Added source-span validation and calibrated confidence for extracted facts,
   including assertion/temporal classification, bounded external extractor
   output, assistant corroboration semantics, and legacy fact compatibility.

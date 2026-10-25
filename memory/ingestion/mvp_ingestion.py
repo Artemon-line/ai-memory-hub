@@ -458,6 +458,34 @@ class _FactEvidenceType(StrEnum):
     FACT = "fact"
 
 
+class _EvidenceCandidateType(StrEnum):
+    FACT = "fact"
+    CHUNK = "chunk"
+
+
+@dataclass(frozen=True)
+class _EvidenceCandidate:
+    kind: _EvidenceCandidateType
+    payload: dict[str, Any]
+    relevance: float
+    source_quality: float
+    confidence: float
+    freshness_at: str
+    correction_status: bool
+    direct_support: bool
+
+    @property
+    def rank_key(self) -> tuple[float, float, float, float, str, float]:
+        return (
+            float(self.direct_support),
+            float(self.correction_status),
+            self.source_quality,
+            self.confidence,
+            self.freshness_at,
+            self.relevance,
+        )
+
+
 class _FactSubject(StrEnum):
     USER = "user"
 
@@ -4274,8 +4302,13 @@ def ask(
         owner_id=owner_id,
         project_id=effective_project_id,
         filters=filters,
+        include_context=False,
     )
-    if fact_answer is not None and status_filter == _MEMORY_STATUS_ACTIVE:
+    if (
+        fact_answer is not None
+        and status_filter == _MEMORY_STATUS_ACTIVE
+        and _fact_answer_fast_path(fact_answer, question=question)
+    ):
         _record_audit_event(
             "memory.asked",
             owner_id=owner_id,
@@ -4331,6 +4364,29 @@ def ask(
                 "top_k": top_k,
                 "result_count": len(result.get("results", [])),
                 "answer_basis": "handoff",
+                "memory_status": status_filter,
+            },
+        )
+        return _with_query_plan_diagnostics(
+            result, query_plan=query_plan, include=include_query_plan
+        )
+    if fact_answer is not None and status_filter == _MEMORY_STATUS_ACTIVE:
+        result = _arbitrate_fact_and_chunk_evidence(
+            fact_answer=fact_answer,
+            matches=matches,
+            question=question,
+            top_k=top_k,
+            max_context_tokens=max_context_tokens,
+        )
+        _record_audit_event(
+            "memory.asked",
+            owner_id=owner_id,
+            project_id=effective_project_id,
+            metadata={
+                "question_hash": _audit_hash(question),
+                "top_k": top_k,
+                "result_count": len(result.get("results", [])),
+                "answer_basis": result.get("answer_basis"),
                 "memory_status": status_filter,
             },
         )
@@ -5676,6 +5732,7 @@ def _answer_from_facts(
     owner_id: str | None = None,
     project_id: str | None = None,
     filters: ConversationFilters | None = None,
+    include_context: bool = True,
 ) -> dict[str, Any] | None:
     filters = filters or ConversationFilters()
     candidates: list[dict[str, Any]] = []
@@ -5700,8 +5757,237 @@ def _answer_from_facts(
     basis = (
         _AskAnswerBasis.CONFLICT.value
         if projection.has_latest_conflict
-        else (_AskAnswerBasis.MIXED.value if needs_context else _AskAnswerBasis.FACT_LAYER.value)
+        else (
+            _AskAnswerBasis.MIXED.value
+            if needs_context and include_context
+            else _AskAnswerBasis.FACT_LAYER.value
+        )
     )
+    return _build_fact_answer(
+        question=question,
+        selected_entries=selected_entries,
+        projection=projection,
+        basis=basis,
+        top_k=top_k,
+        result_mode=result_mode,
+        owner_id=owner_id,
+        project_id=project_id,
+        filters=filters,
+    )
+
+
+def _fact_answer_fast_path(fact_answer: Mapping[str, Any], *, question: str) -> bool:
+    if fact_answer.get(_AskResponseKey.ANSWER_BASIS.value) != _AskAnswerBasis.FACT_LAYER.value:
+        return False
+    if _fact_question_needs_context(question):
+        return False
+    facts = fact_answer.get(_AskResponseKey.FACTS.value)
+    if not isinstance(facts, list) or not facts:
+        return False
+    authoritative = {"direct_user_statement", "corrected_by_user"}
+    return all(
+        isinstance(fact, dict)
+        and fact.get(FactField.CONFIDENCE.value) == "high"
+        and fact.get(FactField.SOURCE_QUALITY.value) in authoritative
+        for fact in facts
+    )
+
+
+def _arbitrate_fact_and_chunk_evidence(
+    *,
+    fact_answer: dict[str, Any],
+    matches: list[dict[str, Any]],
+    question: str,
+    top_k: int,
+    max_context_tokens: int | None,
+) -> dict[str, Any]:
+    if not matches:
+        return fact_answer
+    candidates = _rank_evidence_candidates(fact_answer=fact_answer, matches=matches)
+    ranked_chunks = [
+        candidate.payload
+        for candidate in candidates
+        if candidate.kind == _EvidenceCandidateType.CHUNK
+    ][:top_k]
+    facts = fact_answer.get(_AskResponseKey.FACTS.value)
+    active_facts = [fact for fact in facts if isinstance(fact, dict)] if isinstance(facts, list) else []
+    direct_chunks = [
+        row
+        for row in ranked_chunks
+        if row.get("role") == _FactSourceRole.USER.value
+        and not _direct_memory_answer_snippet_is_question_echo(str(row.get("text", "")), question)
+    ]
+    supporting = [row for row in direct_chunks if _chunk_supports_facts(row, active_facts)]
+    corrected_fact = any(
+        fact.get(FactField.SOURCE_QUALITY.value) == "corrected_by_user" for fact in active_facts
+    )
+    fact_conflict = (
+        fact_answer.get(_AskResponseKey.ANSWER_BASIS.value) == _AskAnswerBasis.CONFLICT.value
+    )
+    basis = (
+        _AskAnswerBasis.CONFLICT.value
+        if fact_conflict or (direct_chunks and not supporting and not corrected_fact)
+        else _AskAnswerBasis.MIXED.value
+    )
+    selected, citations, budget_fields = _arbitration_context(
+        ranked_chunks,
+        max_context_tokens=max_context_tokens,
+    )
+    if not selected:
+        return fact_answer
+    result = dict(fact_answer)
+    fact_citations = result.get(_AskResponseKey.CITATIONS.value)
+    result[_AskResponseKey.RESULTS.value] = selected
+    result[_AskResponseKey.CITATIONS.value] = (
+        list(fact_citations) if isinstance(fact_citations, list) else []
+    ) + citations
+    fact_evidence = result.get(_AskResponseKey.EVIDENCE.value)
+    fact_evidence = list(fact_evidence) if isinstance(fact_evidence, list) else []
+    chunk_evidence = _chunk_evidence_from_matches(selected)
+    result[_AskResponseKey.EVIDENCE.value] = fact_evidence + chunk_evidence
+    result[_AskResponseKey.STRUCTURED_EVIDENCE.value] = {
+        _StructuredEvidenceKey.FACTS.value: fact_evidence,
+        _StructuredEvidenceKey.RESULTS.value: selected,
+    }
+    fact_provenance = result.get(_AskResponseKey.PROVENANCE.value)
+    result[_AskResponseKey.PROVENANCE.value] = _merge_provenance(
+        list(fact_provenance) if isinstance(fact_provenance, list) else [],
+        _provenance_from_matches(selected, citations),
+    )
+    result[_AskResponseKey.ANSWER_BASIS.value] = basis
+    if basis == _AskAnswerBasis.CONFLICT.value:
+        fact_text = str(fact_answer.get(_AskResponseKey.ANSWER.value, ""))
+        chunk_text = _direct_memory_answer_text(selected, question=question)
+        result[_AskResponseKey.ANSWER.value] = (
+            f"Evidence disagrees: normalized facts say {fact_text}; direct memory says {chunk_text}"
+        )
+        result[_AskResponseKey.CONFIDENCE.value] = "low"
+        result[_AskResponseKey.CONFIDENCE_REASON.value] = (
+            fact_answer.get(_AskResponseKey.CONFIDENCE_REASON.value)
+            if fact_conflict
+            else "Normalized facts and direct conversation evidence disagree."
+        )
+    else:
+        result[_AskResponseKey.ANSWER.value] = (
+            str(fact_answer.get(_AskResponseKey.ANSWER.value, ""))
+            + "\nContext from memory:\n"
+            + "\n".join(
+                f"- [{row.get('id')}#{int(row.get('chunk_index', 0))}] {row.get('text', '')}"
+                for row in selected
+            )
+        )
+        weak_fact = any(
+            fact.get(FactField.CONFIDENCE.value) != "high"
+            or fact.get(FactField.SOURCE_QUALITY.value) == "assistant_statement"
+            for fact in active_facts
+        )
+        result[_AskResponseKey.CONFIDENCE_REASON.value] = (
+            "Weak normalized facts were corroborated by direct user conversation evidence."
+            if supporting and weak_fact
+            else "Normalized facts were compared with ranked conversation evidence."
+        )
+    result.update(budget_fields)
+    return result
+
+
+def _rank_evidence_candidates(
+    *, fact_answer: Mapping[str, Any], matches: Sequence[dict[str, Any]]
+) -> list[_EvidenceCandidate]:
+    candidates: list[_EvidenceCandidate] = []
+    facts = fact_answer.get(_AskResponseKey.FACTS.value)
+    for index, fact in enumerate(facts if isinstance(facts, list) else []):
+        if not isinstance(fact, dict):
+            continue
+        quality = str(fact.get(FactField.SOURCE_QUALITY.value, ""))
+        candidates.append(
+            _EvidenceCandidate(
+                kind=_EvidenceCandidateType.FACT,
+                payload=fact,
+                relevance=1.0 / (index + 1),
+                source_quality=1.0 if quality == "corrected_by_user" else 0.9 if quality == "direct_user_statement" else 0.5,
+                confidence=float(fact.get(FactField.CONFIDENCE_SCORE.value, 0.5)),
+                freshness_at=str(fact.get(FactField.LAST_CONFIRMED_AT.value, "")),
+                correction_status=quality == "corrected_by_user",
+                direct_support=quality in {"corrected_by_user", "direct_user_statement"},
+            )
+        )
+    for index, row in enumerate(matches):
+        conversation = row.get("conversation")
+        role = str(row.get("role", ""))
+        text = str(row.get("text", ""))
+        candidates.append(
+            _EvidenceCandidate(
+                kind=_EvidenceCandidateType.CHUNK,
+                payload=row,
+                relevance=1.0 / (index + 1),
+                source_quality=0.95 if role == _FactSourceRole.USER.value else 0.45,
+                confidence=0.9 if role == _FactSourceRole.USER.value else 0.5,
+                freshness_at=str(conversation.get("timestamp", "")) if isinstance(conversation, dict) else "",
+                correction_status=bool(re.search(r"\b(?:actually|correction:)\b", text, re.IGNORECASE)),
+                direct_support=role == _FactSourceRole.USER.value,
+            )
+        )
+    return sorted(candidates, key=lambda candidate: candidate.rank_key, reverse=True)
+
+
+def _chunk_supports_facts(row: Mapping[str, Any], facts: Sequence[Mapping[str, Any]]) -> bool:
+    text = " ".join(str(row.get("text", "")).casefold().split())
+    return any(
+        " ".join(
+            str(fact.get(FactField.OBJECT_NORMALIZED.value) or fact.get(FactField.OBJECT.value, ""))
+            .casefold()
+            .split()
+        )
+        in text
+        for fact in facts
+        if fact.get(FactField.OBJECT_NORMALIZED.value) or fact.get(FactField.OBJECT.value)
+    )
+
+
+def _arbitration_context(
+    matches: list[dict[str, Any]], *, max_context_tokens: int | None
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+    runtime = _runtime()
+    if max_context_tokens is None and not runtime.tokenizer_enabled:
+        return matches, [_citation_from_row(row) for row in matches], {}
+    budget = max_context_tokens if max_context_tokens is not None else runtime.ask_max_context_tokens
+    selected, citations, _lines, used, dropped, truncated = _select_ask_context(
+        matches=matches,
+        max_context_tokens=budget,
+        encoding=runtime.tokenizer_encoding,
+    )
+    return selected, citations, {
+        _AskResponseKey.CONTEXT_TOKENS_USED.value: used,
+        _AskResponseKey.CHUNKS_SELECTED.value: len(selected),
+        _AskResponseKey.CHUNKS_DROPPED.value: dropped,
+        _AskResponseKey.CONTEXT_TRUNCATED.value: truncated,
+        _AskResponseKey.TOKENIZER_USED.value: tokenizer_used(runtime.tokenizer_encoding),
+    }
+
+
+def _merge_provenance(
+    facts: Sequence[dict[str, Any]], chunks: Sequence[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    merged: dict[str, dict[str, Any]] = {}
+    for item in [*facts, *chunks]:
+        conversation_id = str(item.get("conversation_id", ""))
+        if conversation_id:
+            merged[conversation_id] = {**merged.get(conversation_id, {}), **item}
+    return list(merged.values())
+
+
+def _build_fact_answer(
+    *,
+    question: str,
+    selected_entries: Sequence[Any],
+    projection: Any,
+    basis: str,
+    top_k: int,
+    result_mode: str,
+    owner_id: str | None,
+    project_id: str | None,
+    filters: ConversationFilters,
+) -> dict[str, Any]:
     public_active = [entry.fact for entry in selected_entries]
     public_history = [entry.fact for entry in projection.historical_entries]
     confidence = (
@@ -7517,6 +7803,7 @@ def _fact_evidence(fact: dict[str, Any], *, used_in_answer: bool) -> dict[str, A
         FactField.DELETED_AT.value: fact.get(FactField.DELETED_AT.value),
         "used_in_answer": used_in_answer,
     }
+    evidence.update(extraction_public_fields(fact.get(FactField.QUALIFIERS.value)))
     evidence.update(_fact_save_intent_fields(fact))
     return evidence
 
