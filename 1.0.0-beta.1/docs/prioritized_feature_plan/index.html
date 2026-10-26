@@ -1,0 +1,4190 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Local-first deterministic memory ingestion hub">
+      
+      
+      
+        <link rel="canonical" href="https://artemon-line.github.io/ai-memory-hub/1.0.0-beta.1/docs/prioritized_feature_plan/">
+      
+      
+        <link rel="prev" href="../plans/">
+      
+      
+        <link rel="next" href="../storage_agnostic_byoa_plan/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/brand/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Prioritized Feature Plan - ai-memory-hub</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/connect.css">
+    
+      <link rel="stylesheet" href="../stylesheets/leap-day-dark.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#prioritized-feature-plan" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="ai-memory-hub" class="md-header__button md-logo" aria-label="ai-memory-hub" data-md-component="logo">
+      
+  <img src="../assets/brand/ai-memory-hub-mark.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ai-memory-hub
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Prioritized Feature Plan
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Artemon-line/ai-memory-hub" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Artemon-line/ai-memory-hub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="ai-memory-hub" class="md-nav__button md-logo" aria-label="ai-memory-hub" data-md-component="logo">
+      
+  <img src="../assets/brand/ai-memory-hub-mark.svg" alt="logo">
+
+    </a>
+    ai-memory-hub
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Artemon-line/ai-memory-hub" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Artemon-line/ai-memory-hub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What Exists Now
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    What Exists Now
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Current Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Technical Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../connect_ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Connect UI and OAuth Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../brand_assets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Brand Assets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../storage_provider_examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage Provider Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What Is Planned
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    What Is Planned
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../planned_features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Planned Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plans/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CHANGELOG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CONTRIBUTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CODE_OF_CONDUCT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code Of Conduct
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    MCP
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp_client_smoke_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Client Smoke Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../real_client_mcp_smoke_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Real-Client MCP Smoke Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../openclaw_native_mcp_setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OpenClaw Native MCP Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp_utility_compliance_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Utility Compliance Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/mcp_response_format_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Response Format Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/codex_cli_findings_coverage_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Codex CLI MCP Findings Coverage Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/p0_live_mcp_retest_followup_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P0 Live MCP Retest Follow-Up Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/agent_model_footprint_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Model Footprint Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bearer_api_key_auth_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Authorization Compliance Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation Plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Implementation Plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plans/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prioritized Feature Plan
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prioritized Feature Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#priority-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Priority Order
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-token-budgeted-ask-and-token-chunking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Token-Budgeted Ask And Token Chunking
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-storage-abstraction-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Storage Abstraction Baseline
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-retrieval-precision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Retrieval Precision
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-mcp-protocol-compliance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: MCP Protocol Compliance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-mcp-response-formats-before-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: MCP Response Formats Before Release
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-agentmodel-footprint-before-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Agent/Model Footprint Before Release
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-bearer-token-auth-and-per-user-isolation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Bearer-Token Auth And Per-User Isolation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-project-workspaces-and-shared-collaboration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Project Workspaces And Shared Collaboration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-mcp-client-feedback-improvements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: MCP Client Feedback Improvements
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-advanced-search-filters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Advanced Search Filters
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-conversation-summary-metadata-and-profile-views" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Conversation Summary Metadata And Profile Views
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#closed-bulk-conversation-insert" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Closed: Bulk Conversation Insert
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-mcp-client-smoke-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: MCP Client Smoke Coverage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-required-real-client-mcp-smoke-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Required Real-Client MCP Smoke Coverage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-bruno-black-box-apimcp-integration-test-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Bruno Black-Box API/MCP Integration Test Layer
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-handoff-memory-for-task-continuity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Handoff Memory For Task Continuity
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-app-level-memory-encryption" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: App-Level Memory Encryption
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p1-cli-foundation-and-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: CLI Foundation And Commands
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p1-container-and-docs-publishing-foundation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: Container And Docs Publishing Foundation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p1-platform-specific-importers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: Platform-Specific Importers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p1-browser-extension-capture-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: Browser Extension Capture Contract
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p2-github-releases-and-docker-hub-publishing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P2: GitHub Releases And Docker Hub Publishing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p2-first-release-readiness" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P2: First Release Readiness
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p2-recurring-codebase-cleanup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P2: Recurring Codebase Cleanup
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p2-admin-only-mutation-workflows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P2: Admin-Only Mutation Workflows
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p2-storage-operational-hardening" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P2: Storage Operational Hardening
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p2-storage-provider-expansion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P2: Storage Provider Expansion
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p3-later-storage-providers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P3: Later Storage Providers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p3-next-vector-provider-candidates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P3: Next Vector Provider Candidates
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p3-release-notes-and-supply-chain-hardening" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P3: Release Notes And Supply Chain Hardening
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p3-topicproject-summaries-and-consolidation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P3: Topic/Project Summaries And Consolidation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p3-ui-and-developer-experience" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P3: UI And Developer Experience
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p4-advanced-memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P4: Advanced Memory
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p4-optional-cloud-sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P4: Optional Cloud Sync
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../storage_agnostic_byoa_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage BYOA Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../browser_extension_capture_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Browser Extension Capture Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bruno_integration_test_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bruno Integration Test Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project_workspace_collaboration_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Workspace Collaboration Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../deterministic_ingestion_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deterministic Ingestion Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../token_budget_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Token Budget Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli_implementation_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin_readiness_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin Readiness Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release_container_docs_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release, Container, and Docs Publishing Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../first_release_readiness_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First Release Readiness Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release_ci_gap_analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release CI Gap Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release_security_scan_notes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Security Scan Notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../repository_governance_settings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Repository Governance Settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release_promotion_assets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Promotion Assets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project_promotion_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Promotion Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability_logging_telemetry_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability, Logging, and Telemetry Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recurring_codebase_cleanup_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Recurring Codebase Cleanup Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Improvements
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Improvements
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Improvement Plans
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/client_feedback_improvement_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client Feedback Improvement Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/top_priority_mcp_result_shape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Top Priority MCP Result Shape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/mcp_response_format_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Response Format Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/codex_cli_findings_coverage_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Codex CLI MCP Findings Coverage Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/p0_live_mcp_retest_followup_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P0 Live MCP Retest Follow-Up Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/agent_model_footprint_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Model Footprint Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/handoff_memory_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Handoff Memory Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/retrieval_precision_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Retrieval Precision Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/context_building_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Context Building Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/conversation_grouping_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conversation Grouping Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/memory_quality_fact_layer_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Memory Quality And Fact Layer Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/edge_case_test_coverage_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Edge Case Test Coverage Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/explicit_memory_save_intent_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Explicit Memory Save Intent Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/google_oauth_connect_ui_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Google OAuth Connect UI Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/p0_beta_governance_checklist/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P0 Beta Governance Checklist
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/p1_sql_hardening_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P1 SQL Hardening Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/vector_dbs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vector Database Options
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/neo4j_aura_graph_memory_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Neo4j Aura Graph Memory Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/app_level_encryption_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    App-Level Memory Encryption Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#priority-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Priority Order
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-token-budgeted-ask-and-token-chunking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Token-Budgeted Ask And Token Chunking
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-storage-abstraction-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Storage Abstraction Baseline
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-retrieval-precision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Retrieval Precision
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-mcp-protocol-compliance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: MCP Protocol Compliance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-mcp-response-formats-before-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: MCP Response Formats Before Release
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-agentmodel-footprint-before-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Agent/Model Footprint Before Release
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-bearer-token-auth-and-per-user-isolation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Bearer-Token Auth And Per-User Isolation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-project-workspaces-and-shared-collaboration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Project Workspaces And Shared Collaboration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-mcp-client-feedback-improvements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: MCP Client Feedback Improvements
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-advanced-search-filters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Advanced Search Filters
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-conversation-summary-metadata-and-profile-views" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Conversation Summary Metadata And Profile Views
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#closed-bulk-conversation-insert" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Closed: Bulk Conversation Insert
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-mcp-client-smoke-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: MCP Client Smoke Coverage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-required-real-client-mcp-smoke-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Required Real-Client MCP Smoke Coverage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-bruno-black-box-apimcp-integration-test-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Bruno Black-Box API/MCP Integration Test Layer
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-handoff-memory-for-task-continuity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Handoff Memory For Task Continuity
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-app-level-memory-encryption" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: App-Level Memory Encryption
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p1-cli-foundation-and-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: CLI Foundation And Commands
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p1-container-and-docs-publishing-foundation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: Container And Docs Publishing Foundation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p1-platform-specific-importers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: Platform-Specific Importers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p1-browser-extension-capture-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: Browser Extension Capture Contract
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p2-github-releases-and-docker-hub-publishing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P2: GitHub Releases And Docker Hub Publishing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p2-first-release-readiness" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P2: First Release Readiness
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p2-recurring-codebase-cleanup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P2: Recurring Codebase Cleanup
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p2-admin-only-mutation-workflows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P2: Admin-Only Mutation Workflows
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p2-storage-operational-hardening" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P2: Storage Operational Hardening
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p2-storage-provider-expansion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P2: Storage Provider Expansion
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p3-later-storage-providers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P3: Later Storage Providers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p3-next-vector-provider-candidates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P3: Next Vector Provider Candidates
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p3-release-notes-and-supply-chain-hardening" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P3: Release Notes And Supply Chain Hardening
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p3-topicproject-summaries-and-consolidation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P3: Topic/Project Summaries And Consolidation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p3-ui-and-developer-experience" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P3: UI And Developer Experience
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p4-advanced-memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P4: Advanced Memory
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p4-optional-cloud-sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P4: Optional Cloud Sync
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="prioritized-feature-plan">Prioritized Feature Plan</h1>
+<p>This plan captures unimplemented or partial features found while reconciling <code>docs/</code> with the current codebase.</p>
+<h2 id="priority-order">Priority Order</h2>
+<table>
+<thead>
+<tr>
+<th>Priority</th>
+<th>Feature</th>
+<th>Status</th>
+<th>Existing plan</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>P0</td>
+<td>Token-budgeted <code>memory_ask</code> and token-aware ingestion chunking</td>
+<td>Implemented</td>
+<td><code>token_budget_plan.md</code>, <code>improvements/context_building_plan.md</code></td>
+</tr>
+<tr>
+<td>P0</td>
+<td>Storage abstraction baseline: capabilities, schema checks, dimensions, fallback, dry-run, Postgres/PGVector</td>
+<td>Implemented</td>
+<td><code>storage_agnostic_byoa_plan.md</code></td>
+</tr>
+<tr>
+<td>P0</td>
+<td>Retrieval precision: threshold, hybrid search, metadata rerank</td>
+<td>Implemented</td>
+<td><code>improvements/retrieval_precision_plan.md</code></td>
+</tr>
+<tr>
+<td>P0</td>
+<td>MCP protocol compliance: initialize instructions, schemas, pagination, logging, completion when client UX needs it</td>
+<td>Partial</td>
+<td><code>mcp_utility_compliance_plan.md</code>, <code>mcp_plan.md</code></td>
+</tr>
+<tr>
+<td>P0</td>
+<td>MCP response formats for token-efficient agent recall before release</td>
+<td>Planned</td>
+<td><code>improvements/mcp_response_format_plan.md</code></td>
+</tr>
+<tr>
+<td>P0</td>
+<td>Live MCP retest follow-up for noisy real hubs and fact canonicalization</td>
+<td>Planned</td>
+<td><code>improvements/p0_live_mcp_retest_followup_plan.md</code></td>
+</tr>
+<tr>
+<td>P0</td>
+<td>Agent/model footprint provenance for saved conversations before release</td>
+<td>Planned</td>
+<td><code>improvements/agent_model_footprint_plan.md</code></td>
+</tr>
+<tr>
+<td>P0</td>
+<td>Bearer-token auth and per-user memory isolation</td>
+<td>Partial</td>
+<td><code>bearer_api_key_auth_plan.md</code>, <code>improvements/google_oauth_connect_ui_plan.md</code></td>
+</tr>
+<tr>
+<td>P0</td>
+<td>Project workspaces and shared collaboration boundaries</td>
+<td>Partial</td>
+<td><code>project_workspace_collaboration_plan.md</code></td>
+</tr>
+<tr>
+<td>P0</td>
+<td>MCP client feedback: response shape clarity, fact freshness, and source quality</td>
+<td>Implemented</td>
+<td><code>improvements/client_feedback_improvement_plan.md</code></td>
+</tr>
+<tr>
+<td>P0</td>
+<td>Advanced search filters for ask, facts, and profile queries</td>
+<td>Implemented</td>
+<td><code>improvements/client_feedback_improvement_plan.md</code></td>
+</tr>
+<tr>
+<td>P0</td>
+<td>Conversation summary metadata and profile views</td>
+<td>Implemented</td>
+<td><code>improvements/client_feedback_improvement_plan.md</code></td>
+</tr>
+<tr>
+<td>P0</td>
+<td>MCP client smoke coverage for Codex, Gemini, Copilot, Claude, opencode</td>
+<td>Implemented</td>
+<td><code>mcp_client_smoke_plan.md</code></td>
+</tr>
+<tr>
+<td>P0</td>
+<td>Required real-client MCP smoke coverage</td>
+<td>Implemented</td>
+<td><code>real_client_mcp_smoke_plan.md</code></td>
+</tr>
+<tr>
+<td>P0</td>
+<td>Bruno black-box API/MCP integration test layer</td>
+<td>Implemented</td>
+<td><code>bruno_integration_test_plan.md</code></td>
+</tr>
+<tr>
+<td>P0</td>
+<td>Handoff memory for cross-agent and cross-environment task continuity</td>
+<td>Planned</td>
+<td><code>improvements/handoff_memory_plan.md</code></td>
+</tr>
+<tr>
+<td>P0</td>
+<td>App-level memory encryption for local and self-hosted deployments</td>
+<td>Planned</td>
+<td><code>improvements/app_level_encryption_plan.md</code></td>
+</tr>
+<tr>
+<td>P1</td>
+<td>CLI foundation and command contract</td>
+<td>Implemented</td>
+<td><code>cli_implementation_plan.md</code></td>
+</tr>
+<tr>
+<td>P1</td>
+<td>CLI <code>ingest</code>, <code>search</code>, <code>retrieve</code>, and <code>ask</code> commands</td>
+<td>Implemented</td>
+<td><code>cli_implementation_plan.md</code></td>
+</tr>
+<tr>
+<td>P1</td>
+<td>CLI <code>serve</code> command for container/runtime entrypoint</td>
+<td>Implemented</td>
+<td><code>cli_implementation_plan.md</code>, <code>release_container_docs_plan.md</code></td>
+</tr>
+<tr>
+<td>P1</td>
+<td>Containerfile maintenance and container CI smoke tests</td>
+<td>Implemented</td>
+<td><code>release_container_docs_plan.md</code></td>
+</tr>
+<tr>
+<td>P1</td>
+<td>GitHub Pages documentation publishing from Markdown</td>
+<td>Implemented</td>
+<td><code>release_container_docs_plan.md</code></td>
+</tr>
+<tr>
+<td>P1</td>
+<td>Platform-specific importers and browser extension capture contract</td>
+<td>Partial</td>
+<td>This doc, <code>roadmap.md</code>, and <code>browser_extension_capture_plan.md</code></td>
+</tr>
+<tr>
+<td>P2</td>
+<td>Recurring codebase cleanup and engineering-health review</td>
+<td>Planned</td>
+<td><code>recurring_codebase_cleanup_plan.md</code></td>
+</tr>
+<tr>
+<td>P2</td>
+<td>Admin-only mutation workflows for local/API maintenance, not MCP</td>
+<td>Planned</td>
+<td><code>improvements/client_feedback_improvement_plan.md</code></td>
+</tr>
+<tr>
+<td>P2</td>
+<td>GitHub release and Docker Hub image publishing</td>
+<td>Planned</td>
+<td><code>release_container_docs_plan.md</code></td>
+</tr>
+<tr>
+<td>P2</td>
+<td>First release readiness, repository governance, and contribution policy</td>
+<td>Planned</td>
+<td><code>first_release_readiness_plan.md</code></td>
+</tr>
+<tr>
+<td>P2</td>
+<td>Storage operational hardening: startup policy logs, production fallback warnings, audit events</td>
+<td>Partial</td>
+<td><code>storage_agnostic_byoa_plan.md</code></td>
+</tr>
+<tr>
+<td>P2</td>
+<td>Storage provider expansion config and shared contract tests</td>
+<td>Implemented</td>
+<td><code>storage_agnostic_byoa_plan.md</code></td>
+</tr>
+<tr>
+<td>P2</td>
+<td>ChromaDB and Qdrant vector providers</td>
+<td>Implemented</td>
+<td><code>storage_agnostic_byoa_plan.md</code></td>
+</tr>
+<tr>
+<td>P2</td>
+<td>MongoDB metadata and MongoDB Atlas Vector Search</td>
+<td>Implemented</td>
+<td><code>storage_agnostic_byoa_plan.md</code></td>
+</tr>
+<tr>
+<td>P3</td>
+<td>Elasticsearch/OpenSearch vector providers</td>
+<td>Implemented</td>
+<td><code>storage_agnostic_byoa_plan.md</code></td>
+</tr>
+<tr>
+<td>P3</td>
+<td>Milvus/Zilliz and Weaviate vector providers</td>
+<td>Implemented</td>
+<td><code>storage_agnostic_byoa_plan.md</code></td>
+</tr>
+<tr>
+<td>P3</td>
+<td>Provider backlog: Redis/RediSearch, Pinecone, Turbopuffer, Vespa, and Typesense implemented; Neo4j AuraDB, Meilisearch, DuckDB VSS, and sqlite-vec remain planned</td>
+<td>Partial</td>
+<td><code>storage_agnostic_byoa_plan.md</code>, <code>improvements/vector_dbs.md</code>, <code>improvements/neo4j_aura_graph_memory_plan.md</code></td>
+</tr>
+<tr>
+<td>P3</td>
+<td>Release notes, image scanning, SBOM, and provenance</td>
+<td>Implemented</td>
+<td><code>release_container_docs_plan.md</code></td>
+</tr>
+<tr>
+<td>P3</td>
+<td>Topic/project summaries, digests, consolidation</td>
+<td>Planned here</td>
+<td>This doc and <code>roadmap.md</code></td>
+</tr>
+<tr>
+<td>P3</td>
+<td>UI and developer experience</td>
+<td>Planned here</td>
+<td>This doc and <code>roadmap.md</code></td>
+</tr>
+<tr>
+<td>P4</td>
+<td>Graph memory, decay, shared memory, plugins</td>
+<td>Planned</td>
+<td><code>improvements/advanced_memory_plan.md</code>, <code>roadmap.md</code></td>
+</tr>
+<tr>
+<td>P4</td>
+<td>Optional encrypted cloud sync</td>
+<td>Planned here</td>
+<td>This doc and <code>roadmap.md</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="p0-token-budgeted-ask-and-token-chunking">P0: Token-Budgeted Ask And Token Chunking</h2>
+<p>Use the existing token plans as the source of truth:</p>
+<ul>
+<li><code>token_budget_plan.md</code></li>
+<li><code>improvements/context_building_plan.md</code></li>
+</ul>
+<p>Implemented:</p>
+<ul>
+<li>[x] Add tokenizer config defaults and lazy tokenizer adapter with deterministic fallback.</li>
+<li>[x] Add optional <code>max_context_tokens</code> to API and MCP <code>memory_ask</code>.</li>
+<li>[x] Select, skip, or truncate retrieved chunks inside the budget.</li>
+<li>[x] Return non-breaking diagnostics such as selected/dropped chunks.</li>
+<li>[x] Add opt-in <code>chunking.strategy: token</code> ingestion windows with overlap.</li>
+<li>[x] Add unit, API, MCP, and regression tests.</li>
+</ul>
+<h2 id="p0-storage-abstraction-baseline">P0: Storage Abstraction Baseline</h2>
+<p>Use <code>storage_agnostic_byoa_plan.md</code> as the source of truth for implemented storage work.</p>
+<p>Implemented:</p>
+<ul>
+<li>[x] Add provider capabilities to metadata and vector contracts.</li>
+<li>[x] Add metadata schema-version and vector dimensionality surfaces.</li>
+<li>[x] Add deterministic storage errors for unsupported operations, schema incompatibility, and dimension mismatches.</li>
+<li>[x] Update SQLite metadata and LanceDB vector adapters.</li>
+<li>[x] Add Postgres metadata and PGVector adapters.</li>
+<li>[x] Add in-memory vector provider for local/test/fallback use.</li>
+<li>[x] Add startup metadata schema compatibility checks.</li>
+<li>[x] Add startup and runtime vector dimension checks.</li>
+<li>[x] Add policy-gated vector fallback with degraded health.</li>
+<li>[x] Add dry-run storage wrappers with return-shape parity.</li>
+<li>[x] Add unit/integration coverage for storage safety, Postgres, PGVector, fallback, and redaction behavior.</li>
+</ul>
+<h2 id="p0-retrieval-precision">P0: Retrieval Precision</h2>
+<p>Use <code>improvements/retrieval_precision_plan.md</code> as the source of truth.</p>
+<p>Implementation sequence:</p>
+<ul>
+<li>[x] Add a conservative similarity threshold.</li>
+<li>[x] Add keyword candidate matching alongside vector search.</li>
+<li>[x] Merge vector and keyword scores deterministically.</li>
+<li>[x] Add metadata-aware reranking for tags, source, and topics.</li>
+<li>[x] Verify the combined pipeline against fixed fixtures.</li>
+<li>[x] Validate and tune retrieval quality against real representative data.</li>
+</ul>
+<h2 id="p0-mcp-protocol-compliance">P0: MCP Protocol Compliance</h2>
+<p>Use <code>mcp_utility_compliance_plan.md</code> and <code>mcp_plan.md</code> as the source of truth.</p>
+<p>MCP is the primary agent integration boundary, so protocol compliance is a P0
+quality bar. Treat spec-defined fields, lifecycle behavior, tool schemas,
+capabilities, utility methods, and transport behavior as compatibility-critical
+surface area, not optional polish.</p>
+<p>Current status:</p>
+<ul>
+<li>[x] Return server startup guidance through MCP <code>InitializeResult.instructions</code>.</li>
+<li>[x] Keep tool input schemas explicit enough for real clients to construct valid
+      <code>tools/call</code> arguments.</li>
+<li>[x] Implement MCP pagination for list operations.</li>
+<li>[x] Implement sanitized MCP logging with no payload, query, embedding, secret,
+      DSN, or stack-trace leakage.</li>
+<li>[x] Cover initialize, tool listing, pagination, logging, and malformed protocol
+      cases with MCP transport tests.</li>
+<li>[ ] Keep checking protocol compliance whenever the MCP spec version changes or
+      real clients expose new interpretation gaps.</li>
+<li>[ ] Implement MCP completion only when a concrete client UX needs prompt or
+      resource argument suggestions.</li>
+</ul>
+<h2 id="p0-mcp-response-formats-before-release">P0: MCP Response Formats Before Release</h2>
+<p>Use <code>improvements/mcp_response_format_plan.md</code> as the source of truth.</p>
+<p>Real agent feedback showed that profile and search reads still return too much
+metadata for normal recall. Treat this as pre-release product-contract work:
+MCP tools should translate the API into agent-friendly response shapes rather
+than exposing every audit field by default.</p>
+<p>Implementation sequence:</p>
+<ul>
+<li>[ ] Add an MCP <code>response_format</code> enum, initially <code>concise</code> and <code>detailed</code>,
+      instead of a <code>compact</code> boolean.</li>
+<li>[ ] Keep <code>result_mode</code> for retrieval grouping and <code>response_format</code> for
+      payload size/field selection.</li>
+<li>[ ] Make concise search and ask responses omit full conversations,
+      <code>metadata.index_chunks</code>, <code>metadata.tag_sources</code>, and duplicate summary
+      envelopes.</li>
+<li>[ ] Make concise fact/profile reads return high-signal facts, summary text,
+      freshness, confidence, source quality, and compact citations.</li>
+<li>[ ] Preserve the current detailed shape for audit/debug clients.</li>
+<li>[ ] Update MCP docs, initialize guidance, smoke calls, and tests before
+      publishing <code>v0.1.0</code>.</li>
+</ul>
+<h2 id="p0-agentmodel-footprint-before-release">P0: Agent/Model Footprint Before Release</h2>
+<p>Use <code>improvements/agent_model_footprint_plan.md</code> as the source of truth.</p>
+<p>An AI memory hub should preserve the runtime footprint of saved memory. Agents
+should be able to tell that a conversation came from Hermes using
+<code>gemini-3.6-flash</code>, from Codex using its configured model, or from a specific
+subagent, without relying on raw text clues.</p>
+<p>Implementation sequence:</p>
+<ul>
+<li>[ ] Treat <code>source</code> as the canonical saved conversation runtime/client, such
+      as <code>hermes</code>, <code>codex</code>, <code>gemini-cli</code>, <code>opencode</code>, <code>claude-code</code>, or
+      <code>manual</code>.</li>
+<li>[ ] Preserve conversation-level <code>metadata.agent</code>, <code>metadata.model</code>,
+      <code>metadata.model_provider</code>, <code>metadata.platform</code>, <code>metadata.capture_client</code>,
+      and <code>metadata.ingestion_method</code>.</li>
+<li>[ ] Add optional message-level <code>agent</code>, <code>model</code>, <code>model_provider</code>, and
+      <code>source_message_id</code> fields for subagents and mixed-model turns.</li>
+<li>[ ] Keep the existing message hash based on <code>role</code> and <code>text</code> for backward
+      compatible dedupe.</li>
+<li>[ ] Carry source agent/model footprint into fact and generated-summary
+      provenance.</li>
+<li>[ ] Update MCP save guidance so agents provide exact runtime and model
+      footprint when saving conversations.</li>
+</ul>
+<h2 id="p0-bearer-token-auth-and-per-user-isolation">P0: Bearer-Token Auth And Per-User Isolation</h2>
+<p>Use <code>bearer_api_key_auth_plan.md</code> as the source of truth.</p>
+<p>This is the top security priority before recommending Raspberry Pi, LAN, or
+multi-user deployments. AMH currently has config placeholders but no enforced
+auth. A server bound to <code>0.0.0.0</code> can expose conversation history to any device
+that can reach the port.</p>
+<p>Implementation sequence:</p>
+<ul>
+<li>[x] Add <code>api.auth: bearer_token</code> alongside existing <code>none</code> mode.</li>
+<li>[x] Store users and token hashes in the metadata database, not in config files.</li>
+<li>[x] Add admin CLI commands to create users, issue tokens, list tokens, and
+      revoke tokens.</li>
+<li>[x] Accept tokens through <code>Authorization: Bearer &lt;token&gt;</code> for HTTP API and MCP.</li>
+<li>[x] Map each token to a server-side user/principal; scopes remain planned.</li>
+<li>[x] Stamp new conversations and facts with server-side <code>owner_id</code>.</li>
+<li>[x] Scope search, retrieve, ask, fact search, profile, and future admin
+      operations by <code>owner_id</code>.</li>
+<li>[x] Prevent cross-user leakage from vector candidates by filtering against
+      metadata ownership before returning or answering.</li>
+<li>[x] Redact bearer tokens from logs, errors, and diagnostics.</li>
+<li>[x] Keep <code>auth=none</code> for CI/test fixtures and maintainer-only loopback smoke
+      tests; do not document it as a user setup option.</li>
+<li>[x] Leave Google/Apple/Meta OAuth for later <code>oauth_resource_server</code> mode or a
+      trusted identity-aware reverse proxy.</li>
+</ul>
+<p>Acceptance criteria:</p>
+<ul>
+<li>A valid token is required for <code>/memory/*</code> and <code>/mcp/*</code> when bearer auth is
+  enabled.</li>
+<li>User A cannot read, search, ask over, or retrieve User B's memory or facts.</li>
+<li>Raw tokens are displayed only once and only hashes are stored.</li>
+<li>Existing no-auth local tests continue to pass.</li>
+<li>Client request shape is compatible with future MCP OAuth: <code>Authorization:
+  Bearer &lt;token&gt;</code>.</li>
+</ul>
+<h2 id="p0-project-workspaces-and-shared-collaboration">P0: Project Workspaces And Shared Collaboration</h2>
+<p>Use <code>project_workspace_collaboration_plan.md</code> as the source of truth.</p>
+<p>Bearer auth gives AMH a server-side actor. Project workspaces add the missing
+collaboration boundary: users keep a private default memory space, but can also
+join shared projects where selected conversations and facts are visible to other
+members.</p>
+<p>Implementation sequence:</p>
+<ul>
+<li>[x] Keep <code>owner_id</code> as the server-stamped actor/audit field.</li>
+<li>[x] Add <code>project_id</code> as the memory workspace boundary for conversations,
+      facts, and vector metadata.</li>
+<li>[x] Add <code>projects</code> and <code>project_memberships</code> metadata tables.</li>
+<li>[x] Auto-create one default private project per user.</li>
+<li>[x] Resolve omitted <code>project_id</code> values to the authenticated user's default
+      private project.</li>
+<li>[x] Validate project membership before every read, write, ask, retrieve,
+      profile, and fact supersession operation.</li>
+<li>[x] Add optional <code>project_id</code> to HTTP and MCP tool schemas.</li>
+<li>[x] Add HTTP/MCP helpers to list visible projects and fetch the default project.</li>
+<li>[x] Keep project and membership administration in CLI/API flows first, not
+      agent-facing MCP tools.</li>
+<li>[x] Add admin CLI commands to create/list projects and add/list project
+      members.</li>
+</ul>
+<p>Acceptance criteria:</p>
+<ul>
+<li>Existing single-user behavior remains private by default.</li>
+<li>Two users who share a project can collaborate in that project's memory.</li>
+<li>Users cannot read or write memory in projects where they are not members.</li>
+<li>Duplicate conversation hashes dedupe within a project, not globally.</li>
+</ul>
+<h2 id="p0-mcp-client-feedback-improvements">P0: MCP Client Feedback Improvements</h2>
+<p>Use <code>improvements/client_feedback_improvement_plan.md</code> as the source of truth.</p>
+<p>This plan comes from real opencode and Codex feedback after using ai-memory-hub
+through MCP. Treat the P0 items as product-contract work because they affect how
+agents interpret successful answers.</p>
+<p>Implementation sequence:</p>
+<ul>
+<li>[x] Make <code>memory_ask</code> structured fields clear for chunk-backed, fact-backed,
+      mixed, conflict, and not-found answers.</li>
+<li>[x] Ensure a fact-layer answer does not look like an empty retrieval miss.</li>
+<li>[x] Separate raw source memory, normalized facts, and polished answer text for
+      fact-backed answers.</li>
+<li>[x] Add source-quality or confidence-reason fields for fact answers.</li>
+<li>[x] Expose fact freshness fields such as <code>created_at</code>, <code>updated_at</code>,
+      <code>last_confirmed_at</code>, and <code>superseded_at</code>.</li>
+<li>[x] Add tests for the Codex-observed response shape and confidence/freshness
+      behavior.</li>
+</ul>
+<h2 id="p0-advanced-search-filters">P0: Advanced Search Filters</h2>
+<p>Use <code>improvements/client_feedback_improvement_plan.md</code> as the source of truth.</p>
+<p>These filters are high priority because they let agents narrow recall without
+client-side post-filtering or overfetching.</p>
+<p>Implementation sequence:</p>
+<ul>
+<li>[x] Document current <code>memory_search</code> filters in MCP tool descriptions and
+      initialize instructions.</li>
+<li>[x] Add filter support to <code>memory_ask</code> where it can preserve answer quality.</li>
+<li>[x] Add fact/profile filters for source, predicate, date range, confidence,
+      active/superseded status, and freshness.</li>
+<li>[x] Add tests for filtered ask retrieval and fact/profile filter combinations.</li>
+</ul>
+<h2 id="p0-conversation-summary-metadata-and-profile-views">P0: Conversation Summary Metadata And Profile Views</h2>
+<p>Use <code>improvements/client_feedback_improvement_plan.md</code> as the source of truth.</p>
+<p>This is not graph memory. It is a lightweight retrieval hint: clients may provide
+a short factual <code>metadata.summary</code> while still saving the complete conversation.
+The summary can improve recall and reranking, but raw messages and normalized
+facts remain the source of truth for answers and citations. Built-in generated
+conversation, profile, topic, and project summaries are tracked in the same
+feedback item because they share provenance and trust constraints.</p>
+<p>Implementation sequence:</p>
+<ul>
+<li>[x] Document optional <code>metadata.summary</code> in the conversation schema and public docs.</li>
+<li>[x] Update MCP save guidance to ask for a short factual summary while still
+      saving the complete conversation.</li>
+<li>[x] Validate <code>metadata.summary</code> as a bounded string.</li>
+<li>[x] Include summary text in metadata search/reranking.</li>
+<li>[x] Return summary in search/retrieve metadata, not as standalone answer
+      evidence unless raw messages or facts support it.</li>
+<li>[x] Add tests showing summary improves recall without replacing message
+      provenance.</li>
+<li>[x] Add a profile summary response that combines active facts, freshness, and
+      compact provenance.</li>
+<li>[x] Keep generated summary storage separate from raw chunks and normalized
+      facts with provenance-aware generated summary records.</li>
+<li>[x] Add server-generated conversation, topic, and project summaries after
+      summary provenance is reliable.</li>
+</ul>
+<h2 id="closed-bulk-conversation-insert">Closed: Bulk Conversation Insert</h2>
+<p>Use <code>improvements/client_feedback_improvement_plan.md</code> as the source of truth.</p>
+<p>Decision: do not add a first-class bulk insert endpoint, CLI command, or MCP tool
+now. Clients should store one complete conversation per insert, with the full
+<code>messages</code> list in a single <code>conversation_json</code> object. Importers that need to
+save many independent conversations can loop over the existing single insert path
+while preserving source thread/session boundaries.</p>
+<p>Rationale:</p>
+<ul>
+<li>Batch insert encourages clients to guess boundaries, split one real thread into
+  many fake conversations, merge unrelated sessions, or resend overlapping
+  messages.</li>
+<li>Single conversation insert keeps validation, dedupe, hashing, trusted append,
+  fact extraction, and vector indexing synchronized through one write path.</li>
+<li>If importer throughput becomes a real problem later, optimize importer loops
+  without changing the public memory contract first.</li>
+</ul>
+<h2 id="p0-mcp-client-smoke-coverage">P0: MCP Client Smoke Coverage</h2>
+<p>Use <code>mcp_client_smoke_plan.md</code> as the source of truth.</p>
+<p>MCP remains the primary agent integration path. Framework-specific examples should
+not be tracked as a separate priority unless they prove a concrete MCP/API gap.</p>
+<p>Implementation sequence:</p>
+<ul>
+<li>[x] Keep CI smoke tests focused on MCP protocol compatibility and client-shaped payloads.</li>
+<li>[x] Preserve the existing Codex, Gemini, VS Code Copilot, and opencode profile coverage.</li>
+<li>[x] Add the missing Claude profile.</li>
+<li>[x] Add explicit retrieve round-trip checks and metadata assertions.</li>
+<li>[x] Add malformed payload negative cases with stable <code>invalid_input</code> envelopes.</li>
+<li>[x] Prefer a deterministic local OpenAI/Anthropic-compatible test gateway over Ollama, because Ollama is not the system under test.</li>
+</ul>
+<p>Real-client CLI smoke coverage is tracked separately as P0 in
+<code>real_client_mcp_smoke_plan.md</code>.</p>
+<h2 id="p0-required-real-client-mcp-smoke-coverage">P0: Required Real-Client MCP Smoke Coverage</h2>
+<p>Use <code>real_client_mcp_smoke_plan.md</code> as the source of truth.</p>
+<p>Implementation sequence:</p>
+<ul>
+<li>[x] Add a separate real-client smoke harness for agent CLIs.</li>
+<li>[x] Run the real-client smoke lane on pull requests, pushes to <code>main</code>,
+      weekly schedule, and manual dispatch.</li>
+<li>[x] Keep manual dispatch available for debugging and release checks.</li>
+<li>[x] Start with Claude Code and Copilot CLI because they expose clear base-URL/provider environment variables.</li>
+<li>[x] Validate Codex, opencode, and Gemini headless command status before wiring them into strict CI.</li>
+<li>[x] Promote real-client smoke tests into default PR gating, while keeping
+      individual client slots skip-safe when binaries or command templates are
+      unavailable.</li>
+</ul>
+<h2 id="p0-bruno-black-box-apimcp-integration-test-layer">P0: Bruno Black-Box API/MCP Integration Test Layer</h2>
+<p>Use <code>bruno_integration_test_plan.md</code> as the source of truth.</p>
+<p>Bruno should provide a local and CI-friendly black-box smoke layer for the live
+HTTP API and streamable HTTP MCP endpoint. It should prove the public contract
+works against a running server and configured metadata/vector stores, while
+pytest remains the source of truth for internal behavior, boundary conditions,
+and storage adapter details.</p>
+<ul>
+<li>[x] Add a committed Bruno workspace under <code>tests/bruno</code>.</li>
+<li>[x] Cover <code>/health</code>, <code>/ready</code>, API insert/search/ask, MCP initialize,
+      <code>tools/list</code>, <code>memory_validate</code>, <code>memory_insert</code>, <code>memory_search</code>, and
+      <code>memory_ask</code>.</li>
+<li>[x] Run against the reusable Postgres/PGVector local stack.</li>
+<li>[x] Add a GitHub Actions lane that installs <code>@usebruno/cli</code>, runs <code>bru run</code>,
+      uploads HTML/JUnit report artifacts, and publishes JUnit test results.</li>
+<li>[x] Add bearer-token and project-workspace smoke tests after CI token/project
+      seeding is scripted.</li>
+<li>[x] Add an OAuth resource-server protected-resource metadata guard.</li>
+<li>[x] Add source/date/tag filter smoke coverage for API and MCP search/ask.</li>
+<li>[x] Verify the unauthenticated smoke collection with the real Bruno CLI locally.</li>
+<li>[ ] Promote to required CI only after repeated stable runs.</li>
+</ul>
+<h2 id="p0-handoff-memory-for-task-continuity">P0: Handoff Memory For Task Continuity</h2>
+<p>Use <code>improvements/handoff_memory_plan.md</code> as the source of truth.</p>
+<p>This is the next top planned agent-workflow feature. It addresses the practical
+failure mode where useful agent work disappears when a session runs out of
+context, budget, time, or access to a specific environment. The hub should let
+Agent A save a compact continuation packet and Agent B resume from it later,
+whether the next session starts in a local machine, cloud IDE, hosted agent
+runtime, or another MCP-capable client.</p>
+<p>Implementation sequence:</p>
+<ul>
+<li>[ ] Define the handoff packet model: goal, status, decisions, changed files,
+      commands run, validation, blockers, next steps, and citations.</li>
+<li>[ ] Add retrieval-only generated handoff views from existing memory before
+      adding stored records.</li>
+<li>[ ] Add stored handoff records with MCP and HTTP create/get/update/search
+      surfaces.</li>
+<li>[ ] Add MCP prompts and CLI commands for create/resume workflows.</li>
+<li>[ ] Enforce owner, project, shared-project, and secret-redaction boundaries.</li>
+<li>[ ] Treat A2A as an optional later integration surface after MCP/HTTP handoff
+      behavior is stable.</li>
+<li>[ ] Link handoffs into graph memory later for agent/task/file/decision
+      provenance.</li>
+</ul>
+<h2 id="p0-app-level-memory-encryption">P0: App-Level Memory Encryption</h2>
+<p>Use <code>improvements/app_level_encryption_plan.md</code> as the source of truth.</p>
+<p>This is the next storage-security priority for Raspberry Pi, K3s, LAN, and
+other self-hosted deployments. API auth protects access through the hub, but
+direct access to Postgres, SQLite, persistent volumes, or backups can still
+expose canonical memory payloads unless the hub encrypts them before storage.</p>
+<p>Implementation sequence:</p>
+<ul>
+<li>[ ] Add disabled-by-default <code>encryption</code> config with a required base64
+      32-byte master key when enabled.</li>
+<li>[ ] Add an encryption service using authenticated encryption and row-bound
+      associated data.</li>
+<li>[ ] Encrypt canonical conversation payloads in SQLite and Postgres metadata
+      stores while preserving legacy plaintext reads.</li>
+<li>[ ] Decrypt only after auth, owner, and project checks pass.</li>
+<li>[ ] Add CLI commands for key generation, status, explicit plaintext-row
+      migration, and key rotation.</li>
+<li>[ ] Document K3s/Helm secret wiring, encrypted backups, and how app-level
+      encryption complements disk encryption.</li>
+<li>[ ] Add follow-up search-index hardening for encrypted chunk text and snippet
+      reconstruction.</li>
+</ul>
+<p>Acceptance criteria:</p>
+<ul>
+<li>Raw metadata database dumps do not expose encrypted canonical memory payloads.</li>
+<li>Missing or wrong keys fail closed without returning corrupt plaintext.</li>
+<li>Existing API and MCP response shapes remain stable after successful
+  decryption.</li>
+<li>Logs, diagnostics, and config display never expose keys, decrypted payloads,
+  tokens, or database secrets.</li>
+</ul>
+<h2 id="p1-cli-foundation-and-commands">P1: CLI Foundation And Commands</h2>
+<p>Use <code>cli_implementation_plan.md</code> as the source of truth.</p>
+<p>Current status:</p>
+<ul>
+<li>[x] A basic <code>memory.cli</code> argparse entrypoint exists.</li>
+<li>[x] <code>python -m memory.cli tokenizer-check</code> is implemented for tokenizer diagnostics.</li>
+<li>[x] The distributable console script name is finalized as <code>aim</code>.</li>
+<li>[x] Global CLI options are implemented across commands.</li>
+<li>[x] <code>ingest</code>, <code>search</code>, <code>retrieve</code>, <code>ask</code>, and <code>serve</code> are implemented.</li>
+</ul>
+<p>Implementation sequence:</p>
+<ul>
+<li>[x] Stabilize the command namespace, console script name, global flags, and JSON/text output contract.</li>
+<li>[x] Keep <code>tokenizer-check</code> as the first diagnostics command and align future diagnostics with the same output shape.</li>
+<li>[x] Add shared helpers for config loading, JSON/text formatting, and stable exit-code handling.</li>
+<li>[x] Implement <code>ingest &lt;file&gt;</code> using the same normalization, validation, hashing, dedupe, and storage path as API/MCP.</li>
+<li>[x] Implement <code>search "&lt;query&gt;"</code> using the existing runtime search function and deterministic result shape.</li>
+<li>[x] Implement <code>retrieve &lt;id&gt;</code> and <code>ask "&lt;question&gt;"</code> after ingest/search behavior is stable.</li>
+<li>[x] Implement diagnostics: <code>health</code>, <code>config-show</code>, and <code>storage-check</code>.</li>
+<li>[x] Implement <code>serve --host --port --config</code> as the preferred runtime/container entrypoint.</li>
+<li>[x] Add <code>--config</code>, <code>--json</code>, <code>--top-k</code>, <code>--max-context-tokens</code>, and clear exit-code behavior across commands.</li>
+<li>[x] Add unit tests for parser/output behavior and smoke tests for success, invalid input, and storage round trips.</li>
+</ul>
+<h2 id="p1-container-and-docs-publishing-foundation">P1: Container And Docs Publishing Foundation</h2>
+<p>Use <code>release_container_docs_plan.md</code> as the source of truth.</p>
+<p>Current status:</p>
+<ul>
+<li>[x] <code>Containerfile</code> exists.</li>
+<li>[x] CI exists in <code>.github/workflows/pipeline.yml</code>.</li>
+<li>[x] README and Markdown docs exist.</li>
+<li>[x] Project version is declared in <code>pyproject.toml</code>.</li>
+<li>[x] Container build is verified in CI.</li>
+<li>[x] Container smoke test is verified in CI.</li>
+<li>[x] GitHub Pages workflow is implemented.</li>
+</ul>
+<p>Implementation sequence:</p>
+<ul>
+<li>[x] Add <code>.dockerignore</code>.</li>
+<li>[x] Keep <code>Containerfile</code> aligned with <code>pyproject.toml</code>, <code>uv.lock</code>, default config, and the CLI <code>serve</code> command once implemented.</li>
+<li>[x] Add OCI labels to the container image.</li>
+<li>[x] Add a container build job to CI.</li>
+<li>[x] Add a container smoke test that starts the API/MCP app and checks readiness.</li>
+<li>[x] Add non-root and OpenShift arbitrary-UID container hardening.</li>
+<li>[x] Add Containerfile linting with Hadolint.</li>
+<li>[x] Decide default vs optional image variants for Postgres/PGVector and tokenizer extras.</li>
+<li>[x] Document runtime volume mounts and config/secrets environment variables.</li>
+<li>[x] Add MkDocs configuration for <code>README.md</code>, top-level <code>docs/*.md</code>, and <code>docs/improvements/*.md</code>.</li>
+<li>[x] Add a GitHub Pages workflow that builds and deploys docs from <code>main</code>.</li>
+<li>[x] Add docs link validation before making docs deploy required.</li>
+</ul>
+<h2 id="p1-platform-specific-importers">P1: Platform-Specific Importers</h2>
+<p>The importer boundary and manual paste importer are implemented. Export-specific parsers remain planned.</p>
+<p>Implementation sequence:</p>
+<ul>
+<li>[x] Define an importer interface that returns unified conversation payloads.</li>
+<li>[x] Add manual paste importer first because it is lowest risk and useful across clients.</li>
+<li>[ ] Add Gemini Takeout parser.</li>
+<li>[ ] Add Claude HTML export parser.</li>
+<li>[ ] Add optional local log importers for VS Code Copilot, Ollama, LM Studio, and Llama Stack.</li>
+<li>[x] Keep storage and ingestion unchanged by feeding all importers through the existing normalized schema path.</li>
+</ul>
+<h2 id="p1-browser-extension-capture-contract">P1: Browser Extension Capture Contract</h2>
+<p>Use <code>browser_extension_capture_plan.md</code> as the source of truth.</p>
+<ul>
+<li>[x] Keep browser extension implementations in separate repositories.</li>
+<li>[x] Treat existing <code>POST /memory/insert</code> as the normalized web-chat capture contract.</li>
+<li>[x] Document normalized extension payloads for ChatGPT, Microsoft Copilot,
+  Claude, Gemini, and similar web platforms.</li>
+<li>[x] Keep raw HTML, DOM snapshots, screenshots, and selector evidence out of
+  ai-memory-hub storage by default.</li>
+<li>[x] Add extension-shaped API contract tests before implementing extension repos.</li>
+<li>[x] Add explicit CORS allowlist config for browser extension origins.</li>
+<li>[x] Document bearer-token setup and trusted append behavior for repeated
+  captures of the same upstream thread.</li>
+</ul>
+<h2 id="p2-github-releases-and-docker-hub-publishing">P2: GitHub Releases And Docker Hub Publishing</h2>
+<p>Use <code>release_container_docs_plan.md</code> as the source of truth.</p>
+<p>Implementation sequence:</p>
+<ul>
+<li>[x] Define release version policy: GitHub tag must match <code>pyproject.toml</code>.</li>
+<li>[x] Add release tag validation for <code>vMAJOR.MINOR.PATCH</code>.</li>
+<li>[x] Add Docker Hub secrets: <code>DOCKERHUB_USERNAME</code>, <code>DOCKERHUB_TOKEN</code>, and optional namespace.</li>
+<li>[x] Add release workflow triggered by <code>release.published</code>.</li>
+<li>[x] Build from <code>Containerfile</code> with Docker Buildx.</li>
+<li>[x] Push versioned tags for every release.</li>
+<li>[x] Push <code>latest</code> only for stable releases.</li>
+<li>[x] Add image digest to workflow summary and release notes.</li>
+<li>[x] Add manual <code>workflow_dispatch</code> for release publish recovery.</li>
+</ul>
+<h2 id="p2-first-release-readiness">P2: First Release Readiness</h2>
+<p>Use <code>first_release_readiness_plan.md</code> as the source of truth.</p>
+<p>Implementation sequence:</p>
+<ul>
+<li>[x] Add <code>CONTRIBUTING.md</code>, <code>CODE_OF_CONDUCT.md</code>, and <code>SECURITY.md</code>.</li>
+<li>[x] Add pull request and issue templates.</li>
+<li>[x] Document branch protection, required checks, and repository settings.</li>
+<li>[ ] Stop direct pushes to <code>main</code> after the release-readiness PR lands.</li>
+<li>[ ] Configure branch protection and required checks.</li>
+<li>[x] Add release checklist and version/tag validation.</li>
+<li>[ ] Run a <code>v0.1.0-rc.1</code> release-candidate drill before publishing <code>v0.1.0</code>.</li>
+</ul>
+<h2 id="p2-recurring-codebase-cleanup">P2: Recurring Codebase Cleanup</h2>
+<p>Use <code>recurring_codebase_cleanup_plan.md</code> as the source of truth.</p>
+<ul>
+<li>[ ] Run weekly automated detection checks for dead code, stale docs,
+  accidental hardcoding, complex control flow, and unsafe logging patterns.</li>
+<li>[ ] Open one focused monthly cleanup PR for the highest-impact findings.</li>
+<li>[ ] Review public docs and examples before each release.</li>
+<li>[ ] Before each release, run the configured static-analysis finding tool
+  manually and revalidate until no open findings remain, with false positives or
+  accepted risks documented.</li>
+<li>[ ] Future improvement: add a non-blocking CI/manual-dispatch lane for the
+  chosen static-analysis finding tool, then consider promoting it to a release
+  gate after repeated stable low-noise runs.</li>
+<li>[ ] Add regression tests for cleanup work that changes behavior.</li>
+<li>[ ] Keep cleanup PRs narrow enough that review can distinguish behavior
+  preservation from intentional behavior changes.</li>
+</ul>
+<h2 id="p2-admin-only-mutation-workflows">P2: Admin-Only Mutation Workflows</h2>
+<p>Use <code>improvements/client_feedback_improvement_plan.md</code> as the source of truth.</p>
+<p>General delete/update through MCP is intentionally out of scope. Source memory
+should remain immutable by default; corrections should use fact supersession.
+Any future mutation support must be admin-only through CLI and HTTP API, with
+clear auth, audit, and provider-consistency behavior.</p>
+<p>Implementation sequence:</p>
+<ul>
+<li>[ ] Define admin-only soft delete, fact hide, metadata edit, append, and
+      supersession semantics.</li>
+<li>[ ] Do not add MCP delete/update tools.</li>
+<li>[ ] Add admin-scoped HTTP API endpoints only after auth scope handling is clear.</li>
+<li>[ ] Add admin CLI commands for local maintenance only after API semantics are stable.</li>
+<li>[ ] Add audit fields for who/what performed a mutation.</li>
+<li>[ ] Add provider contract tests for metadata and vector cleanup parity.</li>
+</ul>
+<h2 id="p2-storage-operational-hardening">P2: Storage Operational Hardening</h2>
+<p>Use <code>storage_agnostic_byoa_plan.md</code> as the source of truth.</p>
+<p>Implemented:</p>
+<ul>
+<li>[x] Redact DSNs, passwords, tokens, and API keys in fallback logs.</li>
+<li>[x] Expose runtime mode: <code>ok</code>, <code>degraded</code>, or <code>dry_run</code>.</li>
+<li>[x] Expose active/requested vector provider and fallback state in runtime health.</li>
+<li>[x] Treat metadata init errors, schema incompatibility, and vector dimension mismatch as hard errors.</li>
+<li>[x] Treat vector init errors as fatal unless fallback is explicitly enabled.</li>
+</ul>
+<p>Remaining sequence:</p>
+<ul>
+<li>[x] Log <code>allow_fallback</code> and <code>dry_run</code> startup policy consistently, including disabled state.</li>
+<li>[x] Warn when <code>allow_fallback=true</code> is used under a production profile.</li>
+<li>[x] Emit structured audit events for fallback activation and dry-run skipped writes.</li>
+<li>[x] Consider changing the default <code>storage.vector.allow_fallback</code> to <code>false</code> for production-oriented configs.</li>
+</ul>
+<h2 id="p2-storage-provider-expansion">P2: Storage Provider Expansion</h2>
+<p>Use <code>storage_agnostic_byoa_plan.md</code> as the source of truth.</p>
+<p>Provider expansion sequence:</p>
+<ul>
+<li>[x] Add provider-specific config model for ChromaDB, Qdrant, Milvus, Weaviate, MongoDB Atlas, Elasticsearch, and OpenSearch.</li>
+<li>[x] Extend <code>providers.vector_db</code> and <code>providers.metadata_db</code> accepted values only as providers land.</li>
+<li>[x] Add shared metadata-store contract tests.</li>
+<li>[x] Add shared vector-store contract tests.</li>
+<li>[x] Add fake SDK/client fixtures for unit tests.</li>
+<li>[x] Add live integration tests gated by provider-specific environment variables.</li>
+<li>[x] Add fallback and secret-redaction tests for ChromaDB.</li>
+<li>[x] Implement ChromaDB vector adapter first.</li>
+<li>[x] Implement Qdrant vector adapter second.</li>
+<li>[x] Implement MongoDB metadata, then MongoDB Atlas Vector Search.</li>
+<li>[x] Update architecture docs and config examples after ChromaDB landed.</li>
+</ul>
+<h2 id="p3-later-storage-providers">P3: Later Storage Providers</h2>
+<p>Use <code>storage_agnostic_byoa_plan.md</code> as the source of truth.</p>
+<p>Implementation sequence:</p>
+<ul>
+<li>[x] Implement Elasticsearch vector adapter.</li>
+<li>[x] Implement OpenSearch vector adapter.</li>
+<li>[x] Keep Elasticsearch/OpenSearch vector-only at first; add hybrid capability only after API semantics are designed.</li>
+<li>[x] Implement Milvus/Zilliz vector adapter.</li>
+<li>[x] Implement Weaviate vector adapter.</li>
+<li>[x] Add Docker Compose examples for local provider smoke testing.</li>
+<li>[ ] Document provider limitations: consistency, index readiness, score interpretation, distance metrics, and local/hosted differences.</li>
+</ul>
+<h2 id="p3-next-vector-provider-candidates">P3: Next Vector Provider Candidates</h2>
+<p>Use <code>storage_agnostic_byoa_plan.md</code> as the source of truth, with
+<code>improvements/vector_dbs.md</code> as the raw candidate list. Use
+<code>improvements/neo4j_aura_graph_memory_plan.md</code> for the Neo4j AuraDB vector
+provider, graph mirror, and graph-aware retrieval path.</p>
+<p>Implementation sequence:</p>
+<ul>
+<li>[x] Redis/RediSearch adapter for teams already running Redis Stack.</li>
+<li>[x] Pinecone adapter for managed/serverless vector search.</li>
+<li>[x] Turbopuffer adapter for serverless, object-storage-backed vector search.</li>
+<li>[x] Vespa adapter for large-scale hybrid retrieval.</li>
+<li>[x] Typesense adapter after confirming vector API maturity and filtering
+      semantics.</li>
+<li>[ ] Neo4j AuraDB adapter as a vector provider first, then a graph-record mirror
+      and graph-aware retrieval backend.</li>
+<li>[ ] Meilisearch adapter after confirming direct user-provided vector CRUD and
+      search semantics fit the hub-owned embedding contract.</li>
+<li>[ ] DuckDB VSS and/or sqlite-vec embedded adapter for local analytical or
+      single-file deployments.</li>
+<li>[ ] Keep Faiss, ScaNN, and HNSWlib out of the advertised provider matrix
+      unless the project adds a local library-backed experimental adapter with
+      explicit persistence, delete, and operational semantics.</li>
+</ul>
+<h2 id="p3-release-notes-and-supply-chain-hardening">P3: Release Notes And Supply Chain Hardening</h2>
+<p>Use <code>release_container_docs_plan.md</code> as the source of truth.</p>
+<p>Implementation sequence:</p>
+<ul>
+<li>[x] Decide release notes source: GitHub generated notes, <code>CHANGELOG.md</code>, or conventional commits.</li>
+<li>[x] Add release template/checklist.</li>
+<li>[x] Include Docker image tags, digest, docs URL, and upgrade notes in release notes.</li>
+<li>[x] Add dependency vulnerability scan plan.</li>
+<li>[x] Add image vulnerability scan plan.</li>
+<li>[x] Add SBOM generation plan.</li>
+<li>[x] Add provenance/signing plan.</li>
+<li>[x] Document supported image lifecycle and security fix policy.</li>
+</ul>
+<h2 id="p3-topicproject-summaries-and-consolidation">P3: Topic/Project Summaries And Consolidation</h2>
+<p>Implementation sequence:</p>
+<ul>
+<li>[ ] Add topic-level and daily/weekly digest generation.</li>
+<li>[ ] Add duplicate/redundant memory consolidation tooling.</li>
+<li>[ ] Add stable-fact extraction only after summary storage and provenance are reliable.</li>
+<li>[ ] Use <code>improvements/memory_quality_fact_layer_plan.md</code> for confidence scoring, compact provenance, result deduplication, profile facts, and correction/supersession behavior.</li>
+</ul>
+<h2 id="p3-ui-and-developer-experience">P3: UI And Developer Experience</h2>
+<p>Implementation sequence:</p>
+<ul>
+<li>[x] Expose OpenAPI docs and examples for current HTTP contracts.</li>
+<li>[ ] Add a storage health and diagnostics view.</li>
+<li>[ ] Add search and conversation viewer flows.</li>
+<li>[ ] Add import/upload workflows after importers exist.</li>
+<li>[ ] Add Python SDK first, then TypeScript SDK.</li>
+<li>[ ] Add packaging only after CLI and SDK contracts are stable.</li>
+</ul>
+<h2 id="p4-advanced-memory">P4: Advanced Memory</h2>
+<p>Use <code>improvements/advanced_memory_plan.md</code> as the source of truth. Use
+<code>improvements/neo4j_aura_graph_memory_plan.md</code> for the optional Neo4j-backed
+graph mirror and retrieval backend path.</p>
+<p>Implementation sequence:</p>
+<ul>
+<li>[ ] Define advanced-memory data contracts and provenance links.</li>
+<li>[ ] Add entity extraction and relationship storage behind an optional module.</li>
+<li>[ ] Add graph-aware retrieval only after entity, relationship, provenance, and graph-retrieval quality gates pass.</li>
+<li>[ ] Add relevance decay, importance scoring, pinning, and review workflows.</li>
+<li>[ ] Add forgetting/consolidation workflows with admin-only mutation semantics.</li>
+<li>[ ] Add shared memory spaces and agent-specific filters.</li>
+<li>[ ] Add plugin extension points once importer/provider boundaries are stable.</li>
+</ul>
+<h2 id="p4-optional-cloud-sync">P4: Optional Cloud Sync</h2>
+<p>Implementation sequence:</p>
+<ul>
+<li>[ ] Define encrypted backup/export format.</li>
+<li>[ ] Add local backup and restore before network sync.</li>
+<li>[ ] Add opt-in encrypted sync for SQLite metadata and vector bundles.</li>
+<li>[ ] Add multi-device conflict handling.</li>
+</ul>
+<p>Cloud sync must stay opt-in and must not change the local-first default.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Dedicated to my little brother,<br> Andrii Hladenko.<br> Вічна Слава Героям. <img src="docs/assets/flags/ua.svg" alt="Ukraine flag" width="18" height="14">
+
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"alias": true, "default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../javascripts/connect.js"></script>
+      
+    
+  </body>
+</html>
