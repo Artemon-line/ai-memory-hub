@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
+from dataclasses import dataclass
 from statistics import mean
 from time import perf_counter
 from typing import Any, Callable
@@ -19,6 +21,52 @@ class _Embedder:
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         return [[1.0] for _ in texts]
+
+
+@dataclass
+class _WorkLedger:
+    search_calls: int = 0
+    candidate_rows: int = 0
+    audit_writes: int = 0
+
+    def reset(self) -> None:
+        self.search_calls = 0
+        self.candidate_rows = 0
+        self.audit_writes = 0
+
+    def snapshot(self, *, requests: int) -> dict[str, Any]:
+        divisor = max(requests, 1)
+        return {
+            "requests": requests,
+            "search_calls": self.search_calls,
+            "candidate_rows": self.candidate_rows,
+            "audit_writes": self.audit_writes,
+            "per_request": {
+                "search_calls": self.search_calls / divisor,
+                "candidate_rows": self.candidate_rows / divisor,
+                "audit_writes": self.audit_writes / divisor,
+            },
+        }
+
+
+class _BenchmarkAuditStore:
+    def __init__(self, ledger: _WorkLedger):
+        self._ledger = ledger
+
+    def append_audit_event(self, _event: dict[str, Any]) -> None:
+        self._ledger.audit_writes += 1
+
+
+class _BenchmarkSearch:
+    def __init__(self, ledger: _WorkLedger):
+        self._ledger = ledger
+
+    def __call__(self, query: str, top_k: int = 5, **_kwargs: Any) -> dict[str, Any]:
+        _ = query
+        rows = _FIXED_MATCHES[:top_k]
+        self._ledger.search_calls += 1
+        self._ledger.candidate_rows += len(rows)
+        return {"status": "ok", "results": rows}
 
 
 _FIXED_MATCHES: list[dict[str, Any]] = [
@@ -109,23 +157,32 @@ def run_benchmark(
 
     original_runtime = mvp_ingestion._RUNTIME
     original_search = mvp_ingestion.search
+    ledger = _WorkLedger()
     try:
-        mvp_ingestion.search = _fixed_search  # type: ignore[method-assign]
-        default_result, default_ms = _measure_default(iterations=iterations)
-        budgeted_result, budgeted_ms = _measure_budgeted(
-            iterations=iterations, budget=budget, tokenizer_enabled=False
+        mvp_ingestion.search = _BenchmarkSearch(ledger)  # type: ignore[method-assign]
+        default_result, default_latency, default_work = _measure_default(
+            iterations=iterations, ledger=ledger
         )
-        config_result, config_ms = _measure_budgeted(
-            iterations=iterations, budget=budget, tokenizer_enabled=True
+        budgeted_result, budgeted_latency, budgeted_work = _measure_budgeted(
+            iterations=iterations,
+            budget=budget,
+            tokenizer_enabled=False,
+            ledger=ledger,
         )
-        chunking_result = _measure_chunking()
+        config_result, config_latency, config_work = _measure_budgeted(
+            iterations=iterations,
+            budget=budget,
+            tokenizer_enabled=True,
+            ledger=ledger,
+        )
+        chunking_result = _measure_chunking(ledger=ledger)
     finally:
         mvp_ingestion.search = original_search  # type: ignore[method-assign]
         mvp_ingestion._RUNTIME = original_runtime
 
-    default_avg = mean(default_ms)
-    budgeted_avg = mean(budgeted_ms)
-    config_avg = mean(config_ms)
+    default_avg = float(default_latency["warm_avg"])
+    budgeted_avg = float(budgeted_latency["warm_avg"])
+    config_avg = float(config_latency["warm_avg"])
     budgeted_ratio = _safe_ratio(budgeted_avg, default_avg)
     config_ratio = _safe_ratio(config_avg, default_avg)
 
@@ -146,6 +203,9 @@ def run_benchmark(
         "iterations": iterations,
         "budget": budget,
         "latency_ms": {
+            "default_unbudgeted": default_latency,
+            "budgeted_request": budgeted_latency,
+            "config_enabled": config_latency,
             "default_unbudgeted_avg": default_avg,
             "budgeted_request_avg": budgeted_avg,
             "config_enabled_avg": config_avg,
@@ -160,6 +220,11 @@ def run_benchmark(
             "config_enabled_tokens": int(config_result.get("context_tokens_used", 0)),
             "budgeted_dropped": int(budgeted_result.get("chunks_dropped", 0)),
             "config_enabled_dropped": int(config_result.get("chunks_dropped", 0)),
+        },
+        "work_amplification": {
+            "default_unbudgeted": _with_result_work(default_work, default_result),
+            "budgeted_request": _with_result_work(budgeted_work, budgeted_result),
+            "config_enabled": _with_result_work(config_work, config_result),
         },
         "chunking": chunking_result,
         "thresholds": {
@@ -198,43 +263,55 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _fixed_search(query: str, top_k: int = 5) -> dict[str, Any]:
-    _ = query
-    return {"status": "ok", "results": _FIXED_MATCHES[:top_k]}
-
-
-def _measure_default(*, iterations: int) -> tuple[dict[str, Any], list[float]]:
-    _configure_runtime(tokenizer_enabled=False)
-    return _measure(lambda: mvp_ingestion.ask(_QUESTION, top_k=_TOP_K), iterations)
+def _measure_default(
+    *, iterations: int, ledger: _WorkLedger
+) -> tuple[dict[str, Any], dict[str, float], dict[str, Any]]:
+    _configure_runtime(tokenizer_enabled=False, ledger=ledger)
+    return _measure(lambda: mvp_ingestion.ask(_QUESTION, top_k=_TOP_K), iterations, ledger)
 
 
 def _measure_budgeted(
-    *, iterations: int, budget: int, tokenizer_enabled: bool
-) -> tuple[dict[str, Any], list[float]]:
-    _configure_runtime(tokenizer_enabled=tokenizer_enabled, ask_max_context_tokens=budget)
+    *, iterations: int, budget: int, tokenizer_enabled: bool, ledger: _WorkLedger
+) -> tuple[dict[str, Any], dict[str, float], dict[str, Any]]:
+    _configure_runtime(
+        tokenizer_enabled=tokenizer_enabled,
+        ask_max_context_tokens=budget,
+        ledger=ledger,
+    )
     if tokenizer_enabled:
-        return _measure(lambda: mvp_ingestion.ask(_QUESTION, top_k=_TOP_K), iterations)
+        return _measure(
+            lambda: mvp_ingestion.ask(_QUESTION, top_k=_TOP_K), iterations, ledger
+        )
     return _measure(
         lambda: mvp_ingestion.ask(
             _QUESTION, top_k=_TOP_K, max_context_tokens=budget
         ),
         iterations,
+        ledger,
     )
 
 
 def _measure(
-    fn: Callable[[], dict[str, Any]], iterations: int
-) -> tuple[dict[str, Any], list[float]]:
+    fn: Callable[[], dict[str, Any]], iterations: int, ledger: _WorkLedger
+) -> tuple[dict[str, Any], dict[str, float], dict[str, Any]]:
+    ledger.reset()
+    start = perf_counter()
     result = fn()
+    first_call_ms = (perf_counter() - start) * 1000.0
+    first_call_work = ledger.snapshot(requests=1)
+    ledger.reset()
     samples: list[float] = []
     for _ in range(iterations):
         start = perf_counter()
         result = fn()
         samples.append((perf_counter() - start) * 1000.0)
-    return result, samples
+    return result, _latency_summary(first_call_ms=first_call_ms, samples=samples), {
+        "first_call": first_call_work,
+        "warm": ledger.snapshot(requests=iterations),
+    }
 
 
-def _measure_chunking() -> dict[str, Any]:
+def _measure_chunking(*, ledger: _WorkLedger) -> dict[str, Any]:
     message = {
         "role": "user",
         "hash": "sha256:" + ("a" * 64),
@@ -245,7 +322,7 @@ def _measure_chunking() -> dict[str, Any]:
         "messages": [message],
     }
 
-    _configure_runtime(tokenizer_enabled=False, chunking_strategy="message")
+    _configure_runtime(tokenizer_enabled=False, chunking_strategy="message", ledger=ledger)
     default_chunks = mvp_ingestion.chunk_selected_messages(
         obj, obj["messages"], start_index=0
     )
@@ -255,6 +332,7 @@ def _measure_chunking() -> dict[str, Any]:
         chunking_strategy="token",
         chunking_max_tokens=40,
         chunking_overlap_tokens=10,
+        ledger=ledger,
     )
     token_chunks = mvp_ingestion.chunk_selected_messages(
         obj, obj["messages"], start_index=0
@@ -274,11 +352,12 @@ def _configure_runtime(
     chunking_strategy: str = "message",
     chunking_max_tokens: int = 800,
     chunking_overlap_tokens: int = 80,
+    ledger: _WorkLedger,
 ) -> None:
     mvp_ingestion.configure_runtime(
         runtime=mvp_ingestion.RuntimeDependencies(
             embedding_provider=_Embedder(),
-            metadata_store=object(),
+            metadata_store=_BenchmarkAuditStore(ledger),
             vector_store=object(),
             health_state={"mode": "ok"},
             tokenizer_enabled=tokenizer_enabled,
@@ -295,6 +374,42 @@ def _safe_ratio(value: float, baseline: float) -> float:
     if baseline <= 0:
         return 0.0
     return value / baseline
+
+
+def _latency_summary(*, first_call_ms: float, samples: list[float]) -> dict[str, float]:
+    ordered = sorted(samples)
+    return {
+        "first_call": first_call_ms,
+        "warm_avg": mean(ordered),
+        "warm_min": ordered[0],
+        "warm_p50": _percentile(ordered, 0.50),
+        "warm_p95": _percentile(ordered, 0.95),
+        "warm_p99": _percentile(ordered, 0.99),
+        "warm_max": ordered[-1],
+    }
+
+
+def _percentile(ordered: list[float], percentile: float) -> float:
+    return ordered[min(math.ceil(len(ordered) * percentile) - 1, len(ordered) - 1)]
+
+
+def _with_result_work(work: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
+    selected_chunks = int(result.get("chunks_selected", len(result.get("citations", []))))
+    candidate_rows = int(work["warm"]["candidate_rows"])
+    requests = max(int(work["warm"]["requests"]), 1)
+    candidates_per_request = candidate_rows / requests
+    return {
+        **work,
+        "result": {
+            "returned_results": len(result.get("results", [])),
+            "selected_chunks": selected_chunks,
+            "dropped_chunks": int(result.get("chunks_dropped", 0)),
+            "context_tokens": int(result.get("context_tokens_used", 0)),
+            "candidate_to_selected_ratio": (
+                candidates_per_request / selected_chunks if selected_chunks else 0.0
+            ),
+        },
+    }
 
 
 if __name__ == "__main__":

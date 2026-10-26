@@ -6,6 +6,27 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Adapted unfiltered lexical and fact candidate limits to the requested
+  `top_k` and configured candidate multiplier, while preserving configured
+  maxima for filtered searches to protect post-filter recall.
+- Deferred generated-summary work until after trusted-append detection, so an
+  append writes summaries once for the combined conversation instead of first
+  writing transient summaries for the incoming transcript.
+- Reused assembled source-conversation search text within fact ranking and
+  question narrowing requests, with a deterministic work-amplification
+  benchmark and no cross-request payload cache.
+- Replaced repeated fact-source conversation reads during filtering, ranking,
+  projection, candidate construction, and provenance assembly with bounded,
+  deduplicated metadata batch hydration and a machine-readable work benchmark.
+- Short-circuited fully indexed exact-duplicate ingestion before derived-record,
+  embedding, metadata, and vector work, while retaining incomplete-index repair
+  and adding a machine-readable ingestion work ledger.
+- Reused bounded, file-identity-aware compiled conversation validators across
+  ingestion requests, with explicit invalidation and isolated multi-schema
+  runtime behavior.
+- Improved performance benchmark fidelity with exception-free in-memory audit
+  accounting, first-call and warm latency distributions, p50/p95/p99 reporting,
+  and per-request candidate/context amplification metrics.
 - Added a versioned synthetic retrieval and extraction quality corpus with a
   credential-free CI gate, comparable provider/model reports, auditable
   thresholds, ranking/filter/fact/temporal metrics, latency percentiles, and

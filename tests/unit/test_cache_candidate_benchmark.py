@@ -9,15 +9,25 @@ def test_cache_candidate_benchmark_reports_ranked_operations() -> None:
     report = run_benchmark(iterations=2)
 
     assert report["iterations"] == 2
+    assert report["validation_iterations"] == 2
     assert set(report["operations"]) == {
         "schema_load",
         "schema_compatibility",
+        "schema_validator_load",
+        "schema_validation_rebuild",
+        "schema_validation_reused",
         "config_parse",
         "token_count",
     }
+    assert report["cache_info"]["schema"]["maxsize"] == 16
+    assert "get_encoding_hits" in report["cache_info"]["tokenizer"]
     assert report["candidates"]
     assert "operation" in report["candidates"][0]
     assert "cache_when" in report["candidates"][0]
+    assert all(
+        set(values) >= {"samples", "first_call_ms", "p50_ms", "p95_ms", "p99_ms"}
+        for values in report["operations"].values()
+    )
 
 
 def test_cache_candidate_benchmark_rejects_invalid_iterations() -> None:

@@ -24,7 +24,6 @@ elasticsearch = [
 ]
 milvus = [
     "pymilvus>=3.0.2",
-    "setuptools>=84.1.0",
 ]
 mongodb = [
     "pymongo>=4.19.0",
