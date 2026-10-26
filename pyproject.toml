@@ -54,7 +54,7 @@ pinecone = [
     "pinecone>=7.0.0",
 ]
 qdrant = [
-    "qdrant-client>=1.19.1",
+    "qdrant-client>=1.20.0",
 ]
 redis = [
     "redis>=8.1.0",
