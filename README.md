@@ -385,6 +385,8 @@ provider fixture matrix, smoke commands, CI coverage, and hosted-provider notes.
 
 ## Documentation
 
+- [Published documentation (latest release)](https://artemon-line.github.io/ai-memory-hub/)
+- [Main branch preview (experimental)](https://artemon-line.github.io/ai-memory-hub/main/)
 - [Technical overview](docs/overview.md)
 - [Architecture](docs/architecture.md)
 - [Agent integration](docs/agents.md)

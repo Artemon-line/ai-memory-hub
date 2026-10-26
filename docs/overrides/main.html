@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block outdated %}
+  {% if config.extra.docs_status == "experimental" %}
+    These docs describe the <strong>main</strong> branch. They may cover experimental,
+    unreleased, or untested behavior.
+    <a href="{{ '../' ~ base_url }}"><strong>View the latest released docs.</strong></a>
+  {% else %}
+    You are viewing documentation for an older release.
+    <a href="{{ '../' ~ base_url }}"><strong>View the latest released docs.</strong></a>
+  {% endif %}
+{% endblock %}
