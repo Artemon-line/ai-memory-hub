@@ -116,11 +116,11 @@ def test_reranker_receives_bounded_redacted_projection_only() -> None:
             ]
         },
         reranker=reranker,
-        reranker_candidate_limit=1,
+        reranker_candidate_limit=2,
         projection_text_limit=40,
     )
 
-    assert len(reranker.candidates) == 1
+    assert len(reranker.candidates) == 2
     projection = reranker.candidates[0]
     assert len(projection.text) <= 40
     assert "super-secret" not in projection.text
@@ -196,3 +196,33 @@ def test_semantic_reranker_batch_limit_keeps_unseen_tail_below_batch() -> None:
     )
 
     assert [row["id"] for row in result.rows] == ["first", "tail"]
+    assert result.diagnostics["reranker"] == "insufficient_candidates"
+
+
+def test_semantic_reranker_is_skipped_when_only_one_candidate_can_be_ranked() -> None:
+    class FailingReranker:
+        def rerank(
+            self, query: str, candidates: Sequence[RerankCandidate]
+        ) -> dict[str, float]:
+            _ = query, candidates
+            raise AssertionError("single-candidate reranker must not be called")
+
+    result = rank_candidate_lists(
+        "only candidate",
+        {"dense": [_row("only", "only candidate")]},
+        reranker=FailingReranker(),
+    )
+
+    assert [row["id"] for row in result.rows] == ["only"]
+    assert result.diagnostics["reranker"] == "insufficient_candidates"
+    assert result.diagnostics["reranker_candidate_count"] == 1
+
+    empty = rank_candidate_lists(
+        "no candidates",
+        {"dense": []},
+        reranker=FailingReranker(),
+    )
+
+    assert empty.rows == []
+    assert empty.diagnostics["reranker"] == "insufficient_candidates"
+    assert empty.diagnostics["reranker_candidate_count"] == 0
