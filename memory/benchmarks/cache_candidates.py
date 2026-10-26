@@ -4,6 +4,7 @@ import argparse
 import cProfile
 import io
 import json
+import math
 import pstats
 from statistics import mean
 from time import perf_counter
@@ -23,25 +24,55 @@ _CONFIG = {
     },
     "tokenizer": {"encoding": "cl100k_base"},
 }
+_HASH = f"sha256:{'0' * 64}"
+_VALID_PAYLOAD = {
+    "id": "d9fd4c95-9cb3-4fd5-b967-3027f8863210",
+    "source": "benchmark",
+    "timestamp": "2026-01-01T00:00:00Z",
+    "messages": [{"role": "user", "text": "benchmark", "hash": _HASH}],
+    "metadata": {
+        "imported_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-01T00:00:00Z",
+        "conversation_hash": _HASH,
+    },
+}
 
 
 def run_benchmark(*, iterations: int = 1000) -> dict[str, Any]:
     if iterations < 1:
         raise ValueError("iterations must be positive")
 
+    validation_iterations = min(iterations, 100)
     original_schema = validate.load_schema()
+    compiled_validator = validate.load_conversation_validator()
     measurements = {
         "schema_load": _measure(validate.load_schema, iterations),
         "schema_compatibility": _measure(
             lambda: validate.validate_schema_compatibility(original_schema),
             iterations,
         ),
+        "schema_validator_load": _measure(validate.load_conversation_validator, iterations),
+        "schema_validation_rebuild": _measure(
+            lambda: validate.validate_conversation(_VALID_PAYLOAD, original_schema),
+            validation_iterations,
+        ),
+        "schema_validation_reused": _measure(
+            lambda: validate.validate_conversation(
+                _VALID_PAYLOAD,
+                validator=compiled_validator,
+            ),
+            validation_iterations,
+        ),
         "config_parse": _measure(lambda: parse_config(_CONFIG), iterations),
         "token_count": _measure(lambda: count_tokens(_TEXT, "cl100k_base"), iterations),
     }
-    cache_info = _tokenizer_cache_info()
+    cache_info = {
+        "schema": validate.schema_cache_info(),
+        "tokenizer": _tokenizer_cache_info(),
+    }
     return {
         "iterations": iterations,
+        "validation_iterations": validation_iterations,
         "operations": measurements,
         "cache_info": cache_info,
         "candidates": _candidate_summary(measurements),
@@ -75,29 +106,42 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _measure(fn: Callable[[], Any], iterations: int) -> dict[str, float]:
-    samples: list[float] = []
+    first_start = perf_counter()
     fn()
+    first_ms = (perf_counter() - first_start) * 1000.0
+    samples: list[float] = []
     for _ in range(iterations):
         start = perf_counter()
         fn()
         samples.append((perf_counter() - start) * 1000.0)
+    ordered = sorted(samples)
     return {
-        "avg_ms": mean(samples),
+        "samples": len(ordered),
+        "first_call_ms": first_ms,
+        "avg_ms": mean(ordered),
         "total_ms": sum(samples),
-        "min_ms": min(samples),
-        "max_ms": max(samples),
+        "min_ms": ordered[0],
+        "p50_ms": _percentile(ordered, 0.50),
+        "p95_ms": _percentile(ordered, 0.95),
+        "p99_ms": _percentile(ordered, 0.99),
+        "max_ms": ordered[-1],
     }
+
+
+def _percentile(ordered: list[float], percentile: float) -> float:
+    return ordered[min(math.ceil(len(ordered) * percentile) - 1, len(ordered) - 1)]
 
 
 def _candidate_summary(measurements: dict[str, dict[str, float]]) -> list[dict[str, Any]]:
     ranked = sorted(
         measurements.items(),
-        key=lambda item: item[1]["total_ms"],
+        key=lambda item: item[1]["avg_ms"],
         reverse=True,
     )
     return [
         {
             "operation": name,
+            "samples": values["samples"],
             "total_ms": values["total_ms"],
             "avg_ms": values["avg_ms"],
             "cache_when": _cache_guidance(name),
@@ -108,7 +152,13 @@ def _candidate_summary(measurements: dict[str, dict[str, float]]) -> list[dict[s
 
 def _cache_guidance(name: str) -> str:
     if name == "schema_load":
-        return "Good LRU/static-cache candidate if schema path changes are invalidated."
+        return "Startup-only in production; keep uncached unless request-path traces change."
+    if name == "schema_validation_rebuild":
+        return "Reuse one checked validator per runtime instead of rebuilding per payload."
+    if name == "schema_validator_load":
+        return "Cached by resolved path, modification time, and size with explicit invalidation."
+    if name == "schema_validation_reused":
+        return "Already optimized through runtime-scoped compiled validator reuse."
     if name == "config_parse":
         return "Cache only per explicit config path; avoid stale config during tests/dev reloads."
     if name == "token_count":
