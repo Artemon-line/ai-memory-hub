@@ -4243,6 +4243,15 @@ def _chunk_keyword_overlap(query: str, row: Mapping[str, Any]) -> int:
 
 
 def _conversation_search_text(conversation: dict[str, Any]) -> str:
+    return _conversation_search_text_with_cache(conversation, cache=None)
+
+
+def _conversation_search_text_with_cache(
+    conversation: dict[str, Any], *, cache: dict[int, str] | None
+) -> str:
+    cache_key = id(conversation)
+    if cache is not None and cache_key in cache:
+        return cache[cache_key]
     parts = [
         str(conversation.get("id", "")),
         str(conversation.get("source", "")),
@@ -4257,7 +4266,10 @@ def _conversation_search_text(conversation: dict[str, Any]) -> str:
     metadata = conversation.get("metadata", {})
     if isinstance(metadata, dict):
         parts.extend(_metadata_search_values(metadata))
-    return " ".join(parts)
+    search_text = " ".join(parts)
+    if cache is not None:
+        cache[cache_key] = search_text
+    return search_text
 
 
 def _metadata_search_values(metadata: dict[str, Any]) -> list[str]:
@@ -6351,12 +6363,14 @@ def _narrow_facts_for_question(
     if not question_tokens:
         return facts
     source_conversations = _source_conversations_for_facts(facts)
+    conversation_search_texts: dict[int, str] = {}
     scored = [
         (
             _fact_question_overlap_score(
                 fact,
                 question_tokens,
                 source_conversations=source_conversations,
+                conversation_search_texts=conversation_search_texts,
             ),
             index,
             fact,
@@ -6413,6 +6427,7 @@ def _best_fact_projection_group(
     source_conversations = (
         _source_conversations_for_facts(facts) if include_source_memory else {}
     )
+    conversation_search_texts: dict[int, str] = {}
     groups: dict[tuple[str, str], list[tuple[int, int, dict[str, Any]]]] = {}
     for index, fact in enumerate(facts):
         fact_tokens = set(
@@ -6421,6 +6436,7 @@ def _best_fact_projection_group(
                     fact,
                     include_source_memory=include_source_memory,
                     source_conversations=source_conversations,
+                    conversation_search_texts=conversation_search_texts,
                 ),
                 limit=None,
             )
@@ -6464,10 +6480,15 @@ def _fact_question_overlap_score(
     question_tokens: set[str],
     *,
     source_conversations: Mapping[str, dict[str, Any]] | None = None,
+    conversation_search_texts: dict[int, str] | None = None,
 ) -> int:
     fact_tokens = set(
         _query_tokens(
-            _fact_search_text(fact, source_conversations=source_conversations),
+            _fact_search_text(
+                fact,
+                source_conversations=source_conversations,
+                conversation_search_texts=conversation_search_texts,
+            ),
             limit=None,
         )
     )
@@ -6479,6 +6500,7 @@ def _fact_search_text(
     *,
     include_source_memory: bool = True,
     source_conversations: Mapping[str, dict[str, Any]] | None = None,
+    conversation_search_texts: dict[int, str] | None = None,
 ) -> str:
     parts = [
         str(fact.get(FactField.SUBJECT.value, "")),
@@ -6492,7 +6514,11 @@ def _fact_search_text(
             fact, source_conversations=source_conversations
         )
         if isinstance(conversation, dict):
-            parts.append(_conversation_search_text(conversation))
+            parts.append(
+                _conversation_search_text_with_cache(
+                    conversation, cache=conversation_search_texts
+                )
+            )
     return " ".join(parts)
 
 
@@ -6502,6 +6528,7 @@ def _rank_facts_by_text_query(
     *,
     include_source_memory: bool = True,
     source_conversations: Mapping[str, dict[str, Any]] | None = None,
+    conversation_search_texts: dict[int, str] | None = None,
 ) -> list[dict[str, Any]]:
     if not query:
         return facts
@@ -6516,6 +6543,7 @@ def _rank_facts_by_text_query(
             fact,
             include_source_memory=include_source_memory,
             source_conversations=source_conversations,
+            conversation_search_texts=conversation_search_texts,
         )
         fact_tokens = set(_query_tokens(fact_text, limit=None))
         if identity_tokens and not identity_tokens.issubset(fact_tokens):
@@ -6746,10 +6774,12 @@ def fact_search(
             source_conversations=source_conversations,
         )
     ]
+    conversation_search_texts: dict[int, str] = {}
     facts = _rank_facts_by_text_query(
         facts,
         fact_filters.query,
         source_conversations=source_conversations,
+        conversation_search_texts=conversation_search_texts,
     )
     return {
         "status": "ok",

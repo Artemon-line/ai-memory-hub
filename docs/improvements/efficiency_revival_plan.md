@@ -164,7 +164,7 @@ Start with low-risk work that should not alter ranking or storage semantics.
       time; never allow one configured schema to contaminate another runtime.
 - [ ] Reuse bounded provider clients and connection pools rather than creating
       network clients per operation.
-- [ ] Compute normalized conversation/search text once per candidate within a
+- [x] Compute normalized conversation/search text once per candidate within a
       request and reuse it across lexical, metadata, fact, and boost stages.
 - [x] Replace repeated single-record lookups with existing `get_many` or a new
       provider capability only where traces show N+1 behavior.
@@ -208,6 +208,16 @@ results while reducing the former 240 source reads across ranking and public
 projection to one batch read for three unique conversations (more than 99%
 fewer metadata read calls). No conversation payloads are cached across
 requests.
+
+Implementation note (request-local search-text reuse slice): fact ranking and
+question narrowing now share each hydrated source conversation's assembled
+search text for the duration of that operation. The cache uses in-memory object
+identity, is discarded after the request stage, and never stores text across
+requests. Lexical candidates already assembled their conversation text once per
+candidate. The deterministic `memory.benchmarks.search_text_efficiency` fixture
+preserves all 120 ranked facts while reducing source conversation search-text
+construction from 120 times to three times for three unique conversations
+(97.5% less construction work).
 
 ## Phase 2: Make Ingestion Proportional To New Information
 

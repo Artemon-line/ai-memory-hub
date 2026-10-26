@@ -2477,6 +2477,39 @@ def test_fact_search_batches_shared_source_conversation_hydration() -> None:
     assert metadata.get_many_calls == [[conversation["id"]]]
 
 
+def test_fact_search_reuses_one_request_local_conversation_text_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["messages"] = [
+        {"role": "user", "text": "My name is Taylor. I work as a backend engineer."}
+    ]
+    mvp_ingestion.ingest_messages(conversation)
+    observed_caches: list[dict[int, str] | None] = []
+    original = mvp_ingestion._conversation_search_text_with_cache
+
+    def tracking_search_text(
+        source: dict[str, Any], *, cache: dict[int, str] | None
+    ) -> str:
+        observed_caches.append(cache)
+        return original(source, cache=cache)
+
+    monkeypatch.setattr(
+        mvp_ingestion,
+        "_conversation_search_text_with_cache",
+        tracking_search_text,
+    )
+
+    result = mvp_ingestion.fact_search(query="Taylor backend engineer")
+
+    assert len(result["results"]) > 1
+    assert len(observed_caches) > 1
+    assert observed_caches[0] is not None
+    assert all(cache is observed_caches[0] for cache in observed_caches)
+    assert len(observed_caches[0]) == 1
+
+
 def test_fact_source_hydration_respects_backend_batch_bound() -> None:
     metadata, _ = _configure_stubs()
     facts = []
