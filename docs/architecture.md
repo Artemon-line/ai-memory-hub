@@ -264,7 +264,7 @@ with both fact and chunk evidence. Corrected current facts remain authoritative
 over stale historical chunks. Context budgeting is applied to the selected
 chunk evidence after arbitration.
 
-When budgeting is enabled, `memory_ask` selects, truncates, or drops context chunks within the configured budget and may return `context_tokens_used`, `chunks_selected`, `chunks_dropped`, and `tokenizer_used`.
+When budgeting is enabled, `memory_ask` selects, truncates, or drops context chunks within the configured budget and may return `context_tokens_used`, `chunks_selected`, `chunks_dropped`, and `tokenizer_used`. Exact suffix/prefix overlap between adjacent token windows from the same source message is represented once in the selected context while each retained span keeps its original citation.
 
 Semantic reranking is optional. With no reranker, on timeout, or on invalid
 reranker output, retrieval uses the same deterministic fused ordering. Inputs

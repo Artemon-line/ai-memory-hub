@@ -6,6 +6,8 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Removed exact repeated token-window overlap from budgeted ask and handoff
+  context when adjacent chunks are proven to come from the same source message.
 - Skipped semantic reranker projection and invocation when zero or one
   candidate can be reranked, with an explicit diagnostic mode and deterministic
   call-amplification coverage.

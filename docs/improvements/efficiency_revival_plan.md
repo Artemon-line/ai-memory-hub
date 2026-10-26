@@ -327,7 +327,7 @@ versioned quality gate remains green with unchanged retrieval metrics.
 - [ ] Measure input/output tokens and selected evidence per ask mode and client.
 - [ ] Define default context budgets by concise/detailed response mode, with
       explicit overrides and stable diagnostics.
-- [ ] Deduplicate overlapping chunks before token counting and context assembly.
+- [x] Deduplicate overlapping chunks before token counting and context assembly.
 - [ ] Prefer the smallest evidence span that preserves the claim and citation.
 - [ ] Use existing summaries and validated facts as compact evidence; never
       synthesize a summary merely to save tokens unless its creation cost and
@@ -343,6 +343,15 @@ Acceptance criteria:
 - Total answer latency or provider cost improves after including local token
   selection overhead.
 - Citation completeness and answer-contract accuracy remain unchanged.
+
+Implementation note (overlapping-context deduplication slice): budgeted ask,
+fact/chunk arbitration, and handoff context now remove an exact suffix/prefix
+overlap only when adjacent chunks share both a conversation ID and stored source
+message hash. Ranking and citation identities remain unchanged, and different
+messages retain repeated wording. The deterministic
+`memory.benchmarks.context_overlap_efficiency` fixture preserves all unique
+evidence while reducing total selected-context accounting from 40 to 38 tokens
+(5%); citation framing accounts for the invariant portion of that measurement.
 
 ## Phase 5: Storage And Index Efficiency
 
@@ -449,6 +458,7 @@ uv run python -m memory.benchmarks.cache_candidates --iterations 1000
 uv run python -m memory.benchmarks.ingestion_efficiency
 uv run python -m memory.benchmarks.reranker_efficiency
 uv run python -m memory.benchmarks.retrieval_amplification
+uv run python -m memory.benchmarks.context_overlap_efficiency
 uv run python -m memory.benchmarks.token_budget --iterations 200
 uv run python -m memory.benchmarks.quality_gate \
   --output reports/quality/quality-gate.json

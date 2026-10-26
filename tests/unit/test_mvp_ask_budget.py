@@ -75,6 +75,174 @@ def test_select_ask_context_prefers_ranked_chunks_and_drops_overflow(monkeypatch
     assert context_truncated is True
 
 
+def test_select_ask_context_removes_exact_overlap_from_adjacent_windows(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        mvp_ingestion, "count_tokens", lambda text, encoding: len(text.split())
+    )
+    conversation = {
+        "metadata": {
+            "index_chunks": [
+                {"chunk_index": 0, "message_hash": "sha256:message"},
+                {"chunk_index": 1, "message_hash": "sha256:message"},
+            ]
+        }
+    }
+    matches = [
+        {
+            "id": "memory-a",
+            "chunk_index": 0,
+            "score": 0.1,
+            "text": "alpha beta gamma delta",
+            "conversation": conversation,
+        },
+        {
+            "id": "memory-a",
+            "chunk_index": 1,
+            "score": 0.2,
+            "text": "gamma delta epsilon zeta",
+            "conversation": conversation,
+        },
+    ]
+
+    selected, citations, lines, tokens_used, dropped, context_truncated = (
+        mvp_ingestion._select_ask_context(
+            matches=matches,
+            max_context_tokens=20,
+            encoding="test",
+        )
+    )
+
+    assert [row["text"] for row in selected] == [
+        "alpha beta gamma delta",
+        "epsilon zeta",
+    ]
+    assert citations[1]["text"] == "epsilon zeta"
+    assert lines[1] == "- [memory-a#1] epsilon zeta"
+    assert tokens_used == 10
+    assert dropped == 0
+    assert context_truncated is False
+
+
+def test_select_ask_context_preserves_overlap_from_different_messages(monkeypatch) -> None:
+    monkeypatch.setattr(
+        mvp_ingestion, "count_tokens", lambda text, encoding: len(text.split())
+    )
+    conversation = {
+        "metadata": {
+            "index_chunks": [
+                {"chunk_index": 0, "message_hash": "sha256:first"},
+                {"chunk_index": 1, "message_hash": "sha256:second"},
+            ]
+        }
+    }
+    matches = [
+        {
+            "id": "memory-a",
+            "chunk_index": 0,
+            "score": 0.1,
+            "text": "alpha beta gamma delta",
+            "conversation": conversation,
+        },
+        {
+            "id": "memory-a",
+            "chunk_index": 1,
+            "score": 0.2,
+            "text": "gamma delta epsilon zeta",
+            "conversation": conversation,
+        },
+    ]
+
+    selected, citations, _, _, _, _ = mvp_ingestion._select_ask_context(
+        matches=matches,
+        max_context_tokens=20,
+        encoding="test",
+    )
+
+    assert selected[1]["text"] == "gamma delta epsilon zeta"
+    assert citations[1]["text"] == "gamma delta epsilon zeta"
+
+
+def test_select_ask_context_handles_reverse_window_ranking(monkeypatch) -> None:
+    monkeypatch.setattr(
+        mvp_ingestion, "count_tokens", lambda text, encoding: len(text.split())
+    )
+    conversation = {
+        "metadata": {
+            "index_chunks": [
+                {"chunk_index": 0, "message_hash": "sha256:message"},
+                {"chunk_index": 1, "message_hash": "sha256:message"},
+            ]
+        }
+    }
+    matches = [
+        {
+            "id": "memory-a",
+            "chunk_index": 1,
+            "score": 0.1,
+            "text": "gamma delta epsilon zeta",
+            "conversation": conversation,
+        },
+        {
+            "id": "memory-a",
+            "chunk_index": 0,
+            "score": 0.2,
+            "text": "alpha beta gamma delta",
+            "conversation": conversation,
+        },
+    ]
+
+    selected, _, _, _, _, _ = mvp_ingestion._select_ask_context(
+        matches=matches,
+        max_context_tokens=20,
+        encoding="test",
+    )
+
+    assert [row["text"] for row in selected] == [
+        "gamma delta epsilon zeta",
+        "alpha beta",
+    ]
+
+
+def test_select_ask_context_does_not_trim_partial_word_match(monkeypatch) -> None:
+    monkeypatch.setattr(
+        mvp_ingestion, "count_tokens", lambda text, encoding: len(text.split())
+    )
+    conversation = {
+        "metadata": {
+            "index_chunks": [
+                {"chunk_index": 0, "message_hash": "sha256:message"},
+                {"chunk_index": 1, "message_hash": "sha256:message"},
+            ]
+        }
+    }
+    matches = [
+        {
+            "id": "memory-a",
+            "chunk_index": 0,
+            "score": 0.1,
+            "text": "alpha",
+            "conversation": conversation,
+        },
+        {
+            "id": "memory-a",
+            "chunk_index": 1,
+            "score": 0.2,
+            "text": "apple next",
+            "conversation": conversation,
+        },
+    ]
+
+    selected, _, _, _, _, _ = mvp_ingestion._select_ask_context(
+        matches=matches,
+        max_context_tokens=20,
+        encoding="test",
+    )
+
+    assert selected[1]["text"] == "apple next"
+
+
 def test_ask_uses_config_budget_when_tokenizer_enabled(monkeypatch) -> None:
     monkeypatch.setattr(
         mvp_ingestion,
