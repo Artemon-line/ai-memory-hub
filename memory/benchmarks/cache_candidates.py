@@ -4,6 +4,7 @@ import argparse
 import cProfile
 import io
 import json
+import math
 import pstats
 from statistics import mean
 from time import perf_counter
@@ -75,18 +76,29 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _measure(fn: Callable[[], Any], iterations: int) -> dict[str, float]:
-    samples: list[float] = []
+    first_start = perf_counter()
     fn()
+    first_ms = (perf_counter() - first_start) * 1000.0
+    samples: list[float] = []
     for _ in range(iterations):
         start = perf_counter()
         fn()
         samples.append((perf_counter() - start) * 1000.0)
+    ordered = sorted(samples)
     return {
-        "avg_ms": mean(samples),
+        "first_call_ms": first_ms,
+        "avg_ms": mean(ordered),
         "total_ms": sum(samples),
-        "min_ms": min(samples),
-        "max_ms": max(samples),
+        "min_ms": ordered[0],
+        "p50_ms": _percentile(ordered, 0.50),
+        "p95_ms": _percentile(ordered, 0.95),
+        "p99_ms": _percentile(ordered, 0.99),
+        "max_ms": ordered[-1],
     }
+
+
+def _percentile(ordered: list[float], percentile: float) -> float:
+    return ordered[min(math.ceil(len(ordered) * percentile) - 1, len(ordered) - 1)]
 
 
 def _candidate_summary(measurements: dict[str, dict[str, float]]) -> list[dict[str, Any]]:

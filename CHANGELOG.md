@@ -6,6 +6,9 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Improved performance benchmark fidelity with exception-free in-memory audit
+  accounting, first-call and warm latency distributions, p50/p95/p99 reporting,
+  and per-request candidate/context amplification metrics.
 - Added a versioned synthetic retrieval and extraction quality corpus with a
   credential-free CI gate, comparable provider/model reports, auditable
   thresholds, ranking/filter/fact/temporal metrics, latency percentiles, and
