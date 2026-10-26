@@ -4,7 +4,6 @@ import argparse
 import json
 from copy import deepcopy
 from dataclasses import dataclass
-from time import perf_counter
 from typing import Any
 
 from memory.backend.metadata_store import IndexChunkField, IndexState, MetadataField
@@ -164,17 +163,13 @@ def run_benchmark() -> dict[str, Any]:
     )
     try:
         mvp_ingestion.configure_runtime(runtime=runtime)
-        accepted_started = perf_counter()
         accepted_result = mvp_ingestion.ingest_messages(deepcopy(_PAYLOAD))
-        accepted_ms = (perf_counter() - accepted_started) * 1000.0
         accepted_work = ledger.snapshot()
 
         ledger.reset()
         duplicate = deepcopy(_PAYLOAD)
         duplicate["id"] = "00000000-0000-4000-8000-000000000102"
-        duplicate_started = perf_counter()
         duplicate_result = mvp_ingestion.ingest_messages(duplicate)
-        duplicate_ms = (perf_counter() - duplicate_started) * 1000.0
         duplicate_work = ledger.snapshot()
     finally:
         mvp_ingestion._RUNTIME = original_runtime
@@ -182,14 +177,13 @@ def run_benchmark() -> dict[str, Any]:
     message_count = len(_PAYLOAD["messages"])
     baseline_embedding_inputs = int(accepted_result["embedded_chunks"])
     return {
+        "measurement": "deterministic_work_amplification",
         "accepted": {
-            "latency_ms": accepted_ms,
             "result": accepted_result,
             "work": accepted_work,
             "work_per_message": _per_message(accepted_work, message_count),
         },
         "duplicate": {
-            "latency_ms": duplicate_ms,
             "result": duplicate_result,
             "work": duplicate_work,
             "work_per_message": _per_message(duplicate_work, message_count),

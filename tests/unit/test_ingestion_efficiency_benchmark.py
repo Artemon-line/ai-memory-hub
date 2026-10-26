@@ -8,6 +8,9 @@ from memory.benchmarks.ingestion_efficiency import assert_thresholds, run_benchm
 def test_ingestion_efficiency_reports_zero_duplicate_indexing_work() -> None:
     report = run_benchmark()
 
+    assert report["measurement"] == "deterministic_work_amplification"
+    assert "latency_ms" not in report["accepted"]
+    assert "latency_ms" not in report["duplicate"]
     assert report["accepted"]["work"]["embedding_inputs"] == 2
     assert report["accepted"]["work"]["vector_rows_written"] == 2
     assert report["duplicate"]["result"]["embedded_chunks"] == 0
