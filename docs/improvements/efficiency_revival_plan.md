@@ -166,7 +166,7 @@ Start with low-risk work that should not alter ranking or storage semantics.
       network clients per operation.
 - [ ] Compute normalized conversation/search text once per candidate within a
       request and reuse it across lexical, metadata, fact, and boost stages.
-- [ ] Replace repeated single-record lookups with existing `get_many` or a new
+- [x] Replace repeated single-record lookups with existing `get_many` or a new
       provider capability only where traces show N+1 behavior.
 - [ ] Avoid building detailed diagnostics, provenance projections, or full
       result bodies when the caller requested a concise response.
@@ -196,6 +196,18 @@ the validator reduced unprofiled validation p95 from `29.60 ms` to `0.33 ms`
 (more than 98%); exact timings are environment-dependent. Invalidation, mutation
 isolation, and multi-schema tests cover reload and concurrent configuration
 safety.
+
+Implementation note (fact-source batch hydration slice): fact filtering,
+text ranking, temporal projection, retrieval-candidate construction, and
+provenance assembly now deduplicate source conversation IDs and reuse bounded
+`get_many` reads. Batches are capped at 500 IDs to match every metadata
+provider contract, while custom stores without `get_many` retain the compatible
+single-read fallback. The deterministic
+`memory.benchmarks.fact_hydration_efficiency` fixture preserves all 120 fact
+results while reducing the former 240 source reads across ranking and public
+projection to one batch read for three unique conversations (more than 99%
+fewer metadata read calls). No conversation payloads are cached across
+requests.
 
 ## Phase 2: Make Ingestion Proportional To New Information
 

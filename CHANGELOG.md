@@ -6,6 +6,9 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Replaced repeated fact-source conversation reads during filtering, ranking,
+  projection, candidate construction, and provenance assembly with bounded,
+  deduplicated metadata batch hydration and a machine-readable work benchmark.
 - Short-circuited fully indexed exact-duplicate ingestion before derived-record,
   embedding, metadata, and vector work, while retaining incomplete-index repair
   and adding a machine-readable ingestion work ledger.

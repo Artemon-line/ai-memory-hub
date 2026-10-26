@@ -586,6 +586,7 @@ _MAX_PAYLOAD_BYTES = 25_000_000
 _MAX_RAW_TRANSCRIPT_BYTES = 5_000_000
 _MAX_METADATA_BYTES = 1_000_000
 _MAX_METADATA_SUMMARY_CHARS = 2_000
+_FACT_SOURCE_HYDRATION_BATCH_SIZE = 500
 _MAX_AUTO_TAGS = 24
 _MAX_SENSITIVE_FINDINGS = 16
 _MAX_LINEAGE_DEPTH = 16
@@ -4018,7 +4019,7 @@ def _fact_candidate_rows(
         date_to=filters.date_to,
     ).get("results", [])
     rows: list[dict[str, Any]] = []
-    store = _runtime().metadata_store
+    source_conversations = _source_conversations_for_facts(facts)
     seen: set[tuple[str, int]] = set()
     for fact in facts:
         if not isinstance(fact, dict):
@@ -4026,7 +4027,7 @@ def _fact_candidate_rows(
         memory_id = str(fact.get(FactField.SOURCE_CONVERSATION_ID.value, ""))
         if not memory_id:
             continue
-        conversation = _with_generated_summary_metadata(store.get(memory_id))
+        conversation = _with_generated_summary_metadata(source_conversations.get(memory_id))
         if not _conversation_visible(conversation, owner_id, project_id, memory_status):
             continue
         if not _conversation_matches_filters(conversation, filters):
@@ -5831,7 +5832,10 @@ def _answer_from_facts(
             break
     if not candidates:
         return None
-    public_timeline = [_public_fact(fact) for fact in candidates]
+    source_conversations = _source_conversations_for_facts(candidates)
+    public_timeline = [
+        _public_fact(fact, source_conversations=source_conversations) for fact in candidates
+    ]
     projection = FactTimelineProjector().project(public_timeline)
     selected_entries = list(projection.unique_latest_entries)
     if not selected_entries:
@@ -6346,8 +6350,17 @@ def _narrow_facts_for_question(
     question_tokens = _specific_fact_question_tokens(question, query)
     if not question_tokens:
         return facts
+    source_conversations = _source_conversations_for_facts(facts)
     scored = [
-        (_fact_question_overlap_score(fact, question_tokens), index, fact)
+        (
+            _fact_question_overlap_score(
+                fact,
+                question_tokens,
+                source_conversations=source_conversations,
+            ),
+            index,
+            fact,
+        )
         for index, fact in enumerate(facts)
     ]
     best_score = max(score for score, _index, _fact in scored)
@@ -6397,11 +6410,18 @@ def _best_fact_projection_group(
     include_source_memory: bool = True,
 ) -> list[dict[str, Any]]:
     query_tokens = _fact_text_query_tokens(question)
+    source_conversations = (
+        _source_conversations_for_facts(facts) if include_source_memory else {}
+    )
     groups: dict[tuple[str, str], list[tuple[int, int, dict[str, Any]]]] = {}
     for index, fact in enumerate(facts):
         fact_tokens = set(
             _query_tokens(
-                _fact_search_text(fact, include_source_memory=include_source_memory),
+                _fact_search_text(
+                    fact,
+                    include_source_memory=include_source_memory,
+                    source_conversations=source_conversations,
+                ),
                 limit=None,
             )
         )
@@ -6439,12 +6459,27 @@ def _specific_fact_question_tokens(question: str, query: dict[str, str]) -> set[
     return {token for token in _query_tokens(question, limit=None) if token not in ignored_tokens}
 
 
-def _fact_question_overlap_score(fact: dict[str, Any], question_tokens: set[str]) -> int:
-    fact_tokens = set(_query_tokens(_fact_search_text(fact), limit=None))
+def _fact_question_overlap_score(
+    fact: dict[str, Any],
+    question_tokens: set[str],
+    *,
+    source_conversations: Mapping[str, dict[str, Any]] | None = None,
+) -> int:
+    fact_tokens = set(
+        _query_tokens(
+            _fact_search_text(fact, source_conversations=source_conversations),
+            limit=None,
+        )
+    )
     return len(question_tokens.intersection(fact_tokens))
 
 
-def _fact_search_text(fact: dict[str, Any], *, include_source_memory: bool = True) -> str:
+def _fact_search_text(
+    fact: dict[str, Any],
+    *,
+    include_source_memory: bool = True,
+    source_conversations: Mapping[str, dict[str, Any]] | None = None,
+) -> str:
     parts = [
         str(fact.get(FactField.SUBJECT.value, "")),
         str(fact.get(FactField.PREDICATE.value, "")).replace("_", " "),
@@ -6453,7 +6488,9 @@ def _fact_search_text(fact: dict[str, Any], *, include_source_memory: bool = Tru
         str(fact.get(FactField.SOURCE_CONVERSATION_ID.value, "")),
     ]
     if include_source_memory:
-        conversation = _source_conversation_for_fact(fact)
+        conversation = _source_conversation_for_fact(
+            fact, source_conversations=source_conversations
+        )
         if isinstance(conversation, dict):
             parts.append(_conversation_search_text(conversation))
     return " ".join(parts)
@@ -6464,6 +6501,7 @@ def _rank_facts_by_text_query(
     query: str | None,
     *,
     include_source_memory: bool = True,
+    source_conversations: Mapping[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     if not query:
         return facts
@@ -6474,7 +6512,11 @@ def _rank_facts_by_text_query(
     minimum_overlap = _minimum_fact_text_query_overlap(query_tokens)
     scored: list[tuple[int, int, dict[str, Any]]] = []
     for index, fact in enumerate(facts):
-        fact_text = _fact_search_text(fact, include_source_memory=include_source_memory)
+        fact_text = _fact_search_text(
+            fact,
+            include_source_memory=include_source_memory,
+            source_conversations=source_conversations,
+        )
         fact_tokens = set(_query_tokens(fact_text, limit=None))
         if identity_tokens and not identity_tokens.issubset(fact_tokens):
             continue
@@ -6530,24 +6572,34 @@ def _search_facts(
             include_superseded=fact_filters.include_superseded,
             project_id=project_id,
         )
-        return [
+        facts = [fact for fact in facts if _fact_allowed(fact, owner_id, project_id)]
+    else:
+        facts = getattr(store, "_facts", [])
+        if not isinstance(facts, list):
+            return []
+        facts = [
             fact
             for fact in facts
-            if _fact_allowed(fact, owner_id, project_id)
-            and _fact_matches_filters(fact, conversation_filters, fact_filters)
+            if isinstance(fact, dict)
+            and (subject is None or str(fact.get(FactField.SUBJECT.value)) == subject)
+            and (predicate is None or str(fact.get(FactField.PREDICATE.value)) == predicate)
+            and _fact_allowed(fact, owner_id, project_id)
+            and not fact.get(FactField.DELETED_AT.value)
         ]
-    facts = getattr(store, "_facts", [])
-    if not isinstance(facts, list):
-        return []
+    source_conversations = (
+        _source_conversations_for_facts(facts)
+        if conversation_filters.has_filters or fact_filters.source
+        else {}
+    )
     return [
         fact
         for fact in facts
-        if isinstance(fact, dict)
-        and (subject is None or str(fact.get(FactField.SUBJECT.value)) == subject)
-        and (predicate is None or str(fact.get(FactField.PREDICATE.value)) == predicate)
-        and _fact_allowed(fact, owner_id, project_id)
-        and _fact_matches_filters(fact, conversation_filters, fact_filters)
-        and not fact.get(FactField.DELETED_AT.value)
+        if _fact_matches_filters(
+            fact,
+            conversation_filters,
+            fact_filters,
+            source_conversations=source_conversations,
+        )
     ]
 
 
@@ -6555,6 +6607,8 @@ def _fact_matches_filters(
     fact: dict[str, Any],
     conversation_filters: ConversationFilters,
     fact_filters: FactFilters,
+    *,
+    source_conversations: Mapping[str, dict[str, Any]] | None = None,
 ) -> bool:
     if fact_filters.status == "active" and fact.get(FactField.SUPERSEDED_BY.value):
         return False
@@ -6612,7 +6666,9 @@ def _fact_matches_filters(
                 thread_id=conversation_filters.thread_id,
                 handoff_only=conversation_filters.handoff_only,
             )
-        conversation = _source_conversation_for_fact(fact)
+        conversation = _source_conversation_for_fact(
+            fact, source_conversations=source_conversations
+        )
         if not _conversation_matches_filters(conversation, source_filters):
             return False
     return True
@@ -6665,7 +6721,6 @@ def fact_search(
             fact
             for fact in facts
             if _fact_allowed(fact, owner_id, effective_project_id)
-            and _fact_matches_filters(fact, ConversationFilters(), fact_filters)
         ]
     else:
         facts = getattr(store, "_facts", [])
@@ -6678,11 +6733,30 @@ def fact_search(
             and (subject is None or str(fact.get(FactField.SUBJECT.value)) == subject)
             and (predicate is None or str(fact.get(FactField.PREDICATE.value)) == predicate)
             and _fact_allowed(fact, owner_id, effective_project_id)
-            and _fact_matches_filters(fact, ConversationFilters(), fact_filters)
             and not fact.get(FactField.DELETED_AT.value)
         ]
-    facts = _rank_facts_by_text_query(facts, fact_filters.query)
-    return {"status": "ok", "results": [_public_fact(fact) for fact in facts]}
+    source_conversations = _source_conversations_for_facts(facts)
+    facts = [
+        fact
+        for fact in facts
+        if _fact_matches_filters(
+            fact,
+            ConversationFilters(),
+            fact_filters,
+            source_conversations=source_conversations,
+        )
+    ]
+    facts = _rank_facts_by_text_query(
+        facts,
+        fact_filters.query,
+        source_conversations=source_conversations,
+    )
+    return {
+        "status": "ok",
+        "results": [
+            _public_fact(fact, source_conversations=source_conversations) for fact in facts
+        ],
+    }
 
 
 def graph_entity_search(
@@ -7678,7 +7752,11 @@ def _store_generated_summary(summary: dict[str, Any]) -> None:
     setattr(store, "_generated_summaries", summaries)
 
 
-def _public_fact(fact: dict[str, Any]) -> dict[str, Any]:
+def _public_fact(
+    fact: dict[str, Any],
+    *,
+    source_conversations: Mapping[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     public = dict(fact)
     computed_source_quality = _source_quality_for_fact(public)
     if (
@@ -7701,17 +7779,67 @@ def _public_fact(fact: dict[str, Any]) -> dict[str, Any]:
         public[FactField.OBJECT_NORMALIZED.value] = _normalized_fact_object(public)
     public.update(extraction_public_fields(public.get(FactField.QUALIFIERS.value)))
     public.update(_fact_save_intent_fields(public))
-    public.update(temporal_fact_source_metadata(public, _source_conversation_for_fact(public)))
+    public.update(
+        temporal_fact_source_metadata(
+            public,
+            _source_conversation_for_fact(
+                public, source_conversations=source_conversations
+            ),
+        )
+    )
     public.setdefault(FactField.SUPERSEDED_AT.value, None)
     return public
 
 
-def _source_conversation_for_fact(fact: dict[str, Any]) -> dict[str, Any] | None:
+def _source_conversation_for_fact(
+    fact: dict[str, Any],
+    *,
+    source_conversations: Mapping[str, dict[str, Any]] | None = None,
+) -> dict[str, Any] | None:
     conversation_id = fact.get(FactField.SOURCE_CONVERSATION_ID.value)
     if not isinstance(conversation_id, str) or not conversation_id.strip():
         return None
+    if source_conversations is not None:
+        conversation = source_conversations.get(conversation_id)
+        return conversation if isinstance(conversation, dict) else None
     conversation = _runtime().metadata_store.get(conversation_id)
     return conversation if isinstance(conversation, dict) else None
+
+
+def _source_conversations_for_facts(
+    facts: Sequence[Mapping[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    conversation_ids = _unique_strings(
+        [
+            str(fact.get(FactField.SOURCE_CONVERSATION_ID.value, "")).strip()
+            for fact in facts
+            if isinstance(fact, Mapping)
+            and str(fact.get(FactField.SOURCE_CONVERSATION_ID.value, "")).strip()
+        ]
+    )
+    if not conversation_ids:
+        return {}
+    store = _runtime().metadata_store
+    hydrated: dict[str, dict[str, Any]] = {}
+    if hasattr(store, "get_many"):
+        for offset in range(0, len(conversation_ids), _FACT_SOURCE_HYDRATION_BATCH_SIZE):
+            batch = conversation_ids[offset : offset + _FACT_SOURCE_HYDRATION_BATCH_SIZE]
+            rows = store.get_many(batch)
+            if not isinstance(rows, Mapping):
+                continue
+            hydrated.update(
+                {
+                    str(memory_id): conversation
+                    for memory_id, conversation in rows.items()
+                    if isinstance(conversation, dict)
+                }
+            )
+        return hydrated
+    for conversation_id in conversation_ids:
+        conversation = store.get(conversation_id)
+        if isinstance(conversation, dict):
+            hydrated[conversation_id] = conversation
+    return hydrated
 
 
 def _source_quality_for_fact(fact: dict[str, Any]) -> str:
@@ -7909,6 +8037,7 @@ def _fact_citation(fact: dict[str, Any]) -> dict[str, Any]:
 
 def _provenance_from_facts(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
     grouped: dict[str, dict[str, Any]] = {}
+    source_conversations = _source_conversations_for_facts(facts)
     for fact in facts:
         conversation_id = str(fact.get(FactField.SOURCE_CONVERSATION_ID.value, ""))
         item = grouped.setdefault(
@@ -7924,7 +8053,9 @@ def _provenance_from_facts(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "save_intent_sources": [],
             },
         )
-        conversation = _source_conversation_for_fact(fact)
+        conversation = _source_conversation_for_fact(
+            fact, source_conversations=source_conversations
+        )
         if conversation is not None:
             item["source"] = conversation.get(MemoryField.SOURCE.value)
             item["title"] = conversation.get("title")
