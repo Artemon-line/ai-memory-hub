@@ -50,6 +50,8 @@ class StubEmbedder:
 class StubMetadataStore:
     def __init__(self):
         self.by_id: dict[str, dict[str, Any]] = {}
+        self.get_calls: list[str] = []
+        self.get_many_calls: list[list[str]] = []
 
     def insert(self, conversation_json: dict[str, Any]) -> str:
         memory_id = str(conversation_json["id"])
@@ -61,9 +63,11 @@ class StubMetadataStore:
         return conversation_id in self.by_id
 
     def get(self, memory_id: str):
+        self.get_calls.append(memory_id)
         return self.by_id.get(memory_id)
 
     def get_many(self, ids: list[str]):
+        self.get_many_calls.append(list(ids))
         return {id_: self.by_id[id_] for id_ in ids if id_ in self.by_id}
 
 
@@ -2451,6 +2455,73 @@ def test_fact_search_query_filters_across_fact_text() -> None:
     result = mvp_ingestion.fact_search(query="teal macro lens")
 
     assert [fact["object"] for fact in result["results"]] == ["a teal macro lens"]
+
+
+def test_fact_search_batches_shared_source_conversation_hydration() -> None:
+    metadata, _ = _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["messages"] = [
+        {"role": "user", "text": "My name is Taylor. I work as a backend engineer."}
+    ]
+    mvp_ingestion.ingest_messages(conversation)
+    metadata.get_calls.clear()
+    metadata.get_many_calls.clear()
+
+    result = mvp_ingestion.fact_search(query="Taylor backend engineer")
+
+    assert {fact["predicate"] for fact in result["results"]} >= {
+        "profile_name",
+        "profile_role",
+    }
+    assert metadata.get_calls == []
+    assert metadata.get_many_calls == [[conversation["id"]]]
+
+
+def test_fact_source_hydration_respects_backend_batch_bound() -> None:
+    metadata, _ = _configure_stubs()
+    facts = []
+    for index in range(501):
+        memory_id = f"00000000-0000-4000-8000-{index:012d}"
+        metadata.by_id[memory_id] = {"id": memory_id, "messages": []}
+        facts.append({"source_conversation_id": memory_id})
+
+    hydrated = mvp_ingestion._source_conversations_for_facts(facts)
+
+    assert len(hydrated) == 501
+    assert [len(batch) for batch in metadata.get_many_calls] == [500, 1]
+    assert metadata.get_calls == []
+
+
+def test_fact_search_filters_scope_before_source_hydration() -> None:
+    metadata, _ = _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["messages"] = [{"role": "user", "text": "My name is Taylor."}]
+    mvp_ingestion.ingest_messages(conversation)
+    foreign_memory_id = "99999999-9999-4999-8999-999999999999"
+    metadata.by_id[foreign_memory_id] = {
+        "id": foreign_memory_id,
+        "messages": [{"role": "user", "text": "My name is Foreign."}],
+        "metadata": {"project_id": "foreign-project"},
+    }
+    metadata._facts.append(
+        {
+            "id": "foreign-fact",
+            "subject": "user",
+            "predicate": "profile_name",
+            "object": "Foreign",
+            "source_conversation_id": foreign_memory_id,
+            "project_id": "foreign-project",
+            "qualifiers": {},
+        }
+    )
+    metadata.get_calls.clear()
+    metadata.get_many_calls.clear()
+
+    result = mvp_ingestion.fact_search(predicate="profile_name")
+
+    assert [fact["object"] for fact in result["results"]] == ["Taylor"]
+    assert metadata.get_many_calls == [[conversation["id"]]]
+    assert foreign_memory_id not in metadata.get_many_calls[0]
 
 
 def test_search_fuses_fact_candidates_without_vector_or_lexical_candidates() -> None:
