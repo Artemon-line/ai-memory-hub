@@ -1,0 +1,3319 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Local-first deterministic memory ingestion hub">
+      
+      
+      
+        <link rel="canonical" href="https://artemon-line.github.io/ai-memory-hub/latest/docs/connect_ui/">
+      
+      
+        <link rel="prev" href="../agents/">
+      
+      
+        <link rel="next" href="../external_oidc/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/brand/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Connect UI and OAuth Setup - ai-memory-hub</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/connect.css">
+    
+      <link rel="stylesheet" href="../stylesheets/leap-day-dark.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#connect-ui-and-oauth-setup" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              
+  
+    These docs describe the <strong>main</strong> branch. They may cover experimental,
+    unreleased, or untested behavior.
+    <a href="../../.."><strong>View the latest released docs.</strong></a>
+  
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="ai-memory-hub" class="md-header__button md-logo" aria-label="ai-memory-hub" data-md-component="logo">
+      
+  <img src="../assets/brand/ai-memory-hub-mark.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ai-memory-hub
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Connect UI and OAuth Setup
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Artemon-line/ai-memory-hub" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Artemon-line/ai-memory-hub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="ai-memory-hub" class="md-nav__button md-logo" aria-label="ai-memory-hub" data-md-component="logo">
+      
+  <img src="../assets/brand/ai-memory-hub-mark.svg" alt="logo">
+
+    </a>
+    ai-memory-hub
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Artemon-line/ai-memory-hub" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Artemon-line/ai-memory-hub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What Exists Now
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    What Exists Now
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Current Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../importing_conversations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Import Conversations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../importer_compatibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importer Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Technical Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Connect UI and OAuth Setup
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Connect UI and OAuth Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#responsibility-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Responsibility Boundary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#access-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Access Modes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#safe-diagnostics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Safe Diagnostics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#supported-providers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported Providers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#packages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Packages
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#google-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Google Setup
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dynamic-mcp-clients" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dynamic MCP Clients
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hub-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hub Config
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#local-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Local Run
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#docker-compose" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Docker Compose
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#client-verification-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Client Verification Matrix
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../external_oidc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    External OIDC and Keycloak
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../brand_assets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Brand Assets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../storage_provider_examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage Provider Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../postgres_driver_decision/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PostgreSQL Driver Decision
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quality_evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quality Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What Is Planned
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    What Is Planned
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../planned_features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Planned Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plans/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CHANGELOG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CONTRIBUTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CODE_OF_CONDUCT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code Of Conduct
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    MCP
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp_client_smoke_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Client Smoke Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../real_client_mcp_smoke_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Real-Client MCP Smoke Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../openclaw_native_mcp_setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OpenClaw Native MCP Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp_utility_compliance_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Utility Compliance Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/mcp_response_format_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Response Format Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/codex_cli_findings_coverage_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Codex CLI MCP Findings Coverage Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/p0_live_mcp_retest_followup_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P0 Live MCP Retest Follow-Up Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/agent_model_footprint_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Model Footprint Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bearer_api_key_auth_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Authorization Compliance Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation Plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Implementation Plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plans/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../prioritized_feature_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prioritized Feature Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../storage_agnostic_byoa_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage BYOA Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../browser_extension_capture_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Browser Extension Capture Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bruno_integration_test_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bruno Integration Test Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project_workspace_collaboration_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Workspace Collaboration Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../deterministic_ingestion_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deterministic Ingestion Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../token_budget_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Token Budget Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli_implementation_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin_readiness_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin Readiness Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release_container_docs_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release, Container, and Docs Publishing Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../first_release_readiness_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First Release Readiness Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release_ci_gap_analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release CI Gap Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release_security_scan_notes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Security Scan Notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../repository_governance_settings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Repository Governance Settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release_promotion_assets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Promotion Assets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project_promotion_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Promotion Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability_logging_telemetry_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability, Logging, and Telemetry Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recurring_codebase_cleanup_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Recurring Codebase Cleanup Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Improvements
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Improvements
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Improvement Plans
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/client_feedback_improvement_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client Feedback Improvement Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/top_priority_mcp_result_shape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Top Priority MCP Result Shape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/mcp_response_format_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Response Format Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/codex_cli_findings_coverage_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Codex CLI MCP Findings Coverage Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/p0_live_mcp_retest_followup_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P0 Live MCP Retest Follow-Up Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/agent_model_footprint_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Model Footprint Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/handoff_memory_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Handoff Memory Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/retrieval_precision_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Retrieval Precision Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/context_building_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Context Building Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/conversation_grouping_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conversation Grouping Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/memory_quality_fact_layer_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Memory Quality And Fact Layer Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/edge_case_test_coverage_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Edge Case Test Coverage Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/explicit_memory_save_intent_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Explicit Memory Save Intent Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/google_oauth_connect_ui_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Google OAuth Connect UI Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/p0_beta_governance_checklist/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P0 Beta Governance Checklist
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/p1_sql_hardening_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P1 SQL Hardening Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/efficiency_revival_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Efficiency Revival Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/vector_dbs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vector Database Options
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/neo4j_aura_graph_memory_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Neo4j Aura Graph Memory Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/app_level_encryption_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    App-Level Memory Encryption Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#responsibility-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Responsibility Boundary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#access-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Access Modes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#safe-diagnostics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Safe Diagnostics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#supported-providers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported Providers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#packages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Packages
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#google-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Google Setup
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dynamic-mcp-clients" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dynamic MCP Clients
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hub-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hub Config
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#local-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Local Run
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#docker-compose" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Docker Compose
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#client-verification-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Client Verification Matrix
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="connect-ui-and-oauth-setup">Connect UI and OAuth Setup</h1>
+<section class="amh-connect-hero">
+  <p class="amh-eyebrow">Local MCP setup</p>
+  <h2>Connect clients to one memory endpoint</h2>
+  <p>The Connect UI is the user-facing setup page for MCP clients. It shows the active MCP URL and renders copyable URL-only client setup snippets with a style that matches the app page.</p>
+  <a href="http://127.0.0.1:8000/connect">Open local Connect UI</a>
+</section>
+
+<p>Open it at:</p>
+<div class="amh-copy-block highlight"><pre><span></span><code>http://127.0.0.1:8000/connect
+</code></pre></div>
+<h2 id="responsibility-boundary">Responsibility Boundary</h2>
+<div class="amh-connect-grid">
+<section class="amh-connect-card">
+<h3>Connect page</h3>
+
+The MCP client owns sign-in, reauthentication, and token storage:
+
+- `/connect` renders setup and client snippets.
+- `/connect/import` provides the signed-in conversation-file import workflow.
+- `/connect` does not ask humans to sign in or copy bearer tokens.
+- Clients should use the MCP OAuth metadata and authorization flow when auth is
+  needed.
+
+</section>
+<section class="amh-connect-card">
+<h3>Protected resource</h3>
+
+The MCP endpoint remains a protected resource server:
+
+- `/mcp` and `/memory/*` require a valid bearer token when
+  `api.auth: oauth_resource_server` is enabled.
+- The hub exposes protected-resource metadata and OAuth authorization-server
+  metadata for compliant MCP clients.
+- Client account switching is client-driven: use the client's reauth/logout
+  flow rather than copying tokens from `/connect`.
+
+</section>
+</div>
+
+<h2 id="access-modes">Access Modes</h2>
+<p><code>/connect</code> renders whenever <code>api.connect.enabled: true</code>. The page adapts to the
+configured auth mode:</p>
+<div class="amh-client-matrix">
+<article>
+<h3>No auth <span class="pending">Local</span></h3>
+<code>api.auth: none</code>
+<p>Shows the endpoint and client snippets for loopback or trusted-network development. Do not expose this mode to untrusted networks.</p>
+</article>
+<article>
+<h3>Bearer/API key <span>Protected</span></h3>
+<code>api.auth: bearer_token</code>
+<p>Shows setup guidance without rendering configured secrets. Client header support still needs client-specific verification.</p>
+</article>
+<article>
+<h3>OAuth resource server <span>Preferred</span></h3>
+<code>api.auth: oauth_resource_server</code>
+<p>Shows OAuth-oriented setup. MCP clients own sign-in, reauthentication, and token storage.</p>
+</article>
+</div>
+
+<h2 id="safe-diagnostics">Safe Diagnostics</h2>
+<p>The Connect UI includes a small diagnostics panel for setup and support. It is
+intentionally allowlisted:</p>
+<ul>
+<li>Service readiness mode.</li>
+<li>Metadata, vector, and embedding provider names.</li>
+<li>Vector fallback state.</li>
+<li>Structured logging state.</li>
+<li>OpenTelemetry tracing and metrics state.</li>
+<li>Whether an OTLP endpoint is in use.</li>
+</ul>
+<p>The panel does not render memory counts, user identities, bearer tokens, API
+keys, DSNs, raw queries, embeddings, or request payloads.</p>
+<h2 id="supported-providers">Supported Providers</h2>
+<p>Current live support is Google OpenID Connect.</p>
+<p>The config model also includes <code>meta</code> and <code>x</code> provider slots so the Connect UI
+can stay provider-shaped, but those providers are not marked supported until
+their provider-specific authorization, callback, claim mapping, and tests are
+implemented. Treat them as disabled placeholders.</p>
+<table>
+<thead>
+<tr>
+<th>Provider</th>
+<th>Status</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Google</td>
+<td>Supported</td>
+<td>Verifies OIDC ID tokens with JOSE/JWKS through the <code>oauth</code> extra.</td>
+</tr>
+<tr>
+<td>Meta</td>
+<td>Placeholder</td>
+<td>Config slot exists; keep disabled.</td>
+</tr>
+<tr>
+<td>X</td>
+<td>Placeholder</td>
+<td>Config slot exists; keep disabled.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="packages">Packages</h2>
+<p>Base installs include the server-rendered UI dependencies:</p>
+<ul>
+<li><code>jinja2</code></li>
+<li><code>itsdangerous</code></li>
+</ul>
+<p>Live provider sign-in requires the OAuth extra:</p>
+<div class="amh-copy-block highlight"><pre><span></span><code>uv<span class="w"> </span>sync<span class="w"> </span>--extra<span class="w"> </span>oauth
+</code></pre></div>
+<p>For package installs:</p>
+<div class="amh-copy-block highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"ai-memory-hub[oauth]"</span>
+</code></pre></div>
+<p>The <code>oauth</code> extra installs HTTPX and JOSE/OIDC token verification dependencies.
+Without it, the Connect UI can render, but live OAuth sign-in returns a
+configuration error.</p>
+<h2 id="google-setup">Google Setup</h2>
+<p>Create an OAuth client in Google Cloud and add the exact redirect URI used by
+your hub config. For the local example:</p>
+<div class="amh-copy-block highlight"><pre><span></span><code>http://127.0.0.1:8000/auth/google/callback
+</code></pre></div>
+<p>Export these secrets before starting the hub:</p>
+<div class="amh-copy-block highlight"><pre><span></span><code><span class="nb">export</span><span class="w"> </span><span class="nv">GOOGLE_CLIENT_ID</span><span class="o">=</span><span class="s2">"your-google-client-id"</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">GOOGLE_CLIENT_SECRET</span><span class="o">=</span><span class="s2">"your-google-client-secret"</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">AMH_OAUTH_JWT_SECRET</span><span class="o">=</span><span class="s2">"</span><span class="k">$(</span>openssl<span class="w"> </span>rand<span class="w"> </span>-base64<span class="w"> </span><span class="m">48</span><span class="k">)</span><span class="s2">"</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">AMH_SESSION_SECRET</span><span class="o">=</span><span class="s2">"</span><span class="k">$(</span>openssl<span class="w"> </span>rand<span class="w"> </span>-base64<span class="w"> </span><span class="m">48</span><span class="k">)</span><span class="s2">"</span>
+</code></pre></div>
+<p><code>AMH_OAUTH_JWT_SECRET</code> signs hub-issued MCP bearer tokens returned by the
+OAuth token endpoint. Keep it stable while you want existing tokens to remain
+valid.</p>
+<p><code>AMH_SESSION_SECRET</code> signs browser session state. Keep it stable while you want
+browser sign-in sessions to survive restarts.</p>
+<h2 id="dynamic-mcp-clients">Dynamic MCP Clients</h2>
+<p>MCP clients can dynamically register with the hub's local authorization server.
+Dynamic registration is intentionally limited to loopback redirect URIs such as
+<code>http://127.0.0.1:&lt;port&gt;/callback</code>, <code>http://localhost:&lt;port&gt;/callback</code>, or
+<code>http://[::1]:&lt;port&gt;/callback</code>. Remote hosts, fragments, userinfo, relative
+paths, and non-HTTP schemes are rejected.</p>
+<p>When a browser is already signed in, <code>/oauth/authorize</code> still starts the
+configured provider flow for a newly registered dynamic client instead of
+silently issuing an authorization code from the existing hub browser session.
+Google sign-in is launched with <code>prompt=select_account</code> so client logout and
+reauthentication can switch to a different Google account.</p>
+<p>Because the MCP endpoint exposes both read and write tools, its initial OAuth
+challenge advertises the configured <code>api.oauth.scopes_supported</code> values. Generic
+MCP clients such as OpenCode and Hermes can then request <code>memory:read</code> and
+<code>memory:write</code> during first auth instead of discovering the missing write scope
+only after a tool call.</p>
+<p>Registered dynamic clients are stored in the configured metadata backend and
+expire after <code>api.oauth.client_registration_ttl_seconds</code>. Unredeemed
+authorization codes stay short-lived and process-local, so abandoned browser
+authorization attempts still disappear quickly.</p>
+<p>The token endpoint returns hub access tokens plus rotating refresh tokens.
+Refresh-token reuse revokes the whole refresh-token family and every linked hub
+access token. <code>/oauth/revoke</code> accepts either a refresh token or a hub access
+token and revokes the matching refresh-token family plus linked access tokens.</p>
+<p>Run the built-in local authorization server as a single hub process. Startup
+fails when <code>api.auth: oauth_resource_server</code> is paired with common multi-worker
+deployment hints such as <code>WEB_CONCURRENCY=2</code>, <code>UVICORN_WORKERS=2</code>, or
+<code>GUNICORN_WORKERS=2</code>. This keeps the first local MCP setup simple; use a
+durable/shared authorization component before relying on dynamic client state
+across multiple hub processes.</p>
+<h2 id="hub-config">Hub Config</h2>
+<p>User-facing MCP setup should use <code>api.auth: oauth_resource_server</code>, set
+<code>api.public_base_url</code>, and enable <code>api.connect</code>.</p>
+<div class="amh-copy-block highlight"><pre><span></span><code><span class="nt">api</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">127.0.0.1</span>
+<span class="w">  </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8000</span>
+<span class="w">  </span><span class="nt">auth</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">oauth_resource_server</span>
+<span class="w">  </span><span class="nt">public_base_url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://127.0.0.1:8000</span>
+<span class="w">  </span><span class="nt">oauth</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">authorization_servers</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://127.0.0.1:8000</span>
+<span class="w">    </span><span class="nt">resource</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://127.0.0.1:8000/mcp</span>
+<span class="w">    </span><span class="nt">jwt_secret_env</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AMH_OAUTH_JWT_SECRET</span>
+<span class="w">    </span><span class="nt">client_registration_ttl_seconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">86400</span>
+<span class="w">    </span><span class="nt">refresh_token_ttl_seconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2592000</span>
+<span class="w">    </span><span class="nt">scopes_supported</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory:read</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory:write</span>
+<span class="w">  </span><span class="nt">connect</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">    </span><span class="nt">session_secret_env</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AMH_SESSION_SECRET</span>
+<span class="w">    </span><span class="nt">session_ttl_seconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">43200</span>
+<span class="w">    </span><span class="nt">token_ttl_seconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3600</span>
+<span class="w">    </span><span class="nt">passport</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">providers</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">google</span><span class="p p-Indicator">]</span>
+<span class="w">      </span><span class="nt">google</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">        </span><span class="nt">client_id_env</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GOOGLE_CLIENT_ID</span>
+<span class="w">        </span><span class="nt">client_secret_env</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GOOGLE_CLIENT_SECRET</span>
+<span class="w">        </span><span class="nt">callback_url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://127.0.0.1:8000/auth/google/callback</span>
+<span class="w">        </span><span class="nt">allowed_domains</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[]</span>
+<span class="w">        </span><span class="nt">allowed_emails</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[]</span>
+<span class="w">      </span><span class="nt">meta</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">        </span><span class="nt">client_id_env</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">META_CLIENT_ID</span>
+<span class="w">        </span><span class="nt">client_secret_env</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">META_CLIENT_SECRET</span>
+<span class="w">      </span><span class="nt">x</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">        </span><span class="nt">client_id_env</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">X_CLIENT_ID</span>
+<span class="w">        </span><span class="nt">client_secret_env</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">X_CLIENT_SECRET</span>
+</code></pre></div>
+<p><code>allowed_domains</code> and <code>allowed_emails</code> are optional allow-lists for Google
+identities. Leave both empty for local testing.</p>
+<h2 id="local-run">Local Run</h2>
+<p>From the repository root:</p>
+<div class="amh-copy-block highlight"><pre><span></span><code>uv<span class="w"> </span>sync<span class="w"> </span>--extra<span class="w"> </span>oauth
+<span class="nb">export</span><span class="w"> </span><span class="nv">GOOGLE_CLIENT_ID</span><span class="o">=</span><span class="s2">"your-google-client-id"</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">GOOGLE_CLIENT_SECRET</span><span class="o">=</span><span class="s2">"your-google-client-secret"</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">AMH_OAUTH_JWT_SECRET</span><span class="o">=</span><span class="s2">"</span><span class="k">$(</span>openssl<span class="w"> </span>rand<span class="w"> </span>-base64<span class="w"> </span><span class="m">48</span><span class="k">)</span><span class="s2">"</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">AMH_SESSION_SECRET</span><span class="o">=</span><span class="s2">"</span><span class="k">$(</span>openssl<span class="w"> </span>rand<span class="w"> </span>-base64<span class="w"> </span><span class="m">48</span><span class="k">)</span><span class="s2">"</span>
+uv<span class="w"> </span>run<span class="w"> </span>aim<span class="w"> </span>serve<span class="w"> </span>--config<span class="w"> </span>examples/google-oauth-connect/config.yaml<span class="w"> </span>--host<span class="w"> </span><span class="m">127</span>.0.0.1<span class="w"> </span>--port<span class="w"> </span><span class="m">8000</span>
+</code></pre></div>
+<p>Then open:</p>
+<div class="amh-copy-block highlight"><pre><span></span><code>http://127.0.0.1:8000/connect
+</code></pre></div>
+<h2 id="docker-compose">Docker Compose</h2>
+<p>The main Docker example combines Postgres, PGVector, Ollama embeddings, Google
+OAuth, and a public HTTPS URL for agents running off the local host. It
+installs the <code>postgres</code>, <code>tokenizer</code>, and <code>oauth</code> extras in the hub image and
+binds the hub service to loopback:</p>
+<div class="amh-copy-block highlight"><pre><span></span><code><span class="nb">export</span><span class="w"> </span><span class="nv">GOOGLE_CLIENT_ID</span><span class="o">=</span><span class="s2">"your-google-client-id"</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">GOOGLE_CLIENT_SECRET</span><span class="o">=</span><span class="s2">"your-google-client-secret"</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">AMH_OAUTH_JWT_SECRET</span><span class="o">=</span><span class="s2">"</span><span class="k">$(</span>openssl<span class="w"> </span>rand<span class="w"> </span>-base64<span class="w"> </span><span class="m">48</span><span class="k">)</span><span class="s2">"</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">AMH_SESSION_SECRET</span><span class="o">=</span><span class="s2">"</span><span class="k">$(</span>openssl<span class="w"> </span>rand<span class="w"> </span>-base64<span class="w"> </span><span class="m">48</span><span class="k">)</span><span class="s2">"</span>
+<span class="nb">cd</span><span class="w"> </span>examples/local-stack
+<span class="nb">export</span><span class="w"> </span><span class="nv">PUBLIC_BASE_URL</span><span class="o">=</span><span class="s2">"https://YOUR-CUSTOM-DOMAIN.app"</span>
+sed<span class="w"> </span><span class="s2">"s#https://YOUR-CUSTOM-DOMAIN.app#</span><span class="si">${</span><span class="nv">PUBLIC_BASE_URL</span><span class="si">}</span><span class="s2">#g"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>config.oauth-public.yaml<span class="w"> </span>&gt;<span class="w"> </span>config.oauth-local.yaml
+<span class="nb">export</span><span class="w"> </span><span class="nv">AMH_CONFIG_FILE</span><span class="o">=</span>config.oauth-local.yaml
+docker<span class="w"> </span>compose<span class="w"> </span>up<span class="w"> </span>--build
+</code></pre></div>
+<p>Open:</p>
+<div class="amh-copy-block highlight"><pre><span></span><code>https://YOUR-CUSTOM-DOMAIN.app/connect
+</code></pre></div>
+<p>Any stable HTTPS tunnel or reverse proxy works if the public base URL and Google
+redirect URI match. Before starting Compose, generate a local config from
+<code>examples/local-stack/config.oauth-public.yaml</code> with the active HTTPS URL and
+register the matching Google redirect URI:</p>
+<div class="amh-copy-block highlight"><pre><span></span><code>https://YOUR-CUSTOM-DOMAIN.app/auth/google/callback
+</code></pre></div>
+<p>After startup, <code>/connect</code> should display the active public MCP URL, not
+<code>YOUR-CUSTOM-DOMAIN</code>. If the placeholder is still visible, the hub will advertise
+the wrong OAuth metadata to clients and Google token exchange can fail because
+the callback URL no longer matches the OAuth client.</p>
+<p>Restart behavior:</p>
+<ul>
+<li>Identities and web sessions persist while the Compose volume and
+  <code>AMH_SESSION_SECRET</code> stay the same.</li>
+<li>Hub bearer tokens remain valid until expiry or logout while the metadata
+  volume and <code>AMH_OAUTH_JWT_SECRET</code> stay the same.</li>
+<li>Changing either secret invalidates the matching session or token class.</li>
+</ul>
+<h2 id="client-verification-matrix">Client Verification Matrix</h2>
+<p>The Connect UI can render snippets before every client has been verified
+against the current local release. Keep untested snippets labeled <code>Unverified</code>
+until the exact command or config has been tested.</p>
+<div class="amh-client-matrix">
+<article>
+<h3>Codex <span>Verified</span></h3>
+<code>codex mcp add ai-memory-hub-local --url &lt;mcp-url&gt;</code>
+<p>Verified for streamable HTTP setup. Use the MCP URL shown by `/connect`.</p>
+</article>
+<article>
+<h3>Copilot CLI <span>Verified</span></h3>
+<code>copilot mcp add --transport http ai-memory-hub http://127.0.0.1:8000/mcp</code>
+<p>Verified for streamable HTTP setup.</p>
+</article>
+<article>
+<h3>Claude CLI <span>Verified</span></h3>
+<code>claude mcp add --transport http ai-memory-hub-local &lt;mcp-url&gt;</code>
+<p>Verified for streamable HTTP setup. Use the MCP URL shown by `/connect`.</p>
+</article>
+<article>
+<h3>Gemini CLI <span>Verified</span></h3>
+<code>gemini mcp add ai-memory-hub-local &lt;mcp-url&gt; -t http</code>
+<p>After adding it, run `/mcp auth` inside Gemini CLI.</p>
+</article>
+<article>
+<h3>OpenCode <span>Verified</span></h3>
+<code>opencode mcp add ai-memory-hub-local --url &lt;mcp-url&gt;</code>
+<p>After adding it, run `opencode mcp add ai-memory-hub-local auth`.</p>
+</article>
+<article>
+<h3>Pi <span>Verified</span></h3>
+<code>pi install npm:pi-mcp-adapter</code>
+<p>Install the adapter, export an existing MCP config from Codex or OpenCode, then run `/mcp auth` inside Pi.</p>
+</article>
+<article>
+<h3>Hermes <span>Verified</span></h3>
+<code>hermes mcp add ai-memory-hub-local --url &lt;mcp-url&gt; --auth oauth</code>
+<p>Verified for OAuth-backed streamable HTTP setup.</p>
+</article>
+<article>
+<h3>OpenClaw <span class="pending">Unverified</span></h3>
+<code>openclaw mcp add ai-memory-hub-local --url &lt;mcp-url&gt; --transport streamable-http --auth oauth</code>
+<p>Then run `openclaw mcp login ai-memory-hub-local`. After approval, run `openclaw mcp login ai-memory-hub-local --code &lt;code&gt;`.</p>
+</article>
+<article>
+<h3>Droid <span>Verified</span></h3>
+<code>droid mcp add ai-memory-hub-local &lt;mcp-url&gt; --type http</code>
+<p>Verified locally for streamable HTTP setup with Droid's HTTP MCP add command.</p>
+</article>
+<article>
+<h3>DeepSeek Harness <span class="pending">Unverified</span></h3>
+<pre><code>- id: ai-memory-hub-local
+  name: '@deepseek-ai/dsh-mcp-client'
+  config:
+    serverName: ai-memory-hub-local
+    transport: streamable-http
+    url: &lt;mcp-url&gt;
+    headers:
+      Authorization: !!js '`Bearer ${process.env.MCP_TOKEN}`'</code></pre>
+<p>Use an environment variable for the token if the harness requires a bearer header.</p>
+</article>
+<article>
+<h3>Qwen Code <span class="pending">Unverified</span></h3>
+<code>qwen mcp add --transport http ai-memory-hub-local &lt;mcp-url&gt;</code>
+<p>Based on the <a href="https://qwenlm.github.io/qwen-code-docs/en/users/features/mcp/#adding-a-server-qwen-mcp-add">Qwen Code documented HTTP MCP command form</a>; keep labeled unverified until tested against ai-memory-hub.</p>
+</article>
+</div>
+
+<p>Do not commit OAuth client secrets or captured bearer tokens.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Dedicated to my little brother,<br> Andrii Hladenko.<br> Вічна Слава Героям. <img src="docs/assets/flags/ua.svg" alt="Ukraine flag" width="18" height="14">
+
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"alias": true, "default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.12.0/mermaid.min.js"></script>
+      
+        <script src="../javascripts/mermaid.js"></script>
+      
+        <script src="../javascripts/connect.js"></script>
+      
+    
+  </body>
+</html>

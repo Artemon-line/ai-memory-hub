@@ -1,0 +1,4122 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Local-first deterministic memory ingestion hub">
+      
+      
+      
+        <link rel="canonical" href="https://artemon-line.github.io/ai-memory-hub/latest/docs/roadmap/">
+      
+      
+        <link rel="prev" href="../planned_features/">
+      
+      
+        <link rel="next" href="../plans/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/brand/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Roadmap - ai-memory-hub</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/connect.css">
+    
+      <link rel="stylesheet" href="../stylesheets/leap-day-dark.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#ai-memory-hub-roadmap" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              
+  
+    These docs describe the <strong>main</strong> branch. They may cover experimental,
+    unreleased, or untested behavior.
+    <a href="../../.."><strong>View the latest released docs.</strong></a>
+  
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="ai-memory-hub" class="md-header__button md-logo" aria-label="ai-memory-hub" data-md-component="logo">
+      
+  <img src="../assets/brand/ai-memory-hub-mark.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ai-memory-hub
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Roadmap
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Artemon-line/ai-memory-hub" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Artemon-line/ai-memory-hub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="ai-memory-hub" class="md-nav__button md-logo" aria-label="ai-memory-hub" data-md-component="logo">
+      
+  <img src="../assets/brand/ai-memory-hub-mark.svg" alt="logo">
+
+    </a>
+    ai-memory-hub
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Artemon-line/ai-memory-hub" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Artemon-line/ai-memory-hub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What Exists Now
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    What Exists Now
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Current Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../importing_conversations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Import Conversations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../importer_compatibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importer Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Technical Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../connect_ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Connect UI and OAuth Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../external_oidc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    External OIDC and Keycloak
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../brand_assets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Brand Assets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../storage_provider_examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage Provider Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../postgres_driver_decision/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PostgreSQL Driver Decision
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quality_evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quality Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What Is Planned
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    What Is Planned
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../planned_features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Planned Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#at-a-glance-humans" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        At a glance (humans)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#at-a-glance-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        At a glance (agents)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-1-core-mvp-minimum-viable-product" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1 — Core MVP (Minimum Viable Product)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 1 — Core MVP (Minimum Viable Product)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#11-ingestion-mcpapi-first-for-mvp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1 Ingestion (MCP/API-first for MVP)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-normalization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.2 Normalization
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#13-storage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.3 Storage
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#14-query-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.4 Query API
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#16-cli-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.6 CLI (optional)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-15-storage-abstraction-and-provider-expansion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1.5 — Storage abstraction and provider expansion
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 1.5 — Storage abstraction and provider expansion">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#151-storage-abstraction-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.5.1 Storage abstraction layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#152-pgvector-provider" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.5.2 PGVector provider
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#153-config-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.5.3 Config changes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#154-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.5.4 Tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-17-app-level-encryption" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1.7 - App-level encryption
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-2-multi-source-capture-and-import-adapters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2 — Multi-source capture and import adapters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 2 — Multi-source capture and import adapters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-gemini" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 Gemini
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-copilot-no-official-export-custom-captureimport" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 Copilot (no official export — custom capture/import)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23-claude" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3 Claude
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#24-local-llms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.4 Local LLMs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#25-browser-extension-capture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.5 Browser extension capture
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-3-intelligence-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3 — Intelligence layer
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 3 — Intelligence layer">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-summaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 Summaries
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-topic-extraction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 Topic extraction
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-timeline-reconstruction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.3 Timeline reconstruction
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#34-memory-consolidation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.4 Memory consolidation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-4-ui-and-developer-experience" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4 — UI and developer experience
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 4 — UI and developer experience">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-web-ui" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1 Web UI
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#42-developer-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.2 Developer tools
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-packaging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 Packaging
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-5-agent-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5 — Agent integration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 5 — Agent integration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#51-langgraph" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.1 LangGraph
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#52-llama-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.2 Llama Stack
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#53-openai-assistants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.3 OpenAI Assistants
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#54-mcp-model-context-protocol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.4 MCP (Model Context Protocol)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-6-advanced-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6 — Advanced features
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 6 — Advanced features">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#61-memory-graph" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.1 Memory graph
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#62-relevance-decay" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.2 Relevance decay
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#63-multi-agent-shared-memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.3 Multi-agent shared memory
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#64-plugins-and-extension-points" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.4 Plugins And Extension Points
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-7-optional-cloud-and-sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 7 — Optional cloud and sync
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plans/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CHANGELOG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CONTRIBUTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CODE_OF_CONDUCT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code Of Conduct
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    MCP
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp_client_smoke_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Client Smoke Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../real_client_mcp_smoke_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Real-Client MCP Smoke Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../openclaw_native_mcp_setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OpenClaw Native MCP Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp_utility_compliance_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Utility Compliance Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/mcp_response_format_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Response Format Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/codex_cli_findings_coverage_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Codex CLI MCP Findings Coverage Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/p0_live_mcp_retest_followup_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P0 Live MCP Retest Follow-Up Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/agent_model_footprint_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Model Footprint Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bearer_api_key_auth_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Authorization Compliance Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation Plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Implementation Plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plans/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../prioritized_feature_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prioritized Feature Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../storage_agnostic_byoa_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage BYOA Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../browser_extension_capture_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Browser Extension Capture Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bruno_integration_test_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bruno Integration Test Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project_workspace_collaboration_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Workspace Collaboration Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../deterministic_ingestion_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deterministic Ingestion Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../token_budget_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Token Budget Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli_implementation_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin_readiness_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin Readiness Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release_container_docs_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release, Container, and Docs Publishing Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../first_release_readiness_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First Release Readiness Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release_ci_gap_analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release CI Gap Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release_security_scan_notes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Security Scan Notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../repository_governance_settings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Repository Governance Settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release_promotion_assets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Promotion Assets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project_promotion_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Promotion Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability_logging_telemetry_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability, Logging, and Telemetry Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recurring_codebase_cleanup_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Recurring Codebase Cleanup Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Improvements
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Improvements
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Improvement Plans
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/client_feedback_improvement_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client Feedback Improvement Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/top_priority_mcp_result_shape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Top Priority MCP Result Shape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/mcp_response_format_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Response Format Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/codex_cli_findings_coverage_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Codex CLI MCP Findings Coverage Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/p0_live_mcp_retest_followup_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P0 Live MCP Retest Follow-Up Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/agent_model_footprint_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Model Footprint Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/handoff_memory_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Handoff Memory Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/retrieval_precision_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Retrieval Precision Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/context_building_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Context Building Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/conversation_grouping_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conversation Grouping Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/memory_quality_fact_layer_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Memory Quality And Fact Layer Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/edge_case_test_coverage_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Edge Case Test Coverage Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/explicit_memory_save_intent_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Explicit Memory Save Intent Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/google_oauth_connect_ui_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Google OAuth Connect UI Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/p0_beta_governance_checklist/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P0 Beta Governance Checklist
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/p1_sql_hardening_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P1 SQL Hardening Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/efficiency_revival_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Efficiency Revival Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/vector_dbs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vector Database Options
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/neo4j_aura_graph_memory_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Neo4j Aura Graph Memory Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/app_level_encryption_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    App-Level Memory Encryption Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#at-a-glance-humans" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        At a glance (humans)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#at-a-glance-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        At a glance (agents)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-1-core-mvp-minimum-viable-product" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1 — Core MVP (Minimum Viable Product)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 1 — Core MVP (Minimum Viable Product)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#11-ingestion-mcpapi-first-for-mvp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1 Ingestion (MCP/API-first for MVP)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-normalization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.2 Normalization
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#13-storage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.3 Storage
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#14-query-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.4 Query API
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#16-cli-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.6 CLI (optional)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-15-storage-abstraction-and-provider-expansion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1.5 — Storage abstraction and provider expansion
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 1.5 — Storage abstraction and provider expansion">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#151-storage-abstraction-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.5.1 Storage abstraction layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#152-pgvector-provider" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.5.2 PGVector provider
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#153-config-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.5.3 Config changes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#154-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.5.4 Tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-17-app-level-encryption" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1.7 - App-level encryption
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-2-multi-source-capture-and-import-adapters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2 — Multi-source capture and import adapters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 2 — Multi-source capture and import adapters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-gemini" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 Gemini
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-copilot-no-official-export-custom-captureimport" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 Copilot (no official export — custom capture/import)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23-claude" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3 Claude
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#24-local-llms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.4 Local LLMs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#25-browser-extension-capture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.5 Browser extension capture
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-3-intelligence-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3 — Intelligence layer
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 3 — Intelligence layer">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-summaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 Summaries
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-topic-extraction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 Topic extraction
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-timeline-reconstruction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.3 Timeline reconstruction
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#34-memory-consolidation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.4 Memory consolidation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-4-ui-and-developer-experience" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4 — UI and developer experience
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 4 — UI and developer experience">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-web-ui" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1 Web UI
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#42-developer-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.2 Developer tools
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-packaging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 Packaging
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-5-agent-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5 — Agent integration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 5 — Agent integration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#51-langgraph" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.1 LangGraph
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#52-llama-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.2 Llama Stack
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#53-openai-assistants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.3 OpenAI Assistants
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#54-mcp-model-context-protocol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.4 MCP (Model Context Protocol)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-6-advanced-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6 — Advanced features
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 6 — Advanced features">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#61-memory-graph" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.1 Memory graph
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#62-relevance-decay" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.2 Relevance decay
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#63-multi-agent-shared-memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.3 Multi-agent shared memory
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#64-plugins-and-extension-points" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.4 Plugins And Extension Points
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-7-optional-cloud-and-sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 7 — Optional cloud and sync
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="ai-memory-hub-roadmap">ai-memory-hub — roadmap</h1>
+<p>Structured plan for a <strong>local-first</strong>, <strong>deterministic</strong>, <strong>MCP-native</strong> memory engine that unifies AI conversations into one searchable, 
+RAG-ready knowledge hub with <strong>pluggable storage backends</strong>.</p>
+<p><strong>How to use this doc:</strong> work <strong>phases in order</strong> or parallelize <strong>within</strong> a phase when tasks are independent. 
+Each phase ends with a <strong>milestone</strong> you can demo or ship.</p>
+<p><strong>Related docs:</strong> 
+<a href="../architecture/">Architecture</a> 
+<a href="../agents/">Agent integration</a> 
+<a href="../deterministic_ingestion_plan/">Deterministic ingestion plan</a> 
+<a href="../storage_agnostic_byoa_plan/">Storage-agnostic BYOA plan</a> 
+<a href="../browser_extension_capture_plan/">Browser extension capture plan</a>
+<a href="../../">Project overview</a></p>
+<hr />
+<h2 id="at-a-glance-humans">At a glance (humans)</h2>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Focus</th>
+<th>Milestone (one line)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Core MVP: MCP/API capture, normalize, store, search, retrieve</td>
+<td>MCP tools/resources + HTTP <code>/memory/*</code> over SQLite + LanceDB</td>
+</tr>
+<tr>
+<td>1.5</td>
+<td>Storage abstraction</td>
+<td>Unified metadata/vector provider interfaces with local, hosted, and existing-stack backends</td>
+</tr>
+<tr>
+<td>1.7</td>
+<td>App-level encryption</td>
+<td>Canonical memory payloads are encrypted before local/self-hosted storage</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Multi-source capture/import adapters</td>
+<td>One hub across platforms, including those without official exports (e.g. Copilot)</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Intelligence: summaries, topics, timelines, consolidation</td>
+<td>Knowledge engine, not just storage</td>
+</tr>
+<tr>
+<td>4</td>
+<td>UI &amp; DX</td>
+<td>Dashboard + SDKs + packaging</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Agent integration</td>
+<td>LangGraph, Llama Stack, Assistants using MCP/API memory backend</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Advanced memory</td>
+<td>Graphs, decay, shared memory, plugins</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Optional cloud</td>
+<td>Encrypted sync, multi-device, backup (opt-in only)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="at-a-glance-agents">At a glance (agents)</h2>
+<p>When planning or estimating work, treat phases as <strong>ordered capability layers</strong>:</p>
+<ul>
+<li><strong>Phase 1</strong> defines the minimum <strong>pipeline</strong>: <strong>capture through MCP/API payloads</strong> → <strong>schema-first ingestion</strong> → <strong>unified schema</strong> → <strong>embeddings</strong> → <strong>vector search</strong> → <strong>HTTP</strong> <code>/memory/search</code>, 
+<code>/memory/retrieve</code> + MCP <code>memory_*</code> tools/resources.</li>
+<li><strong>Phase 1.5</strong> promotes storage to a <strong>first-class subsystem</strong>: <code>VectorStore</code> interface → LanceDB/ChromaDB/Qdrant/Milvus/Weaviate/PGVector/MongoDB Atlas/Elasticsearch/OpenSearch/Redis/Pinecone/Turbopuffer/Vespa/Typesense/in-memory providers → deterministic startup checks → fallback behavior.</li>
+<li><strong>Phase 1.7</strong> adds app-level encryption for local and self-hosted deployments:
+canonical memory payloads are encrypted before metadata storage while auth,
+owner/project boundaries, search behavior, and storage-provider contracts remain
+stable.</li>
+<li><strong>Phase 2</strong> adds <strong>platform-specific capture/import adapters</strong> (Gemini Takeout, Copilot workarounds, Claude HTML, local LLM logs);
+<strong>schema and storage stay stable</strong> if normalization boundaries are respected.</li>
+<li>Browser extension capture has a Phase 2-compatible hub contract:
+extension repos parse ChatGPT, Microsoft Copilot, Claude, Gemini, and similar
+web UIs, then post normalized payloads to <code>POST /memory/insert</code>.</li>
+<li><strong>Phase 3</strong> is <strong>offline/batch intelligence</strong> on top of stored chunks (summaries, clustering, timelines).</li>
+<li><strong>Phase 4</strong> is <strong>presentation and distribution</strong> (UI, SDKs, OpenAPI, pip).</li>
+<li><strong>Phase 5</strong> aligns with <a href="../agents/">agents.md</a>: external agent frameworks consume the same memory API/MCP backend with their choice of supported metadata and vector providers.</li>
+<li><strong>Phases 6–7</strong> are <strong>extensions</strong>; <strong>local-first</strong> remains default until Phase 7 is explicitly enabled.</li>
+</ul>
+<hr />
+<h2 id="phase-1-core-mvp-minimum-viable-product">Phase 1 — Core MVP (Minimum Viable Product)</h2>
+<p><strong>Goal:</strong> A working memory engine with MCP/API capture, hub ingestion, storage,
+search, and retrieval.</p>
+<h3 id="11-ingestion-mcpapi-first-for-mvp">1.1 Ingestion (MCP/API-first for MVP)</h3>
+<ul>
+<li>[x] Schema-validated ingestion payload (<code>conversation_json</code> -&gt; normalized runtime object)</li>
+<li>[x] MCP tool ingestion (<code>memory_insert</code>)</li>
+<li>
+<p>[x] HTTP ingestion (<code>POST /memory/insert</code>)</p>
+</li>
+<li>
+<p>[x] Basic metadata capture (timestamps, roles, source)</p>
+</li>
+<li>[x] Chunking messages for embedding</li>
+</ul>
+<h3 id="12-normalization">1.2 Normalization</h3>
+<ul>
+<li>[x] Unified conversation schema</li>
+<li>[ ] Message role normalization from non-conforming upstream sources</li>
+<li>[ ] Basic topic tagging</li>
+</ul>
+<h3 id="13-storage">1.3 Storage</h3>
+<ul>
+<li>[x] Vector store (LanceDB with in-memory fallback)</li>
+<li>[x] Metadata DB (SQLite)</li>
+<li>[x] Embedding pipeline (HTTP endpoint or local deterministic provider)</li>
+</ul>
+<h3 id="14-query-api">1.4 Query API</h3>
+<ul>
+<li>[x] <code>POST /memory/search</code> — semantic search</li>
+<li>[x] <code>POST /memory/retrieve</code> — retrieve conversation by ID</li>
+<li>[x] MCP <code>memory_search</code> and <code>memory_retrieve</code></li>
+</ul>
+<h3 id="16-cli-optional">1.6 CLI (optional)</h3>
+<ul>
+<li>[x] <code>aim ingest &lt;file&gt;</code></li>
+<li>[x] <code>aim search "&lt;query&gt;"</code></li>
+<li>[x] <code>aim retrieve &lt;id&gt;</code></li>
+<li>[x] <code>aim ask "&lt;question&gt;"</code></li>
+<li>[x] <code>aim serve</code></li>
+</ul>
+<p><strong>Milestone:</strong> Ingest via MCP/API, validate against unified schema, store in SQLite+vector DB, and retrieve via HTTP or MCP.</p>
+<hr />
+<h2 id="phase-15-storage-abstraction-and-provider-expansion">Phase 1.5 — Storage abstraction and provider expansion</h2>
+<p><strong>Goal:</strong> Make storage pluggable and keep every storage backend behind stable metadata and vector interfaces.</p>
+<h3 id="151-storage-abstraction-layer">1.5.1 Storage abstraction layer</h3>
+<ul>
+<li>[x] Define <code>VectorStore</code> interface:</li>
+<li><code>insert(chunks)</code></li>
+<li><code>search(query_embedding, top_k)</code></li>
+<li><code>delete(ids)</code> for provider-level vector maintenance, not user-facing
+    destructive memory deletion in <code>v0.1.0-beta</code></li>
+<li><code>get_stats()</code></li>
+<li>[x] Move LanceDB implementation behind the interface</li>
+<li>[x] Formalize in-memory implementation as a supported provider</li>
+<li>[x] Keep metadata and vector storage boundaries explicit</li>
+</ul>
+<h3 id="152-pgvector-provider">1.5.2 PGVector provider</h3>
+<ul>
+<li>[x] Configure PGVector through <code>storage.vector_providers.pgvector.url</code></li>
+<li>[x] Create vector table (for example, <code>memory_vectors</code>)</li>
+<li>[x] Support cosine, L2, and inner product distance modes</li>
+<li>[x] Add HNSW index creation</li>
+<li>[x] Add deterministic startup checks:</li>
+<li>vector extension installed or installable (<code>CREATE EXTENSION vector</code>)</li>
+<li>embedding dimension matches configured provider</li>
+<li>schema version is compatible</li>
+<li>selected distance mode is supported</li>
+<li>[x] Add fallback logic:</li>
+<li>if PGVector init fails, fallback to in-memory vectors when enabled</li>
+<li>if LanceDB init fails, fallback to in-memory vectors when enabled</li>
+<li>emit clear diagnostics when fallback changes runtime behavior</li>
+</ul>
+<h3 id="153-config-changes">1.5.3 Config changes</h3>
+<ul>
+<li>[x] <code>providers.vector_db: lancedb | chromadb | qdrant | milvus | weaviate | pgvector | mongodb_atlas | elasticsearch | opensearch | redis | pinecone | turbopuffer | vespa | typesense | memory</code></li>
+<li>[x] <code>providers.metadata_db: sqlite | postgres | mongodb</code></li>
+<li>[x] <code>storage.vector.allow_fallback: true</code></li>
+<li>[x] <code>storage.vector.distance: cosine | l2 | inner_product</code></li>
+</ul>
+<h3 id="154-tests">1.5.4 Tests</h3>
+<ul>
+<li>[x] PGVector integration tests</li>
+<li>[x] LanceDB parity tests</li>
+<li>[x] In-memory parity tests</li>
+<li>[x] Fallback tests</li>
+<li>[x] Dry-run/startup validation tests</li>
+</ul>
+<p><strong>Milestone:</strong> ai-memory-hub supports <strong>LanceDB</strong>, <strong>PGVector</strong>, and <strong>in-memory</strong> vector storage with identical search behavior at the API/MCP boundary.</p>
+<hr />
+<h2 id="phase-17-app-level-encryption">Phase 1.7 - App-level encryption</h2>
+<p><strong>Goal:</strong> Protect canonical memory payloads in local and self-hosted storage
+when an attacker gets a database dump, persistent volume, backup archive, or
+storage credentials without the encryption master key.</p>
+<p>Use <a href="../improvements/app_level_encryption_plan/">App-level memory encryption plan</a>
+as the source of truth.</p>
+<ul>
+<li>[ ] Add disabled-by-default encryption config and fail-closed key loading.</li>
+<li>[ ] Encrypt canonical conversation payloads before SQLite/Postgres metadata
+      writes.</li>
+<li>[ ] Preserve legacy plaintext reads until explicit migration.</li>
+<li>[ ] Decrypt only after auth, owner, and project checks pass.</li>
+<li>[ ] Add CLI keygen, status, encrypt-existing, and rotation commands.</li>
+<li>[ ] Document K3s/Helm secret wiring and encrypted backup guidance.</li>
+<li>[ ] Add follow-up search-index text hardening for stronger privacy mode.</li>
+</ul>
+<p><strong>Milestone:</strong> Raw metadata database access is no longer enough to read
+canonical memory payloads.</p>
+<hr />
+<h2 id="phase-2-multi-source-capture-and-import-adapters">Phase 2 — Multi-source capture and import adapters</h2>
+<p><strong>Goal:</strong> Support multiple AI platforms with different capture and import requirements.</p>
+<p>PGVector makes large captured/imported sets more practical, but ingestion code should stay storage-agnostic. Each adapter emits normalized records; the configured storage backend handles persistence.</p>
+<h3 id="21-gemini">2.1 Gemini</h3>
+<ul>
+<li>[ ] Google Takeout parser</li>
+<li>[ ] Thread reconstruction</li>
+</ul>
+<h3 id="22-copilot-no-official-export-custom-captureimport">2.2 Copilot (no official export — custom capture/import)</h3>
+<p>Copilot does not provide a structured export comparable to ChatGPT. Capture/import must use one or more of the following strategies:</p>
+<ul>
+<li>[x] <strong>Manual paste importer</strong> — user pastes a speaker-labelled chat; parser extracts roles and messages.</li>
+<li>[x] <strong>Copilot activity-history CSV importer</strong> — group exported rows by conversation and restore chronological turns.</li>
+<li>
+<p>[x] <strong>DeepSeek share JSON importer</strong> — flatten request, response, and attachment fragments from public-share JSON.</p>
+</li>
+<li>
+<p>[ ] <strong>VS Code Copilot logs (optional)</strong> — parse local <code>.jsonl</code> logs when available.</p>
+</li>
+<li>
+<p>[ ] <strong>Future: Copilot API capture</strong> — if Microsoft exposes conversation-history APIs, add a dedicated capture adapter.</p>
+</li>
+</ul>
+<h3 id="23-claude">2.3 Claude</h3>
+<ul>
+<li>[ ] HTML export parser</li>
+<li>[ ] Conversation grouping</li>
+</ul>
+<h3 id="24-local-llms">2.4 Local LLMs</h3>
+<ul>
+<li>[ ] Ollama conversation logs</li>
+<li>[ ] LM Studio logs</li>
+<li>[ ] Llama Stack logs</li>
+</ul>
+<h3 id="25-browser-extension-capture">2.5 Browser extension capture</h3>
+<ul>
+<li>[x] Keep browser extension implementations in separate repos.</li>
+<li>[x] Have extensions parse platform web UIs and send normalized conversation
+  JSON to the existing <code>POST /memory/insert</code> API.</li>
+<li>[x] Do not parse raw HTML or DOM snapshots in the ai-memory-hub API layer.</li>
+<li>[ ] Add API contract tests, CORS allowlist config, bearer-token guidance, and
+  trusted append guidance before recommending this path for daily use.</li>
+</ul>
+<p><strong>Milestone:</strong> ai-memory-hub becomes a unified memory layer for all your AI tools, even those without official export formats.</p>
+<hr />
+<h2 id="phase-3-intelligence-layer">Phase 3 — Intelligence layer</h2>
+<p><strong>Goal:</strong> Higher-level reasoning and memory organization.</p>
+<p>PGVector unlocks larger local memory sets, faster clustering workflows, and SQL-friendly analysis when Postgres is selected.</p>
+<h3 id="31-summaries">3.1 Summaries</h3>
+<ul>
+<li>[ ] Per-conversation summaries</li>
+<li>[ ] Per-topic summaries</li>
+<li>[ ] Daily/weekly digest generation</li>
+</ul>
+<h3 id="32-topic-extraction">3.2 Topic extraction</h3>
+<ul>
+<li>[ ] LLM-based topic labeling</li>
+<li>[ ] Hosted LLM fact extractor implementation with prompt/schema tuning</li>
+<li>[ ] HDBSCAN clustering</li>
+<li>[ ] Topic graph</li>
+</ul>
+<h3 id="33-timeline-reconstruction">3.3 Timeline reconstruction</h3>
+<ul>
+<li>[ ] Chronological view of discussions</li>
+<li>[ ] “What did I work on last month?”</li>
+<li>[ ] “Show all GPU upgrade conversations”</li>
+</ul>
+<h3 id="34-memory-consolidation">3.4 Memory consolidation</h3>
+<ul>
+<li>[ ] Merge redundant conversations</li>
+<li>[ ] Extract stable facts</li>
+<li>[ ] Long-term memory store</li>
+</ul>
+<p><strong>Milestone:</strong> The hub behaves as a knowledge engine, not only a storage system.</p>
+<hr />
+<h2 id="phase-4-ui-and-developer-experience">Phase 4 — UI and developer experience</h2>
+<p><strong>Goal:</strong> Pleasant day-to-day use and integration.</p>
+<h3 id="41-web-ui">4.1 Web UI</h3>
+<ul>
+<li>[ ] MaterializeCSS dashboard</li>
+<li>[ ] Upload exports</li>
+<li>[ ] Search interface</li>
+<li>[ ] Conversation viewer</li>
+<li>[ ] RAG query console</li>
+<li>[ ] Fact review, edit, supersession, and audit workflows</li>
+<li>[ ] Vector backend diagnostics</li>
+<li>[ ] Storage health panel</li>
+<li>[ ] Embedding dimension inspector</li>
+</ul>
+<h3 id="42-developer-tools">4.2 Developer tools</h3>
+<ul>
+<li>[ ] Python SDK</li>
+<li>[ ] TypeScript SDK</li>
+<li>[ ] API documentation (OpenAPI)</li>
+</ul>
+<h3 id="43-packaging">4.3 Packaging</h3>
+<ul>
+<li>[ ] <code>pip install ai-memory-hub</code></li>
+<li>[ ] Dockerfile (optional)</li>
+</ul>
+<p><strong>Milestone:</strong> Polished interface and clear developer path to adopt the project.</p>
+<hr />
+<h2 id="phase-5-agent-integration">Phase 5 — Agent integration</h2>
+<p><strong>Goal:</strong> Make ai-memory-hub the <strong>memory provider</strong> for agents.</p>
+<p>Agents should be able to choose local LanceDB, Postgres+PGVector, or ephemeral in-memory storage without changing their MCP/API integration.</p>
+<h3 id="51-langgraph">5.1 LangGraph</h3>
+<ul>
+<li>[ ] Tools for search, retrieve, ask</li>
+<li>[ ] Memory-aware agent examples</li>
+</ul>
+<h3 id="52-llama-stack">5.2 Llama Stack</h3>
+<ul>
+<li>[ ] External memory provider</li>
+<li>[ ] Configurable memory routing</li>
+</ul>
+<h3 id="53-openai-assistants">5.3 OpenAI Assistants</h3>
+<ul>
+<li>[ ] Function calling integration</li>
+<li>[ ] Memory-aware assistant template</li>
+</ul>
+<h3 id="54-mcp-model-context-protocol">5.4 MCP (Model Context Protocol)</h3>
+<ul>
+<li>[ ] <code>memory_search</code></li>
+<li>[ ] <code>memory_retrieve</code></li>
+<li>[ ] <code>memory.summarize</code></li>
+<li>[ ] <code>memory.timeline</code></li>
+</ul>
+<p><strong>Milestone:</strong> Any compatible agent can retrieve relevant context from your memory.</p>
+<hr />
+<h2 id="phase-6-advanced-features">Phase 6 — Advanced features</h2>
+<p><strong>Goal:</strong> Long-term, richer memory behavior.</p>
+<p>PGVector and Postgres enable future hybrid search, SQL-based memory analytics, and graph-adjacent workflows without requiring a separate hosted vector service.</p>
+<h3 id="61-memory-graph">6.1 Memory graph</h3>
+<ul>
+<li>[ ] Entity extraction</li>
+<li>[ ] Relationship mapping</li>
+<li>[ ] Graph-based retrieval</li>
+</ul>
+<h3 id="62-relevance-decay">6.2 Relevance decay</h3>
+<ul>
+<li>[ ] Time-based weighting</li>
+<li>[ ] Importance scoring</li>
+<li>[ ] “Forget” low-value conversations</li>
+</ul>
+<h3 id="63-multi-agent-shared-memory">6.3 Multi-agent shared memory</h3>
+<ul>
+<li>[ ] Shared memory spaces</li>
+<li>[ ] Agent-specific memory filters</li>
+</ul>
+<h3 id="64-plugins-and-extension-points">6.4 Plugins And Extension Points</h3>
+<ul>
+<li>[ ] Custom capture/import adapters</li>
+<li>[ ] Custom hub ingestion enrichers</li>
+<li>[ ] Custom embedding providers</li>
+<li>[ ] Custom vector stores</li>
+</ul>
+<p><strong>Milestone:</strong> General-purpose memory platform beyond a single-user notebook flow.</p>
+<hr />
+<h2 id="phase-7-optional-cloud-and-sync">Phase 7 — Optional cloud and sync</h2>
+<p><strong>Only if you choose to — the project stays local-first by default.</strong></p>
+<ul>
+<li>[ ] Encrypted cloud sync</li>
+<li>[ ] Multi-device support</li>
+<li>[ ] Backup/restore</li>
+<li>[ ] SQLite metadata sync</li>
+<li>[ ] PGVector table sync</li>
+<li>[ ] LanceDB bundle sync</li>
+</ul>
+<hr />
+<h2 id="summary">Summary</h2>
+<p>Evolution path:</p>
+<ol>
+<li><strong>MVP</strong> — capture, ingest, store, search, RAG</li>
+<li><strong>Storage abstraction</strong> — supported metadata and vector providers behind stable interfaces</li>
+<li><strong>App-level encryption</strong></li>
+<li><strong>Multi-source capture/import adapters</strong></li>
+<li><strong>Intelligence layer</strong></li>
+<li><strong>UI and developer experience</strong></li>
+<li><strong>Agent integration</strong></li>
+<li><strong>Advanced memory features</strong></li>
+<li><strong>Optional sync</strong></li>
+</ol>
+<p>Phases stack modularly so scope stays focused and components remain swappable (see <a href="../architecture/">architecture.md</a>).</p>
+<p>Positioning:</p>
+<blockquote>
+<p>ai-memory-hub is the SQLite of agent memory: deterministic, local-first, pluggable, and MCP-native.</p>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Dedicated to my little brother,<br> Andrii Hladenko.<br> Вічна Слава Героям. <img src="docs/assets/flags/ua.svg" alt="Ukraine flag" width="18" height="14">
+
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"alias": true, "default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.12.0/mermaid.min.js"></script>
+      
+        <script src="../javascripts/mermaid.js"></script>
+      
+        <script src="../javascripts/connect.js"></script>
+      
+    
+  </body>
+</html>

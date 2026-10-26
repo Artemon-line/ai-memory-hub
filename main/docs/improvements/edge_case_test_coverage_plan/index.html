@@ -1,0 +1,3323 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Local-first deterministic memory ingestion hub">
+      
+      
+      
+        <link rel="canonical" href="https://artemon-line.github.io/ai-memory-hub/latest/docs/improvements/edge_case_test_coverage_plan/">
+      
+      
+        <link rel="prev" href="../memory_quality_fact_layer_plan/">
+      
+      
+        <link rel="next" href="../explicit_memory_save_intent_plan/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/brand/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Edge Case Test Coverage Plan - ai-memory-hub</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/connect.css">
+    
+      <link rel="stylesheet" href="../../stylesheets/leap-day-dark.css">
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#edge-case-test-coverage-plan" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              
+  
+    These docs describe the <strong>main</strong> branch. They may cover experimental,
+    unreleased, or untested behavior.
+    <a href="../../../.."><strong>View the latest released docs.</strong></a>
+  
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="ai-memory-hub" class="md-header__button md-logo" aria-label="ai-memory-hub" data-md-component="logo">
+      
+  <img src="../../assets/brand/ai-memory-hub-mark.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ai-memory-hub
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Edge Case Test Coverage Plan
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Artemon-line/ai-memory-hub" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Artemon-line/ai-memory-hub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="ai-memory-hub" class="md-nav__button md-logo" aria-label="ai-memory-hub" data-md-component="logo">
+      
+  <img src="../../assets/brand/ai-memory-hub-mark.svg" alt="logo">
+
+    </a>
+    ai-memory-hub
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Artemon-line/ai-memory-hub" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Artemon-line/ai-memory-hub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What Exists Now
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    What Exists Now
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Current Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../importing_conversations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Import Conversations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../importer_compatibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importer Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Technical Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../connect_ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Connect UI and OAuth Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../external_oidc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    External OIDC and Keycloak
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../brand_assets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Brand Assets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../storage_provider_examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage Provider Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../postgres_driver_decision/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PostgreSQL Driver Decision
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quality_evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quality Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What Is Planned
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    What Is Planned
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned_features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Planned Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plans/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../CHANGELOG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../CONTRIBUTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../CODE_OF_CONDUCT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code Of Conduct
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    MCP
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mcp_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mcp_client_smoke_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Client Smoke Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../real_client_mcp_smoke_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Real-Client MCP Smoke Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../openclaw_native_mcp_setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OpenClaw Native MCP Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mcp_utility_compliance_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Utility Compliance Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp_response_format_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Response Format Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../codex_cli_findings_coverage_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Codex CLI MCP Findings Coverage Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../p0_live_mcp_retest_followup_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P0 Live MCP Retest Follow-Up Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent_model_footprint_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Model Footprint Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../bearer_api_key_auth_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Authorization Compliance Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation Plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Implementation Plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plans/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../prioritized_feature_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prioritized Feature Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../storage_agnostic_byoa_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage BYOA Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../browser_extension_capture_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Browser Extension Capture Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../bruno_integration_test_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bruno Integration Test Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../project_workspace_collaboration_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Workspace Collaboration Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deterministic_ingestion_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deterministic Ingestion Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../token_budget_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Token Budget Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli_implementation_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin_readiness_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin Readiness Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release_container_docs_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release, Container, and Docs Publishing Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../first_release_readiness_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First Release Readiness Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release_ci_gap_analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release CI Gap Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release_security_scan_notes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Security Scan Notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../repository_governance_settings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Repository Governance Settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release_promotion_assets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Promotion Assets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../project_promotion_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Promotion Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../observability_logging_telemetry_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability, Logging, and Telemetry Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recurring_codebase_cleanup_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Recurring Codebase Cleanup Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Improvements
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Improvements
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Improvement Plans
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../client_feedback_improvement_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client Feedback Improvement Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../top_priority_mcp_result_shape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Top Priority MCP Result Shape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp_response_format_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Response Format Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../codex_cli_findings_coverage_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Codex CLI MCP Findings Coverage Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../p0_live_mcp_retest_followup_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P0 Live MCP Retest Follow-Up Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent_model_footprint_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Model Footprint Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../handoff_memory_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Handoff Memory Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../retrieval_precision_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Retrieval Precision Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../context_building_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Context Building Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../conversation_grouping_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conversation Grouping Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory_quality_fact_layer_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Memory Quality And Fact Layer Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Edge Case Test Coverage Plan
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Edge Case Test Coverage Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#goals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goals
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#current-coverage-snapshot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current Coverage Snapshot
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-api-and-mcp-cross-surface-workflows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: API And MCP Cross-Surface Workflows
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-two-agent-mcp-bearer-interop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Two-Agent MCP Bearer Interop
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-storage-outage-and-fallback-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Storage Outage And Fallback Policy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-auth-mode-transition-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Auth-Mode Transition Behavior
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p1-payload-validation-and-injection-edges" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: Payload, Validation, And Injection Edges
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p1-deduplication-and-append-across-surfaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: Deduplication And Append Across Surfaces
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p1-facts-and-profile-cross-surface-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: Facts And Profile Cross-Surface Behavior
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p1-multilingual-and-embedding-model-drift" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: Multilingual And Embedding Model Drift
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p2-operational-and-observability-edges" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P2: Operational And Observability Edges
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#suggested-execution-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Suggested Execution Order
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#acceptance-criteria" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Acceptance Criteria
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../explicit_memory_save_intent_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Explicit Memory Save Intent Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../google_oauth_connect_ui_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Google OAuth Connect UI Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../p0_beta_governance_checklist/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P0 Beta Governance Checklist
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../p1_sql_hardening_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P1 SQL Hardening Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../efficiency_revival_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Efficiency Revival Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vector_dbs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vector Database Options
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../neo4j_aura_graph_memory_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Neo4j Aura Graph Memory Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../app_level_encryption_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    App-Level Memory Encryption Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#goals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goals
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#current-coverage-snapshot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current Coverage Snapshot
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-api-and-mcp-cross-surface-workflows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: API And MCP Cross-Surface Workflows
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-two-agent-mcp-bearer-interop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Two-Agent MCP Bearer Interop
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-storage-outage-and-fallback-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Storage Outage And Fallback Policy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-auth-mode-transition-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Auth-Mode Transition Behavior
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p1-payload-validation-and-injection-edges" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: Payload, Validation, And Injection Edges
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p1-deduplication-and-append-across-surfaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: Deduplication And Append Across Surfaces
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p1-facts-and-profile-cross-surface-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: Facts And Profile Cross-Surface Behavior
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p1-multilingual-and-embedding-model-drift" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: Multilingual And Embedding Model Drift
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p2-operational-and-observability-edges" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P2: Operational And Observability Edges
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#suggested-execution-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Suggested Execution Order
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#acceptance-criteria" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Acceptance Criteria
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="edge-case-test-coverage-plan">Edge Case Test Coverage Plan</h1>
+<p>This plan tracks public-contract edge cases that are not fully covered by the
+current unit, integration, E2E, and Bruno suites.</p>
+<h2 id="goals">Goals</h2>
+<ul>
+<li>Prove API and MCP surfaces interoperate over the same runtime and storage
+  boundaries.</li>
+<li>Lock down degraded storage behavior for metadata and vector providers.</li>
+<li>Make auth-mode transitions explicit so local development convenience does not
+  accidentally become a data exposure path.</li>
+<li>Add regression tests for error paths that are realistic in Docker, LAN, and
+  real-client MCP use.</li>
+</ul>
+<h2 id="current-coverage-snapshot">Current Coverage Snapshot</h2>
+<p>Implemented coverage already includes:</p>
+<ul>
+<li>HTTP API insert, search, retrieve, ask, facts, profile, bearer auth, OAuth
+  resource-server auth, and shared-project behavior.</li>
+<li>MCP protocol initialize, session handling, tools/list pagination, prompt and
+  resource listing, and MCP tool handler behavior.</li>
+<li>MCP client-shaped payload compatibility for Codex, Gemini, Copilot, ChatGPT,
+  and opencode-style payloads.</li>
+<li>Storage provider contracts, live provider gates, vector fallback startup
+  behavior, metadata startup failure, schema invariants, dimension checks, dry
+  run, and secret redaction.</li>
+<li>Bruno black-box API and MCP smoke flows against a running service.</li>
+</ul>
+<p>Main gaps are cross-surface workflows, auth-mode transition behavior, mid-run
+provider failure behavior, and explicit negative cases for degraded state.</p>
+<h2 id="p0-api-and-mcp-cross-surface-workflows">P0: API And MCP Cross-Surface Workflows</h2>
+<p>Add tests proving API and MCP are interchangeable clients for the same memory
+store.</p>
+<ul>
+<li>[x] API insert, MCP search, MCP retrieve, MCP ask.</li>
+<li>[x] MCP insert, API search, API retrieve, API ask.</li>
+<li>[x] API insert with <code>project_id</code>, MCP read with the same <code>project_id</code>.</li>
+<li>[x] MCP insert with <code>project_id</code>, API read with the same <code>project_id</code>.</li>
+<li>[x] API bearer-token insert, MCP bearer-token read under the same owner.</li>
+<li>[x] MCP bearer-token insert, API bearer-token read under the same owner.</li>
+<li>[x] Two MCP sessions shaped as Codex and opencode clients using the same
+  bearer token can each insert memory and read the other session's memory.</li>
+<li>[x] The same Codex/opencode MCP sessions using different bearer tokens cannot
+  retrieve or search each other's private default-project memory.</li>
+<li>[x] Cross-owner negative checks for both directions: API writes must not leak
+  through MCP reads, and MCP writes must not leak through API reads.</li>
+<li>[x] Response-shape equivalence checks for shared fields: <code>status</code>, <code>id</code>,
+  <code>results</code>, <code>memory</code>, <code>answer</code>, <code>citations</code>, <code>confidence</code>, and
+  <code>answer_basis</code>.</li>
+</ul>
+<p>Implemented in <code>tests/integration/test_api_mcp_interop.py</code>. Note: MCP search
+exposes <code>cursor</code>; HTTP API search currently does not, so the interop test checks
+<code>cursor</code> on MCP and compares the actual shared public fields across both
+surfaces.</p>
+<p>Preferred location:</p>
+<ul>
+<li><code>tests/integration/test_api_mcp_interop.py</code></li>
+</ul>
+<p>Use <code>TestClient</code> against <code>create_app(config={"interfaces": {"api": True, "mcp":
+True}})</code> so both surfaces share one agent/runtime.</p>
+<h2 id="p0-two-agent-mcp-bearer-interop">P0: Two-Agent MCP Bearer Interop</h2>
+<p>Expected policy:</p>
+<ul>
+<li>MCP session identity and <code>clientInfo.name</code> must not define data ownership.</li>
+<li>Bearer token ownership defines private default-project visibility.</li>
+<li>Two agents that intentionally share one bearer token share the same owner
+  boundary and can read each other's memory.</li>
+<li>Two agents using different bearer tokens stay isolated unless they use an
+  explicit shared project with allowed membership.</li>
+</ul>
+<p>Implemented deterministic coverage:</p>
+<ul>
+<li>[x] A Codex-shaped MCP session and an opencode-shaped MCP session initialize
+  with the same bearer token, each call <code>memory_insert</code>, and both can retrieve
+  and search the inserted memories.</li>
+<li>[x] The same client-shaped sessions initialize with different bearer tokens,
+  each can retrieve its own memory, and neither can retrieve or search the
+  other owner's private memory.</li>
+</ul>
+<p>This is intentionally a deterministic integration test instead of a required
+real Codex/opencode plus Ollama CI gate. Real client binaries, local model
+configuration, and headless CLI command syntax are operational smoke concerns;
+this P0 regression locks down the hub contract that auth scope and owner
+isolation follow tokens and projects, not agent names.</p>
+<p>Preferred location:</p>
+<ul>
+<li><code>tests/integration/test_api_mcp_interop.py</code></li>
+</ul>
+<h2 id="p0-storage-outage-and-fallback-policy">P0: Storage Outage And Fallback Policy</h2>
+<p>Expected policy:</p>
+<ul>
+<li>Metadata provider startup failure is fatal. Do not fallback from Postgres or
+  MongoDB metadata to SQLite or in-memory metadata.</li>
+<li>Vector provider startup failure may fallback to in-memory vectors only when
+  <code>storage.vector.allow_fallback: true</code>.</li>
+<li>Runtime health must report degraded state when vector fallback is active.</li>
+<li>Secrets must never appear in health reasons, logs, API responses, or MCP tool
+  errors.</li>
+</ul>
+<p>Add or verify tests:</p>
+<ul>
+<li>[x] Postgres metadata unavailable at startup fails app/runtime creation.</li>
+<li>[x] Redis vector unavailable at startup with <code>allow_fallback=false</code> fails
+  app/runtime creation.</li>
+<li>[x] Redis vector unavailable at startup with <code>allow_fallback=true</code> starts in
+  degraded mode and reports <code>requested_vector_provider=redis</code>,
+  <code>vector_provider=memory</code>, and <code>vector_fallback_active=true</code>.</li>
+<li>[x] PGVector unavailable at startup follows the same disabled/enabled fallback
+  policy.</li>
+<li>[x] Degraded vector fallback does not claim durable vector persistence.</li>
+<li>[x] API <code>/ready</code> reflects degraded vector state consistently.</li>
+<li>[x] MCP <code>memory://health</code> reflects degraded vector state consistently.</li>
+<li>[x] Provider credentials are redacted in startup exceptions, health reasons,
+  and MCP/API error envelopes.</li>
+</ul>
+<p>Preferred locations:</p>
+<ul>
+<li>Startup and provider policy: <code>tests/integration/test_storage_features.py</code></li>
+<li>API/MCP health exposure: <code>tests/integration/test_api_mcp_interop.py</code></li>
+</ul>
+<p>Follow-up candidate:</p>
+<ul>
+<li>[x] Add mid-run outage tests with fake providers that fail on <code>insert</code> or <code>search</code>.
+  Startup fallback does not cover this case. Runtime operation failures should
+  return deterministic API/MCP errors and should not silently switch providers
+  after writes have started. Covered by <code>tests/integration/test_midrun_provider_failures.py</code>.</li>
+</ul>
+<h2 id="p0-auth-mode-transition-behavior">P0: Auth-Mode Transition Behavior</h2>
+<p>Question: if a user writes data while auth is enabled, then the server restarts
+with <code>api.auth: none</code>, should that data be readable without credentials?</p>
+<p>Expected answer: no for user-scoped data. <code>auth=none</code> may be used for
+CI/test-fixture data and unauthenticated local-default test data, but it should
+not become a credential bypass for rows previously stamped with an authenticated
+owner or a non-local project.</p>
+<p>The current implementation resolves unauthenticated requests to the local
+default project and denies explicit access to non-local projects. Add tests to
+lock this down.</p>
+<p>Add tests:</p>
+<ul>
+<li>[x] Bearer-token insert into owner default project, restart/recreate app with
+  the same persistent store and <code>api.auth: none</code>, unauthenticated API search
+  returns no owner-scoped result.</li>
+<li>[x] Same scenario for unauthenticated API retrieve by ID returns 404.</li>
+<li>[x] Same scenario for unauthenticated API ask does not use owner-scoped facts
+  or conversations.</li>
+<li>[x] Same scenario through MCP search, retrieve, and ask.</li>
+<li>[x] Explicit <code>project_id</code> for the authenticated owner's default project is
+  rejected under <code>auth=none</code>.</li>
+<li>[x] OAuth resource-server insert using <code>sub=owner-a</code>, restart/recreate app
+  with <code>auth=none</code>, unauthenticated API/MCP reads do not return owner-scoped
+  data.</li>
+<li>[x] Authenticated shared-project data is not readable under <code>auth=none</code> unless
+  the project is the synthetic <code>local-default</code> project.</li>
+<li>[x] Existing unauthenticated local-default data remains readable after restart
+  with <code>auth=none</code>.</li>
+</ul>
+<p>Preferred location:</p>
+<ul>
+<li><code>tests/integration/test_auth_mode_transitions.py</code></li>
+</ul>
+<p>Use SQLite metadata and a temporary vector store path so restart behavior uses
+real persistence, not only in-process stubs.</p>
+<h2 id="p1-payload-validation-and-injection-edges">P1: Payload, Validation, And Injection Edges</h2>
+<p>Existing tests cover invalid schemas, malformed MCP payloads, invalid IDs, and
+some injection-like IDs. Add cross-surface negative cases:</p>
+<ul>
+<li>[x] API accepts no client-supplied <code>owner_id</code>; server stamps authenticated
+  owner.</li>
+<li>[x] MCP accepts no client-supplied <code>owner_id</code>; server stamps authenticated
+  owner.</li>
+<li>[x] API and MCP reject invalid <code>project_id</code> formats consistently.</li>
+<li>[x] API and MCP reject unknown <code>result_mode</code> consistently.</li>
+<li>[x] API and MCP cap or reject extreme <code>top_k</code>, <code>limit</code>, and
+  <code>max_context_tokens</code> consistently.</li>
+<li>[x] API and MCP preserve date/tag/thread filters consistently.</li>
+<li>[x] Tool and API error messages remain actionable but do not include payload
+  text, credentials, full queries, or provider URLs with secrets.</li>
+</ul>
+<h2 id="p1-deduplication-and-append-across-surfaces">P1: Deduplication And Append Across Surfaces</h2>
+<p>Add tests for mixed client workflows:</p>
+<ul>
+<li>[x] API inserts a conversation, MCP retries the same conversation and gets the
+  deduplicated result.</li>
+<li>[x] MCP inserts a conversation, API retries the same conversation and gets the
+  deduplicated result.</li>
+<li>[x] API inserts an initial thread, MCP appends messages using the same upstream
+  thread metadata.</li>
+<li>[x] MCP inserts an initial thread, API appends messages using the same upstream
+  thread metadata.</li>
+<li>[x] Same-id/different-content conflicts return deterministic errors through
+  both surfaces.</li>
+<li>[x] Same conversation hash in different projects is allowed and remains
+  isolated.</li>
+</ul>
+<h2 id="p1-facts-and-profile-cross-surface-behavior">P1: Facts And Profile Cross-Surface Behavior</h2>
+<p>Add tests proving the fact layer obeys the same boundaries:</p>
+<ul>
+<li>[x] API insert extracts facts, MCP profile/fact search can read them under the
+  same owner/project.</li>
+<li>[x] MCP insert extracts facts, API profile/fact endpoints can read them under
+  the same owner/project.</li>
+<li>[x] Cross-owner fact/profile queries do not leak facts.</li>
+<li>[x] <code>auth=none</code> cannot read owner-scoped facts created under bearer or OAuth
+  auth.</li>
+<li>[x] Supersession through one surface is visible through the other.</li>
+</ul>
+<h2 id="p1-multilingual-and-embedding-model-drift">P1: Multilingual And Embedding Model Drift</h2>
+<p>Expected policy:</p>
+<ul>
+<li>ai-memory-hub should not declare English-only behavior. The hub stores and
+  searches Unicode text, and multilingual retrieval should work when the
+  configured embedding model supports the languages involved.</li>
+<li>Multilingual quality is an embedding-model capability, not an API/MCP contract
+  special case.</li>
+<li>The same configured embedding provider, model, dimension, and embedding
+  options must be used for both ingestion and query-time retrieval.</li>
+<li>Changing the embedding model, dimension, provider, or model options for an
+  existing vector index requires an explicit reindex or a separate vector
+  namespace/index. Do not silently mix vectors from different embedding spaces.</li>
+</ul>
+<p>Current guardrails:</p>
+<ul>
+<li>Different dimensions are caught by startup and runtime vector dimensionality
+  checks.</li>
+<li>Same-dimension model swaps are not reliably detectable from vector shape alone
+  and can silently degrade or corrupt retrieval ranking.</li>
+</ul>
+<p>Add tests and implementation checks:</p>
+<ul>
+<li>[x] English insert, English query works with the configured model.</li>
+<li>[x] Non-English insert, same-language query works when using the same
+  multilingual-capable test embedder.</li>
+<li>[x] Non-English insert, English query works only as a model-quality smoke test,
+  not as a deterministic correctness guarantee.</li>
+<li>[x] Unicode normalization edge cases do not crash ingestion, hashing, chunking,
+  search, ask, facts, or profile extraction.</li>
+<li>[x] Startup records embedding provider, model, dimension, and relevant options
+  as vector-index metadata where the provider supports it.</li>
+<li>[x] Startup fails or enters an explicit "reindex required" state when existing
+  vector-index metadata does not match the configured embedding provider/model,
+  even if dimensions match.</li>
+<li>[x] API and MCP health expose the active embedding provider/model/dimension and
+  any embedding-index mismatch state without leaking provider credentials.</li>
+<li>[x] Reindex command or runbook is documented before allowing a configured model
+  swap on persistent vector stores.</li>
+</ul>
+<p>Preferred locations:</p>
+<ul>
+<li>Embedding/index compatibility: <code>tests/integration/test_storage_features.py</code></li>
+<li>Public health exposure: <code>tests/integration/test_api_mcp_interop.py</code></li>
+<li>Unicode and cross-language public behavior:
+  <code>tests/integration/test_api_mcp_interop.py</code></li>
+</ul>
+<h2 id="p2-operational-and-observability-edges">P2: Operational And Observability Edges</h2>
+<p>Add tests or smoke checks for:</p>
+<ul>
+<li>[x] <code>/health</code> and <code>/ready</code> remain public and secret-free under every auth mode.</li>
+<li>[x] MCP protected-resource metadata remains public and secret-free in OAuth
+  mode.</li>
+<li>[x] Request failures emit structured logs without payload, token, query, or DSN
+  leakage.</li>
+<li>[x] Startup logs clearly state fallback policy and dry-run state.</li>
+<li>[x] Production-oriented config with <code>allow_fallback=true</code> emits a warning once
+  that fallback may make vector data non-durable.</li>
+</ul>
+<h2 id="suggested-execution-order">Suggested Execution Order</h2>
+<ol>
+<li>Add <code>test_api_mcp_interop.py</code> with unauthenticated cross-surface happy paths.</li>
+<li>Extend it with bearer-token cross-surface isolation.</li>
+<li>Add <code>test_auth_mode_transitions.py</code> using persistent SQLite/LanceDB temp
+   storage.</li>
+<li>Fill Redis and PGVector outage assertions in existing storage tests.</li>
+<li>Add embedding-index compatibility checks for model/provider/dimension drift.</li>
+<li>Add cross-surface fact/profile and dedupe/append regressions.</li>
+<li>Add mid-run fake-provider failure tests after startup behavior is locked down.</li>
+</ol>
+<h2 id="acceptance-criteria">Acceptance Criteria</h2>
+<ul>
+<li>Every public memory operation is covered in both directions: API -&gt; MCP and
+  MCP -&gt; API.</li>
+<li>Authenticated data is not exposed by restarting with <code>api.auth: none</code>.</li>
+<li>Metadata provider outages fail startup; vector provider outages only fallback
+  when explicitly allowed.</li>
+<li>Multilingual retrieval is documented as model-dependent, and persistent vector
+  stores cannot silently mix same-dimension vectors from different embedding
+  models.</li>
+<li>Degraded mode is observable from health surfaces and never silently changes
+  response contracts.</li>
+<li>No edge-case test exposes secrets or sensitive payloads in failures.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Dedicated to my little brother,<br> Andrii Hladenko.<br> Вічна Слава Героям. <img src="docs/assets/flags/ua.svg" alt="Ukraine flag" width="18" height="14">
+
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"alias": true, "default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.12.0/mermaid.min.js"></script>
+      
+        <script src="../../javascripts/mermaid.js"></script>
+      
+        <script src="../../javascripts/connect.js"></script>
+      
+    
+  </body>
+</html>

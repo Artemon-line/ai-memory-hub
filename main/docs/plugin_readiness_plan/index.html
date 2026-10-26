@@ -1,0 +1,3555 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Local-first deterministic memory ingestion hub">
+      
+      
+      
+        <link rel="canonical" href="https://artemon-line.github.io/ai-memory-hub/latest/docs/plugin_readiness_plan/">
+      
+      
+        <link rel="prev" href="../cli_implementation_plan/">
+      
+      
+        <link rel="next" href="../release_container_docs_plan/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/brand/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Plugin Readiness Plan - ai-memory-hub</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/connect.css">
+    
+      <link rel="stylesheet" href="../stylesheets/leap-day-dark.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#plugin-readiness-plan" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              
+  
+    These docs describe the <strong>main</strong> branch. They may cover experimental,
+    unreleased, or untested behavior.
+    <a href="../../.."><strong>View the latest released docs.</strong></a>
+  
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="ai-memory-hub" class="md-header__button md-logo" aria-label="ai-memory-hub" data-md-component="logo">
+      
+  <img src="../assets/brand/ai-memory-hub-mark.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ai-memory-hub
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Plugin Readiness Plan
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Artemon-line/ai-memory-hub" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Artemon-line/ai-memory-hub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="ai-memory-hub" class="md-nav__button md-logo" aria-label="ai-memory-hub" data-md-component="logo">
+      
+  <img src="../assets/brand/ai-memory-hub-mark.svg" alt="logo">
+
+    </a>
+    ai-memory-hub
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Artemon-line/ai-memory-hub" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Artemon-line/ai-memory-hub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What Exists Now
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    What Exists Now
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Current Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../importing_conversations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Import Conversations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../importer_compatibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importer Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Technical Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../connect_ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Connect UI and OAuth Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../external_oidc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    External OIDC and Keycloak
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../brand_assets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Brand Assets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../storage_provider_examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage Provider Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../postgres_driver_decision/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PostgreSQL Driver Decision
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quality_evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quality Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What Is Planned
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    What Is Planned
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../planned_features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Planned Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plans/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CHANGELOG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CONTRIBUTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CODE_OF_CONDUCT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code Of Conduct
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    MCP
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp_client_smoke_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Client Smoke Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../real_client_mcp_smoke_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Real-Client MCP Smoke Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../openclaw_native_mcp_setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OpenClaw Native MCP Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp_utility_compliance_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Utility Compliance Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/mcp_response_format_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Response Format Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/codex_cli_findings_coverage_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Codex CLI MCP Findings Coverage Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/p0_live_mcp_retest_followup_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P0 Live MCP Retest Follow-Up Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/agent_model_footprint_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Model Footprint Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bearer_api_key_auth_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Authorization Compliance Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation Plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Implementation Plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plans/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../prioritized_feature_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prioritized Feature Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../storage_agnostic_byoa_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage BYOA Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../browser_extension_capture_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Browser Extension Capture Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bruno_integration_test_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bruno Integration Test Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project_workspace_collaboration_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Workspace Collaboration Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../deterministic_ingestion_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deterministic Ingestion Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../token_budget_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Token Budget Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli_implementation_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin Readiness Plan
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin Readiness Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#goal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goal
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#current-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current State
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-product-positioning-and-user-value" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Product Positioning And User Value
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-local-plugin-packaging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Local Plugin Packaging
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#repository-layout-decision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Repository Layout Decision
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-first-run-installation-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: First-Run Installation Flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-data-handling-and-privacy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Data Handling And Privacy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-authentication-and-exposure-safety" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Authentication And Exposure Safety
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-permission-boundaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Permission Boundaries
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-reliable-mcp-plugin-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Reliable MCP Plugin Behavior
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p1-codex-facing-skills" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: Codex-Facing Skills
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p1-documentation-and-onboarding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: Documentation And Onboarding
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p1-listing-polish" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: Listing Polish
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p1-security-and-privacy-review" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: Security And Privacy Review
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p2-shareable-plugin-candidate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P2: Shareable Plugin Candidate
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#acceptance-criteria" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Acceptance Criteria
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-docs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related Docs
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release_container_docs_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release, Container, and Docs Publishing Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../first_release_readiness_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First Release Readiness Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release_ci_gap_analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release CI Gap Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release_security_scan_notes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Security Scan Notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../repository_governance_settings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Repository Governance Settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release_promotion_assets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Promotion Assets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project_promotion_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Promotion Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability_logging_telemetry_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability, Logging, and Telemetry Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recurring_codebase_cleanup_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Recurring Codebase Cleanup Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Improvements
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Improvements
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Improvement Plans
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/client_feedback_improvement_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client Feedback Improvement Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/top_priority_mcp_result_shape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Top Priority MCP Result Shape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/mcp_response_format_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Response Format Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/codex_cli_findings_coverage_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Codex CLI MCP Findings Coverage Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/p0_live_mcp_retest_followup_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P0 Live MCP Retest Follow-Up Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/agent_model_footprint_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Model Footprint Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/handoff_memory_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Handoff Memory Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/retrieval_precision_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Retrieval Precision Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/context_building_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Context Building Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/conversation_grouping_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conversation Grouping Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/memory_quality_fact_layer_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Memory Quality And Fact Layer Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/edge_case_test_coverage_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Edge Case Test Coverage Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/explicit_memory_save_intent_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Explicit Memory Save Intent Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/google_oauth_connect_ui_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Google OAuth Connect UI Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/p0_beta_governance_checklist/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P0 Beta Governance Checklist
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/p1_sql_hardening_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P1 SQL Hardening Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/efficiency_revival_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Efficiency Revival Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/vector_dbs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vector Database Options
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/neo4j_aura_graph_memory_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Neo4j Aura Graph Memory Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/app_level_encryption_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    App-Level Memory Encryption Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#goal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goal
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#current-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current State
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-product-positioning-and-user-value" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Product Positioning And User Value
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-local-plugin-packaging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Local Plugin Packaging
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#repository-layout-decision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Repository Layout Decision
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-first-run-installation-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: First-Run Installation Flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-data-handling-and-privacy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Data Handling And Privacy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-authentication-and-exposure-safety" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Authentication And Exposure Safety
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-permission-boundaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Permission Boundaries
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p0-reliable-mcp-plugin-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P0: Reliable MCP Plugin Behavior
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p1-codex-facing-skills" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: Codex-Facing Skills
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p1-documentation-and-onboarding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: Documentation And Onboarding
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p1-listing-polish" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: Listing Polish
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p1-security-and-privacy-review" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1: Security And Privacy Review
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p2-shareable-plugin-candidate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P2: Shareable Plugin Candidate
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#acceptance-criteria" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Acceptance Criteria
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-docs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related Docs
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="plugin-readiness-plan">Plugin Readiness Plan</h1>
+<p>This plan tracks the work needed to make ai-memory-hub usable as a Codex-ready
+plugin. The hub remains the local-first memory service; the plugin becomes the
+installable wrapper for setup guidance, MCP wiring, skills, onboarding, and the
+trust model users see inside Codex.</p>
+<h2 id="goal">Goal</h2>
+<p>Make ai-memory-hub reliable as a local Codex plugin, with a later path toward
+broader distribution only after packaging, security, privacy, and documentation
+criteria are satisfied.</p>
+<p>Core user promise:</p>
+<blockquote>
+<p>Local-first memory for Codex and MCP-capable agents, so project decisions,
+architecture notes, prior conversations, and useful facts remain searchable
+across sessions.</p>
+</blockquote>
+<p>Terminology follows <code>agents.md</code>: the Codex plugin captures explicitly selected
+conversation or project context into the hub, retrieves memories from the hub,
+and injects retrieved context into the active Codex task. The plugin does not own
+memory storage or memory quality.</p>
+<h2 id="current-state">Current State</h2>
+<p>Implemented:</p>
+<ul>
+<li>[x] Local-first HTTP and MCP memory service.</li>
+<li>[x] MCP tools for validate, insert, search, retrieve, ask, fact search,
+  profile get, and fact supersession.</li>
+<li>[x] MCP resources and prompts documented for agent clients.</li>
+<li>[x] Explicit save-intent policy and review-pending memory behavior.</li>
+<li>[x] Bearer-token and OAuth resource-server auth modes.</li>
+<li>[x] User and project isolation for authenticated memory operations.</li>
+<li>[x] Storage-provider health, fallback policy, and degraded-mode behavior.</li>
+<li>[x] Real-client and contract-oriented MCP smoke planning.</li>
+<li>[x] Plugin readiness plan added to project docs.</li>
+</ul>
+<p>Missing or partial:</p>
+<ul>
+<li>[ ] Codex plugin wrapper with <code>.codex-plugin/plugin.json</code>.</li>
+<li>[ ] Personal marketplace entry for local installation.</li>
+<li>[ ] Plugin-specific first-run docs.</li>
+<li>[ ] Codex-facing skill prompts for common memory workflows.</li>
+<li>[ ] Plugin-scoped MCP configuration and health-check helper.</li>
+<li>[ ] Plugin listing metadata, icon, screenshots, and privacy note.</li>
+<li>[ ] Clean install/update flow verified from a fresh environment.</li>
+<li>[ ] Dedicated plugin security and privacy review.</li>
+</ul>
+<h2 id="scope">Scope</h2>
+<p>In scope:</p>
+<ul>
+<li>Local Codex plugin packaging for ai-memory-hub.</li>
+<li>A first plugin scaffold in <code>codex-plugin/</code> inside this repository.</li>
+<li>Personal marketplace installation flow.</li>
+<li>MCP server registration or documented MCP connection.</li>
+<li>Plugin-specific onboarding and troubleshooting.</li>
+<li>Privacy, permission, authentication, and data-handling guidance.</li>
+<li>Local smoke tests for plugin install, service health, and MCP usage.</li>
+</ul>
+<p>Out of scope for the first plugin iteration:</p>
+<ul>
+<li>Official/public marketplace publication.</li>
+<li>Hosted multi-tenant operations.</li>
+<li>Cloud sync.</li>
+<li>Automatic transcript capture without explicit user opt-in.</li>
+<li>Admin web UI.</li>
+</ul>
+<h2 id="p0-product-positioning-and-user-value">P0: Product Positioning And User Value</h2>
+<ul>
+<li>[ ] Define the plugin as a memory layer for agents, not as a generic vector
+  database demo.</li>
+<li>[ ] Add a one-paragraph value statement to plugin docs and listing metadata.</li>
+<li>[ ] Document the primary workflows:</li>
+<li>capture an important Codex conversation with explicit user intent</li>
+<li>retrieve previous project decisions</li>
+<li>ask over remembered architecture notes and debugging history</li>
+<li>inject retrieved context into the active Codex task</li>
+<li>retrieve cited memories for inspection</li>
+<li>share one local memory backend across MCP-capable clients</li>
+<li>[ ] State clearly that ai-memory-hub does not capture every conversation
+  automatically.</li>
+<li>[ ] Link plugin docs back to <code>agents.md</code> for the full MCP/agent contract.</li>
+</ul>
+<p>Done when:</p>
+<ul>
+<li>A new user can tell what problem the plugin solves from the listing and first
+  docs screen.</li>
+<li>Docs do not imply background transcript capture or hidden persistence.</li>
+</ul>
+<h2 id="p0-local-plugin-packaging">P0: Local Plugin Packaging</h2>
+<ul>
+<li>[ ] Create a plugin wrapper in <code>codex-plugin/</code>, separate from the service
+  implementation.</li>
+<li>[ ] Add <code>codex-plugin/.codex-plugin/plugin.json</code>.</li>
+<li>[ ] Add a local personal marketplace entry.</li>
+<li>[ ] Choose plugin category:</li>
+<li><code>Productivity</code></li>
+<li><code>Developer Tools</code></li>
+<li>[ ] Add short description:
+  <code>Local-first memory for Codex and MCP agents</code>.</li>
+<li>[ ] Set authentication policy to match the setup flow.</li>
+<li>[ ] Add optional <code>skills/</code> only when the workflow prompts are implemented.</li>
+<li>[ ] Add optional <code>.mcp.json</code> only when the plugin owns MCP server
+  registration.</li>
+<li>[ ] Add optional <code>assets/</code> for icon and listing media.</li>
+<li>[ ] Add optional <code>scripts/</code> for setup, health checks, and update helpers.</li>
+<li>[ ] Keep the core service code in <code>memory/</code>; do not duplicate API, MCP,
+  storage, or ingestion implementation inside the plugin wrapper.</li>
+<li>[ ] Revisit a separate small plugin repository only after the local install
+  and update flow is stable.</li>
+<li>[ ] Validate the plugin with the Codex plugin validator.</li>
+</ul>
+<p>Done when:</p>
+<ul>
+<li>The plugin appears in the local Codex Plugins list from a personal marketplace.</li>
+<li>The plugin wrapper does not duplicate the ai-memory-hub service code.</li>
+<li>Plugin metadata is accurate for the current local-first behavior.</li>
+</ul>
+<h2 id="repository-layout-decision">Repository Layout Decision</h2>
+<p>Start with the plugin scaffold inside this repository:</p>
+<div class="highlight"><pre><span></span><code>codex-plugin/
+  .codex-plugin/
+    plugin.json
+  skills/
+  scripts/
+  assets/
+</code></pre></div>
+<p>Rationale:</p>
+<ul>
+<li>The plugin can evolve with the service while the interface is still changing.</li>
+<li>Documentation, MCP contracts, auth behavior, and setup scripts stay close to
+  the implementation they describe.</li>
+<li>The wrapper remains visibly separate from <code>memory/</code>, so ai-memory-hub continues
+  to be usable by non-Codex MCP clients.</li>
+<li>A future marketplace-oriented split can copy the stabilized wrapper into a
+  smaller distribution repository with a narrower review surface.</li>
+</ul>
+<h2 id="p0-first-run-installation-flow">P0: First-Run Installation Flow</h2>
+<ul>
+<li>[ ] Pick one recommended local install path before documenting alternatives.</li>
+<li>[ ] Document prerequisites:</li>
+<li>Python and <code>uv</code></li>
+<li>Docker or Podman only when using container setup</li>
+<li>available local port</li>
+<li>storage provider requirements</li>
+<li>[ ] Document how to start ai-memory-hub from the repository.</li>
+<li>[ ] Document how to start ai-memory-hub from a container.</li>
+<li>[ ] Document how Codex connects to the MCP endpoint.</li>
+<li>[ ] Add a health-check command or script.</li>
+<li>[ ] Add a first memory save example.</li>
+<li>[ ] Add a first search example.</li>
+<li>[ ] Add a first ask-over-memory example.</li>
+<li>[ ] Add troubleshooting for service startup, port conflicts, config errors,
+  storage failures, and auth failures.</li>
+</ul>
+<p>Done when:</p>
+<ul>
+<li>A clean local environment can install, start, connect, and verify the plugin
+  without guessing.</li>
+<li>Setup errors point to a clear next action.</li>
+</ul>
+<h2 id="p0-data-handling-and-privacy">P0: Data Handling And Privacy</h2>
+<ul>
+<li>[x] Require or support explicit save intent for intentional writes.</li>
+<li>[x] Support review-pending memory status for untrusted or ambiguous writes.</li>
+<li>[x] Redact internal content hashes from external memory responses.</li>
+<li>[x] Avoid raw token logging in auth-protected paths.</li>
+<li>[ ] Add plugin-facing privacy note.</li>
+<li>[ ] Document where metadata and vectors are stored for the recommended setup.</li>
+<li>[ ] Document which actions write memory.</li>
+<li>[ ] Document delete, reject, approve, and export behavior.</li>
+<li>[ ] Document project, thread, source, and user scoping.</li>
+<li>[ ] Document what should not be stored:</li>
+<li>credentials</li>
+<li>personal data that does not belong in project memory</li>
+<li>raw debug logs</li>
+<li>tool output unless explicitly requested</li>
+<li>[ ] Add a plugin onboarding warning before LAN or public exposure guidance.</li>
+</ul>
+<p>Done when:</p>
+<ul>
+<li>Users can understand what is stored, where it is stored, and how to avoid
+  accidental persistence.</li>
+<li>Privacy guidance appears before any non-loopback deployment instructions.</li>
+</ul>
+<h2 id="p0-authentication-and-exposure-safety">P0: Authentication And Exposure Safety</h2>
+<ul>
+<li>[x] Support <code>api.auth: none</code> for CI/test fixtures and maintainer-only
+  loopback smoke tests; do not present it as a plugin user setup option.</li>
+<li>[x] Support <code>api.auth: bearer_token</code> for local or trusted-LAN deployments.</li>
+<li>[x] Support <code>api.auth: oauth_resource_server</code> for future federated MCP
+  deployments.</li>
+<li>[x] Protect <code>/memory/*</code> and <code>/mcp/*</code> when auth is enabled.</li>
+<li>[x] Scope authenticated memory operations to the user.</li>
+<li>[ ] Make the plugin setup default to loopback-only exposure.</li>
+<li>[ ] Warn or fail when <code>auth: none</code> is combined with non-loopback bind.</li>
+<li>[ ] Add token setup guidance to the plugin first-run docs.</li>
+<li>[ ] Document the minimum safe auth mode for each deployment shape.</li>
+<li>[ ] Verify plugin docs never put tokens in query strings, logs, or examples.</li>
+</ul>
+<p>Done when:</p>
+<ul>
+<li>Local setup remains simple.</li>
+<li>LAN or public exposure cannot be followed from docs without seeing auth
+  guidance first.</li>
+<li>Tests prove one user cannot search, retrieve, ask over, or mutate another
+  user's memory.</li>
+</ul>
+<h2 id="p0-permission-boundaries">P0: Permission Boundaries</h2>
+<ul>
+<li>[x] Document agent rules for validate-before-insert.</li>
+<li>[x] Document save-intent expectations in <code>agents.md</code>.</li>
+<li>[x] Protect project-scoped memory operations with membership checks.</li>
+<li>[ ] Add plugin-specific permission language for read, write, and admin
+  capabilities.</li>
+<li>[ ] Keep write actions behind explicit save intent, user confirmation, or
+  configured client auto-save.</li>
+<li>[ ] Keep admin/debug operations disabled or undocumented until intentionally
+  exposed.</li>
+<li>[ ] Ensure plugin skills do not encourage storing debug logs or operational
+  planning text by default.</li>
+<li>[ ] Ensure plugin docs say clients must not write directly to backing
+  databases or vector stores.</li>
+</ul>
+<p>Done when:</p>
+<ul>
+<li>A user can inspect the plugin docs and understand what Codex may read or
+  write through ai-memory-hub.</li>
+<li>MCP tool schemas, HTTP routes, and docs describe the same permission model.</li>
+</ul>
+<h2 id="p0-reliable-mcp-plugin-behavior">P0: Reliable MCP Plugin Behavior</h2>
+<ul>
+<li>[x] Expose <code>memory_validate</code>.</li>
+<li>[x] Expose <code>memory_insert</code>.</li>
+<li>[x] Expose <code>memory_search</code>.</li>
+<li>[x] Expose <code>memory_retrieve</code>.</li>
+<li>[x] Expose <code>memory_ask</code>.</li>
+<li>[x] Expose fact/profile tools.</li>
+<li>[x] Expose useful MCP resources and prompts.</li>
+<li>[x] Use stable MCP response envelopes documented in <code>agents.md</code>.</li>
+<li>[ ] Add plugin-specific smoke instructions for Codex.</li>
+<li>[ ] Add a plugin health-check flow that verifies the MCP endpoint.</li>
+<li>[ ] Verify auth failures return actionable plugin setup errors.</li>
+<li>[ ] Verify storage failures return actionable plugin setup errors.</li>
+<li>[ ] Verify degraded health is visible to the user before writes are trusted.</li>
+<li>[ ] Verify pagination and token budgeting in the plugin happy path.</li>
+</ul>
+<p>Done when:</p>
+<ul>
+<li>Codex can connect to the plugin-backed MCP server and complete save, search,
+  retrieve, and ask workflows.</li>
+<li>Failures are clear enough for a user to fix config, auth, or service state.</li>
+</ul>
+<h2 id="p1-codex-facing-skills">P1: Codex-Facing Skills</h2>
+<ul>
+<li>[ ] Add a skill for saving the current conversation intentionally.</li>
+<li>[ ] Add a skill for searching remembered project context before code changes.</li>
+<li>[ ] Add a skill for asking over project memory with citations.</li>
+<li>[ ] Add a skill for injecting retrieved project context into the active task.</li>
+<li>[ ] Add a skill for reviewing pending memories if review-pending mode is
+  enabled.</li>
+<li>[ ] Keep skill instructions aligned with <code>agents.md</code>.</li>
+<li>[ ] Include save-intent metadata in all write-oriented skill guidance.</li>
+<li>[ ] Avoid automatic saving unless a user explicitly enables it.</li>
+</ul>
+<p>Done when:</p>
+<ul>
+<li>Codex can use the plugin through named workflows without the user needing to
+  remember raw MCP tool details.</li>
+<li>Skills do not bypass save-intent, auth, or project-scoping rules.</li>
+</ul>
+<h2 id="p1-documentation-and-onboarding">P1: Documentation And Onboarding</h2>
+<ul>
+<li>[ ] Add <code>docs/plugin_overview.md</code> or a plugin section in existing docs.</li>
+<li>[ ] Add install/start/connect/test steps.</li>
+<li>[ ] Add secure-localhost-first guidance.</li>
+<li>[ ] Add LAN deployment guidance that requires auth.</li>
+<li>[ ] Add troubleshooting for:</li>
+<li>plugin not visible</li>
+<li>MCP endpoint unavailable</li>
+<li>auth rejected</li>
+<li>storage provider unavailable</li>
+<li>embeddings unavailable</li>
+<li>degraded fallback active</li>
+<li>[ ] Link to <code>mcp_plan.md</code>, <code>mcp_client_smoke_plan.md</code>, and
+  <code>bearer_api_key_auth_plan.md</code> for deep details.</li>
+<li>[ ] Keep examples in bash style.</li>
+</ul>
+<p>Done when:</p>
+<ul>
+<li>A new user can complete the happy path in under five minutes from a clean
+  checkout.</li>
+<li>Deep architecture details are linked instead of repeated in the plugin docs.</li>
+</ul>
+<h2 id="p1-listing-polish">P1: Listing Polish</h2>
+<ul>
+<li>[ ] Add display name: <code>ai-memory-hub</code>.</li>
+<li>[ ] Add short description: <code>Local-first memory for Codex and MCP agents</code>.</li>
+<li>[ ] Add longer description:
+  <code>Search, retrieve, and ask over project memories, architecture decisions, and
+  saved conversations through a local MCP memory service.</code></li>
+<li>[ ] Add privacy note:
+  <code>Stores memories locally by default. Do not expose the service beyond
+  localhost without authentication.</code></li>
+<li>[ ] Add setup requirements.</li>
+<li>[ ] Add icon.</li>
+<li>[ ] Add optional screenshot of save/search/ask workflow.</li>
+<li>[ ] Add optional diagram showing Codex, MCP, ai-memory-hub, metadata storage,
+  and vector storage.</li>
+</ul>
+<p>Done when:</p>
+<ul>
+<li>The listing is accurate, concise, and does not overclaim official marketplace
+  support.</li>
+<li>Privacy and auth expectations are visible before first use.</li>
+</ul>
+<h2 id="p1-security-and-privacy-review">P1: Security And Privacy Review</h2>
+<ul>
+<li>[ ] Review plugin manifest for overbroad claims or permissions.</li>
+<li>[ ] Review setup scripts for secret-safe output.</li>
+<li>[ ] Confirm docs never log or display bearer tokens outside intentional token
+  creation output.</li>
+<li>[ ] Confirm MCP errors do not leak sensitive backend details.</li>
+<li>[ ] Confirm unsafe bind/auth combinations are warned, blocked, or documented.</li>
+<li>[ ] Confirm deletion, rejection, approval, and export behavior are documented.</li>
+<li>[ ] Confirm save-intent behavior is represented accurately in all plugin
+  workflows.</li>
+<li>[ ] Record review results before sharing the plugin beyond local use.</li>
+</ul>
+<p>Done when:</p>
+<ul>
+<li>High-risk findings are fixed or explicitly scoped out with rationale.</li>
+<li>The plugin has a minimal privacy note suitable for listing metadata.</li>
+</ul>
+<h2 id="p2-shareable-plugin-candidate">P2: Shareable Plugin Candidate</h2>
+<ul>
+<li>[ ] Validate install and update from a fresh local environment.</li>
+<li>[ ] Run Codex MCP smoke tests through the plugin setup.</li>
+<li>[ ] Run at least one non-Codex MCP client smoke test against the same service.</li>
+<li>[ ] Add release notes for plugin wrapper changes.</li>
+<li>[ ] Decide whether the plugin should remain personal/local or pursue broader
+  marketplace distribution.</li>
+<li>[ ] If pursuing broader distribution, document additional review requirements:</li>
+<li>support model</li>
+<li>versioning</li>
+<li>security response</li>
+<li>privacy statement</li>
+<li>data retention story</li>
+<li>hosted-service boundaries, if any</li>
+</ul>
+<p>Done when:</p>
+<ul>
+<li>The plugin is safe to share with another developer for local testing.</li>
+<li>Broader distribution is treated as a separate approval and hardening track.</li>
+</ul>
+<h2 id="testing">Testing</h2>
+<ul>
+<li>[ ] Plugin manifest validation passes.</li>
+<li>[ ] Personal marketplace entry renders in Codex.</li>
+<li>[ ] Service health check passes from the documented setup.</li>
+<li>[ ] MCP initialize and tools/list pass from Codex.</li>
+<li>[ ] Save-first-memory workflow passes.</li>
+<li>[ ] Search workflow passes.</li>
+<li>[ ] Retrieve workflow passes.</li>
+<li>[ ] Ask-over-memory workflow passes with citations.</li>
+<li>[ ] Missing service produces an actionable setup error.</li>
+<li>[ ] Invalid token produces an actionable auth error without leaking token
+  material.</li>
+<li>[ ] Non-loopback <code>auth: none</code> exposure is warned, blocked, or explicitly
+  flagged by setup checks.</li>
+<li>[ ] Docs build passes after plugin docs are added.</li>
+</ul>
+<h2 id="acceptance-criteria">Acceptance Criteria</h2>
+<ul>
+<li>[ ] ai-memory-hub can be installed as a local Codex plugin.</li>
+<li>[ ] The plugin can connect Codex to the ai-memory-hub MCP server.</li>
+<li>[ ] A user can capture, search, retrieve, ask over memory, and inject retrieved
+  context from the documented first-run flow.</li>
+<li>[ ] The docs explain local storage, save intent, auth, and exposure safety.</li>
+<li>[ ] The plugin does not encourage automatic memory capture by default.</li>
+<li>[ ] The plugin listing includes accurate setup and privacy notes.</li>
+<li>[ ] Plugin validation and docs validation pass.</li>
+<li>[ ] Security/privacy review is complete before broader sharing.</li>
+</ul>
+<h2 id="related-docs">Related Docs</h2>
+<ul>
+<li>Agent integration: <code>agents.md</code></li>
+<li>MCP plan: <code>mcp_plan.md</code></li>
+<li>MCP client smoke plan: <code>mcp_client_smoke_plan.md</code></li>
+<li>MCP authorization compliance plan: <code>bearer_api_key_auth_plan.md</code></li>
+<li>Explicit memory save intent plan: <code>improvements/explicit_memory_save_intent_plan.md</code></li>
+<li>First release readiness plan: <code>first_release_readiness_plan.md</code></li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Dedicated to my little brother,<br> Andrii Hladenko.<br> Вічна Слава Героям. <img src="docs/assets/flags/ua.svg" alt="Ukraine flag" width="18" height="14">
+
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"alias": true, "default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.12.0/mermaid.min.js"></script>
+      
+        <script src="../javascripts/mermaid.js"></script>
+      
+        <script src="../javascripts/connect.js"></script>
+      
+    
+  </body>
+</html>

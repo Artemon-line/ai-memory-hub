@@ -1,0 +1,3729 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Local-first deterministic memory ingestion hub">
+      
+      
+      
+        <link rel="canonical" href="https://artemon-line.github.io/ai-memory-hub/latest/docs/improvements/efficiency_revival_plan/">
+      
+      
+        <link rel="prev" href="../p1_sql_hardening_plan/">
+      
+      
+        <link rel="next" href="../vector_dbs/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/brand/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Efficiency Revival Plan - ai-memory-hub</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/connect.css">
+    
+      <link rel="stylesheet" href="../../stylesheets/leap-day-dark.css">
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#efficiency-revival-plan" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              
+  
+    These docs describe the <strong>main</strong> branch. They may cover experimental,
+    unreleased, or untested behavior.
+    <a href="../../../.."><strong>View the latest released docs.</strong></a>
+  
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="ai-memory-hub" class="md-header__button md-logo" aria-label="ai-memory-hub" data-md-component="logo">
+      
+  <img src="../../assets/brand/ai-memory-hub-mark.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ai-memory-hub
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Efficiency Revival Plan
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Artemon-line/ai-memory-hub" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Artemon-line/ai-memory-hub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="ai-memory-hub" class="md-nav__button md-logo" aria-label="ai-memory-hub" data-md-component="logo">
+      
+  <img src="../../assets/brand/ai-memory-hub-mark.svg" alt="logo">
+
+    </a>
+    ai-memory-hub
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Artemon-line/ai-memory-hub" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Artemon-line/ai-memory-hub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What Exists Now
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    What Exists Now
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Current Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../importing_conversations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Import Conversations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../importer_compatibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importer Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Technical Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../connect_ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Connect UI and OAuth Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../external_oidc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    External OIDC and Keycloak
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../brand_assets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Brand Assets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../storage_provider_examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage Provider Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../postgres_driver_decision/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PostgreSQL Driver Decision
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quality_evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quality Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What Is Planned
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    What Is Planned
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned_features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Planned Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plans/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../CHANGELOG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../CONTRIBUTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../CODE_OF_CONDUCT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code Of Conduct
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    MCP
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mcp_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mcp_client_smoke_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Client Smoke Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../real_client_mcp_smoke_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Real-Client MCP Smoke Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../openclaw_native_mcp_setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OpenClaw Native MCP Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mcp_utility_compliance_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Utility Compliance Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp_response_format_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Response Format Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../codex_cli_findings_coverage_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Codex CLI MCP Findings Coverage Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../p0_live_mcp_retest_followup_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P0 Live MCP Retest Follow-Up Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent_model_footprint_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Model Footprint Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../bearer_api_key_auth_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Authorization Compliance Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation Plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Implementation Plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plans/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../prioritized_feature_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prioritized Feature Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../storage_agnostic_byoa_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage BYOA Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../browser_extension_capture_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Browser Extension Capture Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../bruno_integration_test_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bruno Integration Test Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../project_workspace_collaboration_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Workspace Collaboration Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deterministic_ingestion_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deterministic Ingestion Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../token_budget_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Token Budget Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli_implementation_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin_readiness_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin Readiness Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release_container_docs_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release, Container, and Docs Publishing Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../first_release_readiness_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First Release Readiness Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release_ci_gap_analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release CI Gap Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release_security_scan_notes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Security Scan Notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../repository_governance_settings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Repository Governance Settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release_promotion_assets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Promotion Assets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../project_promotion_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Promotion Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../observability_logging_telemetry_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability, Logging, and Telemetry Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recurring_codebase_cleanup_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Recurring Codebase Cleanup Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Improvements
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Improvements
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Improvement Plans
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../client_feedback_improvement_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client Feedback Improvement Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../top_priority_mcp_result_shape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Top Priority MCP Result Shape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp_response_format_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Response Format Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../codex_cli_findings_coverage_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Codex CLI MCP Findings Coverage Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../p0_live_mcp_retest_followup_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P0 Live MCP Retest Follow-Up Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent_model_footprint_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Model Footprint Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../handoff_memory_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Handoff Memory Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../retrieval_precision_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Retrieval Precision Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../context_building_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Context Building Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../conversation_grouping_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conversation Grouping Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory_quality_fact_layer_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Memory Quality And Fact Layer Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../edge_case_test_coverage_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Edge Case Test Coverage Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../explicit_memory_save_intent_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Explicit Memory Save Intent Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../google_oauth_connect_ui_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Google OAuth Connect UI Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../p0_beta_governance_checklist/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P0 Beta Governance Checklist
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../p1_sql_hardening_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P1 SQL Hardening Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Efficiency Revival Plan
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Efficiency Revival Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#goal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goal
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#non-goals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-Goals
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#current-baseline-and-evidence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current Baseline And Evidence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#efficiency-scorecard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Efficiency Scorecard
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Efficiency Scorecard">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#latency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Latency
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#work-amplification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Work Amplification
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#capacity-and-cost" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Capacity And Cost
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mandatory-guardrails" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mandatory Guardrails
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#target-deployment-profiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Target Deployment Profiles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-0-make-measurements-trustworthy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 0: Make Measurements Trustworthy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-1-remove-request-path-waste" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1: Remove Request-Path Waste
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-2-make-ingestion-proportional-to-new-information" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2: Make Ingestion Proportional To New Information
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-3-reduce-retrieval-amplification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3: Reduce Retrieval Amplification
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-4-bound-context-and-model-cost" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4: Bound Context And Model Cost
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-5-storage-and-index-efficiency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5: Storage And Index Efficiency
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-6-runtime-and-operational-efficiency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6: Runtime And Operational Efficiency
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proposed-pr-sized-workstreams" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proposed PR-Sized Workstreams
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decision-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decision Rules
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#validation-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation Matrix
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#done-when" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Done When
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vector_dbs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vector Database Options
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../neo4j_aura_graph_memory_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Neo4j Aura Graph Memory Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../app_level_encryption_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    App-Level Memory Encryption Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#goal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goal
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#non-goals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-Goals
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#current-baseline-and-evidence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current Baseline And Evidence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#efficiency-scorecard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Efficiency Scorecard
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Efficiency Scorecard">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#latency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Latency
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#work-amplification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Work Amplification
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#capacity-and-cost" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Capacity And Cost
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mandatory-guardrails" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mandatory Guardrails
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#target-deployment-profiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Target Deployment Profiles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-0-make-measurements-trustworthy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 0: Make Measurements Trustworthy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-1-remove-request-path-waste" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1: Remove Request-Path Waste
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-2-make-ingestion-proportional-to-new-information" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2: Make Ingestion Proportional To New Information
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-3-reduce-retrieval-amplification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3: Reduce Retrieval Amplification
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-4-bound-context-and-model-cost" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4: Bound Context And Model Cost
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-5-storage-and-index-efficiency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5: Storage And Index Efficiency
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-6-runtime-and-operational-efficiency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6: Runtime And Operational Efficiency
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proposed-pr-sized-workstreams" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proposed PR-Sized Workstreams
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decision-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decision Rules
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#validation-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation Matrix
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#done-when" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Done When
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="efficiency-revival-plan">Efficiency Revival Plan</h1>
+<p>Source date: <code>25-10-2026</code></p>
+<h2 id="goal">Goal</h2>
+<p>Make ai-memory-hub cheaper and faster to operate without weakening retrieval
+quality, authorization, durability, privacy, or deterministic fallbacks.</p>
+<p>Efficiency means improving all of the following together:</p>
+<ul>
+<li>end-to-end latency for insert, search, retrieve, ask, and import;</li>
+<li>useful work per embedding, storage call, candidate, byte, and model token;</li>
+<li>throughput under concurrent ingestion and retrieval;</li>
+<li>resident memory, database growth, index growth, and temporary allocations;</li>
+<li>startup, readiness, maintenance, and CI cost; and</li>
+<li>operator effort required to diagnose slow or wasteful behavior.</li>
+</ul>
+<p>This is a measurement-first plan. An optimization is complete only when a
+before/after report shows a material gain and the existing quality and safety
+gates still pass.</p>
+<h2 id="non-goals">Non-Goals</h2>
+<ul>
+<li>Do not trade recall, fact correctness, provenance, or tenant isolation for a
+  lower latency number.</li>
+<li>Do not introduce a mandatory hosted cache, queue, model, or telemetry service.</li>
+<li>Do not cache raw private conversation payloads outside the configured stores.</li>
+<li>Do not optimize every supported provider identically; use capability-aware
+  paths and retain bounded fallbacks.</li>
+<li>Do not change public HTTP or MCP response shapes solely for performance.</li>
+</ul>
+<h2 id="current-baseline-and-evidence">Current Baseline And Evidence</h2>
+<p>The following local measurements are directional baselines from one Windows
+development machine on <code>25-10-2026</code>; they are not cross-platform service-level
+objectives.</p>
+<table>
+<thead>
+<tr>
+<th>Benchmark</th>
+<th style="text-align: right;">Current local result</th>
+<th>Planning implication</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Config parsing</td>
+<td style="text-align: right;"><code>1.43 ms</code> average over 200 warm iterations</td>
+<td>Cache only immutable, path-keyed runtime configuration; first prove it repeats on request paths.</td>
+</tr>
+<tr>
+<td>Schema loading</td>
+<td style="text-align: right;"><code>0.66 ms</code> average over 200 warm iterations</td>
+<td>A path-and-mtime-aware schema cache may help validation-heavy ingestion.</td>
+</tr>
+<tr>
+<td>Token counting</td>
+<td style="text-align: right;"><code>0.03 ms</code> warm average</td>
+<td>Encoding initialization is already cached; text-level caching is low priority unless real traces show repeated identical text.</td>
+</tr>
+<tr>
+<td>Schema compatibility</td>
+<td style="text-align: right;"><code>0.01 ms</code> average</td>
+<td>Do not optimize this independently.</td>
+</tr>
+<tr>
+<td>Default ask</td>
+<td style="text-align: right;"><code>2.41 ms</code> average in the deterministic benchmark</td>
+<td>Preserve as the local comparison path.</td>
+</tr>
+<tr>
+<td>Request-level 80-token budget</td>
+<td style="text-align: right;"><code>3.06 ms</code>, <code>1.27x</code> default latency</td>
+<td>The extra CPU is acceptable only when it reduces downstream context or model cost.</td>
+</tr>
+<tr>
+<td>Config-enabled 80-token budget</td>
+<td style="text-align: right;"><code>2.77 ms</code>, <code>1.15x</code> default latency</td>
+<td>Prefer one configured budget over repeated per-client policy decisions.</td>
+</tr>
+<tr>
+<td>Selected ask context</td>
+<td style="text-align: right;">8 chunks down to 2 chunks / 75 tokens</td>
+<td>Measure total model latency and token cost, not only local selection overhead.</td>
+</tr>
+</tbody>
+</table>
+<p>The token-budget benchmark also emitted an audit persistence exception for
+each measured request because its stub store cannot retain fallback audit
+events. That repeated exception logging pollutes profiles and adds avoidable
+CPU and I/O. Benchmark and test doubles must support a silent bounded audit
+sink before their results are trusted for optimization decisions.</p>
+<p>Existing observability already measures API, MCP, ingestion-stage, embedding,
+and vector-search durations. Existing benchmark coverage includes token
+budgets, cache candidates, retrieval quality, graph quality, and the versioned
+retrieval/extraction quality gate. The plan should extend these assets instead
+of creating a separate performance framework.</p>
+<h2 id="efficiency-scorecard">Efficiency Scorecard</h2>
+<p>Every performance report should identify the deployment profile, corpus size,
+provider versions, cold/warm state, concurrency, and machine class.</p>
+<h3 id="latency">Latency</h3>
+<ul>
+<li>insert, append, search, retrieve, ask, and import p50/p95/p99;</li>
+<li>embedding and vector-search p50/p95 separately;</li>
+<li>query planning, lexical search, fact search, fusion, reranking, context
+  assembly, audit persistence, and serialization duration;</li>
+<li>cold startup and readiness time; and</li>
+<li>first request versus steady-state latency.</li>
+</ul>
+<h3 id="work-amplification">Work Amplification</h3>
+<ul>
+<li>embedding requests and embedded chunks per accepted conversation;</li>
+<li>vector candidates fetched per returned result;</li>
+<li>filtered-search attempts and candidates discarded after retrieval;</li>
+<li>metadata reads and rows loaded per request;</li>
+<li>facts, graph records, and summaries scanned per answer;</li>
+<li>audit writes and log records per operation; and</li>
+<li>context tokens supplied per cited or answer-supporting token.</li>
+</ul>
+<h3 id="capacity-and-cost">Capacity And Cost</h3>
+<ul>
+<li>conversations and messages ingested per second;</li>
+<li>queries per second at concurrency 1, 4, 16, and 32;</li>
+<li>peak and steady-state resident memory;</li>
+<li>metadata and vector bytes per conversation and per chunk;</li>
+<li>model calls, input tokens, output tokens, and estimated provider cost; and</li>
+<li>background maintenance duration and temporary disk use.</li>
+</ul>
+<h3 id="mandatory-guardrails">Mandatory Guardrails</h3>
+<ul>
+<li>the versioned quality gate remains green;</li>
+<li>filtered recall, precision@1, recall@k, MRR, nDCG, fact precision/recall,
+  temporal accuracy, and fallback accuracy do not regress beyond an approved
+  tolerance;</li>
+<li>authorization/project isolation and secret-redaction tests remain green;</li>
+<li>no unbounded cache, queue, candidate list, retry loop, or log stream; and</li>
+<li>rollback is configuration-only or a small isolated code revert.</li>
+</ul>
+<h2 id="target-deployment-profiles">Target Deployment Profiles</h2>
+<p>Use three profiles so local optimizations do not accidentally penalize larger
+deployments.</p>
+<table>
+<thead>
+<tr>
+<th>Profile</th>
+<th>Representative setup</th>
+<th>Primary constraint</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Local</td>
+<td>SQLite + LanceDB/local embeddings, one user</td>
+<td>startup, memory, idle cost, simple operations</td>
+</tr>
+<tr>
+<td>Team</td>
+<td>Postgres + PGVector or Qdrant, 4–32 concurrent clients</td>
+<td>throughput, pooling, tenant fairness</td>
+</tr>
+<tr>
+<td>Remote-provider</td>
+<td>hosted metadata/vector/model services</td>
+<td>round trips, batching, retries, token and request cost</td>
+</tr>
+</tbody>
+</table>
+<p>Each optimization must state which profiles benefit and which may regress.</p>
+<h2 id="phase-0-make-measurements-trustworthy">Phase 0: Make Measurements Trustworthy</h2>
+<p>Deliver this phase before changing production algorithms.</p>
+<ul>
+<li>[ ] Fix benchmark/test audit sinks so expected unsupported persistence does
+      not emit exception traces per request.</li>
+<li>[ ] Add a request-scoped work ledger to benchmark reports: storage calls,
+      embedding calls/texts, candidate counts, filtered candidates, reranker
+      calls, audit writes, selected chunks, and context tokens.</li>
+<li>[ ] Add cold/warm separation and p50/p95/p99 output to performance helpers;
+      averages alone hide tail regressions.</li>
+<li>[ ] Add reproducible synthetic corpora at small, medium, and large scales,
+      including high-selectivity and low-selectivity filters.</li>
+<li>[ ] Add concurrency runners for insert, search, and ask without external
+      credentials.</li>
+<li>[ ] Persist machine-readable before/after reports as CI artifacts.</li>
+<li>[ ] Keep deterministic CI gates short; run provider load profiles on demand or
+      on a scheduled workflow.</li>
+</ul>
+<p>Acceptance criteria:</p>
+<ul>
+<li>Repeated benchmark runs on an idle machine have documented variance bounds.</li>
+<li>Profiles contain no repeated expected exception logging.</li>
+<li>A report can attribute a regression to a stage or amplification counter, not
+  only to total request time.</li>
+<li>Performance fixtures contain synthetic data only.</li>
+</ul>
+<p>Implementation status:</p>
+<ul>
+<li>The first benchmark-hygiene slice adds a bounded audit sink to the token
+  budget benchmark, separates first-call and warm latency, reports warm
+  average/p50/p95/p99/min/max distributions, and records per-request search,
+  candidate, audit-write, and result/context amplification. Cache-candidate
+  operations now report first-call and warm percentile distributions. Scale
+  corpora, concurrency runners, broader provider work ledgers, and persisted CI
+  comparison artifacts remain follow-up work.</li>
+</ul>
+<h2 id="phase-1-remove-request-path-waste">Phase 1: Remove Request-Path Waste</h2>
+<p>Start with low-risk work that should not alter ranking or storage semantics.</p>
+<ul>
+<li>[x] Trace config parsing and schema loading to confirm whether they occur on
+      hot request paths.</li>
+<li>[x] If repeated, cache parsed configuration by resolved path plus file
+      identity and invalidate explicitly on reload.</li>
+<li>[x] If repeated, cache validated schemas by resolved path plus modification
+      time; never allow one configured schema to contaminate another runtime.</li>
+<li>[ ] Reuse bounded provider clients and connection pools rather than creating
+      network clients per operation.</li>
+<li>[x] Compute normalized conversation/search text once per candidate within a
+      request and reuse it across lexical, metadata, fact, and boost stages.</li>
+<li>[x] Replace repeated single-record lookups with existing <code>get_many</code> or a new
+      provider capability only where traces show N+1 behavior.</li>
+<li>[ ] Avoid building detailed diagnostics, provenance projections, or full
+      result bodies when the caller requested a concise response.</li>
+<li>[ ] Bound and deduplicate warning/error logs by failure class while retaining
+      counters and first-occurrence diagnostics.</li>
+</ul>
+<p>Acceptance criteria:</p>
+<ul>
+<li>At least one measured hot-path cost is removed or the phase closes with
+  evidence that the suspected work is not material.</li>
+<li>Warm p95 latency improves by at least 10% on an affected path, or total work
+  amplification drops by at least 20%.</li>
+<li>Cache invalidation and multi-config tests pass.</li>
+<li>No raw payload, query, embedding, token, or secret is added to cache keys or
+  logs.</li>
+</ul>
+<p>Implementation note (runtime immutable-data cache slice): tracing confirmed
+that configuration parsing and schema file loading occur during runtime
+construction rather than on normal request paths, so parsed configuration is
+intentionally left uncached. Payload validation did, however, re-check and
+recompile the same schema for every ingest. Runtimes now reuse a checked
+validator cached by resolved schema path, nanosecond modification time, and
+file size; the cache is bounded to 16 identities and supports explicit
+invalidation. Direct schema loads remain isolated so caller mutation cannot
+contaminate another runtime. On a 100-iteration local synthetic run, reusing
+the validator reduced unprofiled validation p95 from <code>29.60 ms</code> to <code>0.33 ms</code>
+(more than 98%); exact timings are environment-dependent. Invalidation, mutation
+isolation, and multi-schema tests cover reload and concurrent configuration
+safety.</p>
+<p>Implementation note (fact-source batch hydration slice): fact filtering,
+text ranking, temporal projection, retrieval-candidate construction, and
+provenance assembly now deduplicate source conversation IDs and reuse bounded
+<code>get_many</code> reads. Batches are capped at 500 IDs to match every metadata
+provider contract, while custom stores without <code>get_many</code> retain the compatible
+single-read fallback. The deterministic
+<code>memory.benchmarks.fact_hydration_efficiency</code> fixture preserves all 120 fact
+results while reducing the former 240 source reads across ranking and public
+projection to one batch read for three unique conversations (more than 99%
+fewer metadata read calls). No conversation payloads are cached across
+requests.</p>
+<p>Implementation note (request-local search-text reuse slice): fact ranking and
+question narrowing now share each hydrated source conversation's assembled
+search text for the duration of that operation. The cache uses in-memory object
+identity, is discarded after the request stage, and never stores text across
+requests. Lexical candidates already assembled their conversation text once per
+candidate. The deterministic <code>memory.benchmarks.search_text_efficiency</code> fixture
+preserves all 120 ranked facts while reducing source conversation search-text
+construction from 120 times to three times for three unique conversations
+(97.5% less construction work).</p>
+<h2 id="phase-2-make-ingestion-proportional-to-new-information">Phase 2: Make Ingestion Proportional To New Information</h2>
+<ul>
+<li>[ ] Establish stage timings and amplification counts for validate, normalize,
+      hash, deduplicate, chunk, extract, embed, metadata write, vector write,
+      derived-record write, and audit.</li>
+<li>[x] Complete deduplication and append-delta detection before embedding or
+      derived extraction wherever the contract permits.</li>
+<li>[ ] Batch embedding inputs up to provider-advertised limits with bounded
+      payload size and deterministic result-to-chunk mapping.</li>
+<li>[ ] Use metadata/vector batch-write capabilities when available; retain the
+      current atomic or compensating behavior on partial failure.</li>
+<li>[ ] Introduce bounded ingestion concurrency by project/provider, with
+      backpressure rather than unbounded task creation.</li>
+<li>[ ] Avoid recomputing facts, graph records, summaries, or hashes for unchanged
+      messages during append and reindex.</li>
+<li>[ ] Add checkpointed, resumable reindex batches so a large reindex does not
+      retain the entire corpus or restart from zero.</li>
+<li>[x] Report bytes and rows written per accepted message and per duplicate.</li>
+</ul>
+<p>Acceptance criteria:</p>
+<ul>
+<li>Duplicate ingestion performs zero embedding and vector-write work.</li>
+<li>Append work scales with new messages/chunks rather than full conversation
+  length.</li>
+<li>Batch ingestion improves remote-provider throughput by at least 25% without
+  increasing error leakage or partial-write ambiguity.</li>
+<li>Peak memory remains bounded by configured batch size.</li>
+</ul>
+<p>Implementation note (duplicate-ingestion fast-path slice): exact duplicates
+now return before summary/fact/graph derivation, metadata rewrites, embedding,
+or vector writes when the stored manifest is indexed and the vector provider
+confirms all expected chunk IDs. Pending manifests are reconciled from existing
+vector rows, while missing vectors retain the full repair path. The deterministic
+<code>memory.benchmarks.ingestion_efficiency</code> work ledger reports calls, rows, and
+bytes for accepted and duplicate inputs. Its baseline fixture drops from two
+embedding inputs and two vector-row writes on the former full-reindex path to
+zero of each, a 100% reduction; the required audit row remains.</p>
+<p>Implementation note (single-pass append-summary slice): generated summaries
+are now attached only after trusted-append detection. New conversations retain
+the same summary behavior, while an append generates summaries once from the
+combined stored conversation instead of first writing transient summaries for
+the incoming transcript and immediately overwriting the same derived
+identities. The deterministic ingestion work ledger preserves the final
+three-message summary and reduces the append fixture from two summary passes
+and four derived-row writes to one pass and two writes (50% less summary work).
+Rejected same-ID updates also perform no generated-summary writes. Other
+unchanged-message derivation remains follow-up work.</p>
+<p>Implementation note (incremental append-graph slice): trusted appends now run
+graph extraction only over newly appended messages and carry the original
+zero-based message offset into entity and relationship provenance. Existing
+relationships remain available for conflict supersession, while unchanged
+messages are not scanned or rewritten by the extraction stage. The deterministic
+<code>memory.benchmarks.append_graph_efficiency</code> fixture reduces graph inputs for a
+two-message conversation plus one-message append from three messages to one
+(66.7%) and verifies that the new relationship still cites message index 2.
+Facts were already append-incremental; unchanged-message hashing and reindex
+work remain follow-up items.</p>
+<h2 id="phase-3-reduce-retrieval-amplification">Phase 3: Reduce Retrieval Amplification</h2>
+<ul>
+<li>[ ] Break search and ask latency into planning, embedding, dense, lexical,
+      fact, graph, fusion, reranking, hydration, context, and serialization.</li>
+<li>[ ] Run independent candidate sources concurrently only when provider clients
+      are safe and a shared deadline can cancel or ignore late optional work.</li>
+<li>[ ] Make candidate limits responsive to <code>top_k</code>, filter selectivity, provider
+      pushdown capability, and observed hit yield; retain hard global caps.</li>
+<li>[ ] Hydrate only unique candidate IDs and only fields required by the selected
+      response mode and reranker projection.</li>
+<li>[ ] Skip semantic reranking when deterministic evidence is decisive, the
+      candidate set is too small to change order, or the remaining deadline is
+      insufficient.</li>
+<li>[ ] Reuse the query plan between <code>memory_lookup</code>, search, and ask sub-steps
+      inside one request; do not cache authorization scope from model output.</li>
+<li>[ ] Add a bounded, privacy-safe query-embedding cache only after production
+      traces demonstrate meaningful exact-query repetition. Key it by embedding
+      provider/model/version and normalized query, never by incomplete tenant
+      scope when results are cached.</li>
+<li>[ ] Prefer fact/profile or summary evidence before raw chunks when it answers
+      the question with equal or better confidence and provenance.</li>
+</ul>
+<p>Acceptance criteria:</p>
+<ul>
+<li>Candidate-to-result amplification falls by at least 25% on filtered and
+  unfiltered medium/large corpora.</li>
+<li>Search and ask p95 improve by at least 20% for one target profile.</li>
+<li>Reranker/model call rate drops without reducing fallback accuracy or quality
+  metrics.</li>
+<li>Deadline and cancellation behavior is deterministic and test-covered.</li>
+</ul>
+<p>Implementation note (adaptive candidate-budget slice): unfiltered lexical and
+fact candidate admission now uses the smaller of each configured hard cap and
+<code>top_k * candidate_multiplier</code>, matching the existing dense-search budget.
+Filtered and non-active-memory searches retain their configured maxima because
+some metadata providers apply those constraints after their initial text
+limit. The deterministic <code>memory.benchmarks.retrieval_amplification</code> fixture
+reduces the representative <code>top_k=5</code>, multiplier-3 lexical/fact budget from 75
+to 30 candidates (60%) while preserving the full 75-candidate filtered budget.
+The versioned quality gate retains perfect precision@1, recall@k, MRR, nDCG,
+filtered recall, temporal accuracy, and fallback accuracy on its synthetic
+corpus. Provider-pushdown and observed-yield adaptation remain follow-up work.</p>
+<p>Implementation note (small-set reranker-bypass slice): rank fusion now reports
+<code>insufficient_candidates</code> and skips both bounded projection construction and
+semantic reranker invocation when its rerankable subset contains zero or one
+candidate. A single candidate cannot change relative order, including when a
+configured reranker batch limit exposes only the leading item. Multi-candidate
+semantic, timeout, error, and deterministic-fallback paths are unchanged. The
+deterministic <code>memory.benchmarks.reranker_efficiency</code> fixture reduces the
+single-candidate reranker call count from one to zero (100%), preserves the
+result, and verifies that a two-candidate request still makes one call. The
+versioned quality gate remains green with unchanged retrieval metrics.</p>
+<h2 id="phase-4-bound-context-and-model-cost">Phase 4: Bound Context And Model Cost</h2>
+<ul>
+<li>[ ] Measure input/output tokens and selected evidence per ask mode and client.</li>
+<li>[ ] Define default context budgets by concise/detailed response mode, with
+      explicit overrides and stable diagnostics.</li>
+<li>[x] Deduplicate overlapping chunks before token counting and context assembly.</li>
+<li>[ ] Prefer the smallest evidence span that preserves the claim and citation.</li>
+<li>[ ] Use existing summaries and validated facts as compact evidence; never
+      synthesize a summary merely to save tokens unless its creation cost and
+      provenance are accounted for.</li>
+<li>[ ] Gate optional planner, extractor, reranker, and answer-model calls with
+      deterministic sufficiency checks.</li>
+<li>[ ] Track model calls avoided, tokens avoided, and answer quality together.</li>
+</ul>
+<p>Acceptance criteria:</p>
+<ul>
+<li>Median selected context tokens fall by at least 30% on detailed ask cases or
+  at least 50% on concise cases.</li>
+<li>Total answer latency or provider cost improves after including local token
+  selection overhead.</li>
+<li>Citation completeness and answer-contract accuracy remain unchanged.</li>
+</ul>
+<p>Implementation note (overlapping-context deduplication slice): budgeted ask,
+fact/chunk arbitration, and handoff context now remove an exact suffix/prefix
+overlap only when adjacent chunks share both a conversation ID and stored source
+message hash. Ranking and citation identities remain unchanged, and different
+messages retain repeated wording. The deterministic
+<code>memory.benchmarks.context_overlap_efficiency</code> fixture preserves all unique
+evidence while reducing total selected-context accounting from 40 to 38 tokens
+(5%); citation framing accounts for the invariant portion of that measurement.</p>
+<h2 id="phase-5-storage-and-index-efficiency">Phase 5: Storage And Index Efficiency</h2>
+<ul>
+<li>[ ] Capture query plans and row counts for SQLite and Postgres metadata paths
+      used by search, fact/profile reads, timeline, audit, and project scoping.</li>
+<li>[ ] Add or adjust indexes only for measured scans; include write and storage
+      cost in the before/after report.</li>
+<li>[ ] Enforce cursor pagination and projection reads on potentially unbounded
+      list/search paths.</li>
+<li>[ ] Measure index-chunk manifest, fact, graph, audit, and tombstone growth per
+      conversation.</li>
+<li>[ ] Define safe retention/compaction for superseded derived records, stale
+      pending items, and audit data without altering immutable source memories.</li>
+<li>[ ] Document provider-specific vacuum, compaction, index-readiness, and
+      connection-pool guidance.</li>
+<li>[ ] Add health diagnostics for pool saturation, index lag, storage growth,
+      fallback activation, and maintenance age.</li>
+</ul>
+<p>Acceptance criteria:</p>
+<ul>
+<li>The large corpus has no unapproved full scan on critical read paths.</li>
+<li>Metadata and vector growth remain within documented per-conversation budgets.</li>
+<li>Maintenance is resumable, bounded, observable, and safe to interrupt.</li>
+<li>Storage optimizations pass SQLite, Postgres, and relevant provider contracts.</li>
+</ul>
+<h2 id="phase-6-runtime-and-operational-efficiency">Phase 6: Runtime And Operational Efficiency</h2>
+<ul>
+<li>[ ] Audit synchronous provider calls executed on async API/MCP paths and move
+      blocking work behind an appropriate bounded execution boundary.</li>
+<li>[ ] Define connection, worker, queue, batch, timeout, and retry budgets per
+      deployment profile.</li>
+<li>[ ] Use one end-to-end request deadline; prevent nested retries from exceeding
+      it.</li>
+<li>[ ] Add overload behavior that fails predictably or sheds optional work before
+      memory and queues grow without bound.</li>
+<li>[ ] Separate readiness checks from expensive provider probes with bounded,
+      stale-aware caching.</li>
+<li>[ ] Reduce CI duplication by identifying equivalent push and pull-request
+      runs while preserving branch-protection evidence.</li>
+<li>[ ] Publish a compact efficiency dashboard/runbook using existing metrics.</li>
+</ul>
+<p>Acceptance criteria:</p>
+<ul>
+<li>Load tests show bounded queue depth and memory at the documented concurrency
+  ceiling.</li>
+<li>Provider outage tests complete within the request deadline and do not create
+  retry storms.</li>
+<li>Idle local deployments retain a small, documented resource footprint.</li>
+<li>CI minutes decrease without removing required test, security, or quality
+  coverage.</li>
+</ul>
+<h2 id="proposed-pr-sized-workstreams">Proposed PR-Sized Workstreams</h2>
+<p>Implement in this order; each item should remain independently reviewable.</p>
+<ol>
+<li><strong>Benchmark hygiene and work ledger</strong> — fix audit-log amplification, add
+   counters, percentiles, cold/warm modes, and synthetic scale profiles.</li>
+<li><strong>Runtime immutable-data caches</strong> — prove and optimize repeated config/schema
+   work with explicit invalidation.</li>
+<li><strong>Incremental and batched ingestion</strong> — dedupe before expensive work, batch
+   embeddings/writes, and bound concurrency.</li>
+<li><strong>Retrieval amplification controls</strong> — stage timings, adaptive candidate
+   limits, unique hydration, and deadline-aware optional work.</li>
+<li><strong>Context and model-call economy</strong> — evidence dedupe, response-mode budgets,
+   and deterministic model bypasses.</li>
+<li><strong>Metadata query/index audit</strong> — measured indexes, projections, pagination,
+   growth budgets, and maintenance guidance.</li>
+<li><strong>Provider and concurrency profiles</strong> — local/team/remote load reports,
+   pooling, backpressure, deadlines, and outage tests.</li>
+<li><strong>Operational efficiency and CI</strong> — dashboard/runbook, idle footprint, and
+   duplicate-work reduction.</li>
+</ol>
+<p>Do not combine workstreams 2–8 into one optimization PR. Measurement changes
+from workstream 1 may land together because later before/after reports depend on
+them.</p>
+<h2 id="decision-rules">Decision Rules</h2>
+<ul>
+<li>Prefer deleting work over making unnecessary work faster.</li>
+<li>Prefer request-local reuse before cross-request caching.</li>
+<li>Cache immutable or versioned values; require explicit invalidation for mutable
+  values.</li>
+<li>Include provider/model/version and relevant policy in cache identities.</li>
+<li>Never cache authorization decisions or results under a key that omits owner,
+  project, visibility, or data-version scope.</li>
+<li>Bound every cache by entry count and/or bytes, expose hit/miss/eviction
+  metrics, and test eviction.</li>
+<li>Parallelize independent I/O only under a shared deadline and concurrency cap.</li>
+<li>Keep local-first deterministic paths functional when optional services are
+  absent.</li>
+<li>Reject improvements that move cost to startup, memory, storage, CI, or model
+  usage without showing a favorable total-cost tradeoff.</li>
+</ul>
+<h2 id="validation-matrix">Validation Matrix</h2>
+<p>Each implementation PR should run the smallest relevant subset first, then the
+broader gates appropriate to its blast radius.</p>
+<div class="highlight"><pre><span></span><code>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>ruff<span class="w"> </span>check<span class="w"> </span>memory<span class="w"> </span>tests<span class="w"> </span>tools
+uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>pyright
+uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>tests/unit<span class="w"> </span>tests/integration<span class="w"> </span>-q
+uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>memory.benchmarks.cache_candidates<span class="w"> </span>--iterations<span class="w"> </span><span class="m">1000</span>
+uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>memory.benchmarks.ingestion_efficiency
+uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>memory.benchmarks.append_graph_efficiency
+uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>memory.benchmarks.reranker_efficiency
+uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>memory.benchmarks.retrieval_amplification
+uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>memory.benchmarks.context_overlap_efficiency
+uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>memory.benchmarks.token_budget<span class="w"> </span>--iterations<span class="w"> </span><span class="m">200</span>
+uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>memory.benchmarks.quality_gate<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--output<span class="w"> </span>reports/quality/quality-gate.json
+</code></pre></div>
+<p>Add provider contract, live-provider, concurrency, or outage tests when the
+changed path touches pooling, batching, retries, filtering, persistence, or
+deadlines. Documentation changes must pass the strict MkDocs build.</p>
+<h2 id="done-when">Done When</h2>
+<ul>
+<li>[ ] Baseline and before/after reports exist for all three deployment profiles.</li>
+<li>[ ] Search and ask p95 improve by at least 20% on a representative medium
+      corpus without quality regression.</li>
+<li>[ ] Duplicate and append ingestion avoid work proportional to unchanged data.</li>
+<li>[ ] Remote ingestion throughput improves by at least 25% through measured
+      batching and bounded concurrency.</li>
+<li>[ ] Candidate-to-result amplification falls by at least 25% on representative
+      filtered and unfiltered queries.</li>
+<li>[ ] Context/model cost falls by at least 30% on the target ask workload with
+      unchanged citation and answer quality.</li>
+<li>[ ] Memory, storage growth, queue depth, retries, cache size, and maintenance
+      work all have explicit bounds and diagnostics.</li>
+<li>[ ] Local-first operation, provider fallbacks, auth isolation, redaction,
+      durability, and public contracts remain intact.</li>
+<li>[ ] The quality gate, full unit/integration suite, provider contracts, and
+      applicable end-to-end tests pass.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Dedicated to my little brother,<br> Andrii Hladenko.<br> Вічна Слава Героям. <img src="docs/assets/flags/ua.svg" alt="Ukraine flag" width="18" height="14">
+
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"alias": true, "default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.12.0/mermaid.min.js"></script>
+      
+        <script src="../../javascripts/mermaid.js"></script>
+      
+        <script src="../../javascripts/connect.js"></script>
+      
+    
+  </body>
+</html>

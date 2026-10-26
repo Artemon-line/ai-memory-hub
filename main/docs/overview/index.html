@@ -1,0 +1,4975 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Local-first deterministic memory ingestion hub">
+      
+      
+      
+        <link rel="canonical" href="https://artemon-line.github.io/ai-memory-hub/latest/docs/overview/">
+      
+      
+        <link rel="prev" href="../importer_compatibility/">
+      
+      
+        <link rel="next" href="../agents/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/brand/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Technical Overview - ai-memory-hub</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/connect.css">
+    
+      <link rel="stylesheet" href="../stylesheets/leap-day-dark.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#technical-overview" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              
+  
+    These docs describe the <strong>main</strong> branch. They may cover experimental,
+    unreleased, or untested behavior.
+    <a href="../../.."><strong>View the latest released docs.</strong></a>
+  
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="ai-memory-hub" class="md-header__button md-logo" aria-label="ai-memory-hub" data-md-component="logo">
+      
+  <img src="../assets/brand/ai-memory-hub-mark.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ai-memory-hub
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Technical Overview
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Artemon-line/ai-memory-hub" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Artemon-line/ai-memory-hub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="ai-memory-hub" class="md-nav__button md-logo" aria-label="ai-memory-hub" data-md-component="logo">
+      
+  <img src="../assets/brand/ai-memory-hub-mark.svg" alt="logo">
+
+    </a>
+    ai-memory-hub
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Artemon-line/ai-memory-hub" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Artemon-line/ai-memory-hub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What Exists Now
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    What Exists Now
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Current Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../importing_conversations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Import Conversations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../importer_compatibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importer Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Technical Overview
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Technical Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How It Works
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#insert-payload" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Insert Payload
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#search-result-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Search Result Shape
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ask-result-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ask Result Shape
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cli" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CLI
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CLI">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#codex-rollout-compatibility-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Codex rollout compatibility contract
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multipart-http-imports" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multipart HTTP imports
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mcp-interface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP Interface
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mcp-session-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP Session Flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#native-clients" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Native Clients
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#storage-backends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Storage Backends
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multilingual-retrieval" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multilingual Retrieval
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Multilingual Retrieval">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#changing-embedding-models-for-existing-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changing Embedding Models For Existing Data
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sqlite-lancedb" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SQLite + LanceDB
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sqlite-qdrant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SQLite + Qdrant
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sqlite-milvus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SQLite + Milvus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sqlite-weaviate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SQLite + Weaviate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sqlite-elasticsearch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SQLite + Elasticsearch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sqlite-opensearch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SQLite + OpenSearch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sqlite-redisredisearch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SQLite + Redis/RediSearch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sqlite-vespa" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SQLite + Vespa
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sqlite-typesense" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SQLite + Typesense
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sqlite-pinecone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SQLite + Pinecone
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sqlite-turbopuffer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SQLite + Turbopuffer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mongodb-metadata-and-atlas-vectors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MongoDB Metadata And Atlas Vectors
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#postgres-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Postgres Metadata
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pgvector" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PGVector
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#in-memory-vectors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        In-Memory Vectors
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#containers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Containers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#project-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Project Structure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-considerations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Considerations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#more-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        More Documentation
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../connect_ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Connect UI and OAuth Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../external_oidc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    External OIDC and Keycloak
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../brand_assets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Brand Assets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../storage_provider_examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage Provider Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../postgres_driver_decision/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PostgreSQL Driver Decision
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quality_evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quality Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What Is Planned
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    What Is Planned
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../planned_features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Planned Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plans/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CHANGELOG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CONTRIBUTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CODE_OF_CONDUCT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code Of Conduct
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    MCP
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp_client_smoke_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Client Smoke Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../real_client_mcp_smoke_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Real-Client MCP Smoke Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../openclaw_native_mcp_setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OpenClaw Native MCP Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp_utility_compliance_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Utility Compliance Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/mcp_response_format_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Response Format Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/codex_cli_findings_coverage_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Codex CLI MCP Findings Coverage Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/p0_live_mcp_retest_followup_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P0 Live MCP Retest Follow-Up Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/agent_model_footprint_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Model Footprint Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bearer_api_key_auth_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Authorization Compliance Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation Plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Implementation Plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plans/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../prioritized_feature_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prioritized Feature Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../storage_agnostic_byoa_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage BYOA Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../browser_extension_capture_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Browser Extension Capture Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bruno_integration_test_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bruno Integration Test Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project_workspace_collaboration_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Workspace Collaboration Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../deterministic_ingestion_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deterministic Ingestion Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../token_budget_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Token Budget Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli_implementation_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin_readiness_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin Readiness Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release_container_docs_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release, Container, and Docs Publishing Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../first_release_readiness_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First Release Readiness Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release_ci_gap_analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release CI Gap Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release_security_scan_notes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Security Scan Notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../repository_governance_settings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Repository Governance Settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release_promotion_assets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Promotion Assets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project_promotion_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Promotion Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability_logging_telemetry_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability, Logging, and Telemetry Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recurring_codebase_cleanup_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Recurring Codebase Cleanup Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Improvements
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Improvements
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Improvement Plans
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/client_feedback_improvement_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client Feedback Improvement Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/top_priority_mcp_result_shape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Top Priority MCP Result Shape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/mcp_response_format_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Response Format Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/codex_cli_findings_coverage_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Codex CLI MCP Findings Coverage Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/p0_live_mcp_retest_followup_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P0 Live MCP Retest Follow-Up Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/agent_model_footprint_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Model Footprint Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/handoff_memory_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Handoff Memory Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/retrieval_precision_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Retrieval Precision Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/context_building_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Context Building Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/conversation_grouping_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conversation Grouping Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/memory_quality_fact_layer_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Memory Quality And Fact Layer Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/edge_case_test_coverage_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Edge Case Test Coverage Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/explicit_memory_save_intent_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Explicit Memory Save Intent Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/google_oauth_connect_ui_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Google OAuth Connect UI Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/p0_beta_governance_checklist/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P0 Beta Governance Checklist
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/p1_sql_hardening_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P1 SQL Hardening Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/efficiency_revival_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Efficiency Revival Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/vector_dbs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vector Database Options
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/neo4j_aura_graph_memory_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Neo4j Aura Graph Memory Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/app_level_encryption_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    App-Level Memory Encryption Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How It Works
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#insert-payload" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Insert Payload
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#search-result-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Search Result Shape
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ask-result-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ask Result Shape
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cli" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CLI
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CLI">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#codex-rollout-compatibility-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Codex rollout compatibility contract
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multipart-http-imports" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multipart HTTP imports
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mcp-interface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP Interface
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mcp-session-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP Session Flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#native-clients" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Native Clients
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#storage-backends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Storage Backends
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multilingual-retrieval" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multilingual Retrieval
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Multilingual Retrieval">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#changing-embedding-models-for-existing-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changing Embedding Models For Existing Data
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sqlite-lancedb" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SQLite + LanceDB
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sqlite-qdrant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SQLite + Qdrant
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sqlite-milvus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SQLite + Milvus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sqlite-weaviate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SQLite + Weaviate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sqlite-elasticsearch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SQLite + Elasticsearch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sqlite-opensearch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SQLite + OpenSearch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sqlite-redisredisearch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SQLite + Redis/RediSearch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sqlite-vespa" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SQLite + Vespa
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sqlite-typesense" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SQLite + Typesense
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sqlite-pinecone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SQLite + Pinecone
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sqlite-turbopuffer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SQLite + Turbopuffer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mongodb-metadata-and-atlas-vectors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MongoDB Metadata And Atlas Vectors
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#postgres-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Postgres Metadata
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pgvector" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PGVector
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#in-memory-vectors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        In-Memory Vectors
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#containers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Containers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#project-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Project Structure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-considerations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Considerations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#more-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        More Documentation
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="technical-overview">Technical Overview</h1>
+<p>This page keeps the technical detail that used to live in the README. The README
+is intentionally short; use this page when you need implementation, operations,
+or integration details.</p>
+<h2 id="installation">Installation</h2>
+<p>Clone the repository and install the development environment with <code>uv</code>:</p>
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/Artemon-line/ai-memory-hub.git
+<span class="nb">cd</span><span class="w"> </span>ai-memory-hub
+uv<span class="w"> </span>sync<span class="w"> </span>--dev
+</code></pre></div>
+<p>The project requires Python 3.14 or newer.</p>
+<p>Optional extras:</p>
+<div class="highlight"><pre><span></span><code>uv<span class="w"> </span>sync<span class="w"> </span>--dev<span class="w"> </span>--extra<span class="w"> </span>postgres
+uv<span class="w"> </span>sync<span class="w"> </span>--dev<span class="w"> </span>--extra<span class="w"> </span>tokenizer
+uv<span class="w"> </span>sync<span class="w"> </span>--dev<span class="w"> </span>--all-extras
+</code></pre></div>
+<p>Use provider extras when selecting optional storage SDKs such as Qdrant,
+Milvus, Weaviate, MongoDB, Elasticsearch, OpenSearch, Redis, Vespa,
+Typesense, Pinecone, Turbopuffer, Postgres, or PGVector. Use the tokenizer extra for exact
+OpenAI-compatible token counting through <code>tiktoken</code>. Use <code>--all-extras</code> for
+container builds or provider compatibility checks.</p>
+<p>Provider config blocks do not install dependencies. Dependencies are installed
+only by the <code>uv sync</code> extras you choose, or by container images that explicitly
+install extras. The checked-in root <code>Containerfile</code> is the quickstart image and
+installs only the default SQLite/LanceDB runtime dependencies. The free local
+Compose examples for PostgreSQL/PGVector, MongoDB, Redis, and SQLite/LanceDB
+use provider-local Containerfiles so they install only the extras needed by
+that example.</p>
+<p>ChromaDB is temporarily unavailable in <code>v0.1.0</code> because the upstream
+<code>chromadb</code> package has an unresolved critical advisory with no patched release.
+The adapter code remains in the repository for future re-enable after upstream
+publishes a safe version.</p>
+<h2 id="how-it-works">How It Works</h2>
+<div class="highlight"><pre><span></span><code>Captured Conversation JSON
+  -&gt; Schema Validation
+  -&gt; Chunk Messages or Token Windows
+  -&gt; Embed Chunks
+  -&gt; Store Metadata + Vectors
+  -&gt; Search / Retrieve / Ask
+</code></pre></div>
+<p>The hub expects structured conversation JSON. Capture/import adapters convert
+supported external formats into that shared schema before using the same hub
+ingestion path. Manual speaker-labelled transcripts are supported;
+export-specific capture/import adapters are tracked in the roadmap. Browser
+extension capture is supported as a separate extension-repo workflow that posts
+normalized web chat payloads to the existing insert API; see the
+<a href="../browser_extension_capture_plan/">browser extension capture plan</a>.</p>
+<h2 id="api-endpoints">API Endpoints</h2>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>POST</code></td>
+<td><code>/memory/insert</code></td>
+<td>Validate and store a conversation</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/memory/import</code></td>
+<td>Parse and store an uploaded external conversation export</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/memory/search</code></td>
+<td>Return ranked semantic matches</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/memory/retrieve</code></td>
+<td>Retrieve a stored conversation by ID</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/memory/ask</code></td>
+<td>Build an answer from retrieved memory or facts</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/memory/facts/search</code></td>
+<td>Search normalized facts</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/memory/profile/get</code></td>
+<td>Return profile facts and a compact fact-based summary for a subject</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/memory/facts/supersede</code></td>
+<td>Mark a fact as superseded</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/health</code></td>
+<td>Liveness endpoint with redacted runtime health</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/ready</code></td>
+<td>Readiness endpoint for container orchestration</td>
+</tr>
+</tbody>
+</table>
+<h2 id="insert-payload">Insert Payload</h2>
+<p>If backend-generated IDs are enabled, omit <code>id</code> and let the server assign the
+canonical UUID. When the backend requires caller-supplied IDs, include an <code>id</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">"id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"11111111-2222-4333-8444-555555555555"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"source"</span><span class="p">:</span><span class="w"> </span><span class="s2">"codex"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"timestamp"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2026-05-17T00:00:00Z"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"messages"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span><span class="nt">"role"</span><span class="p">:</span><span class="w"> </span><span class="s2">"user"</span><span class="p">,</span><span class="w"> </span><span class="nt">"text"</span><span class="p">:</span><span class="w"> </span><span class="s2">"remember this"</span><span class="p">},</span>
+<span class="w">    </span><span class="p">{</span><span class="nt">"role"</span><span class="p">:</span><span class="w"> </span><span class="s2">"assistant"</span><span class="p">,</span><span class="w"> </span><span class="nt">"text"</span><span class="p">:</span><span class="w"> </span><span class="s2">"stored"</span><span class="p">}</span>
+<span class="w">  </span><span class="p">],</span>
+<span class="w">  </span><span class="nt">"metadata"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">"imported_at"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2026-05-17T00:00:00Z"</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"summary"</span><span class="p">:</span><span class="w"> </span><span class="s2">"User asked the assistant to remember a preference."</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"tags"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"preferences"</span><span class="p">]</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>Messages may use <code>text</code> or <code>content</code>; <code>content</code> is normalized to <code>text</code>.
+<code>metadata.summary</code> is optional. Use it as a short factual retrieval hint only;
+raw <code>messages</code> and normalized facts remain the source of truth for answers and
+citations. The server also writes deterministic generated summaries for each
+conversation, its topics, and its project. Generated summaries are persisted
+separately from raw messages and facts; conversation summaries are exposed back
+under <code>metadata.generated_summary</code> for search, retrieve, and CLI display.
+The server also writes deterministic <code>metadata.auto_tags</code> and
+<code>metadata.tag_sources</code> from source, topics, entities, and fact predicates.
+Manual <code>metadata.tags</code> remain authoritative and are not overwritten.
+Search and ask <code>tags</code> filters match only explicit <code>metadata.tags</code>; generated
+<code>auto_tags</code> support ranking and inspection, but are not filter values.
+For continuing source threads, clients may send <code>metadata.upstream_thread_id</code>
+or <code>metadata.thread_id</code>. The server preserves upstream IDs, derives
+<code>metadata.thread_id</code> when needed, and accepts optional
+<code>metadata.parent_conversation_id</code> plus <code>metadata.related_conversation_ids</code> as
+conversation UUID references.
+<code>metadata.save_intent</code> declares why a client is saving a conversation. Accepted
+values are <code>explicit_user_request</code>, <code>user_confirmed</code>, and <code>client_auto_save</code>.
+When <code>memory.insert_policy: require_save_intent</code> is configured, API and MCP
+inserts without an accepted marker are rejected before storage, vector indexing,
+or fact extraction. When <code>memory.insert_policy: review_pending</code> is configured,
+unmarked inserts are stored with <code>metadata.memory_status: pending_review</code> and
+excluded from default retrieve, search, ask, fact, and profile reads until
+approved through <code>/memory/pending/approve</code> or the <code>memory_pending_approve</code> MCP
+tool. <code>/memory/pending/reject</code> and <code>memory_pending_reject</code> mark pending inserts
+as rejected.</p>
+<p>Conversation read operations accept <code>memory_status</code> to intentionally inspect
+review states. The default is <code>active</code>. Use <code>pending_review</code>, <code>rejected</code>, or
+<code>all</code> with <code>/memory/search</code>, <code>/memory/retrieve</code>, <code>/memory/ask</code>,
+<code>memory_search</code>, <code>memory_retrieve</code>, or <code>memory_ask</code> when reviewing held or
+rejected inserts.</p>
+<p>Store one complete conversation per insert. Do not split one thread into
+multiple batch items. If an importer has many independent source conversations,
+it should call the existing single insert path once per source conversation while
+preserving each original thread/session boundary.</p>
+<h2 id="search-result-shape">Search Result Shape</h2>
+<p><code>/memory/search</code> returns ranked chunk matches in <code>results</code>. Each result includes:</p>
+<ul>
+<li><code>id</code>: canonical conversation ID</li>
+<li><code>score</code>: the source provider's vector distance, retained for compatibility;
+  fused ordering does not compare this value with lexical or metadata scores</li>
+<li><code>chunk_index</code>, <code>role</code>, and <code>text</code>: the matched chunk</li>
+<li><code>conversation</code>: the stored conversation payload, including
+  <code>metadata.generated_summary</code> when a server-generated conversation summary is
+  available, and <code>metadata.auto_tags</code> when deterministic tags were generated</li>
+<li><code>conversation_score</code>: best score for that conversation among retrieved chunks</li>
+<li><code>conversation_match_count</code>: number of retrieved chunks from that conversation</li>
+</ul>
+<p>Search applies conservative conversation grouping before trimming to <code>top_k</code>, so
+closely matched chunks from the same conversation can surface together without
+hiding strong unrelated matches.
+Use <code>result_mode=threads</code> to group matching conversations by <code>metadata.thread_id</code>.</p>
+<p>To save unfinished work for later, insert it as a normal memory with an RFC 3339
+<code>metadata.handoff_at</code> timestamp. Search or ask with <code>handoff_only=true</code> to limit
+retrieval to these handoff-marked memories. Handoffs therefore use the same
+storage, indexing, permissions, and retrieval path as every other memory.</p>
+<p>MCP <code>memory_search</code> adds a <code>response_format</code> enum. The default,
+<code>response_format="concise"</code>, returns each row as matched chunk fields plus a
+small <code>citation</code> object with conversation ID, source, title, timestamp,
+thread ID, and generated summary text when available:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">"id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"11111111-2222-4333-8444-555555555555"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"score"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.0</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"chunk_index"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"role"</span><span class="p">:</span><span class="w"> </span><span class="s2">"user"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"text"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Remember that I prefer local-first tools."</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"matching_chunks"</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"citation"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">"id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"11111111-2222-4333-8444-555555555555"</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"source"</span><span class="p">:</span><span class="w"> </span><span class="s2">"codex"</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"timestamp"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2026-06-08T12:00:00Z"</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"thread_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"codex:session-42"</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"summary"</span><span class="p">:</span><span class="w"> </span><span class="s2">"User said they prefer local-first tools."</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>Use <code>response_format="detailed"</code> when an MCP client needs the full
+conversation envelope, generated-summary metadata, auto-tag provenance, and
+chunk manifests for audit or diagnostics.</p>
+<p>MCP <code>memory_retrieve</code> also accepts <code>response_format</code>. The default
+<code>response_format="concise"</code> returns a compact <code>memory</code> object with public recall
+fields, memory status, message count, and a small list of role/text messages.
+Use <code>response_format="detailed"</code> for the full redacted stored record. HTTP
+<code>/memory/retrieve</code> keeps the detailed administrative shape.</p>
+<h2 id="ask-result-shape">Ask Result Shape</h2>
+<p><code>/memory/ask</code> returns:</p>
+<ul>
+<li><code>answer</code>: human-readable answer text. For fact-backed answers this uses
+  normalized display values while preserving raw source text in stored memory and
+  fact evidence.</li>
+<li><code>results</code>: chunk-shaped retrieval hits. Fact-only answers can legitimately
+  return an empty <code>results</code> list because the answer came from normalized facts,
+  not retrieved chunks.</li>
+<li><code>citations</code>: compact provenance for chunks or facts used in the answer.</li>
+<li><code>provenance</code>: grouped source-conversation provenance.</li>
+<li><code>confidence</code> and <code>confidence_reason</code>: confidence label plus the reason, such
+  as a direct user statement, assistant statement, inferred recurring topic, or
+  conflict.</li>
+<li><code>answer_basis</code>: one of <code>direct_memory</code>, <code>fact_layer</code>, <code>mixed</code>, <code>conflict</code>, or
+  <code>not_found</code>.</li>
+<li><code>evidence</code>: stable evidence entries used by the answer. Chunk-backed answers
+  return <code>type: "chunk"</code> entries; fact-backed answers return <code>type: "fact"</code>
+  entries.</li>
+<li><code>structured_evidence</code>: split evidence for clients that do not want to inspect
+  mixed lists. <code>structured_evidence.facts</code> contains normalized fact evidence and
+  <code>structured_evidence.results</code> contains chunk-shaped retrieval hits.</li>
+<li><code>facts</code>: active normalized facts used by fact-backed answers, including
+  <code>source_quality</code>, <code>confidence_reason</code>, <code>created_at</code>, <code>updated_at</code>,
+  <code>last_confirmed_at</code>, <code>superseded_at</code>, <code>object_raw</code>, <code>object_normalized</code>,
+  and save-intent provenance when the source memory included it. Facts derived
+  from <code>metadata.save_intent: client_auto_save</code> use lower confidence than
+  explicit user-requested saves.</li>
+</ul>
+<p><code>memory_ask</code> compares weak, assistant-derived, or conflicting normalized facts
+with ranked conversation chunks before choosing <code>answer_basis</code>. A corroborated
+fact-and-chunk answer uses <code>mixed</code>; disagreement uses <code>conflict</code> and includes
+both sides in <code>evidence</code> and <code>structured_evidence</code>. Unambiguous high-confidence
+direct-user and corrected facts retain the low-latency <code>fact_layer</code> fast path.</p>
+<p>Newly extracted facts are validated against their source message before they
+become active. Detailed fact responses include the supporting <code>evidence_span</code>,
+<code>source_role</code>, assertion and temporal classifications, numeric
+<code>confidence_score</code>, extractor/rule identifiers, and <code>validation_status</code>.
+Negated and hypothetical candidates are rejected; quoted, uncertain, temporary,
+inferred, and assistant-derived facts are retained with lower confidence as
+appropriate. Older fact rows remain readable as <code>validation_status: legacy</code>
+without synthetic evidence fields.</p>
+<p>Pass <code>max_context_tokens</code> to <code>/memory/ask</code> to build the answer from only the
+chunks that fit the requested context budget. When budgeting is active, the
+response can include <code>context_tokens_used</code>, <code>chunks_selected</code>, <code>chunks_dropped</code>,
+and <code>tokenizer_used</code>.</p>
+<p>MCP <code>memory_retrieve</code>, <code>memory_ask</code>, <code>memory_fact_search</code>, and
+<code>memory_profile_get</code> support the same <code>response_format</code> enum as search.
+Concise ask responses are
+answer-centric: they keep <code>answer</code>, <code>confidence</code>, <code>confidence_reason</code>,
+<code>answer_basis</code>, and small result/fact/citation counts, but omit full
+<code>citations</code>, <code>evidence</code>, <code>structured_evidence</code>, <code>provenance</code>, chunk result
+arrays, and token-budget diagnostics. Concise fact/profile reads deduplicate
+and limit fact rows to 10 by default, drop qualifiers, source message indexes,
+owner/project fields, and summary provenance while keeping fact display values,
+freshness, source quality, confidence, and supersession status. Use
+<code>response_format="detailed"</code> for the full evidence-rich answer and fact
+provenance.</p>
+<h2 id="cli">CLI</h2>
+<p>Use <code>python -m memory.cli</code> during development, or the packaged <code>aim</code> console
+script after installation.</p>
+<div class="highlight"><pre><span></span><code>python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>ingest<span class="w"> </span>conversation.json<span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>reindex<span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>import<span class="w"> </span>manual<span class="w"> </span>copilot-chat.txt<span class="w"> </span>--source<span class="w"> </span>vscode-copilot<span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>import<span class="w"> </span>copilot-activity-csv<span class="w"> </span>copilot-activity-history.csv<span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>import<span class="w"> </span>copilot-cli-events-jsonl<span class="w"> </span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/.copilot/session-state/&lt;SESSION_ID&gt;/events.jsonl"</span><span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>import<span class="w"> </span>deepseek-harness-session-jsonl<span class="w"> </span>dsh-session/session.v4.jsonl<span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>import<span class="w"> </span>droid-exec-json<span class="w"> </span>droid-capture.json<span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>import<span class="w"> </span>hermes-session-jsonl<span class="w"> </span>hermes-backup.jsonl<span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>import<span class="w"> </span>deepseek-share-json<span class="w"> </span>deepseek-share.json<span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>import<span class="w"> </span>claude-code-session-jsonl<span class="w"> </span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/.claude/projects/&lt;PROJECT&gt;/&lt;SESSION_ID&gt;.jsonl"</span><span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>import<span class="w"> </span>codex-rollout-jsonl<span class="w"> </span><span class="s2">"</span><span class="nv">$CODEX_HOME</span><span class="s2">/sessions/2026/04/12/rollout-&lt;SESSION_ID&gt;.jsonl"</span><span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>import<span class="w"> </span>gemini-cli-session-json<span class="w"> </span>gemini-session.json<span class="w"> </span>--json
+opencode<span class="w"> </span><span class="nb">export</span><span class="w"> </span>&lt;SESSION_ID&gt;<span class="w"> </span><span class="p">|</span><span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>import<span class="w"> </span>opencode-session-json<span class="w"> </span>-<span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>import<span class="w"> </span>pi-session-jsonl<span class="w"> </span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/.pi/agent/sessions/--work-project--/&lt;SESSION_ID&gt;.jsonl"</span><span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>import<span class="w"> </span>pi-session-jsonl<span class="w"> </span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/.omp/agent/sessions/--work-project--/&lt;SESSION_ID&gt;.jsonl"</span><span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>import<span class="w"> </span>pi-session-jsonl<span class="w"> </span>openclaw-session.jsonl<span class="w"> </span>--source<span class="w"> </span>openclaw<span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>import<span class="w"> </span>qwen-code-session-export<span class="w"> </span>qwen-session.json<span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>import<span class="w"> </span>qwen-code-session-export<span class="w"> </span>qwen-session.jsonl<span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>search<span class="w"> </span><span class="s2">"local-first tools"</span><span class="w"> </span>--top-k<span class="w"> </span><span class="m">5</span><span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>retrieve<span class="w"> </span>&lt;MEMORY_ID&gt;<span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>ask<span class="w"> </span><span class="s2">"What did I store about local-first tools?"</span><span class="w"> </span>--top-k<span class="w"> </span><span class="m">5</span><span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>serve<span class="w"> </span>--host<span class="w"> </span><span class="m">127</span>.0.0.1<span class="w"> </span>--port<span class="w"> </span><span class="m">8000</span>
+</code></pre></div>
+<p>For short, source-by-source instructions and the default Linux, macOS, and
+Windows session locations, see <a href="../importing_conversations/">Import Conversations</a>.</p>
+<p>Manual imports accept multiline messages labelled with common speaker names such
+as <code>User:</code>, <code>You:</code>, <code>Human:</code>, <code>Assistant:</code>, <code>Copilot:</code>, <code>Claude:</code>, or <code>Gemini:</code>.
+Use <code>-</code> as the file name to read the transcript from stdin.</p>
+<p>Codex CLI and the Codex app persist complete session rollouts as JSONL under
+<code>$CODEX_HOME/sessions/YYYY/MM/DD/</code>. Import those files with
+<code>codex-rollout-jsonl</code>; the importer keeps only canonical user and assistant text
+messages and omits reasoning, system/developer instructions, tool calls and
+results, approvals, usage, injected startup context, and duplicate presentation
+events. Sessions run with
+<code>--ephemeral</code> do not create rollout files. <code>codex exec --json</code> is an output
+protocol and is not guaranteed to contain the submitted prompt, so use the
+persisted rollout unless the prompt was captured separately in a versioned
+envelope. A result-only capture is rejected instead of creating a one-sided
+conversation.</p>
+<h3 id="codex-rollout-compatibility-contract">Codex rollout compatibility contract</h3>
+<p>The importer contract was verified against <strong>Codex CLI 0.152.0</strong> on
+2026-10-02. Both <code>codex --version</code> and the sampled rollout's
+<code>session_meta.payload.cli_version</code> reported <code>0.152.0</code>; the rollout identified
+itself with <code>source: "cli"</code> and <code>originator: "codex-tui"</code>. This is an observed
+compatibility baseline, not a claim that Codex's local rollout format is a
+stable public API. Validate a minimized fixture before declaring support for a
+newer Codex version.</p>
+<p><code>codex-rollout-jsonl</code> consumes this bounded subset of the observed contract:</p>
+<table>
+<thead>
+<tr>
+<th>JSONL record</th>
+<th>Fields consumed</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>session_meta</code></td>
+<td><code>payload.id</code>, <code>timestamp</code>, <code>cwd</code>, <code>source</code>, <code>originator</code>, <code>cli_version</code>, <code>model_provider</code>, and optional <code>git.branch</code>/<code>git.commit_hash</code></td>
+<td>Maps safe session provenance into canonical metadata. Account identifiers, base instructions, and unrecognized fields are not copied.</td>
+</tr>
+<tr>
+<td><code>response_item</code> message</td>
+<td><code>payload.role</code>, textual <code>input_text</code>/<code>output_text</code> content blocks, and optional <code>internal_chat_message_metadata_passthrough.turn_id</code></td>
+<td>Keeps user <code>input_text</code> and assistant <code>output_text</code> only. When several user-role records share a turn ID, only the last is kept so injected startup context is excluded.</td>
+</tr>
+<tr>
+<td>Every other record</td>
+<td>None</td>
+<td>Ignores event copies, developer/system instructions, reasoning, tools, approvals, usage, turn context, and unknown future record types.</td>
+</tr>
+</tbody>
+</table>
+<p>Malformed JSON fails with its line number. A result-only stream without both a
+user message and an assistant message is rejected. Records without a turn ID
+retain file order for compatibility with older or simplified rollouts.</p>
+<p>The regression suite also includes a salted, fully synthetic Codex 0.152.0
+rollout shaped like a resumed tool-using session. It verifies that five user
+turns, five visible assistant progress messages, and five final answers survive
+as 15 ordered conversation messages, while 14 reasoning records, 14 tool calls,
+14 tool outputs, developer instructions, and injected environment context do
+not enter canonical memory.</p>
+<p>Microsoft Copilot activity exports must use the columns <code>Conversation</code>, <code>Time</code>,
+<code>Author</code>, and <code>Message</code>. The importer groups rows by conversation and restores
+the chronological user/assistant order used by the hub.</p>
+<p>GitHub Copilot CLI stores resumable sessions under
+<code>$COPILOT_HOME/session-state/&lt;session-id&gt;/events.jsonl</code>, with
+<code>~/.copilot/session-state/</code> as the default location. Import a copied, inactive
+event log with <code>copilot-cli-events-jsonl</code>. This is separate from the Microsoft
+Copilot activity-history CSV importer above. The JSONL importer keeps visible,
+top-level <code>user.message</code> and <code>assistant.message</code> text in event order and
+deduplicates stable message or event IDs. It omits system and synthetic user
+prompts, reasoning, sub-agent messages, tool calls and results, permissions,
+compaction data, errors, usage, telemetry, and unknown event types.</p>
+<p>The bundled Draft 2020-12 importer schema covers both initial <code>session.start</code>
+and resumed-session metadata envelopes plus the observed minimal and current
+message envelopes. Safe provenance includes the session ID, start time, working
+directory, repository, Git root and branch, selected model, CLI version, and
+title when those fields are present. Recognized malformed records and invalid
+timestamps fail with their physical line number; unknown event types remain
+forward-compatible. A malformed JSONL file, including a historical tool result
+split across physical lines by an unescaped newline, fails instead of being
+silently repaired into a partial conversation.</p>
+<p>For a reviewable manual fallback, run <code>/share file &lt;PATH&gt;</code> (or its <code>/export</code>
+alias) in Copilot CLI and import the resulting Markdown with <code>manual</code>. Review
+either artifact for sensitive prompts, paths, and output before copying or
+retaining it. Multipart HTTP upload remains outside the importer contract.</p>
+<p>Factory Droid does not currently document a portable export for historical
+interactive CLI sessions. The <code>droid-exec-json</code> importer therefore accepts only
+the versioned <code>ai-memory-hub.droid-exec-capture</code> envelope for headless
+<code>droid exec</code> runs. It rejects raw result-only JSON because that output omits the
+submitted prompt.</p>
+<p>For a one-shot run, record the exact submitted prompt and Droid's JSON result in
+one capture. This example uses <code>jq</code> only to assemble the local capture file:</p>
+<div class="highlight"><pre><span></span><code><span class="nv">prompt</span><span class="o">=</span><span class="s1">'Explain this repository'</span>
+droid<span class="w"> </span><span class="nb">exec</span><span class="w"> </span><span class="s2">"</span><span class="nv">$prompt</span><span class="s2">"</span><span class="w"> </span>--output-format<span class="w"> </span>json<span class="w"> </span>&gt;<span class="w"> </span>droid-result.json
+jq<span class="w"> </span>-n<span class="w"> </span>--arg<span class="w"> </span>prompt<span class="w"> </span><span class="s2">"</span><span class="nv">$prompt</span><span class="s2">"</span><span class="w"> </span>--slurpfile<span class="w"> </span>result<span class="w"> </span>droid-result.json<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="s1">'{</span>
+<span class="s1">    format: "ai-memory-hub.droid-exec-capture",</span>
+<span class="s1">    version: 1,</span>
+<span class="s1">    kind: "one-shot",</span>
+<span class="s1">    prompt: $prompt,</span>
+<span class="s1">    result: $result[0],</span>
+<span class="s1">    metadata: {cwd: "/workspace/project", model: "configured-model"}</span>
+<span class="s1">  }'</span><span class="w"> </span>&gt;<span class="w"> </span>droid-capture.json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>import<span class="w"> </span>droid-exec-json<span class="w"> </span>droid-capture.json<span class="w"> </span>--json
+</code></pre></div>
+<p>Only a successful, non-empty one-shot result becomes an assistant message. The
+importer preserves safe session ID, duration, reported turn count, model, cwd,
+title, and timestamp metadata when supplied. Error results are rejected, and
+unknown result fields are ignored.</p>
+<p>For a multi-turn integration, launch the documented bidirectional protocol:</p>
+<div class="highlight"><pre><span></span><code>droid<span class="w"> </span><span class="nb">exec</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--input-format<span class="w"> </span>stream-jsonrpc<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--output-format<span class="w"> </span>stream-jsonrpc<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--auto<span class="w"> </span>low
+</code></pre></div>
+<p>The recorder must wrap each JSON-RPC object with its direction rather than
+concatenating stdin and stdout into an ambiguous log:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">"format"</span><span class="p">:</span><span class="w"> </span><span class="s2">"ai-memory-hub.droid-exec-capture"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"version"</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"kind"</span><span class="p">:</span><span class="w"> </span><span class="s2">"stream-jsonrpc"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"frames"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">"direction"</span><span class="p">:</span><span class="w"> </span><span class="s2">"client-to-droid"</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">"message"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2.0"</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">"id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"turn-1"</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">"method"</span><span class="p">:</span><span class="w"> </span><span class="s2">"droid.add_user_message"</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">"params"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"text"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Explain this repository"</span><span class="p">}</span>
+<span class="w">      </span><span class="p">}</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">"direction"</span><span class="p">:</span><span class="w"> </span><span class="s2">"droid-to-client"</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">"message"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2.0"</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">"method"</span><span class="p">:</span><span class="w"> </span><span class="s2">"droid.session_notification"</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">"params"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">          </span><span class="nt">"notification"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"assistant_text_delta"</span><span class="p">,</span>
+<span class="w">            </span><span class="nt">"messageId"</span><span class="p">:</span><span class="w"> </span><span class="s2">"assistant-1"</span><span class="p">,</span>
+<span class="w">            </span><span class="nt">"blockIndex"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<span class="w">            </span><span class="nt">"textDelta"</span><span class="p">:</span><span class="w"> </span><span class="s2">"This repository..."</span>
+<span class="w">          </span><span class="p">}</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">      </span><span class="p">}</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">"direction"</span><span class="p">:</span><span class="w"> </span><span class="s2">"droid-to-client"</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">"message"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2.0"</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">"method"</span><span class="p">:</span><span class="w"> </span><span class="s2">"droid.session_notification"</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">"params"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">          </span><span class="nt">"notification"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"agent_turn_completed"</span><span class="p">,</span><span class="w"> </span><span class="nt">"reason"</span><span class="p">:</span><span class="w"> </span><span class="s2">"completed"</span><span class="p">}</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">      </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">]</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>The importer pairs <code>droid.add_user_message</code> requests with successfully completed
+turns and coalesces <code>assistant_text_delta</code> values by message and block. It skips
+system prompts, thinking, tool calls and results, permissions, errors, usage,
+control traffic, incomplete turns, and unknown notifications. This contract
+does not scrape the Droid TUI, follow organization <code>/share</code> links, or import
+arbitrary historical Droid sessions. Raw-content OpenTelemetry export is not a
+normal capture path: it is opt-in, can expose sensitive content, and can
+truncate attributes. Multipart HTTP upload remains tracked separately.</p>
+<p>DeepSeek Harness can download a session tree as
+<code>dsh-session-&lt;SESSION_ID&gt;.zip</code> from its <code>/export</code> browser page. Only extract an
+archive you generated or otherwise trust: inspect its entries first, reject
+absolute paths or <code>..</code> traversal entries, and extract it into a new empty
+directory rather than over existing files. The importer deliberately does not
+open ZIP archives or attachments. Pass the extracted root <code>session.jsonl</code> or
+<code>session.vN.jsonl</code> file to <code>deepseek-harness-session-jsonl</code>:</p>
+<div class="highlight"><pre><span></span><code>unzip<span class="w"> </span>-l<span class="w"> </span>dsh-session-&lt;SESSION_ID&gt;.zip
+mkdir<span class="w"> </span>-p<span class="w"> </span>dsh-session
+unzip<span class="w"> </span>-q<span class="w"> </span>dsh-session-&lt;SESSION_ID&gt;.zip<span class="w"> </span>-d<span class="w"> </span>dsh-session
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>import<span class="w"> </span>deepseek-harness-session-jsonl<span class="w"> </span>dsh-session/session.v4.jsonl<span class="w"> </span>--json
+</code></pre></div>
+<p>Choose the root file actually present in the archive; unversioned version 0
+logs use <code>session.jsonl</code>, while later formats use <code>session.vN.jsonl</code>. Descendant
+agent logs under <code>subagents/&lt;SESSION_ID&gt;/</code> are independent conversations and
+may be imported separately with the same command. The importer records their
+parent session ID and descendant relationship but does not merge the tree.</p>
+<p>The bundled Draft 2020-12 schema supports canonical Harness session versions
+0 through 4. It keeps visible user and assistant text, while omitting system
+and request context, internal user messages, reasoning, commands, tools,
+compaction content, usage, attachments, duplicate message updates, and unknown
+event types. Exported logs with <code>seq</code> and <code>time</code> coordinates must contain a
+complete dense sequence; raw canonical files without coordinates retain their
+physical order. Mixed or non-monotonic ordering and malformed recognized
+records fail with their physical line number. Multipart archive upload remains
+outside this importer contract.</p>
+<p>This format is distinct from <code>deepseek-share-json</code>, which consumes the public
+DeepSeek chat share-content response. A future DeepSeek account-history CSV
+importer is tracked separately; neither format should be passed to the Harness
+session importer.</p>
+<p>For a public DeepSeek share link, save the response from its share-content API
+as JSON, then pass that file to <code>deepseek-share-json</code>. The importer keeps request
+and response text, represents file-only turns by their attachment names, and
+does not copy search-result snippets into memory. For example:</p>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-fsS<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="s1">'https://chat.deepseek.com/api/v0/share/content?share_id=&lt;SHARE_ID&gt;'</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-o<span class="w"> </span>deepseek-share.json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>import<span class="w"> </span>deepseek-share-json<span class="w"> </span>deepseek-share.json<span class="w"> </span>--json
+</code></pre></div>
+<p>OpenCode session exports can be streamed directly from <code>opencode export</code> or
+read from a saved JSON file. The importer keeps user and assistant text in
+export order, skips internal reasoning, tool-only turns, and synthetic or
+ignored text parts, and records the OpenCode session ID, title, working
+directory, and model as provenance when present. Sanitized exports are also
+accepted; their redacted text remains redacted.</p>
+<p>Pi and Oh My Pi store machine-readable sessions as version 3 JSONL trees under
+<code>~/.pi/agent/sessions/</code> and <code>~/.omp/agent/sessions/</code>, respectively. Import a
+copied, inactive session with <code>pi-session-jsonl</code>. The importer follows the last
+entry's <code>parentId</code> ancestry to reconstruct the active branch, so abandoned fork
+branches are not flattened into the conversation. It keeps user and assistant
+text blocks in ancestry order and omits system/developer messages, thinking,
+tool calls and results, custom/bootstrap records, compaction bodies, usage, and
+provider-private data. Oh My Pi title/header markers and OpenClaw-namespaced
+records are used for variant detection; use <code>--source openclaw</code> for older
+OpenClaw archives without a distinguishing marker.</p>
+<p>Malformed JSON reports its line number. Duplicate entry IDs, missing parents,
+cycles, and unsupported session versions are rejected instead of guessing at a
+partial conversation. Orphaned branches therefore fail closed even when they
+are not the last branch. The importer accepts the optional fixed-width Oh My Pi
+title record before the logical session header and preserves only bounded safe
+provenance such as the session ID, working directory, model, title, and Git
+branch or commit. Its bundled Draft 2020-12 importer schema validates the title
+record, version 3 session header, entry-tree fields, and recognized message
+envelopes before typed parsing. Schema failures report the source line and
+field path when available.</p>
+<p>Pi and Oh My Pi HTML exports are presentation-only and do not preserve the
+session tree, so import their JSONL source instead. Current OpenClaw runtime
+sessions live in a SQLite database; do not copy or read a live database file
+through this importer because a main-file-only copy can omit write-ahead-log
+data. Use an archived/legacy JSONL artifact or a coordinated OpenClaw export or
+backup. The importer does not open paths found inside an export.</p>
+<p>Claude Code persists resumable session transcripts as JSONL under
+<code>~/.claude/projects/&lt;project&gt;/&lt;session-id&gt;.jsonl</code>. Import a copied, inactive
+transcript with <code>claude-code-session-jsonl</code>. The importer retains non-empty user
+and assistant text in file order, deduplicates repeated visible records by UUID,
+and records the session ID, working directory, Git branch, and model when
+present. Its bundled Draft 2020-12 importer schema defines the accepted message
+envelope, role matching, content shapes, and compaction-summary exclusion. It
+omits system prompts, thinking, tool calls and results, progress, usage,
+compaction summaries, and file snapshots. Malformed JSON and recognized message
+records that do not match the importer schema report their line number. Claude
+Code's <code>/export transcript.txt</code> output is suitable for the <code>manual</code> importer
+when a readable transcript is preferred, but it does not preserve the same
+structured provenance. Review the transcript for sensitive content before
+copying or importing it.</p>
+<p>Gemini CLI sessions can be exported with <code>/export-session gemini-session.json</code>
+and imported with <code>gemini-cli-session-json</code>. JSON written by
+<code>/chat share gemini-session.json</code> is also accepted, as are legacy local saved-chat
+JSON objects with the same session envelope. Current Gemini CLI autosaved session
+files may use an internal JSONL format; use <code>/export-session</code> rather than passing
+those files to this JSON importer. The importer maps <code>user</code> and <code>gemini</code>/<code>model</code>
+roles to canonical messages, keeps text blocks in export order, and records the
+session ID, project hash, workspace directories, start time, and first visible
+model name when available. It omits injected session context, thoughts, tool
+calls and results, token counts, diagnostics, and unknown fields.</p>
+<p>Gemini's export formats may contain prompts, responses, workspace paths, and
+other sensitive context. Review the JSON before sharing or retaining it outside
+the CLI's local state. The bundled importer schema accepts only the documented
+session-object and shared-history envelopes; malformed recognized messages fail
+with their message index.</p>
+<p>Qwen Code supports self-contained native transcript exports through
+<code>/export json</code> and <code>/export jsonl</code>. Import either format with
+<code>qwen-code-session-export</code>. The JSON form contains one session object; the
+canonical JSONL form begins with a <code>session_metadata</code> record followed by the
+same normalized message objects. A bounded message-only JSONL stream is also
+accepted when metadata was captured separately. The importer keeps textual
+<code>message.content</code> or <code>message.parts[].text</code> from user and assistant records,
+deduplicates repeated message UUIDs, and records the session ID, start time,
+working directory, Git repository and branch, model, and channel when present.</p>
+<p>The bundled Draft 2020-12 importer schema validates the JSON envelope, JSONL
+metadata, role matching, stable UUIDs, timestamps, and recognized message
+content before typed parsing. System records, goal-state audit data, tool calls
+and raw input/output, usage, aggregate file lists, and unknown future message
+types are not copied into canonical memory. <code>qwen sessions list --json</code> is a
+session metadata listing, not a transcript export; use <code>/export json</code> or
+<code>/export jsonl</code> for conversation content. HTML and Markdown exports are
+presentation-oriented and can be reviewed and imported with <code>manual</code> when a
+human-readable fallback is preferable.</p>
+<p>Review imported output before retaining sensitive conversations. The repository
+fixtures are synthetic and contain no text copied from personal exports.</p>
+<p>Hermes Agent's <code>sessions export</code> command writes one complete session object per
+JSONL line. Import one session directly from standard input, or save and import
+a multi-session backup:</p>
+<div class="highlight"><pre><span></span><code>hermes<span class="w"> </span>sessions<span class="w"> </span><span class="nb">export</span><span class="w"> </span>-<span class="w"> </span>--session-id<span class="w"> </span>&lt;SESSION_ID&gt;<span class="w"> </span>--redact<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="p">|</span><span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>import<span class="w"> </span>hermes-session-jsonl<span class="w"> </span>-<span class="w"> </span>--json
+
+hermes<span class="w"> </span>sessions<span class="w"> </span><span class="nb">export</span><span class="w"> </span>hermes-backup.jsonl<span class="w"> </span>--redact
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>import<span class="w"> </span>hermes-session-jsonl<span class="w"> </span>hermes-backup.jsonl<span class="w"> </span>--json
+</code></pre></div>
+<p>Use <code>--redact</code> whenever an export may be shared or retained outside Hermes'
+local state. The importer preserves each exported session as a separate hub
+conversation and keeps safe provenance such as its session ID, Hermes source,
+title, model, working directory, Git root and branch, parent session ID, and
+UTC start time. It imports non-empty user and assistant text that remains in
+Hermes' visible history, including compaction-archived turns, while excluding
+rewound/edited-away rows and synthetic compressed context. System prompts,
+tool calls and results, reasoning, timings, billing and token data, user/chat
+identifiers, and unknown fields are not copied into canonical memory. Hermes
+Markdown exports are presentation formats; use the documented JSONL backup for
+structured import.</p>
+<h3 id="multipart-http-imports">Multipart HTTP imports</h3>
+<p>Authenticated API clients can use the same registered parsers as the CLI with
+<code>POST /memory/import</code>. The request must be <code>multipart/form-data</code> with an
+explicit <code>parser</code> text field and one uploaded <code>file</code> part. The server never
+guesses a parser from the filename or media type, and the uploaded filename is
+metadata only: it is never opened as a server path or treated as a URL.</p>
+<p>JSON, JSONL, CSV, and speaker-labelled plain-text examples:</p>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-fsS<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://127.0.0.1:8000/memory/import<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s2">"Authorization: Bearer </span><span class="nv">$MEMORY_API_TOKEN</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-F<span class="w"> </span><span class="s2">"parser=opencode-session-json"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-F<span class="w"> </span><span class="s2">"file=@opencode-session.json;type=application/json"</span>
+
+curl<span class="w"> </span>-fsS<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://127.0.0.1:8000/memory/import<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s2">"Authorization: Bearer </span><span class="nv">$MEMORY_API_TOKEN</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-F<span class="w"> </span><span class="s2">"parser=hermes-session-jsonl"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-F<span class="w"> </span><span class="s2">"file=@hermes-backup.jsonl;type=application/x-ndjson"</span>
+
+curl<span class="w"> </span>-fsS<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://127.0.0.1:8000/memory/import<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s2">"Authorization: Bearer </span><span class="nv">$MEMORY_API_TOKEN</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-F<span class="w"> </span><span class="s2">"parser=copilot-activity-csv"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-F<span class="w"> </span><span class="s2">"file=@copilot-activity.csv;type=text/csv"</span>
+
+curl<span class="w"> </span>-fsS<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://127.0.0.1:8000/memory/import<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s2">"Authorization: Bearer </span><span class="nv">$MEMORY_API_TOKEN</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-F<span class="w"> </span><span class="s2">"parser=manual"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-F<span class="w"> </span><span class="s2">"file=@transcript.txt;type=text/plain"</span>
+</code></pre></div>
+<p>Optional <code>source</code> and <code>title</code> text fields have the same meaning as their CLI
+options. An optional <code>schema</code> JSON part is accepted only when the selected
+parser publishes a bounded override contract. Hermes currently supports
+version 1 top-level field aliases, role aliases, and explicit ISO 8601, Unix
+seconds, or Unix milliseconds timestamps:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">"version"</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"message_container"</span><span class="p">:</span><span class="w"> </span><span class="s2">"turns"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"session_id_field"</span><span class="p">:</span><span class="w"> </span><span class="s2">"session_key"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"role_field"</span><span class="p">:</span><span class="w"> </span><span class="s2">"speaker"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"content_field"</span><span class="p">:</span><span class="w"> </span><span class="s2">"body"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"role_map"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">"human"</span><span class="p">:</span><span class="w"> </span><span class="s2">"user"</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"ai"</span><span class="p">:</span><span class="w"> </span><span class="s2">"assistant"</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">"timestamp"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">"field"</span><span class="p">:</span><span class="w"> </span><span class="s2">"created_at"</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"format"</span><span class="p">:</span><span class="w"> </span><span class="s2">"iso8601"</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-fsS<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://127.0.0.1:8000/memory/import<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s2">"Authorization: Bearer </span><span class="nv">$MEMORY_API_TOKEN</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-F<span class="w"> </span><span class="s2">"parser=hermes-session-jsonl"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-F<span class="w"> </span><span class="s2">"file=@custom-hermes.jsonl;type=application/x-ndjson"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-F<span class="w"> </span><span class="s2">"schema=@hermes-parser-schema.json;type=application/json"</span>
+
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>import<span class="w"> </span>hermes-session-jsonl<span class="w"> </span>custom-hermes.jsonl<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--schema<span class="w"> </span>hermes-parser-schema.json<span class="w"> </span>--json
+</code></pre></div>
+<p>Overrides cannot contain remote or filesystem references, code, templates,
+queries, or regular expressions, and cannot alter authentication, canonical
+validation, save-intent policy, sensitive-content handling, hashing, storage,
+or project ownership. The endpoint requires <code>memory:write</code>, accepts UTF-8 input
+only, limits files to 20,000,000 bytes, limits override schemas to 65,536 bytes,
+and returns bounded per-conversation IDs and statuses without echoing source
+text or schema contents. All sessions are parsed before insertion begins; if a
+later independent insertion fails, its index receives a redacted error receipt.</p>
+<p>Shared options include <code>--config &lt;path&gt;</code>, <code>--json</code>, <code>--quiet</code>, and <code>--verbose</code>.
+<code>search</code> also supports <code>--source</code>, <code>--date-from</code>, <code>--date-to</code>, repeated <code>--tags</code>,
+<code>--thread-id</code>, and <code>--result-mode chunks|compact|conversations|threads</code>.</p>
+<p>Diagnostics:</p>
+<div class="highlight"><pre><span></span><code>python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>tokenizer-check<span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>health<span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>config-show<span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>storage-check<span class="w"> </span>--json
+</code></pre></div>
+<p>Authenticated clients can inspect visible project workspaces through <code>GET /memory/projects</code>, <code>GET /memory/projects/default</code>, <code>GET /memory/projects/{project_id}</code>, and the matching MCP project helper tools.</p>
+<p>Local bearer-token and project administration is CLI-first. Token creation prints
+the raw bearer token once; token list and revoke commands only expose stable
+token ids and non-secret prefixes.</p>
+<div class="highlight"><pre><span></span><code>python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>admin<span class="w"> </span>user<span class="w"> </span>create<span class="w"> </span>jane<span class="w"> </span>--display-name<span class="w"> </span><span class="s2">"Jane"</span><span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>admin<span class="w"> </span>user<span class="w"> </span>list<span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>admin<span class="w"> </span>token<span class="w"> </span>create<span class="w"> </span>--user<span class="w"> </span>jane<span class="w"> </span>--display-name<span class="w"> </span>laptop<span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>admin<span class="w"> </span>token<span class="w"> </span>list<span class="w"> </span>--user<span class="w"> </span>jane<span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>admin<span class="w"> </span>token<span class="w"> </span>revoke<span class="w"> </span>&lt;TOKEN_ID_OR_PREFIX&gt;<span class="w"> </span>--json
+
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>admin<span class="w"> </span>project<span class="w"> </span>create<span class="w"> </span>shared-321<span class="w"> </span>--owner<span class="w"> </span>jane<span class="w"> </span>--name<span class="w"> </span><span class="s2">"Shared 321"</span><span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>admin<span class="w"> </span>project<span class="w"> </span>list<span class="w"> </span>--user<span class="w"> </span>jane<span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>admin<span class="w"> </span>project<span class="w"> </span>member<span class="w"> </span>add<span class="w"> </span>shared-321<span class="w"> </span>--user<span class="w"> </span>carl<span class="w"> </span>--role<span class="w"> </span>writer<span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>admin<span class="w"> </span>project<span class="w"> </span>member<span class="w"> </span>list<span class="w"> </span>shared-321<span class="w"> </span>--json
+</code></pre></div>
+<p>Fact review helpers:</p>
+<div class="highlight"><pre><span></span><code>python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>fact-search<span class="w"> </span>--subject<span class="w"> </span>user<span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>fact-search<span class="w"> </span>--source<span class="w"> </span>codex<span class="w"> </span>--status<span class="w"> </span>superseded<span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>profile-get<span class="w"> </span>--subject<span class="w"> </span>user<span class="w"> </span>--predicate<span class="w"> </span>owns_item<span class="w"> </span>--source-quality<span class="w"> </span>corrected_by_user<span class="w"> </span>--save-intent-source<span class="w"> </span>codex<span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>fact-supersede<span class="w"> </span>&lt;OLD_FACT_ID&gt;<span class="w"> </span>&lt;NEW_FACT_ID&gt;<span class="w"> </span>--json
+</code></pre></div>
+<h2 id="mcp-interface">MCP Interface</h2>
+<p>When <code>interfaces.mcp</code> is enabled, the streamable HTTP MCP endpoint is mounted at:</p>
+<div class="highlight"><pre><span></span><code>http://127.0.0.1:8000/mcp/
+</code></pre></div>
+<p>For user-facing MCP setup, run with <code>api.auth: oauth_resource_server</code> and open
+<code>/connect</code>. The Connect UI shows the configured MCP resource URL, enabled
+passport providers, sign-in status, hub-issued token workflow, and client setup
+snippets. Google is the current live provider; <code>meta</code> and <code>x</code> are disabled
+provider slots until their provider-specific flows are implemented. Client
+snippets remain marked <code>Unverified</code> until checked against current client
+releases. See the <a href="../connect_ui/">Connect UI and OAuth setup guide</a> for
+packages, Docker setup, provider status, and client verification notes.</p>
+<p>For an external OpenID Connect provider such as Keycloak, use
+<code>api.auth: oidc_resource_server</code>. This mode validates asymmetric access tokens
+through provider discovery/JWKS and advertises the external issuer to MCP
+clients; see <a href="../external_oidc/">External OIDC and Keycloak</a>.</p>
+<p>Core tools:</p>
+<ul>
+<li><code>memory_validate(conversation_json)</code></li>
+<li><code>memory_insert(conversation_json)</code></li>
+<li><code>memory_search(query, top_k=5, limit, cursor, result_mode="chunks", response_format="concise", source, date_from, date_to, tags, thread_id, handoff_only=false)</code></li>
+<li><code>memory_retrieve(id, response_format="concise", project_id, memory_status)</code></li>
+<li><code>memory_ask(question, top_k=5, max_context_tokens=None, result_mode="chunks", response_format="concise", source, date_from, date_to, tags, thread_id, handoff_only=false, project_id)</code></li>
+<li><code>memory_fact_search(query=None, subject=None, predicate=None, include_superseded=False, response_format="concise", limit=None, source, date_from, date_to, confidence, status, source_quality, save_intent, save_intent_source, freshness_from, freshness_to, project_id)</code></li>
+<li><code>memory_profile_get(subject="user", predicate, response_format="concise", limit=None, source, date_from, date_to, confidence, status, source_quality, save_intent, save_intent_source, freshness_from, freshness_to, project_id)</code></li>
+<li><code>memory_fact_supersede(fact_id, superseded_by)</code></li>
+<li><code>memory_project_list()</code></li>
+<li><code>memory_project_default_get()</code></li>
+<li><code>memory_project_get(project_id)</code></li>
+</ul>
+<p><code>memory_profile_get</code> returns <code>facts</code> plus a <code>summary</code> object. Its default
+concise projection keeps canonical direct-user and user-correction facts; use
+an explicit predicate or <code>source_quality</code> filter to include assistant statements
+or inferred topics. Detailed reads retain the complete timestamped fact history.
+The summary includes freshness, source-quality counts, filters, save-intent
+filters, and compact fact provenance. Insert also generates conversation, topic,
+and project summaries from stored message text. Generated summaries are stored
+separately from raw chunks and normalized facts; the conversation summary is
+returned as <code>metadata.generated_summary</code> on search and retrieve responses.</p>
+<p><code>memory_insert</code> accepts one complete conversation object. There is intentionally
+no bulk MCP insert tool. Clients may include a short <code>metadata.summary</code>, but
+must still send the complete <code>messages</code> list.</p>
+<p>Resources:</p>
+<ul>
+<li><code>memory://conversation/example</code></li>
+</ul>
+<p>Templates:</p>
+<ul>
+<li><code>memory://conversation/{id}</code></li>
+<li><code>memory://search/{query}</code></li>
+<li><code>memory://timeline/{day}</code></li>
+<li><code>memory://health</code></li>
+</ul>
+<p>Prompts:</p>
+<ul>
+<li><code>save_conversation</code></li>
+<li><code>search_memory</code></li>
+<li><code>ask_memory</code></li>
+<li><code>summarize_conversation</code></li>
+</ul>
+<h2 id="mcp-session-flow">MCP Session Flow</h2>
+<p>Initialize:</p>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-i<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://127.0.0.1:8000/mcp/<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s2">"Content-Type: application/json"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s2">"Accept: application/json, text/event-stream"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-d<span class="w"> </span><span class="s1">'{</span>
+<span class="s1">    "jsonrpc": "2.0",</span>
+<span class="s1">    "id": 1,</span>
+<span class="s1">    "method": "initialize",</span>
+<span class="s1">    "params": {</span>
+<span class="s1">      "protocolVersion": "2025-06-18",</span>
+<span class="s1">      "capabilities": {},</span>
+<span class="s1">      "clientInfo": {"name": "example-client", "version": "0.1.0"}</span>
+<span class="s1">    }</span>
+<span class="s1">  }'</span>
+</code></pre></div>
+<p>Use the returned <code>Mcp-Session-Id</code> for later MCP calls:</p>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://127.0.0.1:8000/mcp/<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s2">"Content-Type: application/json"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s2">"Accept: application/json, text/event-stream"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s2">"Mcp-Session-Id: &lt;SESSION_ID&gt;"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-d<span class="w"> </span><span class="s1">'{"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}'</span>
+</code></pre></div>
+<h2 id="native-clients">Native Clients</h2>
+<p>Register <code>ai-memory-hub</code> as an MCP server in clients such as Codex, opencode,
+Claude, Copilot, VS Code, or Cursor, then point the client at:</p>
+<div class="highlight"><pre><span></span><code>http://127.0.0.1:8000/mcp/
+</code></pre></div>
+<p>The same memory operations remain available through HTTP API endpoints, so agent
+clients and direct service clients can share one backend.</p>
+<h2 id="storage-backends">Storage Backends</h2>
+<p>The runtime uses one metadata provider and one vector provider. Select them with
+<code>providers.metadata_db</code> and <code>providers.vector_db</code>. The blocks under
+<code>storage.metadata_providers</code> and <code>storage.vector_providers</code> only hold settings
+for possible providers; they are not active unless selected.</p>
+<h2 id="multilingual-retrieval">Multilingual Retrieval</h2>
+<p>ai-memory-hub is not English-only. It stores Unicode text and uses the
+configured embedding model for semantic retrieval. Multilingual retrieval works
+when the configured embedding model supports the languages in the stored
+conversation and the user's query.</p>
+<p>The embedding provider, model, dimension, and relevant options form one vector
+space. Use the same embedding configuration for ingestion and query-time
+retrieval. If a persistent vector index was built with a different embedding
+model or provider, reindex it or use a separate vector namespace/index. Dimension
+checks catch many unsafe swaps, but same-dimension model changes can still
+corrupt ranking if mixed silently.</p>
+<h3 id="changing-embedding-models-for-existing-data">Changing Embedding Models For Existing Data</h3>
+<p>Use this runbook when you already have a metadata database containing your
+conversations and you want to switch to another embedding model.</p>
+<p>Do not point a new embedding model at the old vector table, collection, index, or
+namespace. The vectors already stored there were produced in the old model's
+embedding space. Mixing them with new vectors corrupts ranking, and
+same-dimension models are not interchangeable.</p>
+<ol>
+<li>Stop <code>aim serve</code> and any API, MCP, or CLI clients that can insert memory.</li>
+<li>Back up metadata and vectors.</li>
+<li>Default local metadata: back up <code>data/metadata.sqlite3</code>.</li>
+<li>Default local vectors: back up <code>data/lancedb</code>.</li>
+<li>PGVector: back up the configured <code>storage.vector_providers.pgvector.table_name</code>.</li>
+<li>Hosted vector stores: take the provider's normal snapshot/export before
+     changing collections, indexes, namespaces, or tables.</li>
+<li>Choose the new embedding settings and set all of them together:</li>
+</ol>
+<div class="highlight"><pre><span></span><code><span class="nt">providers</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">embeddings</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http</span>
+<span class="w">  </span><span class="nt">embedding_model</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">nomic-embed-text</span>
+<span class="w">  </span><span class="nt">embedding_dimension</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">768</span>
+
+<span class="nt">embeddings</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">endpoint</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://127.0.0.1:11434/v1</span>
+</code></pre></div>
+<ol>
+<li>Point the new config at an empty vector destination.</li>
+<li>SQLite + LanceDB: keep <code>paths.data_dir</code> unchanged if you want the same
+     <code>data/metadata.sqlite3</code>, but back up and replace only the <code>data/lancedb</code>
+     vector directory. Use a new <code>paths.data_dir</code> only when you want a separate
+     metadata database too.</li>
+<li>PGVector: use a new <code>storage.vector_providers.pgvector.table_name</code>, such
+     as <code>memory_vectors_nomic_768</code>.</li>
+<li>Qdrant, Milvus, Weaviate, Redis, Typesense, MongoDB Atlas, Elasticsearch,
+     OpenSearch, Pinecone, Turbopuffer, and Vespa: use a new collection, index,
+     namespace, table, or schema name that contains no old-model vectors.</li>
+<li>Keep the same metadata database unless you intentionally want a completely
+   separate memory store. Keeping metadata preserves conversations, facts,
+   generated summaries, projects, users, and tokens while the vector store is
+   rebuilt.</li>
+<li>Recalculate embeddings from the stored metadata:</li>
+</ol>
+<div class="highlight"><pre><span></span><code>uv<span class="w"> </span>run<span class="w"> </span>aim<span class="w"> </span>reindex<span class="w"> </span>--config<span class="w"> </span>new-embedding-config.yaml<span class="w"> </span>--json
+</code></pre></div>
+<p><code>aim reindex</code> reads the existing conversation payloads from metadata, rebuilds
+chunks, embeds them with the active embedding config, and writes vectors to the
+active vector store with replacement semantics. It does not require original
+transcript files or hand-written JSON files.</p>
+<p>Useful options:</p>
+<ul>
+<li><code>--project-id &lt;id&gt;</code> reindexes one project workspace.</li>
+<li><code>--limit &lt;n&gt;</code> reindexes only the first <code>n</code> stored conversations, useful for a
+  smoke test before a full run.</li>
+<li><code>--include-inactive</code> also recalculates vectors for <code>pending_review</code> or
+  <code>rejected</code> conversations. The default only reindexes active memory.</li>
+</ul>
+<p>The same reindex command is the compatibility path when enabling vector filter
+pushdown for an index created before owner/project payload fields were present.
+Back up the vector destination, deploy the updated provider schema or mapping,
+and reindex every project whose vectors predate those fields. Until reindexing
+is complete, use a fresh vector destination or a provider configuration that
+reports no native filter fields; the hub will use bounded metadata-validated
+fallback retrieval instead of trusting incomplete payloads. Check the active
+mode with <code>aim storage-check --json</code> or the <code>/health</code> response under
+<code>vector_filtering</code>.</p>
+<ol>
+<li>Verify the new index before removing the old one:</li>
+</ol>
+<div class="highlight"><pre><span></span><code>uv<span class="w"> </span>run<span class="w"> </span>aim<span class="w"> </span>storage-check<span class="w"> </span>--config<span class="w"> </span>new-embedding-config.yaml<span class="w"> </span>--json
+uv<span class="w"> </span>run<span class="w"> </span>aim<span class="w"> </span>search<span class="w"> </span><span class="s2">"project memory smoke"</span><span class="w"> </span>--config<span class="w"> </span>new-embedding-config.yaml<span class="w"> </span>--top-k<span class="w"> </span><span class="m">5</span><span class="w"> </span>--json
+uv<span class="w"> </span>run<span class="w"> </span>aim<span class="w"> </span>ask<span class="w"> </span><span class="s2">"What do you remember about this project?"</span><span class="w"> </span>--config<span class="w"> </span>new-embedding-config.yaml<span class="w"> </span>--top-k<span class="w"> </span><span class="m">5</span><span class="w"> </span>--json
+</code></pre></div>
+<p>Rollback is simple if you kept the backups: restore the old config that points
+at the old embedding model and old vector destination. The metadata database can
+stay in place when the migration only replayed duplicate conversation payloads.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">providers</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">metadata_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">postgres</span>
+<span class="w">  </span><span class="nt">vector_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pgvector</span>
+
+<span class="nt">storage</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">metadata_providers</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">postgres</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">postgresql://user:password@127.0.0.1:5432/memory</span>
+<span class="w">  </span><span class="nt">vector_providers</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">pgvector</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">postgresql://user:password@127.0.0.1:5432/memory</span>
+<span class="w">      </span><span class="nt">table_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory_vectors</span>
+</code></pre></div>
+<h3 id="sqlite-lancedb">SQLite + LanceDB</h3>
+<p>The default local setup stores metadata in SQLite and vectors in LanceDB:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">providers</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">metadata_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sqlite</span>
+<span class="w">  </span><span class="nt">vector_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">lancedb</span>
+
+<span class="nt">paths</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">data_dir</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">./data</span>
+</code></pre></div>
+<h3 id="sqlite-qdrant">SQLite + Qdrant</h3>
+<p>Use Qdrant as a local Docker or Qdrant Cloud vector backend:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">providers</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">metadata_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sqlite</span>
+<span class="w">  </span><span class="nt">vector_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">qdrant</span>
+
+<span class="nt">storage</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vector</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">allow_fallback</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">    </span><span class="nt">distance</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cosine</span>
+<span class="w">  </span><span class="nt">vector_providers</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">qdrant</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://127.0.0.1:6333</span>
+<span class="w">      </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">collection</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory_vectors</span>
+</code></pre></div>
+<p>Install the optional dependency with <code>uv sync --extra qdrant</code>.</p>
+<h3 id="sqlite-milvus">SQLite + Milvus</h3>
+<p>Use Milvus or Zilliz for larger vector deployments:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">providers</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">metadata_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sqlite</span>
+<span class="w">  </span><span class="nt">vector_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">milvus</span>
+
+<span class="nt">storage</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vector</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">allow_fallback</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">    </span><span class="nt">distance</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cosine</span>
+<span class="w">  </span><span class="nt">vector_providers</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">milvus</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">uri</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://127.0.0.1:19530</span>
+<span class="w">      </span><span class="nt">token</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">collection</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory_vectors</span>
+</code></pre></div>
+<p>Install the optional dependency with <code>uv sync --extra milvus</code>.</p>
+<h3 id="sqlite-weaviate">SQLite + Weaviate</h3>
+<p>Use Weaviate for schema-rich vector deployments:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">providers</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">metadata_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sqlite</span>
+<span class="w">  </span><span class="nt">vector_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">weaviate</span>
+
+<span class="nt">storage</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vector</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">allow_fallback</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">  </span><span class="nt">vector_providers</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">weaviate</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://127.0.0.1:8080</span>
+<span class="w">      </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">collection</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MemoryVector</span>
+</code></pre></div>
+<p>Install the optional dependency with <code>uv sync --extra weaviate</code>.</p>
+<h3 id="sqlite-elasticsearch">SQLite + Elasticsearch</h3>
+<p>Use Elasticsearch when vector storage should live in an existing Elastic cluster:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">providers</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">metadata_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sqlite</span>
+<span class="w">  </span><span class="nt">vector_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">elasticsearch</span>
+
+<span class="nt">storage</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vector</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">allow_fallback</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">    </span><span class="nt">distance</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cosine</span>
+<span class="w">  </span><span class="nt">vector_providers</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">elasticsearch</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://127.0.0.1:9200</span>
+<span class="w">      </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">index</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory_vectors</span>
+</code></pre></div>
+<p>Install the optional dependency with <code>uv sync --extra elasticsearch</code>.</p>
+<h3 id="sqlite-opensearch">SQLite + OpenSearch</h3>
+<p>Use OpenSearch when vector storage should live in an existing OpenSearch cluster:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">providers</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">metadata_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sqlite</span>
+<span class="w">  </span><span class="nt">vector_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">opensearch</span>
+
+<span class="nt">storage</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vector</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">allow_fallback</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">    </span><span class="nt">distance</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cosine</span>
+<span class="w">  </span><span class="nt">vector_providers</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">opensearch</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://127.0.0.1:9200</span>
+<span class="w">      </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">index</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory_vectors</span>
+</code></pre></div>
+<p>Install the optional dependency with <code>uv sync --extra opensearch</code>.</p>
+<h3 id="sqlite-redisredisearch">SQLite + Redis/RediSearch</h3>
+<p>Use Redis when Redis Stack already owns operational infrastructure and
+RediSearch should host vectors:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">providers</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">metadata_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sqlite</span>
+<span class="w">  </span><span class="nt">vector_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">redis</span>
+
+<span class="nt">storage</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vector</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">allow_fallback</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">    </span><span class="nt">distance</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cosine</span>
+<span class="w">  </span><span class="nt">vector_providers</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">redis</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">redis://127.0.0.1:6379/0</span>
+<span class="w">      </span><span class="nt">index</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory_vectors</span>
+<span class="w">      </span><span class="nt">key_prefix</span><span class="p">:</span><span class="w"> </span><span class="s">"memory_vectors:"</span>
+</code></pre></div>
+<p>Install the optional dependency with <code>uv sync --extra redis</code>.</p>
+<h3 id="sqlite-vespa">SQLite + Vespa</h3>
+<p>Use Vespa when a deployed Vespa application already owns large-scale retrieval
+infrastructure and ai-memory-hub should feed hub-owned embeddings into it:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">providers</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">metadata_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sqlite</span>
+<span class="w">  </span><span class="nt">vector_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">vespa</span>
+
+<span class="nt">storage</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vector</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">allow_fallback</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">    </span><span class="nt">distance</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cosine</span>
+<span class="w">  </span><span class="nt">vector_providers</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">vespa</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://127.0.0.1:8080</span>
+<span class="w">      </span><span class="nt">token</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory</span>
+<span class="w">      </span><span class="nt">schema</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory_vector</span>
+<span class="w">      </span><span class="nt">rank_profile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">vector_similarity</span>
+</code></pre></div>
+<p>Install the optional dependency with <code>uv sync --extra vespa</code>. Deploy the Vespa
+application package and schema before starting ai-memory-hub.</p>
+<h3 id="sqlite-typesense">SQLite + Typesense</h3>
+<p>Use Typesense when vector storage should live in a lightweight search engine
+with first-class filtering and faceting:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">providers</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">metadata_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sqlite</span>
+<span class="w">  </span><span class="nt">vector_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">typesense</span>
+
+<span class="nt">storage</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vector</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">allow_fallback</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">    </span><span class="nt">distance</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cosine</span>
+<span class="w">  </span><span class="nt">vector_providers</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">typesense</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://127.0.0.1:8108</span>
+<span class="w">      </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">collection</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory_vectors</span>
+</code></pre></div>
+<p>Install the optional dependency with <code>uv sync --extra typesense</code>.</p>
+<h3 id="sqlite-pinecone">SQLite + Pinecone</h3>
+<p>Use Pinecone when vector storage should live in hosted managed/serverless
+infrastructure:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">providers</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">metadata_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sqlite</span>
+<span class="w">  </span><span class="nt">vector_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pinecone</span>
+
+<span class="nt">storage</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vector</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">allow_fallback</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">    </span><span class="nt">distance</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cosine</span>
+<span class="w">  </span><span class="nt">vector_providers</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">pinecone</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">index</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory-vectors</span>
+<span class="w">      </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">default</span>
+<span class="w">      </span><span class="nt">cloud</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">aws</span>
+<span class="w">      </span><span class="nt">region</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">us-east-1</span>
+<span class="w">      </span><span class="nt">create_index</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+</code></pre></div>
+<p>Install the optional dependency with <code>uv sync --extra pinecone</code>.</p>
+<h3 id="sqlite-turbopuffer">SQLite + Turbopuffer</h3>
+<p>Use Turbopuffer when vector storage should live in hosted object-storage-backed
+search infrastructure:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">providers</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">metadata_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sqlite</span>
+<span class="w">  </span><span class="nt">vector_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">turbopuffer</span>
+
+<span class="nt">storage</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vector</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">allow_fallback</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">    </span><span class="nt">distance</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cosine</span>
+<span class="w">  </span><span class="nt">vector_providers</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">turbopuffer</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory-vectors</span>
+<span class="w">      </span><span class="nt">region</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gcp-us-central1</span>
+</code></pre></div>
+<p>Install the optional dependency with <code>uv sync --extra turbopuffer</code>.</p>
+<h3 id="mongodb-metadata-and-atlas-vectors">MongoDB Metadata And Atlas Vectors</h3>
+<p>Use MongoDB for metadata when Mongo already owns application persistence, and
+use MongoDB Atlas Vector Search when Atlas should also own vectors:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">providers</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">metadata_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mongodb</span>
+<span class="w">  </span><span class="nt">vector_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mongodb_atlas</span>
+
+<span class="nt">storage</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">metadata_providers</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">mongodb</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">uri</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mongodb://127.0.0.1:27017</span>
+<span class="w">      </span><span class="nt">database</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ai_memory_hub</span>
+<span class="w">      </span><span class="nt">conversations_collection</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">conversations</span>
+<span class="w">  </span><span class="nt">vector_providers</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">mongodb_atlas</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">uri</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mongodb+srv://example.mongodb.net/app</span>
+<span class="w">      </span><span class="nt">database</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ai_memory_hub</span>
+<span class="w">      </span><span class="nt">collection</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory_vectors</span>
+<span class="w">      </span><span class="nt">index</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory_vector_index</span>
+</code></pre></div>
+<p>Install the optional dependency with <code>uv sync --extra mongodb</code>.</p>
+<h3 id="postgres-metadata">Postgres Metadata</h3>
+<p>Use Postgres for conversation metadata:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">providers</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">metadata_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">postgres</span>
+<span class="w">  </span><span class="nt">vector_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">lancedb</span>
+
+<span class="nt">storage</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">metadata_providers</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">postgres</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">postgresql://user:password@127.0.0.1:5432/memory</span>
+</code></pre></div>
+<h3 id="pgvector">PGVector</h3>
+<p>Use PGVector for vector storage:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">providers</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">metadata_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">postgres</span>
+<span class="w">  </span><span class="nt">vector_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pgvector</span>
+
+<span class="nt">storage</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">metadata_providers</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">postgres</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">postgresql://user:password@127.0.0.1:5432/memory</span>
+<span class="w">  </span><span class="nt">vector_providers</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">pgvector</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">postgresql://user:password@127.0.0.1:5432/memory</span>
+<span class="w">      </span><span class="nt">table_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory_vectors</span>
+</code></pre></div>
+<h3 id="in-memory-vectors">In-Memory Vectors</h3>
+<p>Use the in-memory vector backend for tests and short-lived local experiments:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">providers</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vector_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory</span>
+</code></pre></div>
+<h2 id="configuration">Configuration</h2>
+<p>Configuration is loaded from <code>config.yaml</code> by default. A fuller example is
+available in <code>example.config.yaml</code>.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">providers</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">embeddings</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">local</span>
+<span class="w">  </span><span class="nt">embedding_model</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">local-hash</span>
+<span class="w">  </span><span class="nt">embedding_dimension</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">32</span>
+<span class="w">  </span><span class="nt">metadata_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sqlite</span>
+<span class="w">  </span><span class="nt">vector_db</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">lancedb</span>
+
+<span class="nt">storage</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">dry_run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">  </span><span class="nt">allow_trusted_appends</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">  </span><span class="c1"># Metadata schema compatibility allow-list. Version 1 is current.</span>
+<span class="w">  </span><span class="nt">metadata_schema_versions</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">1</span><span class="p p-Indicator">]</span>
+<span class="w">  </span><span class="nt">vector</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">allow_fallback</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">    </span><span class="nt">distance</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cosine</span>
+<span class="w">  </span><span class="nt">vector_providers</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">qdrant</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://127.0.0.1:6333</span>
+<span class="w">      </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">collection</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory_vectors</span>
+<span class="w">    </span><span class="nt">milvus</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">uri</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://127.0.0.1:19530</span>
+<span class="w">      </span><span class="nt">token</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">collection</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory_vectors</span>
+<span class="w">    </span><span class="nt">weaviate</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://127.0.0.1:8080</span>
+<span class="w">      </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">collection</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MemoryVector</span>
+<span class="w">    </span><span class="nt">mongodb_atlas</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">uri</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">database</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ai_memory_hub</span>
+<span class="w">      </span><span class="nt">collection</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory_vectors</span>
+<span class="w">      </span><span class="nt">index</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory_vector_index</span>
+<span class="w">    </span><span class="nt">elasticsearch</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://127.0.0.1:9200</span>
+<span class="w">      </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">index</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory_vectors</span>
+<span class="w">    </span><span class="nt">opensearch</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://127.0.0.1:9200</span>
+<span class="w">      </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">index</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory_vectors</span>
+<span class="w">    </span><span class="nt">redis</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">redis://127.0.0.1:6379/0</span>
+<span class="w">      </span><span class="nt">index</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory_vectors</span>
+<span class="w">      </span><span class="nt">key_prefix</span><span class="p">:</span><span class="w"> </span><span class="s">"memory_vectors:"</span>
+<span class="w">    </span><span class="nt">pinecone</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">index</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory-vectors</span>
+<span class="w">      </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">default</span>
+<span class="w">      </span><span class="nt">cloud</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">aws</span>
+<span class="w">      </span><span class="nt">region</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">us-east-1</span>
+<span class="w">      </span><span class="nt">create_index</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">    </span><span class="nt">turbopuffer</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory-vectors</span>
+<span class="w">      </span><span class="nt">region</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gcp-us-central1</span>
+<span class="w">    </span><span class="nt">vespa</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://127.0.0.1:8080</span>
+<span class="w">      </span><span class="nt">token</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory</span>
+<span class="w">      </span><span class="nt">schema</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory</span>
+<span class="w">      </span><span class="nt">rank_profile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">vector_similarity</span>
+<span class="w">    </span><span class="nt">typesense</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://127.0.0.1:8108</span>
+<span class="w">      </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">collection</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory_vectors</span>
+<span class="w">  </span><span class="nt">metadata_providers</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">mongodb</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">uri</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">database</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ai_memory_hub</span>
+<span class="w">      </span><span class="nt">conversations_collection</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">conversations</span>
+
+<span class="nt">tokenizer</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">  </span><span class="nt">encoding</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cl100k_base</span>
+
+<span class="nt">ask</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">max_context_tokens</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2000</span>
+
+<span class="nt">retrieval</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vector_score_threshold</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">7.5</span>
+<span class="w">  </span><span class="nt">keyword_enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">keyword_candidate_limit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">50</span>
+<span class="w">  </span><span class="nt">candidate_multiplier</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
+<span class="w">  </span><span class="nt">rank_fusion_k</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60</span>
+<span class="w">  </span><span class="nt">dense_candidate_weight</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0</span>
+<span class="w">  </span><span class="nt">lexical_candidate_weight</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0</span>
+<span class="w">  </span><span class="nt">fact_candidate_weight</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.75</span>
+<span class="w">  </span><span class="nt">fact_candidate_limit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">25</span>
+<span class="w">  </span><span class="nt">reranker_candidate_limit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">25</span>
+<span class="w">  </span><span class="nt">reranker_timeout_seconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.5</span>
+<span class="w">  </span><span class="nt">reranker_projection_text_limit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2000</span>
+
+<span class="nt">memory</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">insert_policy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">permissive</span>
+
+<span class="nt">chunking</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">strategy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">message</span>
+<span class="w">  </span><span class="nt">max_tokens</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">800</span>
+<span class="w">  </span><span class="nt">overlap_tokens</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">80</span>
+
+<span class="nt">schema</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">file</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">./memory/schema/conversation.schema.json</span>
+
+<span class="nt">interfaces</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">mcp</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">api</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+
+<span class="nt">paths</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">data_dir</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">./data</span>
+<span class="w">  </span><span class="nt">logs_dir</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">./logs</span>
+
+<span class="nt">embedding_endpoint</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">base_url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://localhost:11434/v1</span>
+<span class="w">  </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">dummy_key</span>
+</code></pre></div>
+<p><code>metadata_schema_versions</code> means "this app build supports these metadata store
+schema versions." It is an array so future rolling migrations can temporarily
+support old and new database layouts, for example <code>[1, 2]</code>. Version <code>1</code> is the
+first and current metadata schema version. Startup fails if the active metadata
+store reports a version outside this list.</p>
+<p>The default <code>chunking.strategy: message</code> keeps one chunk per normalized message.
+Set <code>chunking.strategy: token</code> to split long messages into token windows with
+<code>chunking.max_tokens</code> and <code>chunking.overlap_tokens</code>. Token chunking is opt-in and
+uses <code>tiktoken</code> when available, with a deterministic local heuristic fallback.</p>
+<p>Retrieval gathers dense vector, lexical, fact, and optional graph candidate
+lists, then combines their positions with reciprocal rank fusion. It never
+subtracts lexical or metadata boosts from provider-specific raw vector scores.
+Exact identifiers, quoted phrases, and rare exact terms remain high-signal,
+followed by an optional bounded semantic reranker and deterministic metadata
+signals. The no-model path and all reranker timeout/error paths are deterministic.
+Reranker projections are size-limited, redact secrets, and omit arbitrary
+conversation metadata.</p>
+<p>For migration, <code>retrieval.keyword_weight</code> and <code>retrieval.metadata_weight</code> are
+still accepted so existing configuration files start unchanged, but they no
+longer affect ordering. Replace <code>keyword_weight</code> with
+<code>lexical_candidate_weight</code>; tune <code>dense_candidate_weight</code>,
+<code>fact_candidate_weight</code>, and <code>graph_weight</code> only as source-list weights. Raw
+<code>score</code> remains in responses for compatibility, while result order comes from
+the fused rank.</p>
+<p><code>tokenizer.encoding</code> is an encoding name such as <code>cl100k_base</code>, not a model file
+path. ai-memory-hub does not download tokenizer files itself. When the optional
+<code>tiktoken</code> extra is installed, <code>tiktoken</code> resolves and caches the encoding data.
+For persistent or offline deployments, set <code>TIKTOKEN_CACHE_DIR</code> to a writable
+directory and prewarm the cache during setup:</p>
+<div class="highlight"><pre><span></span><code><span class="nv">TIKTOKEN_CACHE_DIR</span><span class="o">=</span>./data/tiktoken-cache<span class="w"> </span>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">"import tiktoken; tiktoken.get_encoding('cl100k_base')"</span>
+</code></pre></div>
+<p>Check which tokenizer path will be used:</p>
+<div class="highlight"><pre><span></span><code>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>memory.cli<span class="w"> </span>tokenizer-check<span class="w"> </span>--json
+</code></pre></div>
+<h2 id="containers">Containers</h2>
+<p>Build the local image:</p>
+<div class="highlight"><pre><span></span><code>docker<span class="w"> </span>build<span class="w"> </span>-t<span class="w"> </span>ai-memory-hub:local<span class="w"> </span>-f<span class="w"> </span>Containerfile<span class="w"> </span>.
+</code></pre></div>
+<p>Run the default image locally:</p>
+<div class="highlight"><pre><span></span><code>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>-p<span class="w"> </span><span class="m">127</span>.0.0.1:8000:8000<span class="w"> </span>ai-memory-hub:local
+</code></pre></div>
+<p>The image exposes the API and MCP service on port <code>8000</code> and starts with:</p>
+<div class="highlight"><pre><span></span><code>/app/.venv/bin/aim<span class="w"> </span>serve<span class="w"> </span>--host<span class="w"> </span><span class="m">0</span>.0.0.0<span class="w"> </span>--port<span class="w"> </span><span class="m">8000</span>
+</code></pre></div>
+<p>The built-in container configuration uses deterministic local embeddings, SQLite
+metadata, and LanceDB vectors so the image starts without external model or
+database services while keeping local vector state persistent under <code>/app/data</code>.</p>
+<p>Container images run as a non-root user by default and are built so OpenShift can
+override the runtime UID while keeping root-group write access to <code>/app/data</code>,
+<code>/app/logs</code>, and <code>/app/.uv-cache</code>. Use <code>/ready</code> for readiness probes and
+<code>/health</code> for liveness probes.</p>
+<p>Kubernetes probe example:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">readinessProbe</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">httpGet</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/ready</span>
+<span class="w">    </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8000</span>
+<span class="nt">livenessProbe</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">httpGet</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/health</span>
+<span class="w">    </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8000</span>
+</code></pre></div>
+<p>For persistent local container data, mount <code>/app/data</code> and optionally <code>/app/logs</code>.
+For custom configuration, mount a config file and start with:</p>
+<div class="highlight"><pre><span></span><code>uv<span class="w"> </span>run<span class="w"> </span>aim<span class="w"> </span>serve<span class="w"> </span>--config<span class="w"> </span>&lt;path&gt;
+</code></pre></div>
+<p>Keep secrets in a mounted config file or injected environment variables, not in
+committed images or repository files.</p>
+<p>For a reusable Docker/Podman Compose setup that runs ai-memory-hub with Postgres
+metadata and PGVector vectors:</p>
+<div class="highlight"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>examples/local-stack
+docker<span class="w"> </span>compose<span class="w"> </span>up<span class="w"> </span>--build
+</code></pre></div>
+<p>The example binds ai-memory-hub on host port <code>8000</code> for LAN clients. Use
+<code>http://&lt;HOST_LAN_IP&gt;:8000/mcp/</code> from another PC on the same network. It also
+enables tokenizer budgeting with the optional <code>tiktoken</code> extra. For remote
+Ollama embeddings, see <code>examples/local-stack/config.oauth-public.yaml</code>.</p>
+<p>Additional checked-in provider examples are under <code>examples/storage_providers</code>.
+They cover SQLite/LanceDB, in-memory vectors, Qdrant, MongoDB metadata,
+MongoDB Atlas Vector Search, Milvus, Weaviate, Elasticsearch, OpenSearch,
+Redis/RediSearch, Vespa, Typesense, Pinecone, and Turbopuffer.</p>
+<h2 id="testing">Testing</h2>
+<p>Run the full local suite:</p>
+<div class="highlight"><pre><span></span><code>uv<span class="w"> </span>run<span class="w"> </span>pytest
+</code></pre></div>
+<p>Run storage tests only:</p>
+<div class="highlight"><pre><span></span><code>uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>tests/integration/test_storage_features.py
+</code></pre></div>
+<p>Default local runs do not require external storage services. Live provider tests
+are skipped unless their <code>AMH_TEST_*</code> environment variables are set. GitHub
+Actions runs fake-client provider contracts in the normal CI suite and service-
+backed live provider checks in <code>.github/workflows/storage-providers.yml</code>.</p>
+<p>Run live Postgres and PGVector tests locally:</p>
+<div class="highlight"><pre><span></span><code>docker<span class="w"> </span>run<span class="w"> </span>--name<span class="w"> </span>aim-pgvector-test<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-e<span class="w"> </span><span class="nv">POSTGRES_USER</span><span class="o">=</span><span class="nb">test</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-e<span class="w"> </span><span class="nv">POSTGRES_PASSWORD</span><span class="o">=</span><span class="nb">test</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-e<span class="w"> </span><span class="nv">POSTGRES_DB</span><span class="o">=</span>memory<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-p<span class="w"> </span><span class="m">5432</span>:5432<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-d<span class="w"> </span>pgvector/pgvector:pg16
+
+<span class="nb">export</span><span class="w"> </span><span class="nv">AMH_TEST_POSTGRES_DSN</span><span class="o">=</span><span class="s2">"postgresql://test:test@127.0.0.1:5432/memory"</span>
+uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>-q<span class="w"> </span>tests/integration/test_storage_features.py<span class="w"> </span>-k<span class="w"> </span><span class="s2">"postgres_live_integration_when_dsn_provided or postgres_schema_version or pgvector_live_integration_when_dsn_provided or runtime_postgres_pgvector_live_integration_when_dsn_provided"</span>
+
+docker<span class="w"> </span>rm<span class="w"> </span>-f<span class="w"> </span>aim-pgvector-test
+</code></pre></div>
+<p>Benchmarks and evaluation helpers:</p>
+<div class="highlight"><pre><span></span><code>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>memory.benchmarks.token_budget<span class="w"> </span>--iterations<span class="w"> </span><span class="m">200</span>
+uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>memory.benchmarks.retrieval_quality
+uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>memory.benchmarks.quality_gate<span class="w"> </span>--output<span class="w"> </span>reports/quality/quality-gate.json
+uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>memory.benchmarks.cache_candidates<span class="w"> </span>--iterations<span class="w"> </span><span class="m">1000</span>
+</code></pre></div>
+<p>The <a href="../quality_evaluation/">representative quality gate</a> is credential-free in
+CI and also accepts optional provider/model observations for comparable reports.</p>
+<p>Container CI verifies Hadolint, image build, packaged <code>aim serve</code> startup,
+<code>/ready</code>, MCP initialize at <code>/mcp/</code>, arbitrary non-root UID behavior, and
+writable runtime paths.</p>
+<p>A Bruno integration layer provides black-box local and CI smoke tests for the
+live API/MCP surface against a running server and configured metadata/vector
+stores. The Bruno lane uploads HTML and JUnit artifacts and publishes JUnit
+results through GitHub Actions test summaries. Pytest CI jobs also emit JUnit
+XML artifacts for unit/integration, E2E, and storage lanes. See the
+<a href="../bruno_integration_test_plan/">Bruno integration test plan</a>.</p>
+<h2 id="project-structure">Project Structure</h2>
+<div class="highlight"><pre><span></span><code>memory/
+  api/          FastAPI application and HTTP routes
+  backend/      metadata stores, vector stores, redaction, dry-run wrappers
+  ingestion/    schema validation and ingestion agents
+  interfaces/   MCP server implementation
+  schema/       conversation JSON schema
+docs/           architecture notes, plans, and improvement documents
+tests/          unit, integration, and end-to-end tests
+</code></pre></div>
+<h2 id="security-considerations">Security Considerations</h2>
+<ul>
+<li>Store real API keys outside committed configuration files.</li>
+<li>Use secure database connection strings and network access controls.</li>
+<li>Treat stored conversations as sensitive application data.</li>
+<li>Review retention, deletion, and redaction requirements before production use.</li>
+<li>Add authentication before exposing the API or MCP endpoint beyond localhost.</li>
+</ul>
+<h2 id="more-documentation">More Documentation</h2>
+<ul>
+<li><a href="../architecture/">Architecture</a></li>
+<li><a href="../agents/">Agent integration</a></li>
+<li><a href="../roadmap/">Roadmap</a></li>
+<li><a href="../release_container_docs_plan/">Release, container, and docs publishing plan</a></li>
+<li><a href="../first_release_readiness_plan/">First release readiness plan</a></li>
+<li><a href="../project_promotion_plan/">Project promotion plan</a></li>
+<li><a href="../bruno_integration_test_plan/">Bruno integration test plan</a></li>
+<li><a href="../browser_extension_capture_plan/">Browser extension capture plan</a></li>
+<li><a href="../observability_logging_telemetry_plan/">Observability, logging, and telemetry plan</a></li>
+<li><a href="../recurring_codebase_cleanup_plan/">Recurring codebase cleanup plan</a></li>
+<li><a href="../bearer_api_key_auth_plan/">Bearer/API-key auth plan</a></li>
+<li><a href="../project_workspace_collaboration_plan/">Project workspace collaboration plan</a></li>
+<li><a href="../improvements/">Improvement plans</a></li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Dedicated to my little brother,<br> Andrii Hladenko.<br> Вічна Слава Героям. <img src="docs/assets/flags/ua.svg" alt="Ukraine flag" width="18" height="14">
+
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"alias": true, "default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.12.0/mermaid.min.js"></script>
+      
+        <script src="../javascripts/mermaid.js"></script>
+      
+        <script src="../javascripts/connect.js"></script>
+      
+    
+  </body>
+</html>

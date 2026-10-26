@@ -1,0 +1,4264 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Local-first deterministic memory ingestion hub">
+      
+      
+      
+        <link rel="canonical" href="https://artemon-line.github.io/ai-memory-hub/latest/docs/storage_agnostic_byoa_plan/">
+      
+      
+        <link rel="prev" href="../prioritized_feature_plan/">
+      
+      
+        <link rel="next" href="../browser_extension_capture_plan/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/brand/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Storage BYOA Plan - ai-memory-hub</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/connect.css">
+    
+      <link rel="stylesheet" href="../stylesheets/leap-day-dark.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#storage-agnostic-byoa-plan-adjusted" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              
+  
+    These docs describe the <strong>main</strong> branch. They may cover experimental,
+    unreleased, or untested behavior.
+    <a href="../../.."><strong>View the latest released docs.</strong></a>
+  
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="ai-memory-hub" class="md-header__button md-logo" aria-label="ai-memory-hub" data-md-component="logo">
+      
+  <img src="../assets/brand/ai-memory-hub-mark.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ai-memory-hub
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Storage BYOA Plan
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Artemon-line/ai-memory-hub" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Artemon-line/ai-memory-hub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="ai-memory-hub" class="md-nav__button md-logo" aria-label="ai-memory-hub" data-md-component="logo">
+      
+  <img src="../assets/brand/ai-memory-hub-mark.svg" alt="logo">
+
+    </a>
+    ai-memory-hub
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Artemon-line/ai-memory-hub" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Artemon-line/ai-memory-hub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What Exists Now
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    What Exists Now
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Current Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../importing_conversations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Import Conversations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../importer_compatibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importer Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Technical Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../connect_ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Connect UI and OAuth Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../external_oidc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    External OIDC and Keycloak
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../brand_assets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Brand Assets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../storage_provider_examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage Provider Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../postgres_driver_decision/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PostgreSQL Driver Decision
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quality_evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quality Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What Is Planned
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    What Is Planned
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../planned_features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Planned Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plans/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CHANGELOG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CONTRIBUTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CODE_OF_CONDUCT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code Of Conduct
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    MCP
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp_client_smoke_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Client Smoke Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../real_client_mcp_smoke_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Real-Client MCP Smoke Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../openclaw_native_mcp_setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OpenClaw Native MCP Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp_utility_compliance_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Utility Compliance Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/mcp_response_format_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Response Format Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/codex_cli_findings_coverage_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Codex CLI MCP Findings Coverage Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/p0_live_mcp_retest_followup_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P0 Live MCP Retest Follow-Up Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/agent_model_footprint_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Model Footprint Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bearer_api_key_auth_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Authorization Compliance Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation Plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Implementation Plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plans/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation Map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../prioritized_feature_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prioritized Feature Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage BYOA Plan
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage BYOA Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#scope-and-constraints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope and Constraints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#goals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goals
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#non-goals-for-implemented-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-Goals For Implemented Baseline
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#target-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Target Architecture
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-provider-capabilities-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1) Provider Capabilities Contract
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-metadata-schema-versioning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2) Metadata Schema Versioning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-vector-dimensionality-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3) Vector Dimensionality Validation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-provider-fallback-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4) Provider Fallback Strategy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-dry-run-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5) Dry-Run Mode
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#operational-safety" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Operational Safety
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-implementation-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6) Implementation Plan
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6) Implementation Plan">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-contract-extensions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1: Contract Extensions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-adapter-updates-sqlite-lancedb" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2: Adapter Updates (SQLite + LanceDB)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2b-adapter-updates-postgres-pgvector" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2b: Adapter Updates (Postgres + pgvector)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-3-factory-wiring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3: Factory Wiring
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-4-dry-run-wrappers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4: Dry-Run Wrappers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-5-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5: Tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6-provider-coverage-backlog" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6: Provider Coverage Backlog
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6a-provider-config-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6a: Provider Config Model
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6b-shared-provider-contract-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6b: Shared Provider Contract Tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6c-chromadb-vector-adapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6c: ChromaDB Vector Adapter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6d-qdrant-vector-adapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6d: Qdrant Vector Adapter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6e-mongodb-metadata-and-atlas-vector-search" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6e: MongoDB Metadata And Atlas Vector Search
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6f-elasticsearch-and-opensearch-vector-adapters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6f: Elasticsearch And OpenSearch Vector Adapters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6g-milvuszilliz-vector-adapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6g: Milvus/Zilliz Vector Adapter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6h-weaviate-vector-adapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6h: Weaviate Vector Adapter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6i-documentation-and-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6i: Documentation And Examples
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6-acceptance-criteria" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6 Acceptance Criteria
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-7-operational-hardening-backlog" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 7: Operational Hardening Backlog
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deliverables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deliverables
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#acceptance-criteria" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Acceptance Criteria
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../browser_extension_capture_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Browser Extension Capture Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bruno_integration_test_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bruno Integration Test Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project_workspace_collaboration_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Workspace Collaboration Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../deterministic_ingestion_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deterministic Ingestion Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../token_budget_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Token Budget Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli_implementation_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin_readiness_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin Readiness Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release_container_docs_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release, Container, and Docs Publishing Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../first_release_readiness_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First Release Readiness Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release_ci_gap_analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release CI Gap Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release_security_scan_notes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Security Scan Notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../repository_governance_settings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Repository Governance Settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release_promotion_assets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Promotion Assets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project_promotion_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Promotion Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability_logging_telemetry_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability, Logging, and Telemetry Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recurring_codebase_cleanup_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Recurring Codebase Cleanup Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Improvements
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Improvements
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Improvement Plans
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/client_feedback_improvement_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client Feedback Improvement Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/top_priority_mcp_result_shape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Top Priority MCP Result Shape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/mcp_response_format_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Response Format Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/codex_cli_findings_coverage_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Codex CLI MCP Findings Coverage Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/p0_live_mcp_retest_followup_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P0 Live MCP Retest Follow-Up Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/agent_model_footprint_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Model Footprint Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/handoff_memory_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Handoff Memory Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/retrieval_precision_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Retrieval Precision Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/context_building_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Context Building Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/conversation_grouping_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conversation Grouping Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/memory_quality_fact_layer_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Memory Quality And Fact Layer Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/edge_case_test_coverage_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Edge Case Test Coverage Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/explicit_memory_save_intent_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Explicit Memory Save Intent Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/google_oauth_connect_ui_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Google OAuth Connect UI Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/p0_beta_governance_checklist/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P0 Beta Governance Checklist
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/p1_sql_hardening_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P1 SQL Hardening Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/efficiency_revival_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Efficiency Revival Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/vector_dbs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vector Database Options
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/neo4j_aura_graph_memory_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Neo4j Aura Graph Memory Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../improvements/app_level_encryption_plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    App-Level Memory Encryption Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#scope-and-constraints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope and Constraints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#goals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goals
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#non-goals-for-implemented-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-Goals For Implemented Baseline
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#target-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Target Architecture
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-provider-capabilities-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1) Provider Capabilities Contract
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-metadata-schema-versioning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2) Metadata Schema Versioning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-vector-dimensionality-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3) Vector Dimensionality Validation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-provider-fallback-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4) Provider Fallback Strategy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-dry-run-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5) Dry-Run Mode
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#operational-safety" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Operational Safety
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-implementation-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6) Implementation Plan
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6) Implementation Plan">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-contract-extensions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1: Contract Extensions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-adapter-updates-sqlite-lancedb" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2: Adapter Updates (SQLite + LanceDB)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2b-adapter-updates-postgres-pgvector" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2b: Adapter Updates (Postgres + pgvector)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-3-factory-wiring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3: Factory Wiring
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-4-dry-run-wrappers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4: Dry-Run Wrappers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-5-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5: Tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6-provider-coverage-backlog" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6: Provider Coverage Backlog
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6a-provider-config-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6a: Provider Config Model
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6b-shared-provider-contract-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6b: Shared Provider Contract Tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6c-chromadb-vector-adapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6c: ChromaDB Vector Adapter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6d-qdrant-vector-adapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6d: Qdrant Vector Adapter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6e-mongodb-metadata-and-atlas-vector-search" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6e: MongoDB Metadata And Atlas Vector Search
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6f-elasticsearch-and-opensearch-vector-adapters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6f: Elasticsearch And OpenSearch Vector Adapters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6g-milvuszilliz-vector-adapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6g: Milvus/Zilliz Vector Adapter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6h-weaviate-vector-adapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6h: Weaviate Vector Adapter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6i-documentation-and-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6i: Documentation And Examples
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6-acceptance-criteria" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6 Acceptance Criteria
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-7-operational-hardening-backlog" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 7: Operational Hardening Backlog
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deliverables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deliverables
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#acceptance-criteria" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Acceptance Criteria
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="storage-agnostic-byoa-plan-adjusted">Storage-Agnostic BYOA Plan (Adjusted)</h1>
+<p>Plan for evolving <code>ai-memory-hub</code> from SQLite-first persistence to a storage-agnostic
+architecture with explicit provider capabilities, schema compatibility checks, vector dimensionality guards,
+controlled fallback behavior, and dry-run support.</p>
+<h2 id="scope-and-constraints">Scope and Constraints</h2>
+<ul>
+<li>Modify only storage contracts, provider adapters, and factory wiring.</li>
+<li>Do not modify domain logic semantics.</li>
+<li>Do not change API/MCP interface or response shapes.</li>
+</ul>
+<h2 id="goals">Goals</h2>
+<ul>
+<li>Keep storage providers pluggable through stable interfaces.</li>
+<li>Make optional provider features explicit and discoverable.</li>
+<li>Fail fast on metadata schema incompatibility.</li>
+<li>Prevent vector dimension mismatch errors at runtime.</li>
+<li>Keep hub available when vector provider fails to initialize only when explicitly allowed.</li>
+<li>Support safe dry-run execution for write paths.</li>
+</ul>
+<h2 id="non-goals-for-implemented-baseline">Non-Goals For Implemented Baseline</h2>
+<ul>
+<li>Redesigning domain workflows.</li>
+<li>Changing public API/MCP contracts.</li>
+</ul>
+<p>Provider expansion is tracked in Phase 6. Implemented adapters preserve the
+same storage contracts, API/MCP response shapes, fallback policy, health
+semantics, and dry-run behavior.</p>
+<h2 id="target-architecture">Target Architecture</h2>
+<p>Layered storage design:</p>
+<ol>
+<li>domain layer (unchanged behavior)</li>
+<li>storage contracts (<code>MetadataStore</code>, <code>VectorStore</code>)</li>
+<li>provider adapters (SQLite, Postgres, LanceDB, pgvector, in-memory fallback, others)</li>
+<li>factory/wiring (startup selection, validation, fallback)</li>
+</ol>
+<p>Core rule:</p>
+<ul>
+<li>Domain code depends on storage interfaces only.</li>
+<li>Optional capabilities are exposed but never required by domain logic.</li>
+</ul>
+<h2 id="1-provider-capabilities-contract">1) Provider Capabilities Contract</h2>
+<p>Extend both <code>MetadataStore</code> and <code>VectorStore</code> with:</p>
+<ul>
+<li><code>capabilities() -&gt; ProviderCapabilities</code></li>
+</ul>
+<p><code>ProviderCapabilities</code> fields:</p>
+<ul>
+<li><code>supports_batch_insert: bool = False</code></li>
+<li><code>supports_transactions: bool = False</code></li>
+<li><code>supports_ttl: bool = False</code></li>
+<li><code>supports_tags: bool = False</code></li>
+<li><code>supports_metadata_indexing: bool = False</code></li>
+</ul>
+<p>Rules:</p>
+<ul>
+<li>Defaults are <code>False</code> in the base contract.</li>
+<li>Each adapter overrides only fields it actually supports.</li>
+<li>Domain layer must not rely on optional capabilities for correctness.</li>
+<li>Unsupported optional operations must raise deterministic <code>NotSupportedError</code>
+(or equivalent storage-layer error type), never silent no-op.</li>
+</ul>
+<p>Implementation notes:</p>
+<ul>
+<li>Add a typed capabilities object in contracts (dataclass or TypedDict).</li>
+<li>Include capabilities in adapter health/debug internals if useful, but do not alter API/MCP payloads.</li>
+</ul>
+<h2 id="2-metadata-schema-versioning">2) Metadata Schema Versioning</h2>
+<p>Add schema version tracking for metadata providers.</p>
+<p>Contract additions:</p>
+<ul>
+<li><code>schema_version: int</code> property or equivalent accessor on metadata store.</li>
+<li><code>health()</code> must expose effective schema version.</li>
+</ul>
+<p>Adapter behavior:</p>
+<ul>
+<li>SQLite adapter returns fixed schema version (initial value <code>1</code>).</li>
+<li>Postgres adapter reads schema version from <code>schema_version</code> table.</li>
+<li>On startup/initialization, fail fast if version is missing or incompatible.</li>
+</ul>
+<p>Compatibility policy:</p>
+<ul>
+<li>Define supported version set/range in factory or adapter constants.</li>
+<li>Raise deterministic configuration/runtime error with actionable message.</li>
+</ul>
+<p>Postgres version table policy:</p>
+<ul>
+<li>Enforce single-row schema version invariant.</li>
+<li>Read version in a transactionally consistent way.</li>
+<li>Define behavior for rolling deploys with mixed app versions (document supported overlap window or fail-fast policy).</li>
+</ul>
+<h2 id="3-vector-dimensionality-validation">3) Vector Dimensionality Validation</h2>
+<p>Extend vector contract with expected dimensionality and strict validation.</p>
+<p>Multilingual retrieval is a model capability, not a storage-provider special
+case. ai-memory-hub stores Unicode text and uses hub-owned embeddings. If the
+selected embedding model is multilingual, multilingual memory should work
+through the same API/MCP contracts. Storage providers must not reinterpret text
+or run their own vectorizer unless a future explicit provider-side embedding
+mode is designed.</p>
+<p>Dimension checks are necessary but not sufficient. A user can switch to a
+different embedding model with the same output dimension, producing vectors that
+look compatible but live in a different embedding space. Persistent vector
+stores need embedding provider/model/config metadata and should fail, require
+reindex, or use a separate namespace/index when that metadata changes.</p>
+<p>Contract additions:</p>
+<ul>
+<li><code>expected_dimensionality: int</code></li>
+<li>Validation in <code>insert()</code> and <code>search()</code> against incoming vectors.</li>
+</ul>
+<p>Requirements:</p>
+<ul>
+<li>Raise deterministic error when embedding size mismatches expected dimension.</li>
+<li>Error message must include expected and actual dimensions.</li>
+<li>Add startup check in factory: embedding provider dimension vs vector store <code>expected_dimensionality</code>.</li>
+<li>Dimension mismatch is a hard error and must not trigger vector fallback.</li>
+</ul>
+<p>Runtime drift policy:</p>
+<ul>
+<li>Re-validate dimensions on every insert/search call.</li>
+<li>If embedding provider configuration changes at runtime, fail fast on first mismatched request with deterministic error.</li>
+</ul>
+<h2 id="4-provider-fallback-strategy">4) Provider Fallback Strategy</h2>
+<p>Implement explicit vector-store fallback only.</p>
+<p>Behavior:</p>
+<ul>
+<li>If configured vector store initialization fails, fallback to in-memory vector store only when explicitly enabled.</li>
+<li>Log warning with sanitized failure reason and fallback provider.</li>
+<li>Hub continues startup only under allowed fallback policy.</li>
+</ul>
+<p>Rules:</p>
+<ul>
+<li>No silent degradation: fallback event must be clearly logged.</li>
+<li>Metadata store must not fallback; metadata initialization failure is fatal.</li>
+<li>Fallback scope is factory/wiring only.</li>
+<li>Fallback activation must be reflected in health() as degraded state.</li>
+<li>Fallback vector store must adopt the same <code>expected_dimensionality</code> as the failed provider.</li>
+</ul>
+<p>Configuration:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">storage</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">profile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">local | development | test | production</span>
+<span class="w">  </span><span class="nt">vector</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">allow_fallback</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true | false</span>
+</code></pre></div>
+<p>Policy:</p>
+<ul>
+<li>Recommended default for production: <code>allow_fallback: false</code>.</li>
+<li><code>allow_fallback: true</code> may be used for local/dev or explicitly tolerated degraded environments.</li>
+<li><code>profile: production</code> emits a structured startup warning when <code>allow_fallback: true</code>
+  is configured for a persistent vector provider.</li>
+<li>When <code>profile: production</code> is set and <code>allow_fallback</code> is omitted, startup
+  defaults <code>allow_fallback</code> to <code>false</code>.</li>
+</ul>
+<h2 id="5-dry-run-mode">5) Dry-Run Mode</h2>
+<p>Add storage config flag:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">storage</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">dry_run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true | false</span>
+</code></pre></div>
+<p>Behavior when <code>dry_run = true</code>:</p>
+<ul>
+<li>All storage writes are no-ops.</li>
+<li>Reads continue to operate normally.</li>
+<li>Vector search continues to operate normally.</li>
+<li>Insert operations still run validation (including dimensionality checks) but skip persistence.</li>
+<li>Log <code>DRY-RUN: write skipped</code> for write operations.</li>
+</ul>
+<p>Rules:</p>
+<ul>
+<li>Must not break ingestion pipeline execution flow.</li>
+<li>Must not alter API/MCP response shapes.</li>
+<li>Implement via storage-layer wrappers/decorators to avoid domain changes.</li>
+</ul>
+<p>Return contract in dry-run:</p>
+<ul>
+<li>Write methods must return the same shape/type as non-dry-run paths.</li>
+<li>For ID-returning inserts, return deterministic IDs using
+  the existing application ID strategy (no storage-generated IDs required).</li>
+<li>Never return <code>None</code> where normal flow returns an ID/object.</li>
+</ul>
+<h2 id="operational-safety">Operational Safety</h2>
+<ul>
+<li>Secret-safe logging:</li>
+<li>redact DSNs, credentials, tokens, and connection secrets from all storage/fallback errors.</li>
+<li>include provider name, error class, and safe diagnostic context only.</li>
+<li>Explicit degradation signaling:</li>
+<li><code>health()</code> exposes machine-readable mode/state: <code>ok</code>, <code>degraded</code>, or <code>dry_run</code>.</li>
+<li>include active metadata/vector providers and whether vector fallback is active.</li>
+<li>Startup policy visibility:</li>
+<li>log whether <code>allow_fallback</code> and <code>dry_run</code> are enabled at startup.</li>
+<li>warn on risky combinations (for example <code>allow_fallback=true</code> in production profile).</li>
+<li>Failure semantics:</li>
+<li>metadata initialization errors are fatal.</li>
+<li>vector initialization errors are fatal unless explicit fallback policy allows continuation.</li>
+<li>dimension mismatch and schema incompatibility are always hard errors.</li>
+<li>Auditability:</li>
+<li>emit one structured event for fallback activation and one for dry-run skipped writes.</li>
+</ul>
+<h2 id="6-implementation-plan">6) Implementation Plan</h2>
+<h3 id="phase-1-contract-extensions">Phase 1: Contract Extensions</h3>
+<p>Status: <code>IMPLEMENTED</code></p>
+<ul>
+<li>[x] Add <code>ProviderCapabilities</code> type and <code>capabilities()</code> to both contracts.</li>
+<li>[x] Add metadata schema version surface and vector expected dimensionality surface.</li>
+<li>[x] Add deterministic storage error types/messages for unsupported operations, schema incompatibility, and dimension mismatches.</li>
+</ul>
+<h3 id="phase-2-adapter-updates-sqlite-lancedb">Phase 2: Adapter Updates (SQLite + LanceDB)</h3>
+<p>Status: <code>IMPLEMENTED</code></p>
+<ul>
+<li>[x] Update SQLite metadata adapter:</li>
+<li>[x] implement <code>capabilities()</code></li>
+<li>[x] expose fixed <code>schema_version = 1</code></li>
+<li>[x] include version in <code>health()</code></li>
+<li>[x] Update LanceDB vector adapter:</li>
+<li>[x] implement <code>capabilities()</code></li>
+<li>[x] expose <code>expected_dimensionality</code></li>
+<li>[x] validate dimensions in <code>insert()</code> and <code>search()</code></li>
+</ul>
+<h3 id="phase-2b-adapter-updates-postgres-pgvector">Phase 2b: Adapter Updates (Postgres + pgvector)</h3>
+<p>Status: <code>IMPLEMENTED</code></p>
+<ul>
+<li>[x] Add Postgres metadata adapter:</li>
+<li>[x] implement config selection via <code>providers.metadata_db: postgres</code></li>
+<li>[x] implement <code>capabilities()</code></li>
+<li>[x] read <code>schema_version</code> from <code>schema_version</code> table</li>
+<li>[x] enforce single-row schema version invariant</li>
+<li>[x] include version in <code>health()</code></li>
+<li>[x] support insert, insert-new/deduplication, append, get, get-many, conversation-hash lookup, and upstream-thread lookup</li>
+<li>[x] Add pgvector vector adapter:</li>
+<li>[x] implement config selection via <code>providers.vector_db: pgvector</code></li>
+<li>[x] implement <code>capabilities()</code></li>
+<li>[x] expose <code>expected_dimensionality</code></li>
+<li>[x] validate dimensions in <code>insert()</code> and <code>search()</code></li>
+<li>[x] support configurable distance metric: <code>cosine</code>, <code>l2</code>, <code>inner_product</code></li>
+<li>[x] include version/dimension/provider details in <code>health()</code></li>
+<li>[x] Add in-memory vector adapter as explicit local/test/fallback provider.</li>
+</ul>
+<h3 id="phase-3-factory-wiring">Phase 3: Factory Wiring</h3>
+<p>Status: <code>IMPLEMENTED</code></p>
+<ul>
+<li>[x] Add startup schema compatibility check for metadata store.</li>
+<li>[x] Add startup dimension compatibility check (embedding provider vs vector store).</li>
+<li>[x] Add policy-gated vector init fallback to in-memory store with warning log and preserved dimensionality.</li>
+<li>[x] Keep metadata init fail-fast behavior.</li>
+<li>[x] Surface fallback/degraded state via health.</li>
+</ul>
+<h3 id="phase-4-dry-run-wrappers">Phase 4: Dry-Run Wrappers</h3>
+<p>Status: <code>IMPLEMENTED</code></p>
+<ul>
+<li>[x] Add storage-level wrappers for metadata/vector writes.</li>
+<li>[x] Preserve read/search behavior.</li>
+<li>[x] Emit <code>DRY-RUN: write skipped</code> logs consistently.</li>
+<li>[x] Enforce dry-run return shape parity.</li>
+</ul>
+<h3 id="phase-5-tests">Phase 5: Tests</h3>
+<p>Unit tests for all five feature groups:</p>
+<ul>
+<li>[x] capabilities defaults and per-adapter overrides</li>
+<li>[x] unsupported operation deterministic errors</li>
+<li>[x] schema version exposure and incompatible-version fail-fast</li>
+<li>[x] dimension validation in vector <code>insert()</code> and <code>search()</code></li>
+<li>[x] dry-run write no-op with validation + unchanged read/search semantics and return-shape parity</li>
+</ul>
+<p>Integration tests (required):</p>
+<p>Status: <code>IMPLEMENTED</code></p>
+<ul>
+<li>[x] vector provider init failure with <code>allow_fallback=false</code> fails startup</li>
+<li>[x] vector provider init failure with <code>allow_fallback=true</code> activates in-memory fallback and degraded health</li>
+<li>[x] metadata init failure always fails startup</li>
+<li>[x] Postgres <code>schema_version</code> table invariants and incompatibility behavior</li>
+<li>[x] startup and runtime dimensionality mismatch behavior</li>
+<li>[x] log redaction checks for DSN/credential leakage</li>
+<li>[x] pgvector startup, insert/search, health, fallback, and optional live integration coverage</li>
+<li>[x] Postgres metadata startup, schema-version invariant, incompatibility, and optional live integration coverage</li>
+</ul>
+<h3 id="phase-6-provider-coverage-backlog">Phase 6: Provider Coverage Backlog</h3>
+<p>Status: <code>PARTIAL</code></p>
+<p>Current implemented provider matrix:</p>
+<ul>
+<li>[x] Metadata: SQLite</li>
+<li>[x] Metadata: Postgres</li>
+<li>[x] Metadata: MongoDB</li>
+<li>[x] Vectors: LanceDB</li>
+<li>[x] Vectors: pgvector</li>
+<li>[x] Vectors: in-memory</li>
+<li>[x] Vectors: ChromaDB</li>
+<li>[x] Vectors: Qdrant</li>
+<li>[x] Vectors: Milvus/Zilliz</li>
+<li>[x] Vectors: Weaviate</li>
+<li>[x] Vectors: MongoDB Atlas Vector Search</li>
+<li>[x] Vectors: Elasticsearch</li>
+<li>[x] Vectors: OpenSearch</li>
+<li>[x] Vectors: Redis/RediSearch</li>
+<li>[x] Vectors: Pinecone</li>
+<li>[x] Vectors: Turbopuffer</li>
+<li>[x] Vectors: Vespa</li>
+<li>[x] Vectors: Typesense</li>
+<li>[ ] Vectors: Neo4j AuraDB</li>
+</ul>
+<p>Candidate vector-provider backlog from <code>improvements/vector_dbs.md</code>:</p>
+<ul>
+<li>[x] Redis/RediSearch: existing-DB option for teams already running Redis
+      Stack; implemented with RediSearch HNSW over HASH storage, configurable
+      index/key prefix, fake-client contract coverage, optional live test gate,
+      and secret-safe fallback/config diagnostics.</li>
+<li>[x] Pinecone: managed/serverless vector search with explicit API-key config,
+      index/namespace controls, optional index creation, fake-client contract
+      coverage, hosted live-test gate, and cost-safe docs that default to using
+      an existing index.</li>
+<li>[x] Turbopuffer: serverless, object-storage-backed vector search with explicit
+      API-key/namespace/region config, fake-client contract coverage, hosted
+      live-test gate, and docs that call out namespace isolation.</li>
+<li>[x] Vespa: large-scale hybrid retrieval with explicit URL/token/schema/
+      namespace/rank-profile config, fake-client contract coverage, optional
+      live-test gate, and docs that keep schema deployment operator-managed.</li>
+<li>[x] Typesense: lightweight search engine with vector support, explicit
+      URL/API-key/collection config, fake-client contract coverage, optional
+      live test gate, and local Docker Compose example.</li>
+<li>[ ] Neo4j AuraDB: managed graph database option planned first as a vector
+      provider, then as a graph-record mirror and graph-aware retrieval backend;
+      source-of-truth metadata remains SQLite/Postgres/MongoDB until a separate
+      metadata adapter satisfies the full contract.</li>
+<li>[x] Meilisearch: deferred from the normal provider matrix until direct
+      user-provided vector CRUD/search semantics fit the hub-owned embedding
+      contract.</li>
+<li>[x] DuckDB VSS and sqlite-vec: documented as embedded/analytical local
+      deployment candidates that need explicit persistence and extension-loading
+      requirements before implementation.</li>
+<li>[x] Faiss, ScaNN, HNSWlib: documented as library-only options, not database
+      providers. Keep them out of the normal provider matrix unless introduced
+      later as explicitly experimental local adapters with clear persistence and
+      cleanup semantics.</li>
+</ul>
+<p>Expansion principles:</p>
+<ul>
+<li>Add one provider at a time behind existing contracts.</li>
+<li>Prefer provider-native SDKs only inside adapter modules.</li>
+<li>Keep domain logic unchanged.</li>
+<li>Treat local/dev providers before hosted/cloud-only providers.</li>
+<li>Every vector provider must support <code>insert()</code>, <code>search()</code>, <code>delete()</code>, <code>get_stats()</code>, <code>health()</code>,
+  <code>capabilities()</code>, and <code>expected_dimensionality</code>.</li>
+<li>Every metadata provider must support current deduplication semantics before being advertised as
+  a replacement for SQLite/Postgres.</li>
+<li>Provider-specific config must be explicit, validated, and secret-safe.</li>
+</ul>
+<p>Recommended implementation order:</p>
+<ol>
+<li>ChromaDB: simplest local-first vector expansion after LanceDB.</li>
+<li>Qdrant: strong local Docker and cloud story with explicit collection dimensions.</li>
+<li>MongoDB Atlas: useful metadata option plus Atlas Vector Search for users already on Mongo.</li>
+<li>Elasticsearch/OpenSearch: useful for hybrid search and existing ops stacks.</li>
+<li>Milvus/Zilliz: useful for larger vector deployments, more operationally complex.</li>
+<li>Weaviate: useful for schema-rich vector deployments, cloud/auth behavior needs careful testing.</li>
+<li>Redis/RediSearch: useful existing-infrastructure option if Redis Stack is already deployed.</li>
+<li>Pinecone: managed/serverless vector search once hosted-provider auth, namespace, and cost controls are designed.</li>
+<li>Turbopuffer: serverless/object-storage-backed option after consistency and latency behavior are validated.</li>
+<li>Vespa: large-scale hybrid retrieval option after schema deployment and ranking semantics are designed.</li>
+<li>Typesense/Meilisearch: lightweight search-engine vector options after vector/filter maturity is confirmed.</li>
+<li>Neo4j AuraDB: managed graph database option that can start as vector search and later power graph-aware retrieval.</li>
+<li>DuckDB VSS/sqlite-vec: embedded analytical or single-file options after extension loading and persistence semantics are designed.</li>
+<li>Faiss/ScaNN/HNSWlib: library-only options, not normal storage providers; consider only for experimental local adapters.</li>
+</ol>
+<h3 id="phase-6a-provider-config-model">Phase 6a: Provider Config Model</h3>
+<p>Status: <code>PARTIAL</code></p>
+<ul>
+<li>[x] Extend <code>providers.vector_db</code> accepted values:</li>
+<li>[x] <code>chromadb</code></li>
+<li>[x] <code>qdrant</code></li>
+<li>[x] <code>milvus</code></li>
+<li>[x] <code>weaviate</code></li>
+<li>[x] <code>mongodb_atlas</code></li>
+<li>[x] <code>elasticsearch</code></li>
+<li>[x] <code>opensearch</code></li>
+<li>[x] <code>redis</code></li>
+<li>[x] <code>pinecone</code></li>
+<li>[x] <code>turbopuffer</code></li>
+<li>[x] <code>vespa</code></li>
+<li>[x] <code>typesense</code></li>
+<li>[x] Extend <code>providers.metadata_db</code> accepted values:</li>
+<li>[x] <code>mongodb</code></li>
+<li>[x] optional future <code>elasticsearch</code>/<code>opensearch</code> deferred until metadata semantics are fully mapped</li>
+<li>[x] Add provider-specific config sections without changing API/MCP payloads:</li>
+</ul>
+<div class="highlight"><pre><span></span><code><span class="nt">storage</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vector</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">allow_fallback</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">    </span><span class="nt">distance</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cosine</span>
+<span class="w">  </span><span class="nt">vector_providers</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">chromadb</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">./data/chromadb</span>
+<span class="w">      </span><span class="nt">collection</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory_vectors</span>
+<span class="w">      </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">persistent</span><span class="w"> </span><span class="c1"># persistent | http</span>
+<span class="w">      </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">127.0.0.1</span>
+<span class="w">      </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8000</span>
+<span class="w">    </span><span class="nt">qdrant</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://127.0.0.1:6333</span>
+<span class="w">      </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">collection</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory_vectors</span>
+<span class="w">    </span><span class="nt">milvus</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">uri</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://127.0.0.1:19530</span>
+<span class="w">      </span><span class="nt">token</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">collection</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory_vectors</span>
+<span class="w">    </span><span class="nt">weaviate</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://127.0.0.1:8080</span>
+<span class="w">      </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">class_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MemoryVector</span>
+<span class="w">    </span><span class="nt">mongodb_atlas</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">uri</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">database</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ai_memory_hub</span>
+<span class="w">      </span><span class="nt">metadata_collection</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">conversations</span>
+<span class="w">      </span><span class="nt">vector_collection</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory_vectors</span>
+<span class="w">      </span><span class="nt">vector_index</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory_vector_index</span>
+<span class="w">    </span><span class="nt">elasticsearch</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://127.0.0.1:9200</span>
+<span class="w">      </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">index</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory_vectors</span>
+<span class="w">    </span><span class="nt">opensearch</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://127.0.0.1:9200</span>
+<span class="w">      </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">index</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory_vectors</span>
+<span class="w">    </span><span class="nt">redis</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">redis://127.0.0.1:6379/0</span>
+<span class="w">      </span><span class="nt">index</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory_vectors</span>
+<span class="w">      </span><span class="nt">key_prefix</span><span class="p">:</span><span class="w"> </span><span class="s">"memory_vectors:"</span>
+<span class="w">    </span><span class="nt">pinecone</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">index</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory-vectors</span>
+<span class="w">      </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">default</span>
+<span class="w">      </span><span class="nt">cloud</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">aws</span>
+<span class="w">      </span><span class="nt">region</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">us-east-1</span>
+<span class="w">      </span><span class="nt">create_index</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">    </span><span class="nt">turbopuffer</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory-vectors</span>
+<span class="w">      </span><span class="nt">region</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gcp-us-central1</span>
+<span class="w">    </span><span class="nt">vespa</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://127.0.0.1:8080</span>
+<span class="w">      </span><span class="nt">token</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory</span>
+<span class="w">      </span><span class="nt">schema</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory</span>
+<span class="w">      </span><span class="nt">rank_profile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">vector_similarity</span>
+<span class="w">    </span><span class="nt">typesense</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://127.0.0.1:8108</span>
+<span class="w">      </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<span class="w">      </span><span class="nt">collection</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory_vectors</span>
+<span class="w">  </span><span class="nt">metadata_providers</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">mongodb</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">uri</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mongodb://127.0.0.1:27017</span>
+<span class="w">      </span><span class="nt">database</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ai_memory_hub</span>
+<span class="w">      </span><span class="nt">conversations_collection</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">conversations</span>
+</code></pre></div>
+<ul>
+<li>[x] Validate provider-specific config at startup.</li>
+<li>[x] Redact provider URLs, API keys, tokens, usernames, passwords, and connection strings.</li>
+<li>[x] Document environment variable names for live tests:</li>
+<li>[x] <code>AMH_TEST_CHROMADB_URL</code></li>
+<li>[x] <code>AMH_TEST_QDRANT_URL</code></li>
+<li>[x] <code>AMH_TEST_QDRANT_API_KEY</code></li>
+<li>[x] <code>AMH_TEST_MILVUS_URI</code></li>
+<li>[x] <code>AMH_TEST_MILVUS_TOKEN</code></li>
+<li>[x] <code>AMH_TEST_WEAVIATE_URL</code></li>
+<li>[x] <code>AMH_TEST_WEAVIATE_API_KEY</code></li>
+<li>[x] <code>AMH_TEST_MONGODB_URI</code></li>
+<li>[x] <code>AMH_TEST_MONGODB_ATLAS_URI</code></li>
+<li>[x] <code>AMH_TEST_MONGODB_ATLAS_DATABASE</code></li>
+<li>[x] <code>AMH_TEST_MONGODB_ATLAS_COLLECTION</code></li>
+<li>[x] <code>AMH_TEST_MONGODB_ATLAS_INDEX</code></li>
+<li>[x] <code>AMH_TEST_ELASTICSEARCH_URL</code></li>
+<li>[x] <code>AMH_TEST_ELASTICSEARCH_USERNAME</code></li>
+<li>[x] <code>AMH_TEST_ELASTICSEARCH_PASSWORD</code></li>
+<li>[x] <code>AMH_TEST_OPENSEARCH_URL</code></li>
+<li>[x] <code>AMH_TEST_OPENSEARCH_USERNAME</code></li>
+<li>[x] <code>AMH_TEST_OPENSEARCH_PASSWORD</code></li>
+<li>[x] <code>AMH_TEST_REDIS_URL</code></li>
+<li>[x] <code>AMH_TEST_PINECONE_API_KEY</code></li>
+<li>[x] <code>AMH_TEST_PINECONE_INDEX</code></li>
+<li>[x] <code>AMH_TEST_PINECONE_CREATE_INDEX</code></li>
+<li>[x] <code>AMH_TEST_PINECONE_CLOUD</code></li>
+<li>[x] <code>AMH_TEST_PINECONE_REGION</code></li>
+<li>[x] <code>AMH_TEST_TURBOPUFFER_API_KEY</code></li>
+<li>[x] <code>AMH_TEST_TURBOPUFFER_NAMESPACE</code></li>
+<li>[x] <code>AMH_TEST_TURBOPUFFER_REGION</code></li>
+<li>[x] <code>AMH_TEST_VESPA_URL</code></li>
+<li>[x] <code>AMH_TEST_VESPA_TOKEN</code></li>
+<li>[x] <code>AMH_TEST_VESPA_NAMESPACE</code></li>
+<li>[x] <code>AMH_TEST_VESPA_SCHEMA</code></li>
+<li>[x] <code>AMH_TEST_VESPA_RANK_PROFILE</code></li>
+<li>[x] <code>AMH_TEST_TYPESENSE_URL</code></li>
+<li>[x] <code>AMH_TEST_TYPESENSE_API_KEY</code></li>
+</ul>
+<h3 id="phase-6b-shared-provider-contract-tests">Phase 6b: Shared Provider Contract Tests</h3>
+<p>Status: <code>PARTIAL</code></p>
+<ul>
+<li>[x] Create reusable metadata-store contract tests:</li>
+<li>[x] insert returns deterministic ID</li>
+<li>[x] insert-new detects duplicate <code>conversation_hash</code></li>
+<li>[x] get/get-many preserve payload shape</li>
+<li>[x] upstream-thread lookup works</li>
+<li>[x] schema version appears in <code>health()</code></li>
+<li>[x] incompatible schema version fails startup</li>
+<li>[x] unsupported optional operations raise <code>NotSupportedError</code></li>
+<li>[x] Create reusable vector-store contract tests:</li>
+<li>[x] insert/search/delete behavior parity</li>
+<li>[x] replace removes previous chunks for the same memory ID</li>
+<li>[x] search output fields match current contract</li>
+<li>[x] <code>expected_dimensionality</code> is exposed</li>
+<li>[x] insert/search dimension mismatches raise <code>VectorDimensionError</code></li>
+<li>[x] health exposes provider and dimensions</li>
+<li>[x] unsupported optional operations raise <code>NotSupportedError</code></li>
+<li>[x] Add provider fixtures with fake SDK/client objects for unit-level tests.</li>
+<li>[x] Add live integration tests gated by environment variables.</li>
+<li>[x] Add fallback tests for each vector provider:</li>
+<li>[x] ChromaDB unavailable provider fails startup when <code>allow_fallback=false</code></li>
+<li>[x] ChromaDB unavailable provider activates in-memory fallback when <code>allow_fallback=true</code></li>
+<li>[x] ChromaDB fallback health reports <code>mode=degraded</code></li>
+<li>[x] ChromaDB fallback log redacts provider secrets</li>
+</ul>
+<h3 id="phase-6c-chromadb-vector-adapter">Phase 6c: ChromaDB Vector Adapter</h3>
+<p>Status: <code>PARTIAL</code></p>
+<p>Target: local-first vector provider with optional HTTP client mode.</p>
+<ul>
+<li>[x] Add dependency strategy:</li>
+<li>[x] optional extra: <code>chromadb</code></li>
+<li>[x] deterministic import error when package is missing</li>
+<li>[x] Add <code>ChromaDBVectorStore</code> adapter.</li>
+<li>[x] Support persistent local mode using configured path.</li>
+<li>[x] Support HTTP client mode using configured host/port or URL.</li>
+<li>[x] Use configured collection name.</li>
+<li>[x] Store chunk payload fields:</li>
+<li>[x] <code>memory_id</code></li>
+<li>[x] <code>chunk_id</code></li>
+<li>[x] <code>chunk_index</code></li>
+<li>[x] <code>message_hash</code></li>
+<li>[x] <code>role</code></li>
+<li>[x] <code>text</code></li>
+<li>[x] <code>vector</code></li>
+<li>[x] Persist collection metadata:</li>
+<li>[x] schema version</li>
+<li>[x] expected dimensionality</li>
+<li>[x] distance metric, if supported by selected Chroma configuration</li>
+<li>[x] Validate existing collection metadata at startup.</li>
+<li>[x] Validate dimensions on every insert/search.</li>
+<li>[x] Implement replace by deleting rows for <code>memory_id</code> before adding new chunks.</li>
+<li>[x] Normalize Chroma search distances into current <code>score</code> field.</li>
+<li>[x] Implement delete by <code>memory_id</code>.</li>
+<li>[x] Implement <code>get_stats()</code> and <code>health()</code>.</li>
+<li>[x] Tests:</li>
+<li>[x] fake-client contract tests</li>
+<li>[x] persistent local integration test</li>
+<li>[x] HTTP-mode smoke test when <code>AMH_TEST_CHROMADB_URL</code> is set</li>
+<li>[x] collection dimension mismatch startup failure</li>
+<li>[x] fallback and redaction tests</li>
+</ul>
+<h3 id="phase-6d-qdrant-vector-adapter">Phase 6d: Qdrant Vector Adapter</h3>
+<p>Status: <code>PARTIAL</code></p>
+<p>The core Qdrant adapter is implemented. Startup validation and hardening tasks
+below remain open.</p>
+<p>Target: local Docker or Qdrant Cloud vector provider.</p>
+<ul>
+<li>[x] Add dependency strategy:</li>
+<li>[x] optional extra: <code>qdrant-client</code></li>
+<li>[x] deterministic import error when package is missing</li>
+<li>[x] Add <code>QdrantVectorStore</code> adapter.</li>
+<li>[x] Support URL and API key configuration.</li>
+<li>[x] Map hub distance config to Qdrant distance:</li>
+<li>[x] <code>cosine</code></li>
+<li>[x] <code>l2</code></li>
+<li>[x] <code>inner_product</code></li>
+<li>[x] Create collection when missing with configured vector size/distance.</li>
+<li>[x] Validate existing collection vector size and distance at startup.</li>
+<li>[x] Store chunk payload fields in Qdrant payload.</li>
+<li>[x] Use stable point IDs derived from <code>chunk_id</code> or deterministic UUID namespace.</li>
+<li>[x] Implement upsert for insert.</li>
+<li>[x] Implement replace by deleting points filtered by <code>memory_id</code>.</li>
+<li>[x] Implement search result normalization.</li>
+<li>[x] Implement delete by <code>memory_id</code> filter.</li>
+<li>[x] Implement <code>get_stats()</code> and <code>health()</code>.</li>
+<li>[x] Tests:</li>
+<li>[x] fake-client contract tests</li>
+<li>[x] local/cloud live smoke when <code>AMH_TEST_QDRANT_URL</code> is set</li>
+<li>[x] collection distance/dimension mismatch failures</li>
+<li>[x] API key redaction checks</li>
+<li>[x] fallback behavior tests</li>
+</ul>
+<h3 id="phase-6e-mongodb-metadata-and-atlas-vector-search">Phase 6e: MongoDB Metadata And Atlas Vector Search</h3>
+<p>Status: <code>PARTIAL</code></p>
+<p>The core MongoDB metadata and MongoDB Atlas vector adapters are implemented.
+Schema/index validation and readiness hardening tasks below remain open.</p>
+<p>Target: MongoDB as a metadata provider, with optional Atlas Vector Search as a vector provider.</p>
+<p>Decision points:</p>
+<ul>
+<li>[x] Decide whether first implementation is:</li>
+<li>[x] metadata-only MongoDB provider</li>
+<li>[x] Atlas Vector Search is not a separate mode; it is the MongoDB Atlas vector provider</li>
+<li>[x] combined metadata + vector provider</li>
+<li>[x] Recommended sequence:</li>
+<li>[x] implement MongoDB metadata first</li>
+<li>[x] add Atlas Vector Search after metadata semantics are stable</li>
+</ul>
+<p>MongoDB metadata adapter:</p>
+<ul>
+<li>[x] Add dependency strategy:</li>
+<li>[x] optional extra: <code>pymongo</code></li>
+<li>[x] deterministic import error when package is missing</li>
+<li>[x] Add <code>MongoDBMetadataStore</code>.</li>
+<li>[x] Store conversations in configured database/collection.</li>
+<li>[x] Add schema version document with single active version invariant.</li>
+<li>[x] Create unique indexes:</li>
+<li>[x] <code>id</code></li>
+<li>[x] <code>conversation_hash</code> (flattened from metadata)</li>
+<li>[x] <code>(project_id, conversation_hash)</code> partial unique index</li>
+<li>[x] <code>(project_id, source, upstream_thread_id)</code> partial lookup index</li>
+<li>[x] Preserve insert, insert-new, append, get, get-many, conversation-hash lookup, and upstream-thread lookup semantics.</li>
+<li>[x] Ensure duplicate-key errors map to deterministic behavior.</li>
+<li>[x] Implement <code>capabilities()</code> and <code>health()</code>.</li>
+<li>[x] Tests:</li>
+<li>[x] fake-client metadata contract tests</li>
+<li>[x] optional live smoke when <code>AMH_TEST_MONGODB_URI</code> is set</li>
+<li>[x] schema version invariant tests</li>
+<li>[x] duplicate/deduplication parity tests</li>
+<li>[x] URI credential redaction tests</li>
+</ul>
+<p>Atlas Vector Search adapter:</p>
+<ul>
+<li>[x] Add <code>MongoDBAtlasVectorStore</code>.</li>
+<li>[x] Validate configured vector search index exists and is queryable.</li>
+<li>[x] Validate index dimensions and similarity mode where Atlas exposes them.</li>
+<li>[x] Store vector documents with chunk payload fields.</li>
+<li>[x] Implement insert/upsert, replace, search, delete, stats, health.</li>
+<li>[x] Define readiness behavior while Atlas search indexes are still building.</li>
+<li>[x] Tests:</li>
+<li>[x] fake-client vector contract tests</li>
+<li>[x] optional Atlas live smoke when <code>AMH_TEST_MONGODB_ATLAS_URI</code> is set</li>
+<li>[x] index missing/not-ready startup failures</li>
+<li>[x] dimension mismatch tests</li>
+<li>[x] fallback behavior tests</li>
+</ul>
+<h3 id="phase-6f-elasticsearch-and-opensearch-vector-adapters">Phase 6f: Elasticsearch And OpenSearch Vector Adapters</h3>
+<p>Status: <code>PARTIAL</code></p>
+<p>The core Elasticsearch and OpenSearch adapters are implemented. Mapping
+validation, read-after-write documentation, and provider hardening tasks below
+remain open.</p>
+<p>Target: vector search for users already running Elastic/OpenSearch, with a path toward hybrid retrieval.</p>
+<p>Shared adapter requirements:</p>
+<ul>
+<li>[x] Add dependency strategy:</li>
+<li>[x] optional extra: <code>elasticsearch</code></li>
+<li>[x] optional extra: <code>opensearch-py</code></li>
+<li>[x] deterministic import error when package is missing</li>
+<li>[x] Add <code>ElasticsearchVectorStore</code>.</li>
+<li>[x] Add <code>OpenSearchVectorStore</code>.</li>
+<li>[x] Support URL plus username/password auth.</li>
+<li>[x] Create index when missing.</li>
+<li>[x] Store mapping metadata:</li>
+<li>[x] schema version</li>
+<li>[x] dense-vector field dimensions</li>
+<li>[x] similarity/distance mode</li>
+<li>[x] Validate existing mapping at startup.</li>
+<li>[x] Store chunk payload fields as document fields.</li>
+<li>[x] Use stable document IDs derived from <code>chunk_id</code>.</li>
+<li>[x] Implement replace by deleting documents filtered by <code>memory_id</code>.</li>
+<li>[x] Implement vector search:</li>
+<li>[x] Elasticsearch <code>knn</code> path</li>
+<li>[x] OpenSearch k-NN query path</li>
+<li>[x] Normalize provider scores/distances into current <code>score</code> field.</li>
+<li>[x] Explicitly document refresh/read-after-write behavior.</li>
+<li>[x] Implement <code>get_stats()</code> and <code>health()</code>.</li>
+<li>[x] Tests:</li>
+<li>[x] fake-client contract tests for both providers</li>
+<li>[x] optional live smoke for Elasticsearch</li>
+<li>[x] optional live smoke for OpenSearch</li>
+<li>[x] mapping mismatch startup failures</li>
+<li>[x] auth redaction checks</li>
+<li>[x] fallback behavior tests</li>
+</ul>
+<p>Hybrid-search follow-up:</p>
+<ul>
+<li>[x] Add provider capability for keyword/hybrid search only after API semantics are designed.</li>
+<li>[x] Keep initial adapter vector-only to preserve existing API/MCP behavior.</li>
+</ul>
+<h3 id="phase-6g-milvuszilliz-vector-adapter">Phase 6g: Milvus/Zilliz Vector Adapter</h3>
+<p>Status: <code>PARTIAL</code></p>
+<p>The core Milvus/Zilliz adapter is implemented. Collection schema/index
+validation and readiness hardening tasks below remain open.</p>
+<p>Target: larger vector deployments via self-hosted Milvus or managed Zilliz.</p>
+<ul>
+<li>[x] Add dependency strategy:</li>
+<li>[x] optional extra: <code>pymilvus</code></li>
+<li>[x] deterministic import error when package is missing</li>
+<li>[x] Add <code>MilvusVectorStore</code>.</li>
+<li>[x] Support URI and token configuration.</li>
+<li>[x] Map hub distance config to Milvus metric type.</li>
+<li>[x] Create collection when missing.</li>
+<li>[x] Define collection schema:</li>
+<li>[x] primary key</li>
+<li>[x] <code>memory_id</code></li>
+<li>[x] <code>chunk_id</code></li>
+<li>[x] <code>chunk_index</code></li>
+<li>[x] <code>message_hash</code></li>
+<li>[x] <code>role</code></li>
+<li>[x] <code>text</code></li>
+<li>[x] vector field with configured dimension</li>
+<li>[x] Validate existing collection schema/dimension/metric at startup.</li>
+<li>[x] Create or validate vector index.</li>
+<li>[x] Ensure collection load/readiness before search.</li>
+<li>[x] Implement insert/upsert behavior.</li>
+<li>[x] Implement replace by deleting rows filtered by <code>memory_id</code>.</li>
+<li>[x] Implement search result normalization.</li>
+<li>[x] Implement delete by <code>memory_id</code>.</li>
+<li>[x] Implement <code>get_stats()</code> and <code>health()</code>.</li>
+<li>[x] Tests:</li>
+<li>[x] fake-client contract tests</li>
+<li>[x] optional Milvus/Zilliz live smoke when <code>AMH_TEST_MILVUS_URI</code> is set</li>
+<li>[x] collection not-loaded readiness tests</li>
+<li>[x] metric/dimension mismatch startup failures</li>
+<li>[x] token redaction checks</li>
+<li>[x] fallback behavior tests</li>
+</ul>
+<h3 id="phase-6h-weaviate-vector-adapter">Phase 6h: Weaviate Vector Adapter</h3>
+<p>Status: <code>PARTIAL</code></p>
+<p>The core Weaviate adapter is implemented. Existing class schema validation and
+provider hardening tasks below remain open.</p>
+<p>Target: schema-rich vector deployments with self-hosted or cloud Weaviate.</p>
+<ul>
+<li>[x] Add dependency strategy:</li>
+<li>[x] optional extra: <code>weaviate-client</code></li>
+<li>[x] deterministic import error when package is missing</li>
+<li>[x] Add <code>WeaviateVectorStore</code>.</li>
+<li>[x] Support URL and API key configuration.</li>
+<li>[x] Use externally supplied vectors from the hub embedding provider.</li>
+<li>[x] Disable or avoid provider-side vectorization for stored chunks unless explicitly configured later.</li>
+<li>[x] Create class/collection when missing.</li>
+<li>[x] Validate existing class schema:</li>
+<li>[x] vector dimensions where available</li>
+<li>[x] distance metric</li>
+<li>[x] required properties</li>
+<li>[x] schema version marker</li>
+<li>[x] Store chunk payload properties.</li>
+<li>[x] Use stable object UUIDs derived from <code>chunk_id</code>.</li>
+<li>[x] Implement replace by deleting objects filtered by <code>memory_id</code>.</li>
+<li>[x] Implement near-vector search.</li>
+<li>[x] Normalize Weaviate distances/scores into current <code>score</code> field.</li>
+<li>[x] Implement delete, stats, and health.</li>
+<li>[x] Tests:</li>
+<li>[x] fake-client contract tests</li>
+<li>[x] optional live smoke when <code>AMH_TEST_WEAVIATE_URL</code> is set</li>
+<li>[x] schema mismatch startup failures</li>
+<li>[x] API key/header redaction checks</li>
+<li>[x] fallback behavior tests</li>
+</ul>
+<h3 id="phase-6i-documentation-and-examples">Phase 6i: Documentation And Examples</h3>
+<p>Status: <code>PARTIAL</code></p>
+<ul>
+<li>[x] Update architecture supported-provider matrix after each provider lands.</li>
+<li>[x] Add config examples for ChromaDB.</li>
+<li>[x] Add config examples for Qdrant.</li>
+<li>[x] Add config examples for MongoDB metadata and MongoDB Atlas Vector Search.</li>
+<li>[x] Add local Docker Compose snippets for:</li>
+<li>[x] Qdrant</li>
+<li>[x] ChromaDB HTTP server</li>
+<li>[x] MongoDB</li>
+<li>[x] Milvus</li>
+<li>[x] Weaviate</li>
+<li>[x] Elasticsearch</li>
+<li>[x] OpenSearch</li>
+<li>[x] Add cloud setup notes for:</li>
+<li>[x] Qdrant Cloud</li>
+<li>[x] Zilliz</li>
+<li>[x] MongoDB Atlas Vector Search</li>
+<li>[x] Weaviate Cloud</li>
+<li>[x] Elastic Cloud</li>
+<li>[x] Document provider-specific limitations:</li>
+<li>[x] consistency/read-after-write</li>
+<li>[x] index build readiness</li>
+<li>[x] score interpretation</li>
+<li>[x] supported distance metrics</li>
+<li>[x] local vs hosted feature differences</li>
+</ul>
+<h3 id="phase-6-acceptance-criteria">Phase 6 Acceptance Criteria</h3>
+<ul>
+<li>[x] <code>providers.vector_db</code> can select every implemented vector provider from config.</li>
+<li>[x] <code>providers.metadata_db</code> can select every implemented metadata provider from config.</li>
+<li>[x] API and MCP response shapes are unchanged for all providers.</li>
+<li>[x] Domain ingestion/search code remains provider-agnostic.</li>
+<li>[x] Each provider passes shared contract tests.</li>
+<li>[x] Each provider has fallback, health, dimensionality, and redaction tests.</li>
+<li>[x] Live tests are optional and skipped unless provider-specific environment variables are set.</li>
+<li>[x] Missing optional provider dependencies produce actionable startup errors.</li>
+<li>[x] Provider docs include a minimal config example and known limitations.</li>
+</ul>
+<h3 id="phase-7-operational-hardening-backlog">Phase 7: Operational Hardening Backlog</h3>
+<p>Status: <code>PARTIAL</code></p>
+<ul>
+<li>[x] Redact DSNs, passwords, tokens, and API keys in fallback logs.</li>
+<li>[x] Expose machine-readable runtime mode: <code>ok</code>, <code>degraded</code>, or <code>dry_run</code>.</li>
+<li>[x] Expose active/requested vector provider and fallback state in runtime health.</li>
+<li>[x] Treat metadata initialization errors as fatal.</li>
+<li>[x] Treat vector initialization errors as fatal unless <code>storage.vector.allow_fallback=true</code>.</li>
+<li>[x] Treat schema incompatibility and vector dimension mismatch as hard errors.</li>
+<li>[x] Log <code>allow_fallback</code> and <code>dry_run</code> startup policy consistently even when disabled.</li>
+<li>[x] Warn when <code>allow_fallback=true</code> is used under a production profile.</li>
+<li>[x] Emit structured audit events for fallback activation and dry-run skipped writes, not only warning strings.</li>
+<li>[x] Consider changing the default <code>storage.vector.allow_fallback</code> to <code>false</code> for production-oriented configs.</li>
+</ul>
+<h2 id="deliverables">Deliverables</h2>
+<ul>
+<li>Updated storage contracts (<code>MetadataStore</code>, <code>VectorStore</code>) with capabilities/version/dimensionality surfaces.</li>
+<li>Updated SQLite, Postgres, LanceDB, pgvector, and in-memory adapters.</li>
+<li>Factory fallback + startup validation wiring.</li>
+<li>Dry-run wrappers for write paths.</li>
+<li>Unit + integration tests covering all required adjustments and safety guarantees.</li>
+</ul>
+<h2 id="acceptance-criteria">Acceptance Criteria</h2>
+<ul>
+<li>Domain layer remains provider-agnostic and does not depend on optional capabilities.</li>
+<li>API/MCP interfaces and response shapes remain unchanged.</li>
+<li>Metadata store fails fast on schema incompatibility.</li>
+<li>Vector dimension mismatches fail deterministically with clear errors.</li>
+<li>Vector provider init failures fallback only when explicitly allowed and are clearly logged.</li>
+<li>Fallback/degraded mode is machine-visible in health output.</li>
+<li>Dry-run mode preserves pipeline flow while skipping persistence writes with shape-parity responses.</li>
+<li>Logs and errors are secret-safe by default.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Dedicated to my little brother,<br> Andrii Hladenko.<br> Вічна Слава Героям. <img src="docs/assets/flags/ua.svg" alt="Ukraine flag" width="18" height="14">
+
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"alias": true, "default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.12.0/mermaid.min.js"></script>
+      
+        <script src="../javascripts/mermaid.js"></script>
+      
+        <script src="../javascripts/connect.js"></script>
+      
+    
+  </body>
+</html>
