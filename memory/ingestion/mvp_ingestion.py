@@ -2641,12 +2641,6 @@ def ingest_messages(
             # Incomplete duplicates continue through the existing repair path.
             conversation_json["id"] = duplicate_metadata_id
 
-    _attach_generated_summaries(
-        conversation_json,
-        owner_id=owner_id,
-        project_id=effective_project_id,
-    )
-
     existing_by_id = None
     store = _runtime().metadata_store
     if hasattr(store, "get"):
@@ -2749,6 +2743,15 @@ def ingest_messages(
             },
         )
         return _with_graph_counts(result, graph_counts)
+
+    # Generate summaries only after append detection. Trusted appends summarize
+    # the fully combined conversation in the branch above, so summarizing the
+    # incoming transcript here would write the same derived identities twice.
+    _attach_generated_summaries(
+        conversation_json,
+        owner_id=owner_id,
+        project_id=effective_project_id,
+    )
 
     # 3. Chunk messages
     with _ingestion_stage("chunk", message_count=len(conversation_json.get("messages", []))):

@@ -257,6 +257,17 @@ bytes for accepted and duplicate inputs. Its baseline fixture drops from two
 embedding inputs and two vector-row writes on the former full-reindex path to
 zero of each, a 100% reduction; the required audit row remains.
 
+Implementation note (single-pass append-summary slice): generated summaries
+are now attached only after trusted-append detection. New conversations retain
+the same summary behavior, while an append generates summaries once from the
+combined stored conversation instead of first writing transient summaries for
+the incoming transcript and immediately overwriting the same derived
+identities. The deterministic ingestion work ledger preserves the final
+three-message summary and reduces the append fixture from two summary passes
+and four derived-row writes to one pass and two writes (50% less summary work).
+Rejected same-ID updates also perform no generated-summary writes. Incremental
+graph extraction and other unchanged-message derivation remain follow-up work.
+
 ## Phase 3: Reduce Retrieval Amplification
 
 - [ ] Break search and ask latency into planning, embedding, dense, lexical,

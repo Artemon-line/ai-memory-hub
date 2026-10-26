@@ -20,8 +20,21 @@ def test_ingestion_efficiency_reports_zero_duplicate_indexing_work() -> None:
     assert report["reductions"] == {
         "embedding_inputs": 1.0,
         "vector_rows_written": 1.0,
+        "append_summary_generation_passes": 0.5,
+        "append_derived_rows_written": 0.5,
     }
     assert_thresholds(report)
+
+
+def test_ingestion_efficiency_reports_single_pass_append_summaries() -> None:
+    report = run_benchmark()
+
+    assert report["append"]["result"]["appended_messages"] == 1
+    assert report["previous_append_path"]["summary_generation_passes"] == 2
+    assert report["append"]["work"]["derived_rows_written"] > 0
+    assert report["previous_append_path"]["derived_rows_written"] == (
+        report["append"]["work"]["derived_rows_written"] * 2
+    )
 
 
 def test_ingestion_efficiency_thresholds_reject_embedding_work() -> None:
