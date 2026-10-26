@@ -26,6 +26,7 @@ Source date: `28-05-2026`
 20. [App-Level Memory Encryption Plan](./improvements/app_level_encryption_plan.md)
 21. [P0 Beta Governance Checklist](./improvements/p0_beta_governance_checklist.md)
 22. [P1 SQL Hardening Plan](./improvements/p1_sql_hardening_plan.md)
+23. [Efficiency Revival Plan](./improvements/efficiency_revival_plan.md)
 
 ## Notes
 

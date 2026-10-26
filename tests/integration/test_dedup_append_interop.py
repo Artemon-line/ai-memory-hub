@@ -275,6 +275,7 @@ def test_api_insert_then_mcp_retry_same_conversation_deduplicates(tmp_path: Path
     assert mcp_retry["id"] == payload["id"]
     assert mcp_retry["deduplicated"] is True
     assert mcp_retry["appended_messages"] == 0
+    assert mcp_retry["embedded_chunks"] == 0
     assert retrieve.json()["memory"]["messages"][0]["text"] == payload["messages"][0]["text"]
 
 

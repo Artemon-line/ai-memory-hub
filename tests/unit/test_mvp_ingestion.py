@@ -39,13 +39,21 @@ def _restore_runtime() -> Iterator[None]:
 
 
 class StubEmbedder:
+    def __init__(self) -> None:
+        self.calls: list[list[str]] = []
+
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        self.calls.append(list(texts))
         return [[float(len(text)), float(index)] for index, text in enumerate(texts)]
 
 
 class StubMetadataStore:
     def __init__(self):
         self.by_id: dict[str, dict[str, Any]] = {}
+        self.get_calls: list[str] = []
+        self.get_many_calls: list[list[str]] = []
+        self._generated_summaries: dict[str, dict[str, Any]] = {}
+        self.generated_summary_upserts: list[str] = []
 
     def insert(self, conversation_json: dict[str, Any]) -> str:
         memory_id = str(conversation_json["id"])
@@ -57,20 +65,29 @@ class StubMetadataStore:
         return conversation_id in self.by_id
 
     def get(self, memory_id: str):
+        self.get_calls.append(memory_id)
         return self.by_id.get(memory_id)
 
     def get_many(self, ids: list[str]):
+        self.get_many_calls.append(list(ids))
         return {id_: self.by_id[id_] for id_ in ids if id_ in self.by_id}
+
+    def upsert_generated_summary(self, summary: dict[str, Any]) -> None:
+        summary_id = str(summary["id"])
+        self.generated_summary_upserts.append(summary_id)
+        self._generated_summaries[summary_id] = dict(summary)
 
 
 class StubVectorStore:
     def __init__(self):
         self.rows: list[dict[str, Any]] = []
+        self.insert_calls: list[tuple[str, int, bool]] = []
         self.search_limits: list[int] = []
         self.last_filters: VectorSearchFilters | None = None
         self.supports_filters = False
 
     def insert(self, metadata_id: str, embeddings: list[dict[str, Any]], replace: bool = False) -> None:
+        self.insert_calls.append((metadata_id, len(embeddings), replace))
         if replace:
             # Avoid duplicates if re-indexing
             self.rows = [row for row in self.rows if row["memory_id"] != metadata_id]
@@ -701,9 +718,14 @@ def test_ingest_messages_rejects_long_metadata_summary() -> None:
 
 
 def test_ingest_messages_deduplicates_exact_content_before_embedding() -> None:
+    metrics.reset()
     metadata, vectors = _configure_stubs()
+    embedder = mvp_ingestion._runtime().embedding_provider
+    assert isinstance(embedder, StubEmbedder)
 
     first = mvp_ingestion.ingest_messages(_valid_conversation())
+    embedding_calls_after_first = len(embedder.calls)
+    vector_calls_after_first = len(vectors.insert_calls)
     duplicate = _valid_conversation()
     duplicate["id"] = "a2ea9782-cb05-4b93-9ce7-2edcfa3c6461"
     second = mvp_ingestion.ingest_messages(duplicate)
@@ -713,17 +735,67 @@ def test_ingest_messages_deduplicates_exact_content_before_embedding() -> None:
         "id": first["id"],
         "deduplicated": True,
         "appended_messages": 0,
-        "embedded_chunks": 2,
-        "chunks": 2,
+        "embedded_chunks": 0,
+        "chunks": 0,
     }
     assert len(metadata.by_id) == 1
     assert len(vectors.rows) == 2
+    assert len(embedder.calls) == embedding_calls_after_first
+    assert len(vectors.insert_calls) == vector_calls_after_first
+    assert (
+        metrics.snapshot()["counters"][
+            "memory_ingestion_duplicate_short_circuits_total{vector_provider=unknown}"
+        ]
+        == 1
+    )
+
+
+def test_exact_duplicate_repairs_missing_vector_chunks() -> None:
+    _, vectors = _configure_stubs()
+    embedder = mvp_ingestion._runtime().embedding_provider
+    assert isinstance(embedder, StubEmbedder)
+    first = mvp_ingestion.ingest_messages(_valid_conversation())
+    vectors.rows.pop()
+    embedding_calls_after_first = len(embedder.calls)
+
+    duplicate = _valid_conversation()
+    duplicate["id"] = "a2ea9782-cb05-4b93-9ce7-2edcfa3c6461"
+    result = mvp_ingestion.ingest_messages(duplicate)
+
+    assert result["id"] == first["id"]
+    assert result["deduplicated"] is True
+    assert result["embedded_chunks"] == 2
+    assert len(embedder.calls) == embedding_calls_after_first + 1
+    assert len(vectors.rows) == 2
+
+
+def test_exact_duplicate_repairs_stale_pending_manifest_without_reembedding() -> None:
+    metadata, vectors = _configure_stubs()
+    embedder = mvp_ingestion._runtime().embedding_provider
+    assert isinstance(embedder, StubEmbedder)
+    first = mvp_ingestion.ingest_messages(_valid_conversation())
+    stored = metadata.by_id[first["id"]]
+    manifest = stored["metadata"][MetadataField.INDEX_CHUNKS.value]
+    for chunk in manifest:
+        chunk[IndexChunkField.INDEX_STATE.value] = IndexState.PENDING.value
+    embedding_calls_after_first = len(embedder.calls)
+    vector_calls_after_first = len(vectors.insert_calls)
+
+    result = mvp_ingestion.ingest_messages(_valid_conversation())
+
+    assert result["embedded_chunks"] == 0
+    assert len(embedder.calls) == embedding_calls_after_first
+    assert len(vectors.insert_calls) == vector_calls_after_first
+    assert {chunk[IndexChunkField.INDEX_STATE.value] for chunk in manifest} == {
+        IndexState.INDEXED.value
+    }
 
 
 def test_ingest_messages_appends_only_new_same_id_messages() -> None:
     metadata, vectors = _configure_stubs(allow_trusted_appends=True)
     base = _valid_conversation()
     mvp_ingestion.ingest_messages(base)
+    summary_upserts_after_base = len(metadata.generated_summary_upserts)
     longer = _valid_conversation()
     longer["messages"] = [
         {"role": "user", "text": "hello"},
@@ -744,6 +816,11 @@ def test_ingest_messages_appends_only_new_same_id_messages() -> None:
     summary = metadata._generated_summaries[generated["id"]]
     assert summary["provenance"][0]["source_message_indexes"] == [0, 1, 2]
     assert "next" in summary["text"]
+    stored_metadata = metadata.by_id[base["id"]]["metadata"]
+    expected_summary_writes = 2 + len(stored_metadata["generated_topic_summary_ids"])
+    assert len(metadata.generated_summary_upserts) - summary_upserts_after_base == (
+        expected_summary_writes
+    )
 
 
 def test_trusted_append_extracts_facts_only_from_new_messages() -> None:
@@ -839,8 +916,9 @@ def test_trusted_append_accepts_sibling_same_thread_continuation() -> None:
 
 
 def test_ingest_messages_rejects_same_id_append_without_trust() -> None:
-    _configure_stubs()
+    metadata, _ = _configure_stubs()
     mvp_ingestion.ingest_messages(_valid_conversation())
+    summary_upserts_after_insert = len(metadata.generated_summary_upserts)
     longer = _valid_conversation()
     longer["messages"] = [
         {"role": "user", "text": "hello"},
@@ -850,6 +928,8 @@ def test_ingest_messages_rejects_same_id_append_without_trust() -> None:
 
     with pytest.raises(ValueError, match="unauthorized_update"):
         mvp_ingestion.ingest_messages(longer)
+
+    assert len(metadata.generated_summary_upserts) == summary_upserts_after_insert
 
 
 def test_ingest_messages_rejects_conflicting_same_id_history() -> None:
@@ -975,6 +1055,25 @@ def test_validate_conversation_enforces_schema_formats() -> None:
     normalized["metadata"]["updated_at"] = "not-a-date"
     with pytest.raises(jsonschema.ValidationError, match="is not a 'date-time'"):
         ingestion_validate.validate_conversation(normalized)
+
+
+def test_validate_json_compiles_schema_once_per_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
+    _configure_stubs()
+    compile_calls = 0
+    original_compile = mvp_ingestion.compile_conversation_validator
+
+    def counting_compile(schema: dict[str, Any]) -> Any:
+        nonlocal compile_calls
+        compile_calls += 1
+        return original_compile(schema)
+
+    monkeypatch.setattr(mvp_ingestion, "compile_conversation_validator", counting_compile)
+    normalized = mvp_ingestion.normalize_conversation_json(_valid_conversation())
+
+    mvp_ingestion.validate_json(normalized)
+    mvp_ingestion.validate_json(normalized)
+
+    assert compile_calls == 1
 
 
 def test_validate_conversation_enforces_handoff_provenance_bounds() -> None:
@@ -2374,6 +2473,106 @@ def test_fact_search_query_filters_across_fact_text() -> None:
     assert [fact["object"] for fact in result["results"]] == ["a teal macro lens"]
 
 
+def test_fact_search_batches_shared_source_conversation_hydration() -> None:
+    metadata, _ = _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["messages"] = [
+        {"role": "user", "text": "My name is Taylor. I work as a backend engineer."}
+    ]
+    mvp_ingestion.ingest_messages(conversation)
+    metadata.get_calls.clear()
+    metadata.get_many_calls.clear()
+
+    result = mvp_ingestion.fact_search(query="Taylor backend engineer")
+
+    assert {fact["predicate"] for fact in result["results"]} >= {
+        "profile_name",
+        "profile_role",
+    }
+    assert metadata.get_calls == []
+    assert metadata.get_many_calls == [[conversation["id"]]]
+
+
+def test_fact_search_reuses_one_request_local_conversation_text_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["messages"] = [
+        {"role": "user", "text": "My name is Taylor. I work as a backend engineer."}
+    ]
+    mvp_ingestion.ingest_messages(conversation)
+    observed_caches: list[dict[int, str] | None] = []
+    original = mvp_ingestion._conversation_search_text_with_cache
+
+    def tracking_search_text(
+        source: dict[str, Any], *, cache: dict[int, str] | None
+    ) -> str:
+        observed_caches.append(cache)
+        return original(source, cache=cache)
+
+    monkeypatch.setattr(
+        mvp_ingestion,
+        "_conversation_search_text_with_cache",
+        tracking_search_text,
+    )
+
+    result = mvp_ingestion.fact_search(query="Taylor backend engineer")
+
+    assert len(result["results"]) > 1
+    assert len(observed_caches) > 1
+    assert observed_caches[0] is not None
+    assert all(cache is observed_caches[0] for cache in observed_caches)
+    assert len(observed_caches[0]) == 1
+
+
+def test_fact_source_hydration_respects_backend_batch_bound() -> None:
+    metadata, _ = _configure_stubs()
+    facts = []
+    for index in range(501):
+        memory_id = f"00000000-0000-4000-8000-{index:012d}"
+        metadata.by_id[memory_id] = {"id": memory_id, "messages": []}
+        facts.append({"source_conversation_id": memory_id})
+
+    hydrated = mvp_ingestion._source_conversations_for_facts(facts)
+
+    assert len(hydrated) == 501
+    assert [len(batch) for batch in metadata.get_many_calls] == [500, 1]
+    assert metadata.get_calls == []
+
+
+def test_fact_search_filters_scope_before_source_hydration() -> None:
+    metadata, _ = _configure_stubs()
+    conversation = _valid_conversation()
+    conversation["messages"] = [{"role": "user", "text": "My name is Taylor."}]
+    mvp_ingestion.ingest_messages(conversation)
+    foreign_memory_id = "99999999-9999-4999-8999-999999999999"
+    metadata.by_id[foreign_memory_id] = {
+        "id": foreign_memory_id,
+        "messages": [{"role": "user", "text": "My name is Foreign."}],
+        "metadata": {"project_id": "foreign-project"},
+    }
+    metadata._facts.append(
+        {
+            "id": "foreign-fact",
+            "subject": "user",
+            "predicate": "profile_name",
+            "object": "Foreign",
+            "source_conversation_id": foreign_memory_id,
+            "project_id": "foreign-project",
+            "qualifiers": {},
+        }
+    )
+    metadata.get_calls.clear()
+    metadata.get_many_calls.clear()
+
+    result = mvp_ingestion.fact_search(predicate="profile_name")
+
+    assert [fact["object"] for fact in result["results"]] == ["Taylor"]
+    assert metadata.get_many_calls == [[conversation["id"]]]
+    assert foreign_memory_id not in metadata.get_many_calls[0]
+
+
 def test_search_fuses_fact_candidates_without_vector_or_lexical_candidates() -> None:
     _, vectors = _configure_stubs(retrieval_keyword_enabled=False)
     conversation = _valid_conversation()
@@ -2386,6 +2585,52 @@ def test_search_fuses_fact_candidates_without_vector_or_lexical_candidates() -> 
     assert result["results"][0]["id"] == conversation["id"]
     assert result["results"][0]["text"] == "I own a teal macro lens."
     assert result["diagnostics"]["ranking"]["source_candidate_counts"]["fact"] == 1
+
+
+@pytest.mark.parametrize(
+    ("source", "expected_keyword_limit", "expected_fact_limit"),
+    [
+        (None, 6, 6),
+        ("manual", 50, 25),
+    ],
+)
+def test_search_adapts_candidate_limits_without_narrowing_filtered_queries(
+    monkeypatch: pytest.MonkeyPatch,
+    source: str | None,
+    expected_keyword_limit: int,
+    expected_fact_limit: int,
+) -> None:
+    _configure_stubs()
+    observed: dict[str, int] = {}
+
+    def keyword_candidates(
+        _metadata_store: Any,
+        _query: str,
+        *,
+        limit: int,
+        **_kwargs: Any,
+    ) -> list[dict[str, Any]]:
+        observed["keyword"] = limit
+        return []
+
+    def fact_candidates(
+        _query: str,
+        *,
+        limit: int,
+        **_kwargs: Any,
+    ) -> list[dict[str, Any]]:
+        observed["fact"] = limit
+        return []
+
+    monkeypatch.setattr(mvp_ingestion, "_keyword_conversations", keyword_candidates)
+    monkeypatch.setattr(mvp_ingestion, "_fact_candidate_rows", fact_candidates)
+
+    mvp_ingestion.search("candidate budget", top_k=2, source=source)
+
+    assert observed == {
+        "keyword": expected_keyword_limit,
+        "fact": expected_fact_limit,
+    }
 
 
 def test_fact_search_query_requires_identifier_match() -> None:
