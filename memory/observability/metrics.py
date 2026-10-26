@@ -61,6 +61,9 @@ class MetricsRecorder:
             "memory_embedding_failures_total": meter.create_counter(
                 "memory_embedding_failures_total"
             ),
+            "memory_ingestion_duplicate_short_circuits_total": meter.create_counter(
+                "memory_ingestion_duplicate_short_circuits_total"
+            ),
             "memory_provider_fallback_total": meter.create_counter(
                 "memory_provider_fallback_total"
             ),

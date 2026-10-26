@@ -39,7 +39,11 @@ def _restore_runtime() -> Iterator[None]:
 
 
 class StubEmbedder:
+    def __init__(self) -> None:
+        self.calls: list[list[str]] = []
+
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        self.calls.append(list(texts))
         return [[float(len(text)), float(index)] for index, text in enumerate(texts)]
 
 
@@ -66,11 +70,13 @@ class StubMetadataStore:
 class StubVectorStore:
     def __init__(self):
         self.rows: list[dict[str, Any]] = []
+        self.insert_calls: list[tuple[str, int, bool]] = []
         self.search_limits: list[int] = []
         self.last_filters: VectorSearchFilters | None = None
         self.supports_filters = False
 
     def insert(self, metadata_id: str, embeddings: list[dict[str, Any]], replace: bool = False) -> None:
+        self.insert_calls.append((metadata_id, len(embeddings), replace))
         if replace:
             # Avoid duplicates if re-indexing
             self.rows = [row for row in self.rows if row["memory_id"] != metadata_id]
@@ -701,9 +707,14 @@ def test_ingest_messages_rejects_long_metadata_summary() -> None:
 
 
 def test_ingest_messages_deduplicates_exact_content_before_embedding() -> None:
+    metrics.reset()
     metadata, vectors = _configure_stubs()
+    embedder = mvp_ingestion._runtime().embedding_provider
+    assert isinstance(embedder, StubEmbedder)
 
     first = mvp_ingestion.ingest_messages(_valid_conversation())
+    embedding_calls_after_first = len(embedder.calls)
+    vector_calls_after_first = len(vectors.insert_calls)
     duplicate = _valid_conversation()
     duplicate["id"] = "a2ea9782-cb05-4b93-9ce7-2edcfa3c6461"
     second = mvp_ingestion.ingest_messages(duplicate)
@@ -713,11 +724,60 @@ def test_ingest_messages_deduplicates_exact_content_before_embedding() -> None:
         "id": first["id"],
         "deduplicated": True,
         "appended_messages": 0,
-        "embedded_chunks": 2,
-        "chunks": 2,
+        "embedded_chunks": 0,
+        "chunks": 0,
     }
     assert len(metadata.by_id) == 1
     assert len(vectors.rows) == 2
+    assert len(embedder.calls) == embedding_calls_after_first
+    assert len(vectors.insert_calls) == vector_calls_after_first
+    assert (
+        metrics.snapshot()["counters"][
+            "memory_ingestion_duplicate_short_circuits_total{vector_provider=unknown}"
+        ]
+        == 1
+    )
+
+
+def test_exact_duplicate_repairs_missing_vector_chunks() -> None:
+    _, vectors = _configure_stubs()
+    embedder = mvp_ingestion._runtime().embedding_provider
+    assert isinstance(embedder, StubEmbedder)
+    first = mvp_ingestion.ingest_messages(_valid_conversation())
+    vectors.rows.pop()
+    embedding_calls_after_first = len(embedder.calls)
+
+    duplicate = _valid_conversation()
+    duplicate["id"] = "a2ea9782-cb05-4b93-9ce7-2edcfa3c6461"
+    result = mvp_ingestion.ingest_messages(duplicate)
+
+    assert result["id"] == first["id"]
+    assert result["deduplicated"] is True
+    assert result["embedded_chunks"] == 2
+    assert len(embedder.calls) == embedding_calls_after_first + 1
+    assert len(vectors.rows) == 2
+
+
+def test_exact_duplicate_repairs_stale_pending_manifest_without_reembedding() -> None:
+    metadata, vectors = _configure_stubs()
+    embedder = mvp_ingestion._runtime().embedding_provider
+    assert isinstance(embedder, StubEmbedder)
+    first = mvp_ingestion.ingest_messages(_valid_conversation())
+    stored = metadata.by_id[first["id"]]
+    manifest = stored["metadata"][MetadataField.INDEX_CHUNKS.value]
+    for chunk in manifest:
+        chunk[IndexChunkField.INDEX_STATE.value] = IndexState.PENDING.value
+    embedding_calls_after_first = len(embedder.calls)
+    vector_calls_after_first = len(vectors.insert_calls)
+
+    result = mvp_ingestion.ingest_messages(_valid_conversation())
+
+    assert result["embedded_chunks"] == 0
+    assert len(embedder.calls) == embedding_calls_after_first
+    assert len(vectors.insert_calls) == vector_calls_after_first
+    assert {chunk[IndexChunkField.INDEX_STATE.value] for chunk in manifest} == {
+        IndexState.INDEXED.value
+    }
 
 
 def test_ingest_messages_appends_only_new_same_id_messages() -> None:

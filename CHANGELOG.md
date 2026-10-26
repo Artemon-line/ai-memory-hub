@@ -6,6 +6,9 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Short-circuited fully indexed exact-duplicate ingestion before derived-record,
+  embedding, metadata, and vector work, while retaining incomplete-index repair
+  and adding a machine-readable ingestion work ledger.
 - Reused bounded, file-identity-aware compiled conversation validators across
   ingestion requests, with explicit invalidation and isolated multi-schema
   runtime behavior.
