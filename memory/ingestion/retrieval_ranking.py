@@ -104,15 +104,21 @@ def rank_candidate_lists(
     )
 
     bounded_rows = exact_ordered[:reranker_candidate_limit]
-    projections = [
-        _candidate_projection(row, text_limit=projection_text_limit) for row in bounded_rows
-    ]
-    scores, reranker_mode = _reranker_scores(
-        redact_secrets(query)[:projection_text_limit],
-        projections,
-        reranker=reranker,
-        timeout_seconds=reranker_timeout_seconds,
-    )
+    if len(bounded_rows) <= 1:
+        projections: list[RerankCandidate] = []
+        scores: dict[str, float] = {}
+        reranker_mode = "insufficient_candidates"
+    else:
+        projections = [
+            _candidate_projection(row, text_limit=projection_text_limit)
+            for row in bounded_rows
+        ]
+        scores, reranker_mode = _reranker_scores(
+            redact_secrets(query)[:projection_text_limit],
+            projections,
+            reranker=reranker,
+            timeout_seconds=reranker_timeout_seconds,
+        )
     boosts = deterministic_boosts or {}
     semantically_reranked = (
         {candidate.key for candidate in projections} if reranker_mode == "semantic" else set()
@@ -145,7 +151,7 @@ def rank_candidate_lists(
             "source_candidate_counts": source_counts,
             "fused_candidate_count": len(fused),
             "reranker": reranker_mode,
-            "reranker_candidate_count": len(projections),
+            "reranker_candidate_count": len(bounded_rows),
             "reranker_candidate_limit": reranker_candidate_limit,
             "projection_text_limit": projection_text_limit,
         },
