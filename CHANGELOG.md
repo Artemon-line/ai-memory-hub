@@ -6,6 +6,9 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Reused assembled source-conversation search text within fact ranking and
+  question narrowing requests, with a deterministic work-amplification
+  benchmark and no cross-request payload cache.
 - Replaced repeated fact-source conversation reads during filtering, ranking,
   projection, candidate construction, and provenance assembly with bounded,
   deduplicated metadata batch hydration and a machine-readable work benchmark.
