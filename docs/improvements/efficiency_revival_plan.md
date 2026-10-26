@@ -299,6 +299,18 @@ Acceptance criteria:
   metrics.
 - Deadline and cancellation behavior is deterministic and test-covered.
 
+Implementation note (adaptive candidate-budget slice): unfiltered lexical and
+fact candidate admission now uses the smaller of each configured hard cap and
+`top_k * candidate_multiplier`, matching the existing dense-search budget.
+Filtered and non-active-memory searches retain their configured maxima because
+some metadata providers apply those constraints after their initial text
+limit. The deterministic `memory.benchmarks.retrieval_amplification` fixture
+reduces the representative `top_k=5`, multiplier-3 lexical/fact budget from 75
+to 30 candidates (60%) while preserving the full 75-candidate filtered budget.
+The versioned quality gate retains perfect precision@1, recall@k, MRR, nDCG,
+filtered recall, temporal accuracy, and fallback accuracy on its synthetic
+corpus. Provider-pushdown and observed-yield adaptation remain follow-up work.
+
 ## Phase 4: Bound Context And Model Cost
 
 - [ ] Measure input/output tokens and selected evidence per ask mode and client.
@@ -424,6 +436,7 @@ uv run python -m pyright
 uv run pytest tests/unit tests/integration -q
 uv run python -m memory.benchmarks.cache_candidates --iterations 1000
 uv run python -m memory.benchmarks.ingestion_efficiency
+uv run python -m memory.benchmarks.retrieval_amplification
 uv run python -m memory.benchmarks.token_budget --iterations 200
 uv run python -m memory.benchmarks.quality_gate \
   --output reports/quality/quality-gate.json

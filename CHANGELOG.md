@@ -6,6 +6,9 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Adapted unfiltered lexical and fact candidate limits to the requested
+  `top_k` and configured candidate multiplier, while preserving configured
+  maxima for filtered searches to protect post-filter recall.
 - Deferred generated-summary work until after trusted-append detection, so an
   append writes summaries once for the combined conversation instead of first
   writing transient summaries for the incoming transcript.

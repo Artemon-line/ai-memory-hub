@@ -2587,6 +2587,52 @@ def test_search_fuses_fact_candidates_without_vector_or_lexical_candidates() -> 
     assert result["diagnostics"]["ranking"]["source_candidate_counts"]["fact"] == 1
 
 
+@pytest.mark.parametrize(
+    ("source", "expected_keyword_limit", "expected_fact_limit"),
+    [
+        (None, 6, 6),
+        ("manual", 50, 25),
+    ],
+)
+def test_search_adapts_candidate_limits_without_narrowing_filtered_queries(
+    monkeypatch: pytest.MonkeyPatch,
+    source: str | None,
+    expected_keyword_limit: int,
+    expected_fact_limit: int,
+) -> None:
+    _configure_stubs()
+    observed: dict[str, int] = {}
+
+    def keyword_candidates(
+        _metadata_store: Any,
+        _query: str,
+        *,
+        limit: int,
+        **_kwargs: Any,
+    ) -> list[dict[str, Any]]:
+        observed["keyword"] = limit
+        return []
+
+    def fact_candidates(
+        _query: str,
+        *,
+        limit: int,
+        **_kwargs: Any,
+    ) -> list[dict[str, Any]]:
+        observed["fact"] = limit
+        return []
+
+    monkeypatch.setattr(mvp_ingestion, "_keyword_conversations", keyword_candidates)
+    monkeypatch.setattr(mvp_ingestion, "_fact_candidate_rows", fact_candidates)
+
+    mvp_ingestion.search("candidate budget", top_k=2, source=source)
+
+    assert observed == {
+        "keyword": expected_keyword_limit,
+        "fact": expected_fact_limit,
+    }
+
+
 def test_fact_search_query_requires_identifier_match() -> None:
     _configure_stubs()
     marker = "QA_MARKER_SCOPELESS"
