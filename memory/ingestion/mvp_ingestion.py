@@ -3471,11 +3471,26 @@ def search(
     )
 
     ids = [str(match["memory_id"]) for match in matches]
+    preserve_configured_candidate_limits = (
+        filters.has_filters or status_filter != _MEMORY_STATUS_ACTIVE
+    )
+    keyword_candidate_limit = _adaptive_candidate_limit(
+        configured_limit=runtime.retrieval_keyword_candidate_limit,
+        top_k=top_k,
+        candidate_multiplier=candidate_multiplier,
+        preserve_configured_limit=preserve_configured_candidate_limits,
+    )
+    fact_candidate_limit = _adaptive_candidate_limit(
+        configured_limit=runtime.retrieval_fact_candidate_limit,
+        top_k=top_k,
+        candidate_multiplier=candidate_multiplier,
+        preserve_configured_limit=preserve_configured_candidate_limits,
+    )
     keyword_conversations = _keyword_conversations(
         runtime.metadata_store,
         semantic_query,
         enabled=runtime.retrieval_keyword_enabled,
-        limit=runtime.retrieval_keyword_candidate_limit,
+        limit=keyword_candidate_limit,
         owner_id=owner_id,
         project_id=effective_project_id,
         memory_status=status_filter,
@@ -3552,7 +3567,7 @@ def search(
         project_id=effective_project_id,
         memory_status=status_filter,
         filters=filters,
-        limit=runtime.retrieval_fact_candidate_limit,
+        limit=fact_candidate_limit,
         score=runtime.retrieval_vector_score_threshold,
     )
     candidate_lists = {
@@ -3618,6 +3633,21 @@ def search(
         },
     )
     return payload
+
+
+def _adaptive_candidate_limit(
+    *,
+    configured_limit: int,
+    top_k: int,
+    candidate_multiplier: int,
+    preserve_configured_limit: bool,
+) -> int:
+    hard_limit = max(1, int(configured_limit))
+    if preserve_configured_limit:
+        return hard_limit
+    requested_results = max(1, int(top_k))
+    multiplier = max(1, int(candidate_multiplier))
+    return min(hard_limit, requested_results * multiplier)
 
 
 def _vector_search_filters(
