@@ -2708,7 +2708,11 @@ def ingest_messages(
                     new_messages,
                     start_message_index=start_index,
                 )
-                graph_counts = _store_graph_for_conversation(updated)
+                graph_counts = _store_graph_for_messages(
+                    updated,
+                    new_messages,
+                    start_message_index=start_index,
+                )
         else:
             graph_counts = {"entities": 0, "relationships": 0}
         logger.info(
@@ -5415,10 +5419,28 @@ def _store_facts(facts: list[dict[str, Any]]) -> None:
 
 
 def _store_graph_for_conversation(conversation: dict[str, Any]) -> dict[str, int]:
+    messages = conversation.get("messages", [])
+    return _store_graph_for_messages(
+        conversation,
+        messages if isinstance(messages, list) else [],
+        start_message_index=0,
+    )
+
+
+def _store_graph_for_messages(
+    conversation: dict[str, Any],
+    messages: list[dict[str, Any]],
+    *,
+    start_message_index: int,
+) -> dict[str, int]:
     runtime = _runtime()
     if not runtime.graph_enabled:
         return {"entities": 0, "relationships": 0}
-    graph = extract_memory_graph(conversation)
+    graph = extract_memory_graph(
+        conversation,
+        messages=messages,
+        start_message_index=start_message_index,
+    )
     entities = graph["entities"]
     relationships = graph["relationships"]
     if not entities and not relationships:
