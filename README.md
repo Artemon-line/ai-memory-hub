@@ -46,7 +46,9 @@ Terminology:
 - Capture: an adapter sends selected conversation, page, note, or code context
   into the hub.
 - Ingestion: the hub validates, normalizes, deduplicates, enriches, embeds, and
-  stores captured content.
+  stores captured content. Fully indexed exact duplicates return the canonical
+  memory ID without repeating derived-record, embedding, metadata, or vector
+  writes.
 - Retrieval: the hub returns relevant memories, facts, citations, or answers.
 - Context injection: an adapter places retrieved memory into the active agent,
   browser, editor, or CLI session.

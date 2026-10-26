@@ -185,6 +185,11 @@ Expected success includes:
 - `embedded_chunks`
 - `chunks`
 
+A retry whose content exactly matches a fully indexed memory returns the
+canonical stored ID with `deduplicated: true`, `embedded_chunks: 0`, and
+`chunks: 0`. If the stored chunk manifest or vector rows are incomplete, the
+same retry repairs indexing before returning instead of taking the fast path.
+
 ### `memory_search`
 
 Search stored memory by semantic query.

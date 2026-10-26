@@ -156,17 +156,17 @@ Implementation status:
 
 Start with low-risk work that should not alter ranking or storage semantics.
 
-- [ ] Trace config parsing and schema loading to confirm whether they occur on
+- [x] Trace config parsing and schema loading to confirm whether they occur on
       hot request paths.
-- [ ] If repeated, cache parsed configuration by resolved path plus file
+- [x] If repeated, cache parsed configuration by resolved path plus file
       identity and invalidate explicitly on reload.
-- [ ] If repeated, cache validated schemas by resolved path plus modification
+- [x] If repeated, cache validated schemas by resolved path plus modification
       time; never allow one configured schema to contaminate another runtime.
 - [ ] Reuse bounded provider clients and connection pools rather than creating
       network clients per operation.
-- [ ] Compute normalized conversation/search text once per candidate within a
+- [x] Compute normalized conversation/search text once per candidate within a
       request and reuse it across lexical, metadata, fact, and boost stages.
-- [ ] Replace repeated single-record lookups with existing `get_many` or a new
+- [x] Replace repeated single-record lookups with existing `get_many` or a new
       provider capability only where traces show N+1 behavior.
 - [ ] Avoid building detailed diagnostics, provenance projections, or full
       result bodies when the caller requested a concise response.
@@ -183,12 +183,48 @@ Acceptance criteria:
 - No raw payload, query, embedding, token, or secret is added to cache keys or
   logs.
 
+Implementation note (runtime immutable-data cache slice): tracing confirmed
+that configuration parsing and schema file loading occur during runtime
+construction rather than on normal request paths, so parsed configuration is
+intentionally left uncached. Payload validation did, however, re-check and
+recompile the same schema for every ingest. Runtimes now reuse a checked
+validator cached by resolved schema path, nanosecond modification time, and
+file size; the cache is bounded to 16 identities and supports explicit
+invalidation. Direct schema loads remain isolated so caller mutation cannot
+contaminate another runtime. On a 100-iteration local synthetic run, reusing
+the validator reduced unprofiled validation p95 from `29.60 ms` to `0.33 ms`
+(more than 98%); exact timings are environment-dependent. Invalidation, mutation
+isolation, and multi-schema tests cover reload and concurrent configuration
+safety.
+
+Implementation note (fact-source batch hydration slice): fact filtering,
+text ranking, temporal projection, retrieval-candidate construction, and
+provenance assembly now deduplicate source conversation IDs and reuse bounded
+`get_many` reads. Batches are capped at 500 IDs to match every metadata
+provider contract, while custom stores without `get_many` retain the compatible
+single-read fallback. The deterministic
+`memory.benchmarks.fact_hydration_efficiency` fixture preserves all 120 fact
+results while reducing the former 240 source reads across ranking and public
+projection to one batch read for three unique conversations (more than 99%
+fewer metadata read calls). No conversation payloads are cached across
+requests.
+
+Implementation note (request-local search-text reuse slice): fact ranking and
+question narrowing now share each hydrated source conversation's assembled
+search text for the duration of that operation. The cache uses in-memory object
+identity, is discarded after the request stage, and never stores text across
+requests. Lexical candidates already assembled their conversation text once per
+candidate. The deterministic `memory.benchmarks.search_text_efficiency` fixture
+preserves all 120 ranked facts while reducing source conversation search-text
+construction from 120 times to three times for three unique conversations
+(97.5% less construction work).
+
 ## Phase 2: Make Ingestion Proportional To New Information
 
 - [ ] Establish stage timings and amplification counts for validate, normalize,
       hash, deduplicate, chunk, extract, embed, metadata write, vector write,
       derived-record write, and audit.
-- [ ] Complete deduplication and append-delta detection before embedding or
+- [x] Complete deduplication and append-delta detection before embedding or
       derived extraction wherever the contract permits.
 - [ ] Batch embedding inputs up to provider-advertised limits with bounded
       payload size and deterministic result-to-chunk mapping.
@@ -200,7 +236,7 @@ Acceptance criteria:
       messages during append and reindex.
 - [ ] Add checkpointed, resumable reindex batches so a large reindex does not
       retain the entire corpus or restart from zero.
-- [ ] Report bytes and rows written per accepted message and per duplicate.
+- [x] Report bytes and rows written per accepted message and per duplicate.
 
 Acceptance criteria:
 
@@ -210,6 +246,27 @@ Acceptance criteria:
 - Batch ingestion improves remote-provider throughput by at least 25% without
   increasing error leakage or partial-write ambiguity.
 - Peak memory remains bounded by configured batch size.
+
+Implementation note (duplicate-ingestion fast-path slice): exact duplicates
+now return before summary/fact/graph derivation, metadata rewrites, embedding,
+or vector writes when the stored manifest is indexed and the vector provider
+confirms all expected chunk IDs. Pending manifests are reconciled from existing
+vector rows, while missing vectors retain the full repair path. The deterministic
+`memory.benchmarks.ingestion_efficiency` work ledger reports calls, rows, and
+bytes for accepted and duplicate inputs. Its baseline fixture drops from two
+embedding inputs and two vector-row writes on the former full-reindex path to
+zero of each, a 100% reduction; the required audit row remains.
+
+Implementation note (single-pass append-summary slice): generated summaries
+are now attached only after trusted-append detection. New conversations retain
+the same summary behavior, while an append generates summaries once from the
+combined stored conversation instead of first writing transient summaries for
+the incoming transcript and immediately overwriting the same derived
+identities. The deterministic ingestion work ledger preserves the final
+three-message summary and reduces the append fixture from two summary passes
+and four derived-row writes to one pass and two writes (50% less summary work).
+Rejected same-ID updates also perform no generated-summary writes. Incremental
+graph extraction and other unchanged-message derivation remain follow-up work.
 
 ## Phase 3: Reduce Retrieval Amplification
 
@@ -241,6 +298,18 @@ Acceptance criteria:
 - Reranker/model call rate drops without reducing fallback accuracy or quality
   metrics.
 - Deadline and cancellation behavior is deterministic and test-covered.
+
+Implementation note (adaptive candidate-budget slice): unfiltered lexical and
+fact candidate admission now uses the smaller of each configured hard cap and
+`top_k * candidate_multiplier`, matching the existing dense-search budget.
+Filtered and non-active-memory searches retain their configured maxima because
+some metadata providers apply those constraints after their initial text
+limit. The deterministic `memory.benchmarks.retrieval_amplification` fixture
+reduces the representative `top_k=5`, multiplier-3 lexical/fact budget from 75
+to 30 candidates (60%) while preserving the full 75-candidate filtered budget.
+The versioned quality gate retains perfect precision@1, recall@k, MRR, nDCG,
+filtered recall, temporal accuracy, and fallback accuracy on its synthetic
+corpus. Provider-pushdown and observed-yield adaptation remain follow-up work.
 
 ## Phase 4: Bound Context And Model Cost
 
@@ -366,6 +435,8 @@ uv run python -m ruff check memory tests tools
 uv run python -m pyright
 uv run pytest tests/unit tests/integration -q
 uv run python -m memory.benchmarks.cache_candidates --iterations 1000
+uv run python -m memory.benchmarks.ingestion_efficiency
+uv run python -m memory.benchmarks.retrieval_amplification
 uv run python -m memory.benchmarks.token_budget --iterations 200
 uv run python -m memory.benchmarks.quality_gate \
   --output reports/quality/quality-gate.json
