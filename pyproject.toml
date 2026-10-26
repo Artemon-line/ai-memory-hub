@@ -95,6 +95,7 @@ dev = [
     "ruff>=0.17.2",
 ]
 docs = [
+    "mike==2.2.0",
     "mkdocs==1.6.1",
     "mkdocs-material==9.7.7",
 ]

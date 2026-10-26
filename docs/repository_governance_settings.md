@@ -107,8 +107,10 @@ Required settings:
 - Pages source: GitHub Actions.
 - Environment: `github-pages`.
 
-The checked-in `pages` workflow already has `contents: read`, `pages: write`,
-and `id-token: write`.
+The checked-in `pages` workflow uses `contents: write` to update the versioned
+`gh-pages` branch, plus `pages: write` and `id-token: write` to deploy it. The
+site root follows the `latest` release alias; `main` is published separately as
+an experimental preview.
 
 ## Release Candidate Checks
 

@@ -56,5 +56,7 @@ debugging failures or preparing an offline release candidate.
 - [ ] Publish `v0.1.0`.
 - [ ] Confirm Docker version tags and `latest` were pushed.
 - [ ] Confirm the image digest is present in the release notes.
-- [ ] Confirm the docs site link works.
+- [ ] Confirm the docs site root opens this release through the `latest` alias.
+- [ ] Confirm the version selector offers `main (experimental)` without making
+      it the default.
 - [ ] Publish the launch/promotion note.

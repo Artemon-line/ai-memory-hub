@@ -77,3 +77,8 @@ Release PRs should update the project version, release notes source, release
 checklist status, and documentation links together. Release tags must match the
 version in `pyproject.toml`; for example, `v0.1.0` must match
 `version = "0.1.0"`.
+
+Publishing a GitHub release also publishes an immutable documentation version
+and moves the `latest` alias to it. Pushes to `main` update only the
+`main (experimental)` documentation preview; they do not change the default
+documentation shown at the site root.

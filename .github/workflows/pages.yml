@@ -5,14 +5,17 @@ on:
     branches:
       - main
   pull_request:
+  release:
+    types:
+      - published
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: pages-${{ github.ref }}
-  cancel-in-progress: true
+  group: pages
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -38,16 +41,107 @@ jobs:
       - name: Build docs
         run: mkdocs build --strict
 
+  publish:
+    name: Publish Versioned Documentation
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14'
+
+      - name: Install docs dependencies
+        run: python -m pip install -r docs/requirements.txt
+
+      - name: Configure docs publisher
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git fetch origin gh-pages --depth=1 || true
+
+      - name: Bootstrap latest release docs
+        if: github.event_name != 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git show-ref --verify --quiet refs/remotes/origin/gh-pages; then
+            exit 0
+          fi
+
+          release_tag="$(gh release list --exclude-drafts --limit 1 --json tagName --jq '.[0].tagName')"
+          if [ -z "$release_tag" ]; then
+            echo "A published release is required before versioned docs can be initialized." >&2
+            exit 1
+          fi
+
+          git worktree add --detach .release-docs "$release_tag"
+          python .release-docs/tools/prepare_mkdocs.py \
+            --source-root .release-docs \
+            --output-dir "$GITHUB_WORKSPACE/.docs-build"
+
+          cp .release-docs/mkdocs.yml .bootstrap-mkdocs.yml
+          {
+            echo "site_url: https://artemon-line.github.io/ai-memory-hub/"
+            echo "extra:"
+            echo "  docs_status: release"
+            echo "  version:"
+            echo "    provider: mike"
+            echo "    default: latest"
+            echo "    alias: true"
+          } >> .bootstrap-mkdocs.yml
+
+          release_version="${release_tag#v}"
+          mike deploy --config-file .bootstrap-mkdocs.yml \
+            --push --update-aliases --alias-type redirect "$release_version" latest
+          mike set-default --config-file .bootstrap-mkdocs.yml --push latest
+
+      - name: Publish main preview
+        if: github.event_name != 'release'
+        env:
+          DOCS_STATUS: experimental
+        run: |
+          python tools/prepare_mkdocs.py
+          mike deploy --push --title "main (experimental)" main
+
+      - name: Publish release
+        if: github.event_name == 'release'
+        env:
+          DOCS_STATUS: release
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          python tools/validate_release_version.py "$RELEASE_TAG"
+          python tools/prepare_mkdocs.py
+          release_version="${RELEASE_TAG#v}"
+          mike deploy --push --update-aliases "$release_version" latest
+          mike set-default --push latest
+
+      - name: Checkout published site
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: gh-pages
+          path: published-site
+
       - name: Upload Pages artifact
-        if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
-          path: site
+          path: published-site
 
   deploy:
     name: Deploy Documentation
     if: github.event_name != 'pull_request'
-    needs: build
+    needs: publish
     runs-on: ubuntu-latest
     timeout-minutes: 10
 

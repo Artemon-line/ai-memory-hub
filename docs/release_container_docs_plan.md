@@ -243,6 +243,7 @@ Approach:
 Recommended tooling:
 
 - [x] Use MkDocs with Material theme for the first implementation.
+- [x] Use Mike to retain released versions and provide a version selector.
 - [x] Add `mkdocs.yml`.
 - [x] Add docs publishing dependencies in `docs/requirements.txt`.
 - [x] Copy or include `README.md` as `index.md` during docs build.
@@ -266,7 +267,8 @@ Initial site structure:
 Pages workflow:
 
 - [x] Add `.github/workflows/pages.yml`.
-- [x] Trigger on pushes to `main`.
+- [x] Trigger on pushes to `main` for the experimental preview.
+- [x] Trigger on published releases and move the `latest` alias to the release.
 - [x] Trigger manually with `workflow_dispatch`.
 - [x] Build docs site.
 - [x] Upload Pages artifact.
@@ -277,7 +279,7 @@ Required GitHub settings:
 - [ ] Enable GitHub Pages.
 - [ ] Set Pages source to GitHub Actions.
 - [x] Ensure workflow has:
-  - [x] `contents: read`
+  - [x] `contents: write` for the versioned `gh-pages` publishing branch
   - [x] `pages: write`
   - [x] `id-token: write`
 
@@ -290,7 +292,9 @@ Docs quality checks:
 
 Pages acceptance criteria:
 
-- [x] GitHub Pages deploys from `main`.
+- [x] The site root redirects to the latest published release.
+- [x] GitHub Pages exposes `main` as an optional experimental preview.
+- [x] Previously published documentation versions remain available.
 - [x] README content appears as the home page.
 - [x] All important Markdown docs are reachable from navigation.
 - [x] Broken internal links fail the docs workflow.

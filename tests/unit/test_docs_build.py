@@ -33,3 +33,18 @@ def test_prepare_docs_rejects_repo_root_as_output(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="repository root"):
         prepare_docs(source_root, source_root)
+
+
+def test_published_docs_default_to_releases_and_keep_main_experimental() -> None:
+    config = Path("mkdocs.yml").read_text(encoding="utf-8")
+    workflow = Path(".github/workflows/pages.yml").read_text(encoding="utf-8")
+    warning = Path("docs/overrides/main.html").read_text(encoding="utf-8")
+
+    assert "site_url: https://artemon-line.github.io/ai-memory-hub/" in config
+    assert "provider: mike" in config
+    assert "default: latest" in config
+    assert "canonical_version: latest" in config
+    assert "release:" in workflow
+    assert 'mike deploy --push --title "main (experimental)" main' in workflow
+    assert 'mike set-default --push latest' in workflow
+    assert "experimental,\n    unreleased, or untested behavior" in warning

@@ -1,5 +1,6 @@
 site_name: ai-memory-hub
 site_description: Local-first deterministic memory ingestion hub
+site_url: https://artemon-line.github.io/ai-memory-hub/
 repo_url: https://github.com/Artemon-line/ai-memory-hub
 repo_name: Artemon-line/ai-memory-hub
 copyright: >
@@ -13,12 +14,26 @@ strict: true
 
 theme:
   name: material
+  custom_dir: docs/overrides
   logo: docs/assets/brand/ai-memory-hub-mark.svg
   favicon: docs/assets/brand/favicon.svg
   features:
     - navigation.sections
     - navigation.top
     - content.code.copy
+
+plugins:
+  - search
+  - mike:
+      alias_type: redirect
+      canonical_version: latest
+
+extra:
+  docs_status: !ENV [DOCS_STATUS, release]
+  version:
+    provider: mike
+    default: latest
+    alias: true
 
 extra_css:
   - docs/stylesheets/connect.css
