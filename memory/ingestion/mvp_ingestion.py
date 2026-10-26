@@ -2630,8 +2630,14 @@ def ingest_messages(
             duplicate, owner_id, effective_project_id
         ):
             duplicate_metadata_id = str(duplicate["id"])
-            # We proceed to re-index even if it's a duplicate by hash,
-            # to ensure the vector store is in sync with the metadata.
+            duplicate = _repair_retrieved_index_chunks(duplicate_metadata_id, duplicate)
+            if _duplicate_index_is_complete(duplicate_metadata_id, duplicate):
+                return _deduplicated_ingestion_result(
+                    duplicate,
+                    owner_id=owner_id,
+                    project_id=effective_project_id,
+                )
+            # Incomplete duplicates continue through the existing repair path.
             conversation_json["id"] = duplicate_metadata_id
 
     _attach_generated_summaries(
@@ -2804,6 +2810,52 @@ def ingest_messages(
         },
     )
     return _with_graph_counts(result, graph_counts)
+
+
+def _deduplicated_ingestion_result(
+    conversation: dict[str, Any],
+    *,
+    owner_id: str | None,
+    project_id: str,
+) -> dict[str, Any]:
+    memory_id = str(conversation["id"])
+    provider = str(_runtime().health_state.get("vector_provider") or "unknown")
+    metrics.increment(
+        "memory_ingestion_duplicate_short_circuits_total",
+        vector_provider=provider,
+    )
+    logger.info(
+        "Conversation deduplicated without indexing work",
+        extra={
+            "event": "conversation_deduplicated",
+            "operation": "memory_insert",
+            "conversation_id": memory_id,
+            "deduplicated": True,
+            "appended_messages": 0,
+            "embedded_chunks": 0,
+        },
+    )
+    result = {
+        "status": "ok",
+        "id": memory_id,
+        "deduplicated": True,
+        "appended_messages": 0,
+        "embedded_chunks": 0,
+        "chunks": 0,
+    }
+    _record_audit_event(
+        "memory.inserted",
+        owner_id=owner_id,
+        project_id=project_id,
+        memory_id=memory_id,
+        metadata={
+            "deduplicated": True,
+            "appended_messages": 0,
+            "embedded_chunks": 0,
+            "memory_status": _memory_status(conversation),
+        },
+    )
+    return _with_graph_counts(result, {"entities": 0, "relationships": 0})
 
 
 def _store_review_memory(
@@ -3060,6 +3112,29 @@ def _is_fully_indexed(metadata_id: str) -> bool:
         return store.is_fully_indexed(metadata_id)
     # Default to False to ensure indexing if we can't check
     return False
+
+
+def _duplicate_index_is_complete(
+    memory_id: str,
+    conversation: dict[str, Any],
+) -> bool:
+    manifest = _index_chunk_manifest(conversation)
+    if not manifest or any(
+        chunk.get(IndexChunkField.INDEX_STATE.value) != IndexState.INDEXED.value
+        for chunk in manifest
+    ):
+        return False
+
+    expected_chunk_ids = {
+        str(chunk.get(IndexChunkField.CHUNK_ID.value) or "") for chunk in manifest
+    }
+    if "" in expected_chunk_ids:
+        return _is_fully_indexed(memory_id)
+
+    getter = getattr(_runtime().vector_store, "get_indexed_chunk_ids", None)
+    if callable(getter):
+        return expected_chunk_ids.issubset(_vector_indexed_chunk_ids(memory_id))
+    return _is_fully_indexed(memory_id)
 
 
 def _repair_retrieved_index_chunks(memory_id: str, conversation: dict[str, Any]) -> dict[str, Any]:

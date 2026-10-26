@@ -202,7 +202,7 @@ safety.
 - [ ] Establish stage timings and amplification counts for validate, normalize,
       hash, deduplicate, chunk, extract, embed, metadata write, vector write,
       derived-record write, and audit.
-- [ ] Complete deduplication and append-delta detection before embedding or
+- [x] Complete deduplication and append-delta detection before embedding or
       derived extraction wherever the contract permits.
 - [ ] Batch embedding inputs up to provider-advertised limits with bounded
       payload size and deterministic result-to-chunk mapping.
@@ -214,7 +214,7 @@ safety.
       messages during append and reindex.
 - [ ] Add checkpointed, resumable reindex batches so a large reindex does not
       retain the entire corpus or restart from zero.
-- [ ] Report bytes and rows written per accepted message and per duplicate.
+- [x] Report bytes and rows written per accepted message and per duplicate.
 
 Acceptance criteria:
 
@@ -224,6 +224,16 @@ Acceptance criteria:
 - Batch ingestion improves remote-provider throughput by at least 25% without
   increasing error leakage or partial-write ambiguity.
 - Peak memory remains bounded by configured batch size.
+
+Implementation note (duplicate-ingestion fast-path slice): exact duplicates
+now return before summary/fact/graph derivation, metadata rewrites, embedding,
+or vector writes when the stored manifest is indexed and the vector provider
+confirms all expected chunk IDs. Pending manifests are reconciled from existing
+vector rows, while missing vectors retain the full repair path. The deterministic
+`memory.benchmarks.ingestion_efficiency` work ledger reports calls, rows, and
+bytes for accepted and duplicate inputs. Its baseline fixture drops from two
+embedding inputs and two vector-row writes on the former full-reindex path to
+zero of each, a 100% reduction; the required audit row remains.
 
 ## Phase 3: Reduce Retrieval Amplification
 
@@ -380,6 +390,7 @@ uv run python -m ruff check memory tests tools
 uv run python -m pyright
 uv run pytest tests/unit tests/integration -q
 uv run python -m memory.benchmarks.cache_candidates --iterations 1000
+uv run python -m memory.benchmarks.ingestion_efficiency
 uv run python -m memory.benchmarks.token_budget --iterations 200
 uv run python -m memory.benchmarks.quality_gate \
   --output reports/quality/quality-gate.json
