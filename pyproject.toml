@@ -10,7 +10,7 @@ dependencies = [
     "itsdangerous>=2.2.0",
     "jinja2>=3.1.6",
     "jsonschema>=4.25.1",
-    "lancedb>=0.37.1",
+    "lancedb>=0.40.0",
     "mcp>=2.2.0",
     "pydantic>=2.14.1",
     "python-dotenv>=1.2.2",
@@ -54,7 +54,7 @@ pinecone = [
     "pinecone>=7.0.0",
 ]
 qdrant = [
-    "qdrant-client>=1.19.1",
+    "qdrant-client>=1.20.0",
 ]
 redis = [
     "redis>=8.1.0",

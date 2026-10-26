@@ -6,6 +6,13 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Limited trusted-append graph extraction to newly appended messages while
+  preserving absolute message-index provenance and conflict supersession.
+- Removed exact repeated token-window overlap from budgeted ask and handoff
+  context when adjacent chunks are proven to come from the same source message.
+- Skipped semantic reranker projection and invocation when zero or one
+  candidate can be reranked, with an explicit diagnostic mode and deterministic
+  call-amplification coverage.
 - Adapted unfiltered lexical and fact candidate limits to the requested
   `top_k` and configured candidate multiplier, while preserving configured
   maxima for filtered searches to protect post-filter recall.

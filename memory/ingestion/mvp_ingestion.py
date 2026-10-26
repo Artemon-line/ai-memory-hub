@@ -2708,7 +2708,11 @@ def ingest_messages(
                     new_messages,
                     start_message_index=start_index,
                 )
-                graph_counts = _store_graph_for_conversation(updated)
+                graph_counts = _store_graph_for_messages(
+                    updated,
+                    new_messages,
+                    start_message_index=start_index,
+                )
         else:
             graph_counts = {"entities": 0, "relationships": 0}
         logger.info(
@@ -5116,6 +5120,9 @@ def _select_ask_context(
     tokens_used = 0
     chunks_dropped = 0
     context_truncated = False
+    identity_cache: dict[
+        tuple[str, int], tuple[str, int, str, int | None] | None
+    ] = {}
 
     for row in matches:
         citation_id = row.get("id")
@@ -5128,7 +5135,9 @@ def _select_ask_context(
             context_truncated = True
             continue
 
-        text = str(row.get("text", ""))
+        text = _context_text_without_prior_overlap(
+            row, selected_matches, identity_cache=identity_cache
+        )
         text_tokens = count_tokens(text, encoding)
         selected_text = text
         if text_tokens > remaining:
@@ -5157,6 +5166,146 @@ def _select_ask_context(
         tokens_used,
         chunks_dropped,
         context_truncated,
+    )
+
+
+def _context_text_without_prior_overlap(
+    row: Mapping[str, Any],
+    selected_matches: Sequence[Mapping[str, Any]],
+    *,
+    identity_cache: dict[tuple[str, int], tuple[str, int, str, int | None] | None],
+) -> str:
+    """Remove exact token-window overlap already represented in selected context."""
+    text = str(row.get("text", ""))
+    identity = _context_chunk_identity(row, cache=identity_cache)
+    if identity is None:
+        return text
+    memory_id, chunk_index, message_hash, token_window_index = identity
+
+    for prior in selected_matches:
+        prior_identity = _context_chunk_identity(prior, cache=identity_cache)
+        if prior_identity is None:
+            continue
+        (
+            prior_memory_id,
+            prior_chunk_index,
+            prior_message_hash,
+            prior_token_window_index,
+        ) = prior_identity
+        if memory_id != prior_memory_id or message_hash != prior_message_hash:
+            continue
+        if abs(chunk_index - prior_chunk_index) != 1:
+            continue
+        if (
+            token_window_index is not None
+            and prior_token_window_index is not None
+            and abs(token_window_index - prior_token_window_index) != 1
+        ):
+            continue
+
+        prior_text = str(prior.get("text", ""))
+        if chunk_index > prior_chunk_index:
+            text = _trim_exact_prefix_overlap(text, prior_text)
+        else:
+            text = _trim_exact_suffix_overlap(text, prior_text)
+    return text
+
+
+def _context_chunk_identity(
+    row: Mapping[str, Any],
+    *,
+    cache: dict[tuple[str, int], tuple[str, int, str, int | None] | None],
+) -> tuple[str, int, str, int | None] | None:
+    memory_id = str(row.get("id", ""))
+    if not memory_id:
+        return None
+    chunk_index = int(row.get("chunk_index", 0))
+    key = (memory_id, chunk_index)
+    if key in cache:
+        return cache[key]
+    cache[key] = None
+    conversation = row.get("conversation")
+    if not isinstance(conversation, Mapping):
+        return None
+    metadata = conversation.get("metadata")
+    if not isinstance(metadata, Mapping):
+        return None
+    chunks = metadata.get(MetadataField.INDEX_CHUNKS.value)
+    if not isinstance(chunks, list):
+        return None
+    for chunk in chunks:
+        if not isinstance(chunk, Mapping):
+            continue
+        manifest_index = int(chunk.get(IndexChunkField.CHUNK_INDEX.value, -1))
+        message_hash = str(chunk.get(IndexChunkField.MESSAGE_HASH.value, ""))
+        if not message_hash:
+            continue
+        raw_window_index = chunk.get(IndexChunkField.TOKEN_WINDOW_INDEX.value)
+        window_index = int(raw_window_index) if isinstance(raw_window_index, int) else None
+        cache[(memory_id, manifest_index)] = (
+            memory_id,
+            manifest_index,
+            message_hash,
+            window_index,
+        )
+    return cache.get(key)
+
+
+def _trim_exact_prefix_overlap(text: str, prior_text: str) -> str:
+    overlap = _longest_exact_edge_overlap(prior_text, text)
+    if overlap == 0 or overlap == len(text) or overlap == len(prior_text):
+        return text
+    return text[overlap:].lstrip()
+
+
+def _trim_exact_suffix_overlap(text: str, prior_text: str) -> str:
+    overlap = _longest_exact_edge_overlap(text, prior_text)
+    if overlap == 0 or overlap == len(text) or overlap == len(prior_text):
+        return text
+    return text[:-overlap].rstrip()
+
+
+def _longest_exact_edge_overlap(left: str, right: str) -> int:
+    if not left or not right:
+        return 0
+    prefix_lengths = [0] * len(right)
+    matched = 0
+    for index in range(1, len(right)):
+        while matched and right[index] != right[matched]:
+            matched = prefix_lengths[matched - 1]
+        if right[index] == right[matched]:
+            matched += 1
+            prefix_lengths[index] = matched
+
+    matched = 0
+    for index, character in enumerate(left):
+        while matched and character != right[matched]:
+            matched = prefix_lengths[matched - 1]
+        if character == right[matched]:
+            matched += 1
+        if matched == len(right) and index != len(left) - 1:
+            matched = prefix_lengths[matched - 1]
+    overlap = right[:matched]
+    left_start = len(left) - matched
+    splits_left_token = (
+        matched > 0
+        and left_start > 0
+        and left[left_start - 1].isalnum()
+        and left[left_start].isalnum()
+    )
+    splits_right_token = (
+        matched > 0
+        and matched < len(right)
+        and right[matched - 1].isalnum()
+        and right[matched].isalnum()
+    )
+    return (
+        matched
+        if overlap.strip()
+        and re.search(r"\w", overlap)
+        and not splits_left_token
+        and not splits_right_token
+        else 0
     )
 
 
@@ -5270,10 +5419,28 @@ def _store_facts(facts: list[dict[str, Any]]) -> None:
 
 
 def _store_graph_for_conversation(conversation: dict[str, Any]) -> dict[str, int]:
+    messages = conversation.get("messages", [])
+    return _store_graph_for_messages(
+        conversation,
+        messages if isinstance(messages, list) else [],
+        start_message_index=0,
+    )
+
+
+def _store_graph_for_messages(
+    conversation: dict[str, Any],
+    messages: list[dict[str, Any]],
+    *,
+    start_message_index: int,
+) -> dict[str, int]:
     runtime = _runtime()
     if not runtime.graph_enabled:
         return {"entities": 0, "relationships": 0}
-    graph = extract_memory_graph(conversation)
+    graph = extract_memory_graph(
+        conversation,
+        messages=messages,
+        start_message_index=start_message_index,
+    )
     entities = graph["entities"]
     relationships = graph["relationships"]
     if not entities and not relationships:

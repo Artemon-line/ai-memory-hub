@@ -265,8 +265,19 @@ the incoming transcript and immediately overwriting the same derived
 identities. The deterministic ingestion work ledger preserves the final
 three-message summary and reduces the append fixture from two summary passes
 and four derived-row writes to one pass and two writes (50% less summary work).
-Rejected same-ID updates also perform no generated-summary writes. Incremental
-graph extraction and other unchanged-message derivation remain follow-up work.
+Rejected same-ID updates also perform no generated-summary writes. Other
+unchanged-message derivation remains follow-up work.
+
+Implementation note (incremental append-graph slice): trusted appends now run
+graph extraction only over newly appended messages and carry the original
+zero-based message offset into entity and relationship provenance. Existing
+relationships remain available for conflict supersession, while unchanged
+messages are not scanned or rewritten by the extraction stage. The deterministic
+`memory.benchmarks.append_graph_efficiency` fixture reduces graph inputs for a
+two-message conversation plus one-message append from three messages to one
+(66.7%) and verifies that the new relationship still cites message index 2.
+Facts were already append-incremental; unchanged-message hashing and reindex
+work remain follow-up items.
 
 ## Phase 3: Reduce Retrieval Amplification
 
@@ -311,12 +322,23 @@ The versioned quality gate retains perfect precision@1, recall@k, MRR, nDCG,
 filtered recall, temporal accuracy, and fallback accuracy on its synthetic
 corpus. Provider-pushdown and observed-yield adaptation remain follow-up work.
 
+Implementation note (small-set reranker-bypass slice): rank fusion now reports
+`insufficient_candidates` and skips both bounded projection construction and
+semantic reranker invocation when its rerankable subset contains zero or one
+candidate. A single candidate cannot change relative order, including when a
+configured reranker batch limit exposes only the leading item. Multi-candidate
+semantic, timeout, error, and deterministic-fallback paths are unchanged. The
+deterministic `memory.benchmarks.reranker_efficiency` fixture reduces the
+single-candidate reranker call count from one to zero (100%), preserves the
+result, and verifies that a two-candidate request still makes one call. The
+versioned quality gate remains green with unchanged retrieval metrics.
+
 ## Phase 4: Bound Context And Model Cost
 
 - [ ] Measure input/output tokens and selected evidence per ask mode and client.
 - [ ] Define default context budgets by concise/detailed response mode, with
       explicit overrides and stable diagnostics.
-- [ ] Deduplicate overlapping chunks before token counting and context assembly.
+- [x] Deduplicate overlapping chunks before token counting and context assembly.
 - [ ] Prefer the smallest evidence span that preserves the claim and citation.
 - [ ] Use existing summaries and validated facts as compact evidence; never
       synthesize a summary merely to save tokens unless its creation cost and
@@ -332,6 +354,15 @@ Acceptance criteria:
 - Total answer latency or provider cost improves after including local token
   selection overhead.
 - Citation completeness and answer-contract accuracy remain unchanged.
+
+Implementation note (overlapping-context deduplication slice): budgeted ask,
+fact/chunk arbitration, and handoff context now remove an exact suffix/prefix
+overlap only when adjacent chunks share both a conversation ID and stored source
+message hash. Ranking and citation identities remain unchanged, and different
+messages retain repeated wording. The deterministic
+`memory.benchmarks.context_overlap_efficiency` fixture preserves all unique
+evidence while reducing total selected-context accounting from 40 to 38 tokens
+(5%); citation framing accounts for the invariant portion of that measurement.
 
 ## Phase 5: Storage And Index Efficiency
 
@@ -436,7 +467,10 @@ uv run python -m pyright
 uv run pytest tests/unit tests/integration -q
 uv run python -m memory.benchmarks.cache_candidates --iterations 1000
 uv run python -m memory.benchmarks.ingestion_efficiency
+uv run python -m memory.benchmarks.append_graph_efficiency
+uv run python -m memory.benchmarks.reranker_efficiency
 uv run python -m memory.benchmarks.retrieval_amplification
+uv run python -m memory.benchmarks.context_overlap_efficiency
 uv run python -m memory.benchmarks.token_budget --iterations 200
 uv run python -m memory.benchmarks.quality_gate \
   --output reports/quality/quality-gate.json

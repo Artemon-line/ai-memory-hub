@@ -85,7 +85,9 @@ Steps:
 9. Store metadata and child message/chunk records.
 10. Embed only the chunks that need indexing.
 11. Store vectors and mark chunk indexing state.
-12. Return deterministic outcome fields, including `deduplicated`, `appended_messages`, and `embedded_chunks`.
+12. Derive facts and graph records, limiting trusted-append extraction to newly
+    appended messages while retaining their absolute source indexes.
+13. Return deterministic outcome fields, including `deduplicated`, `appended_messages`, and `embedded_chunks`.
 
 ### Fact validation and confidence
 
@@ -264,7 +266,7 @@ with both fact and chunk evidence. Corrected current facts remain authoritative
 over stale historical chunks. Context budgeting is applied to the selected
 chunk evidence after arbitration.
 
-When budgeting is enabled, `memory_ask` selects, truncates, or drops context chunks within the configured budget and may return `context_tokens_used`, `chunks_selected`, `chunks_dropped`, and `tokenizer_used`.
+When budgeting is enabled, `memory_ask` selects, truncates, or drops context chunks within the configured budget and may return `context_tokens_used`, `chunks_selected`, `chunks_dropped`, and `tokenizer_used`. Exact suffix/prefix overlap between adjacent token windows from the same source message is represented once in the selected context while each retained span keeps its original citation.
 
 Semantic reranking is optional. With no reranker, on timeout, or on invalid
 reranker output, retrieval uses the same deterministic fused ordering. Inputs
