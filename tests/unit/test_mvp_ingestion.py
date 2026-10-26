@@ -52,6 +52,8 @@ class StubMetadataStore:
         self.by_id: dict[str, dict[str, Any]] = {}
         self.get_calls: list[str] = []
         self.get_many_calls: list[list[str]] = []
+        self._generated_summaries: dict[str, dict[str, Any]] = {}
+        self.generated_summary_upserts: list[str] = []
 
     def insert(self, conversation_json: dict[str, Any]) -> str:
         memory_id = str(conversation_json["id"])
@@ -69,6 +71,11 @@ class StubMetadataStore:
     def get_many(self, ids: list[str]):
         self.get_many_calls.append(list(ids))
         return {id_: self.by_id[id_] for id_ in ids if id_ in self.by_id}
+
+    def upsert_generated_summary(self, summary: dict[str, Any]) -> None:
+        summary_id = str(summary["id"])
+        self.generated_summary_upserts.append(summary_id)
+        self._generated_summaries[summary_id] = dict(summary)
 
 
 class StubVectorStore:
@@ -788,6 +795,7 @@ def test_ingest_messages_appends_only_new_same_id_messages() -> None:
     metadata, vectors = _configure_stubs(allow_trusted_appends=True)
     base = _valid_conversation()
     mvp_ingestion.ingest_messages(base)
+    summary_upserts_after_base = len(metadata.generated_summary_upserts)
     longer = _valid_conversation()
     longer["messages"] = [
         {"role": "user", "text": "hello"},
@@ -808,6 +816,11 @@ def test_ingest_messages_appends_only_new_same_id_messages() -> None:
     summary = metadata._generated_summaries[generated["id"]]
     assert summary["provenance"][0]["source_message_indexes"] == [0, 1, 2]
     assert "next" in summary["text"]
+    stored_metadata = metadata.by_id[base["id"]]["metadata"]
+    expected_summary_writes = 2 + len(stored_metadata["generated_topic_summary_ids"])
+    assert len(metadata.generated_summary_upserts) - summary_upserts_after_base == (
+        expected_summary_writes
+    )
 
 
 def test_trusted_append_extracts_facts_only_from_new_messages() -> None:
@@ -903,8 +916,9 @@ def test_trusted_append_accepts_sibling_same_thread_continuation() -> None:
 
 
 def test_ingest_messages_rejects_same_id_append_without_trust() -> None:
-    _configure_stubs()
+    metadata, _ = _configure_stubs()
     mvp_ingestion.ingest_messages(_valid_conversation())
+    summary_upserts_after_insert = len(metadata.generated_summary_upserts)
     longer = _valid_conversation()
     longer["messages"] = [
         {"role": "user", "text": "hello"},
@@ -914,6 +928,8 @@ def test_ingest_messages_rejects_same_id_append_without_trust() -> None:
 
     with pytest.raises(ValueError, match="unauthorized_update"):
         mvp_ingestion.ingest_messages(longer)
+
+    assert len(metadata.generated_summary_upserts) == summary_upserts_after_insert
 
 
 def test_ingest_messages_rejects_conflicting_same_id_history() -> None:

@@ -6,6 +6,9 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Deferred generated-summary work until after trusted-append detection, so an
+  append writes summaries once for the combined conversation instead of first
+  writing transient summaries for the incoming transcript.
 - Reused assembled source-conversation search text within fact ranking and
   question narrowing requests, with a deterministic work-amplification
   benchmark and no cross-request payload cache.

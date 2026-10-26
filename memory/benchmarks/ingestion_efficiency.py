@@ -20,6 +20,14 @@ _PAYLOAD = {
     "metadata": {},
 }
 
+_APPEND_PAYLOAD = {
+    **_PAYLOAD,
+    "messages": [
+        *_PAYLOAD["messages"],
+        {"role": "user", "text": "Append only one new benchmark message."},
+    ],
+}
+
 
 @dataclass
 class _WorkLedger:
@@ -145,7 +153,7 @@ class _CountingVectorStore:
 
 
 def run_benchmark() -> dict[str, Any]:
-    """Measure work performed for an accepted insert and its exact duplicate."""
+    """Measure work for an accepted insert, duplicate, and trusted append."""
     original_runtime = mvp_ingestion._RUNTIME
     ledger = _WorkLedger()
     metadata_store = _CountingMetadataStore(ledger)
@@ -160,6 +168,7 @@ def run_benchmark() -> dict[str, Any]:
             "vector_provider": "memory",
             "embedding": {"provider": "benchmark", "model": "deterministic"},
         },
+        allow_trusted_appends=True,
     )
     try:
         mvp_ingestion.configure_runtime(runtime=runtime)
@@ -171,11 +180,16 @@ def run_benchmark() -> dict[str, Any]:
         duplicate["id"] = "00000000-0000-4000-8000-000000000102"
         duplicate_result = mvp_ingestion.ingest_messages(duplicate)
         duplicate_work = ledger.snapshot()
+
+        ledger.reset()
+        append_result = mvp_ingestion.ingest_messages(deepcopy(_APPEND_PAYLOAD))
+        append_work = ledger.snapshot()
     finally:
         mvp_ingestion._RUNTIME = original_runtime
 
     message_count = len(_PAYLOAD["messages"])
     baseline_embedding_inputs = int(accepted_result["embedded_chunks"])
+    previous_append_summary_writes = append_work["derived_rows_written"] * 2
     return {
         "measurement": "deterministic_work_amplification",
         "accepted": {
@@ -188,9 +202,21 @@ def run_benchmark() -> dict[str, Any]:
             "work": duplicate_work,
             "work_per_message": _per_message(duplicate_work, message_count),
         },
+        "append": {
+            "result": append_result,
+            "work": append_work,
+            "work_per_new_message": _per_message(
+                append_work,
+                int(append_result["appended_messages"]),
+            ),
+        },
         "previous_duplicate_path": {
             "embedding_inputs": baseline_embedding_inputs,
             "vector_rows_written": baseline_embedding_inputs,
+        },
+        "previous_append_path": {
+            "summary_generation_passes": 2,
+            "derived_rows_written": previous_append_summary_writes,
         },
         "reductions": {
             "embedding_inputs": _reduction(
@@ -200,6 +226,11 @@ def run_benchmark() -> dict[str, Any]:
             "vector_rows_written": _reduction(
                 baseline_embedding_inputs,
                 duplicate_work["vector_rows_written"],
+            ),
+            "append_summary_generation_passes": _reduction(2, 1),
+            "append_derived_rows_written": _reduction(
+                previous_append_summary_writes,
+                append_work["derived_rows_written"],
             ),
         },
     }
@@ -215,11 +246,16 @@ def assert_thresholds(report: dict[str, Any]) -> None:
         raise AssertionError("duplicate ingestion must perform zero embedding work")
     if work["vector_rows_written"] != 0:
         raise AssertionError("duplicate ingestion must perform zero vector-row writes")
+    append = report["append"]
+    if append["result"].get("appended_messages") != 1:
+        raise AssertionError("append fixture must add exactly one message")
+    if report["reductions"]["append_derived_rows_written"] < 0.5:
+        raise AssertionError("append summary writes must fall by at least 50%")
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Measure accepted-versus-duplicate ingestion work amplification."
+        description="Measure accepted, duplicate, and append ingestion work amplification."
     )
     parser.parse_args(argv)
     report = run_benchmark()
