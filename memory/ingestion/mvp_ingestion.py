@@ -111,6 +111,8 @@ from memory.ingestion.tokenizer import (
 )
 from memory.ingestion.validate import (
     SCHEMA_PATH,
+    compile_conversation_validator,
+    load_compiled_conversation_schema,
     load_schema,
     validate_conversation,
     validate_schema_compatibility,
@@ -234,6 +236,7 @@ class RuntimeDependencies:
     health_state: dict[str, Any]
     schema_path: Path = SCHEMA_PATH
     conversation_schema: dict[str, Any] | None = None
+    conversation_validator: Any | None = None
     allow_trusted_appends: bool = False
     tokenizer_enabled: bool = False
     tokenizer_encoding: str = "cl100k_base"
@@ -916,7 +919,7 @@ def build_runtime(
     cfg = parse_config(config) if isinstance(config, dict) else (config or load_config())
     ensure_token_hash_secret(cfg)
     schema_path = Path(cfg.schema_config.file) if cfg.schema_config.file else SCHEMA_PATH
-    conversation_schema = load_schema(schema_path)
+    conversation_schema, conversation_validator = load_compiled_conversation_schema(schema_path)
     validate_schema_compatibility(conversation_schema)
     data_dir = Path(cfg.paths.data_dir)
     try:
@@ -1042,6 +1045,7 @@ def build_runtime(
         health_state=health_state,
         schema_path=schema_path,
         conversation_schema=conversation_schema,
+        conversation_validator=conversation_validator,
         allow_trusted_appends=cfg.storage.allow_trusted_appends,
         tokenizer_enabled=cfg.tokenizer.enabled,
         tokenizer_encoding=cfg.tokenizer.encoding,
@@ -1355,7 +1359,11 @@ def _runtime() -> RuntimeDependencies:
 def validate_json(obj: dict[str, Any]) -> None:
     runtime = _runtime()
     schema = runtime.conversation_schema or load_schema(runtime.schema_path)
-    validate_conversation(obj, schema=schema)
+    validator = runtime.conversation_validator
+    if validator is None:
+        validator = compile_conversation_validator(schema)
+        runtime.conversation_validator = validator
+    validate_conversation(obj, validator=validator)
 
 
 def infer_topics(messages: list[dict[str, Any]]) -> list[str]:

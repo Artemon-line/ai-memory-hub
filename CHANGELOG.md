@@ -6,6 +6,9 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Reused bounded, file-identity-aware compiled conversation validators across
+  ingestion requests, with explicit invalidation and isolated multi-schema
+  runtime behavior.
 - Improved performance benchmark fidelity with exception-free in-memory audit
   accounting, first-call and warm latency distributions, p50/p95/p99 reporting,
   and per-request candidate/context amplification metrics.

@@ -156,11 +156,11 @@ Implementation status:
 
 Start with low-risk work that should not alter ranking or storage semantics.
 
-- [ ] Trace config parsing and schema loading to confirm whether they occur on
+- [x] Trace config parsing and schema loading to confirm whether they occur on
       hot request paths.
-- [ ] If repeated, cache parsed configuration by resolved path plus file
+- [x] If repeated, cache parsed configuration by resolved path plus file
       identity and invalidate explicitly on reload.
-- [ ] If repeated, cache validated schemas by resolved path plus modification
+- [x] If repeated, cache validated schemas by resolved path plus modification
       time; never allow one configured schema to contaminate another runtime.
 - [ ] Reuse bounded provider clients and connection pools rather than creating
       network clients per operation.
@@ -182,6 +182,20 @@ Acceptance criteria:
 - Cache invalidation and multi-config tests pass.
 - No raw payload, query, embedding, token, or secret is added to cache keys or
   logs.
+
+Implementation note (runtime immutable-data cache slice): tracing confirmed
+that configuration parsing and schema file loading occur during runtime
+construction rather than on normal request paths, so parsed configuration is
+intentionally left uncached. Payload validation did, however, re-check and
+recompile the same schema for every ingest. Runtimes now reuse a checked
+validator cached by resolved schema path, nanosecond modification time, and
+file size; the cache is bounded to 16 identities and supports explicit
+invalidation. Direct schema loads remain isolated so caller mutation cannot
+contaminate another runtime. On a 100-iteration local synthetic run, reusing
+the validator reduced unprofiled validation p95 from `29.60 ms` to `0.33 ms`
+(more than 98%); exact timings are environment-dependent. Invalidation, mutation
+isolation, and multi-schema tests cover reload and concurrent configuration
+safety.
 
 ## Phase 2: Make Ingestion Proportional To New Information
 

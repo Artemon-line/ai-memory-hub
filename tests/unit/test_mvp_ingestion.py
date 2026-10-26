@@ -977,6 +977,25 @@ def test_validate_conversation_enforces_schema_formats() -> None:
         ingestion_validate.validate_conversation(normalized)
 
 
+def test_validate_json_compiles_schema_once_per_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
+    _configure_stubs()
+    compile_calls = 0
+    original_compile = mvp_ingestion.compile_conversation_validator
+
+    def counting_compile(schema: dict[str, Any]) -> Any:
+        nonlocal compile_calls
+        compile_calls += 1
+        return original_compile(schema)
+
+    monkeypatch.setattr(mvp_ingestion, "compile_conversation_validator", counting_compile)
+    normalized = mvp_ingestion.normalize_conversation_json(_valid_conversation())
+
+    mvp_ingestion.validate_json(normalized)
+    mvp_ingestion.validate_json(normalized)
+
+    assert compile_calls == 1
+
+
 def test_validate_conversation_enforces_handoff_provenance_bounds() -> None:
     normalized = mvp_ingestion.normalize_conversation_json(_valid_conversation())
     normalized["metadata"]["source_client"] = "not a slug"
