@@ -64,11 +64,12 @@ The public docs are now split into three kinds of pages:
 | [Release promotion assets](release_promotion_assets.md) | Release announcement and demo assets. |
 | [Repository governance settings](repository_governance_settings.md) | Repository settings and governance checklist. |
 | [Recurring codebase cleanup plan](recurring_codebase_cleanup_plan.md) | Ongoing engineering-health review. |
+| [Efficiency revival plan](improvements/efficiency_revival_plan.md) | Measurement-first latency, throughput, resource, storage, token, and operational efficiency work. |
 
 ## Improvement Backlog
 
 The [improvement plans](improvements.md) collect focused follow-up work for
 client feedback, MCP result shapes, response formats, agent/model footprint, retrieval precision, context building,
 conversation grouping, memory quality, edge-case coverage, explicit save intent,
-handoff memory, Codex CLI MCP findings, Google OAuth connect UX, vector
+handoff memory, efficiency, Codex CLI MCP findings, Google OAuth connect UX, vector
 database evaluation, and Neo4j Aura graph memory.
