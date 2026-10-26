@@ -437,7 +437,12 @@ _USES_RE = re.compile(r"\b(?P<subject>[A-Z][A-Za-z0-9 _-]{2,80})\s+uses\s+(?P<ob
 _CHANGED_RE = re.compile(r"\b(?P<subject>[A-Z][A-Za-z0-9 _-]{2,80})\s+changed\s+to\s+(?P<object>[^.!\n]{2,120})", re.I)
 
 
-def extract_memory_graph(conversation: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+def extract_memory_graph(
+    conversation: dict[str, Any],
+    *,
+    messages: list[dict[str, Any]] | None = None,
+    start_message_index: int = 0,
+) -> dict[str, list[dict[str, Any]]]:
     entities: list[EntityRecord] = []
     relationships: list[RelationshipRecord] = []
     seen_entities: set[str] = set()
@@ -448,9 +453,11 @@ def extract_memory_graph(conversation: dict[str, Any]) -> dict[str, list[dict[st
     owner_id = _optional_str(conversation.get("owner_id"))
     project_id = _optional_str(conversation.get("project_id"))
     timestamp = _optional_str(conversation.get("timestamp"))
-    messages = conversation.get("messages", [])
-    if not isinstance(messages, list):
+    selected_messages = conversation.get("messages", []) if messages is None else messages
+    if not isinstance(selected_messages, list):
         return {"entities": [], "relationships": []}
+    if start_message_index < 0:
+        raise ValueError("start_message_index must be non-negative")
 
     def add_entity(name: str, entity_type: EntityType, index: int) -> str:
         cleaned = _clean_text(name)
@@ -519,9 +526,10 @@ def extract_memory_graph(conversation: dict[str, Any]) -> dict[str, list[dict[st
             )
         )
 
-    for index, message in enumerate(messages):
+    for offset, message in enumerate(selected_messages):
         if not isinstance(message, dict):
             continue
+        index = start_message_index + offset
         text = str(message.get("text", ""))
         for tool in _names_in_text(text, _KNOWN_TOOLS):
             add_entity(tool, EntityType.TOOL, index)

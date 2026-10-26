@@ -3261,6 +3261,47 @@ def test_conflicting_graph_relationships_are_superseded() -> None:
     assert any(row["superseded_by"] for row in changed if row["object"] == "blue")
 
 
+def test_trusted_append_extracts_graph_only_from_new_messages(monkeypatch) -> None:
+    original_extract = mvp_ingestion.extract_memory_graph
+    calls: list[tuple[int, int]] = []
+
+    def recording_extract(
+        conversation: dict[str, Any],
+        *,
+        messages: list[dict[str, Any]] | None = None,
+        start_message_index: int = 0,
+    ) -> dict[str, list[dict[str, Any]]]:
+        selected = conversation.get("messages", []) if messages is None else messages
+        calls.append((len(selected), start_message_index))
+        return original_extract(
+            conversation,
+            messages=messages,
+            start_message_index=start_message_index,
+        )
+
+    monkeypatch.setattr(mvp_ingestion, "extract_memory_graph", recording_extract)
+    _configure_stubs(graph_enabled=True, allow_trusted_appends=True)
+    conversation = _valid_conversation()
+    conversation["messages"] = [
+        {"role": "user", "text": "Velvet Lantern uses PGVector."},
+        {"role": "assistant", "text": "Recorded."},
+    ]
+    mvp_ingestion.ingest_messages(conversation)
+
+    updated = _valid_conversation()
+    updated["messages"] = [
+        *conversation["messages"],
+        {"role": "user", "text": "Velvet Lantern changed to green."},
+    ]
+    result = mvp_ingestion.ingest_messages(updated)
+
+    assert calls == [(2, 0), (1, 2)]
+    assert result["appended_messages"] == 1
+    relationships = mvp_ingestion.graph_relationship_search(include_superseded=True)["results"]
+    appended = next(row for row in relationships if row["predicate"] == "changed_to")
+    assert appended["provenance"][0]["message_index"] == 2
+
+
 def test_ingest_messages_enriches_topics() -> None:
     metadata, _ = _configure_stubs()
     conversation = _valid_conversation()

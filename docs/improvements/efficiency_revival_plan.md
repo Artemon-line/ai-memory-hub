@@ -265,8 +265,19 @@ the incoming transcript and immediately overwriting the same derived
 identities. The deterministic ingestion work ledger preserves the final
 three-message summary and reduces the append fixture from two summary passes
 and four derived-row writes to one pass and two writes (50% less summary work).
-Rejected same-ID updates also perform no generated-summary writes. Incremental
-graph extraction and other unchanged-message derivation remain follow-up work.
+Rejected same-ID updates also perform no generated-summary writes. Other
+unchanged-message derivation remains follow-up work.
+
+Implementation note (incremental append-graph slice): trusted appends now run
+graph extraction only over newly appended messages and carry the original
+zero-based message offset into entity and relationship provenance. Existing
+relationships remain available for conflict supersession, while unchanged
+messages are not scanned or rewritten by the extraction stage. The deterministic
+`memory.benchmarks.append_graph_efficiency` fixture reduces graph inputs for a
+two-message conversation plus one-message append from three messages to one
+(66.7%) and verifies that the new relationship still cites message index 2.
+Facts were already append-incremental; unchanged-message hashing and reindex
+work remain follow-up items.
 
 ## Phase 3: Reduce Retrieval Amplification
 
@@ -456,6 +467,7 @@ uv run python -m pyright
 uv run pytest tests/unit tests/integration -q
 uv run python -m memory.benchmarks.cache_candidates --iterations 1000
 uv run python -m memory.benchmarks.ingestion_efficiency
+uv run python -m memory.benchmarks.append_graph_efficiency
 uv run python -m memory.benchmarks.reranker_efficiency
 uv run python -m memory.benchmarks.retrieval_amplification
 uv run python -m memory.benchmarks.context_overlap_efficiency

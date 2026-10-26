@@ -85,7 +85,9 @@ Steps:
 9. Store metadata and child message/chunk records.
 10. Embed only the chunks that need indexing.
 11. Store vectors and mark chunk indexing state.
-12. Return deterministic outcome fields, including `deduplicated`, `appended_messages`, and `embedded_chunks`.
+12. Derive facts and graph records, limiting trusted-append extraction to newly
+    appended messages while retaining their absolute source indexes.
+13. Return deterministic outcome fields, including `deduplicated`, `appended_messages`, and `embedded_chunks`.
 
 ### Fact validation and confidence
 
