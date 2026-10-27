@@ -2744,6 +2744,9 @@ releases may additionally use generated notes, but the release summary here
 should describe the supported public behavior for each tagged release.</p>
 <h2 id="unreleased">Unreleased</h2>
 <ul>
+<li>Reused the already verified, project-scoped aggregate conversation identity
+  for complete-history trusted appends, while retaining safe recomputation for
+  sibling continuations whose payload omits part of the stored history.</li>
 <li>Limited trusted-append graph extraction to newly appended messages while
   preserving absolute message-index provenance and conflict supersession.</li>
 <li>Removed exact repeated token-window overlap from budgeted ask and handoff
