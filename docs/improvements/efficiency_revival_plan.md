@@ -279,6 +279,18 @@ two-message conversation plus one-message append from three messages to one
 Facts were already append-incremental; unchanged-message hashing and reindex
 work remain follow-up items.
 
+Implementation note (verified append-identity reuse slice): normalization still
+recomputes every client-supplied message hash so trusted appends cannot bypass
+integrity checks. When the normalized payload contains the complete stored
+prefix plus its append, the write path now reuses that already verified,
+project-scoped aggregate conversation identity instead of joining and hashing
+the same ordered hashes a second time. Sibling-thread continuations retain a
+safe combined-history recomputation and now preserve project scoping. The
+deterministic `memory.benchmarks.append_hash_efficiency` fixture reduces
+aggregate hash passes and message-hash scans for a 64-message conversation plus
+one-message append from two/130 to one/65 (50%). Per-message normalization and
+broader unchanged-message derivation remain follow-up work.
+
 ## Phase 3: Reduce Retrieval Amplification
 
 - [ ] Break search and ask latency into planning, embedding, dense, lexical,
@@ -468,6 +480,7 @@ uv run pytest tests/unit tests/integration -q
 uv run python -m memory.benchmarks.cache_candidates --iterations 1000
 uv run python -m memory.benchmarks.ingestion_efficiency
 uv run python -m memory.benchmarks.append_graph_efficiency
+uv run python -m memory.benchmarks.append_hash_efficiency
 uv run python -m memory.benchmarks.reranker_efficiency
 uv run python -m memory.benchmarks.retrieval_amplification
 uv run python -m memory.benchmarks.context_overlap_efficiency

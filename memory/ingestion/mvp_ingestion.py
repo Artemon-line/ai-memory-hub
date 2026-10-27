@@ -557,6 +557,12 @@ class _ProfileSummaryLine:
     value: str
 
 
+@dataclass(frozen=True)
+class _AppendDelta:
+    messages: list[dict[str, Any]]
+    incoming_covers_updated_history: bool
+
+
 _PayloadKey = TypeVar("_PayloadKey", bound=StrEnum)
 
 
@@ -1707,15 +1713,49 @@ def _insert_new_conversation(obj: dict[str, Any]) -> tuple[str, bool]:
 
 
 def _append_conversation(
-    existing: dict[str, Any], incoming: dict[str, Any], new_messages: list[dict[str, Any]]
+    existing: dict[str, Any],
+    incoming: dict[str, Any],
+    new_messages: list[dict[str, Any]],
+    *,
+    incoming_covers_updated_history: bool = False,
 ) -> dict[str, Any]:
     updated = dict(existing)
     metadata = dict(updated.get("metadata", {}))
     incoming_metadata = incoming.get("metadata", {})
     messages = list(updated.get("messages", [])) + new_messages
     metadata["updated_at"] = incoming["metadata"]["updated_at"]
-    metadata["message_hashes"] = [str(message["hash"]) for message in messages]
-    metadata["conversation_hash"] = hash_ordered_messages(messages)
+    incoming_message_hashes = (
+        incoming_metadata.get("message_hashes")
+        if isinstance(incoming_metadata, dict)
+        else None
+    )
+    incoming_conversation_hash = (
+        incoming_metadata.get("conversation_hash") if isinstance(incoming_metadata, dict) else None
+    )
+    can_reuse_incoming_identity = (
+        incoming_covers_updated_history
+        and isinstance(incoming_message_hashes, list)
+        and len(incoming_message_hashes) == len(messages)
+        and isinstance(incoming_conversation_hash, str)
+    )
+    if can_reuse_incoming_identity:
+        assert isinstance(incoming_message_hashes, list)
+        assert isinstance(incoming_conversation_hash, str)
+        # Normalization has already recomputed and verified every message hash,
+        # then derived this ordered aggregate identity from the complete incoming
+        # history. Avoid rebuilding the same joined hash material during append.
+        metadata["message_hashes"] = list(incoming_message_hashes)
+        metadata["conversation_hash"] = incoming_conversation_hash
+    else:
+        metadata["message_hashes"] = [str(message["hash"]) for message in messages]
+        metadata["conversation_hash"] = _project_scoped_conversation_hash(
+            hash_ordered_messages(messages),
+            project_id=(
+                str(metadata["project_id"])
+                if isinstance(metadata.get("project_id"), str)
+                else None
+            ),
+        )
     if isinstance(incoming_metadata, dict):
         _merge_thread_metadata(metadata, incoming_metadata)
     updated["messages"] = messages
@@ -1766,8 +1806,18 @@ def _scope_conversation_hash(conversation: dict[str, Any], *, project_id: str | 
     conversation_hash = metadata.get("conversation_hash")
     if not isinstance(conversation_hash, str):
         return
+    metadata["conversation_hash"] = _project_scoped_conversation_hash(
+        conversation_hash, project_id=project_id
+    )
+
+
+def _project_scoped_conversation_hash(
+    conversation_hash: str, *, project_id: str | None
+) -> str:
+    if project_id is None:
+        return conversation_hash
     digest = hashlib.sha256(f"{project_id}\n{conversation_hash}".encode("utf-8")).hexdigest()
-    metadata["conversation_hash"] = f"sha256:{digest}"
+    return f"sha256:{digest}"
 
 
 def _normalize_thread_metadata(conversation: dict[str, Any]) -> None:
@@ -2102,6 +2152,12 @@ def _resolve_project(
 def _detect_new_messages(
     existing: dict[str, Any], incoming: dict[str, Any]
 ) -> list[dict[str, Any]]:
+    return _detect_append_delta(existing, incoming).messages
+
+
+def _detect_append_delta(
+    existing: dict[str, Any], incoming: dict[str, Any]
+) -> _AppendDelta:
     existing_messages = existing.get("messages", [])
     incoming_messages = incoming.get("messages", [])
     if not isinstance(existing_messages, list) or not isinstance(incoming_messages, list):
@@ -2117,7 +2173,7 @@ def _detect_new_messages(
     if shared_prefix_len == 0 and common_prefix_len > 0:
         raise ValueError("duplicate_conflict: same thread has conflicting message history")
     if shared_prefix_len == common_prefix_len and len(incoming_hashes) <= len(existing_hashes):
-        return []
+        return _AppendDelta(messages=[], incoming_covers_updated_history=False)
     seen = set(existing_hashes)
     new_messages: list[dict[str, Any]] = []
     suffix_start = (
@@ -2128,7 +2184,14 @@ def _detect_new_messages(
         if message_hash not in seen:
             new_messages.append(message)
             seen.add(message_hash)
-    return new_messages
+    incoming_covers_updated_history = (
+        shared_prefix_len == len(existing_messages)
+        and len(incoming_messages) == len(existing_messages) + len(new_messages)
+    )
+    return _AppendDelta(
+        messages=new_messages,
+        incoming_covers_updated_history=incoming_covers_updated_history,
+    )
 
 
 def _utc_now_iso() -> str:
@@ -2659,7 +2722,8 @@ def ingest_messages(
         conversation_json, owner_id=owner_id, project_id=effective_project_id
     )
     if same_thread is not None:
-        new_messages = _detect_new_messages(same_thread, conversation_json)
+        append_delta = _detect_append_delta(same_thread, conversation_json)
+        new_messages = append_delta.messages
         if not new_messages:
             # Re-index check for same_thread
             # If it's already fully indexed, we COULD skip,
@@ -2668,7 +2732,14 @@ def ingest_messages(
             updated = same_thread
         else:
             start_index = len(same_thread.get("messages", []))
-            updated = _append_conversation(same_thread, conversation_json, new_messages)
+            updated = _append_conversation(
+                same_thread,
+                conversation_json,
+                new_messages,
+                incoming_covers_updated_history=(
+                    append_delta.incoming_covers_updated_history
+                ),
+            )
             enrich_topics(updated)
             enrich_auto_tags(updated)
             _attach_generated_summaries(
