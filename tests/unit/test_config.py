@@ -76,6 +76,25 @@ def test_legacy_openai_embedding_config_maps_to_http_endpoint() -> None:
     assert config.embedding_endpoint.api_key == "ollama"
 
 
+def test_embedding_endpoint_batch_limits_are_bounded_and_configurable() -> None:
+    config = parse_config(
+        {
+            "embedding_endpoint": {
+                "max_batch_size": 7,
+                "max_batch_input_bytes": 4096,
+            }
+        }
+    )
+
+    assert config.embedding_endpoint.max_batch_size == 7
+    assert config.embedding_endpoint.max_batch_input_bytes == 4096
+
+    with pytest.raises(ValueError):
+        parse_config({"embedding_endpoint": {"max_batch_size": 0}})
+    with pytest.raises(ValueError):
+        parse_config({"embedding_endpoint": {"max_batch_input_bytes": 0}})
+
+
 def test_oauth_refresh_and_client_registration_ttl_config() -> None:
     config = parse_config({})
 

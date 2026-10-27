@@ -1406,7 +1406,15 @@ paths:
 embedding_endpoint:
   base_url: http://localhost:11434/v1
   api_key: dummy_key
+  max_batch_size: 128
+  max_batch_input_bytes: 1000000
 ```
+
+`max_batch_size` and `max_batch_input_bytes` bound each HTTP embedding request
+by input count and serialized UTF-8 JSON input-array bytes. Ingestion processes
+the batches in source order and does not write any vectors until every batch
+succeeds. Reduce the limits for stricter provider quotas; increase them only
+within the validated configuration bounds supported by the remote endpoint.
 
 `metadata_schema_versions` means "this app build supports these metadata store
 schema versions." It is an array so future rolling migrations can temporarily

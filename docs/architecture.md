@@ -83,7 +83,8 @@ Steps:
    vectors, facts, or graph records are written.
 8. Detect exact duplicates and trusted same-thread appends.
 9. Store metadata and child message/chunk records.
-10. Embed only the chunks that need indexing.
+10. Embed only the chunks that need indexing, splitting remote inputs into
+    configured count- and byte-bounded batches while preserving chunk order.
 11. Store vectors and mark chunk indexing state.
 12. Derive facts and graph records, limiting trusted-append extraction to newly
     appended messages while retaining their absolute source indexes.

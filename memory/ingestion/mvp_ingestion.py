@@ -149,6 +149,8 @@ class HttpEmbeddingProvider:
         dimension: int = 1536,
         base_url: str = "http://localhost:11434/v1",
         api_key: str | None = None,
+        max_batch_size: int = 128,
+        max_batch_input_bytes: int = 1_000_000,
     ):
         key = api_key or os.getenv("EMBEDDING_ENDPOINT_API_KEY")
         if not key:
@@ -158,6 +160,8 @@ class HttpEmbeddingProvider:
         self.api_key = key or ""
         self.embedding_model = embedding_model
         self.dimension = dimension
+        self.max_batch_size = max_batch_size
+        self.max_batch_input_bytes = max_batch_input_bytes
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         payload = {
@@ -167,7 +171,7 @@ class HttpEmbeddingProvider:
         }
         request = urllib.request.Request(
             f"{self.base_url}/embeddings",
-            data=json.dumps(payload).encode("utf-8"),
+            data=json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
@@ -193,7 +197,10 @@ class HttpEmbeddingProvider:
         data = parsed.get("data") if isinstance(parsed, dict) else None
         if not isinstance(data, list):
             raise RuntimeError("Embedding endpoint response must include a data array")
-        embeddings: list[list[float]] = []
+        embeddings_by_index: dict[int, list[float]] = {}
+        unindexed_embeddings: list[list[float]] = []
+        saw_index = False
+        saw_unindexed = False
         for item in data:
             if not isinstance(item, dict) or not isinstance(item.get("embedding"), list):
                 raise RuntimeError("Embedding endpoint response item is missing embedding")
@@ -203,7 +210,29 @@ class HttpEmbeddingProvider:
                     "Embedding endpoint returned vector dimensionality "
                     f"{len(vector)}; expected {self.dimension}"
                 )
-            embeddings.append(_parse_embedding_vector(vector))
+            parsed_vector = _parse_embedding_vector(vector)
+            response_index = item.get("index")
+            if response_index is None:
+                saw_unindexed = True
+                unindexed_embeddings.append(parsed_vector)
+                continue
+            saw_index = True
+            if (
+                isinstance(response_index, bool)
+                or not isinstance(response_index, int)
+                or response_index < 0
+                or response_index >= len(texts)
+                or response_index in embeddings_by_index
+            ):
+                raise RuntimeError("Embedding endpoint response contains an invalid index")
+            embeddings_by_index[response_index] = parsed_vector
+        if saw_index and saw_unindexed:
+            raise RuntimeError("Embedding endpoint response mixes indexed and unindexed items")
+        embeddings = (
+            [embeddings_by_index[index] for index in range(len(texts))]
+            if saw_index and len(embeddings_by_index) == len(texts)
+            else unindexed_embeddings
+        )
         if len(embeddings) != len(texts):
             raise RuntimeError(
                 f"Embedding endpoint returned {len(embeddings)} vectors for {len(texts)} inputs"
@@ -957,6 +986,8 @@ def build_runtime(
             cfg.providers.embedding_dimension,
             cfg.embedding_endpoint.base_url,
             cfg.embedding_endpoint.api_key,
+            cfg.embedding_endpoint.max_batch_size,
+            cfg.embedding_endpoint.max_batch_input_bytes,
         )
     else:
         embedding_provider = LocalEmbeddingProvider()
@@ -1572,13 +1603,31 @@ def embed_chunks(
     chunks: list[dict[str, Any]], *, project_id: str | None = None, owner_id: str | None = None
 ) -> list[dict[str, Any]]:
     runtime = _runtime()
-    texts = [chunk[IndexChunkField.TEXT.value] for chunk in chunks]
+    texts = [str(chunk[IndexChunkField.TEXT.value]) for chunk in chunks]
+    text_batches = _embedding_text_batches(
+        texts,
+        max_batch_size=getattr(runtime.embedding_provider, "max_batch_size", None),
+        max_batch_input_bytes=getattr(
+            runtime.embedding_provider, "max_batch_input_bytes", None
+        ),
+    )
     provider = str(runtime.health_state.get("embedding", {}).get("provider") or "unknown")
     model = str(runtime.health_state.get("embedding", {}).get("model") or "unknown")
     started = time.perf_counter()
-    with _ingestion_stage("embedding", provider=provider, model=model, chunk_count=len(chunks)):
+    with _ingestion_stage(
+        "embedding",
+        provider=provider,
+        model=model,
+        chunk_count=len(chunks),
+        batch_count=len(text_batches),
+    ):
         try:
-            vectors = runtime.embedding_provider.embed_texts(texts)
+            vectors = []
+            for text_batch in text_batches:
+                batch_vectors = runtime.embedding_provider.embed_texts(text_batch)
+                if len(batch_vectors) != len(text_batch):
+                    raise ValueError("Embedding provider must return one vector per input")
+                vectors.extend(batch_vectors)
         except Exception as exc:
             metrics.increment(
                 "memory_embedding_failures_total",
@@ -1613,6 +1662,57 @@ def embed_chunks(
             }
         )
     return embeddings
+
+
+def _embedding_text_batches(
+    texts: list[str],
+    *,
+    max_batch_size: object,
+    max_batch_input_bytes: object,
+) -> list[list[str]]:
+    size_limit = (
+        max_batch_size
+        if isinstance(max_batch_size, int) and not isinstance(max_batch_size, bool)
+        else len(texts) or 1
+    )
+    byte_limit = (
+        max_batch_input_bytes
+        if isinstance(max_batch_input_bytes, int)
+        and not isinstance(max_batch_input_bytes, bool)
+        else None
+    )
+    if size_limit < 1 or (byte_limit is not None and byte_limit < 1):
+        raise ValueError("Embedding provider batch limits must be positive integers")
+
+    batches: list[list[str]] = []
+    current: list[str] = []
+    current_bytes = 2  # JSON array brackets.
+    for text in texts:
+        text_bytes = len(json.dumps(text, ensure_ascii=False).encode("utf-8"))
+        single_input_bytes = 2 + text_bytes
+        if byte_limit is not None and single_input_bytes > byte_limit:
+            raise ValueError("Embedding input exceeds provider max_batch_input_bytes")
+        separator_bytes = 1 if current else 0
+        if current and (
+            len(current) >= size_limit
+            or (
+                byte_limit is not None
+                and current_bytes + separator_bytes + text_bytes > byte_limit
+            )
+        ):
+            batches.append(current)
+            current = []
+            current_bytes = 2
+            separator_bytes = 0
+        current.append(text)
+        current_bytes += separator_bytes + text_bytes
+    if current:
+        batches.append(current)
+    return batches
+
+
+def _embedding_batch_input_bytes(texts: list[str]) -> int:
+    return len(json.dumps(texts, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
 
 
 def store_metadata(obj: dict[str, Any]) -> str:
