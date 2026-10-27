@@ -823,6 +823,87 @@ def test_ingest_messages_appends_only_new_same_id_messages() -> None:
     )
 
 
+def test_trusted_full_history_append_reuses_verified_conversation_hash(monkeypatch) -> None:
+    original_hash_ordered_messages = mvp_ingestion.hash_ordered_messages
+    hashed_message_counts: list[int] = []
+
+    def recording_hash(messages: list[dict[str, Any]]) -> str:
+        hashed_message_counts.append(len(messages))
+        return original_hash_ordered_messages(messages)
+
+    monkeypatch.setattr(mvp_ingestion, "hash_ordered_messages", recording_hash)
+    metadata, _ = _configure_stubs(allow_trusted_appends=True)
+    base = _valid_conversation()
+    mvp_ingestion.ingest_messages(base)
+    hashed_message_counts.clear()
+    longer = _valid_conversation()
+    longer["messages"] = [
+        *base["messages"],
+        {"role": "user", "text": "next"},
+    ]
+
+    mvp_ingestion.ingest_messages(longer)
+
+    stored = metadata.by_id[str(base["id"])]
+    assert hashed_message_counts == [3]
+    raw_hash = original_hash_ordered_messages(stored["messages"])
+    expected_hash = mvp_ingestion._project_scoped_conversation_hash(
+        raw_hash, project_id=mvp_ingestion.LOCAL_DEFAULT_PROJECT_ID
+    )
+    assert stored["metadata"]["conversation_hash"] == expected_hash
+
+    repeated = mvp_ingestion.ingest_messages(longer)
+
+    assert repeated["deduplicated"] is True
+    assert repeated["embedded_chunks"] == 0
+    assert hashed_message_counts == [3, 3]
+
+
+def test_trusted_sibling_append_recomputes_combined_conversation_hash(monkeypatch) -> None:
+    original_hash_ordered_messages = mvp_ingestion.hash_ordered_messages
+    hashed_message_counts: list[int] = []
+
+    def recording_hash(messages: list[dict[str, Any]]) -> str:
+        hashed_message_counts.append(len(messages))
+        return original_hash_ordered_messages(messages)
+
+    monkeypatch.setattr(mvp_ingestion, "hash_ordered_messages", recording_hash)
+    metadata, _ = _configure_stubs(allow_trusted_appends=True)
+    base = _valid_conversation()
+    base["source"] = "opencode"
+    base["metadata"]["upstream_thread_id"] = "thread-hash-fallback"
+    base["messages"] = [{"role": "user", "text": "first thread note"}]
+    mvp_ingestion.ingest_messages(base)
+    first = _valid_conversation()
+    first["id"] = "22222222-2222-4222-8222-222222222222"
+    first["source"] = "opencode"
+    first["metadata"]["upstream_thread_id"] = "thread-hash-fallback"
+    first["messages"] = [
+        *base["messages"],
+        {"role": "assistant", "text": "first continuation"},
+    ]
+    mvp_ingestion.ingest_messages(first)
+    hashed_message_counts.clear()
+    sibling = _valid_conversation()
+    sibling["id"] = "33333333-3333-4333-8333-333333333333"
+    sibling["source"] = "opencode"
+    sibling["metadata"]["upstream_thread_id"] = "thread-hash-fallback"
+    sibling["messages"] = [
+        *base["messages"],
+        {"role": "assistant", "text": "sibling continuation"},
+    ]
+
+    mvp_ingestion.ingest_messages(sibling)
+
+    stored = metadata.by_id[str(base["id"])]
+    raw_hash = original_hash_ordered_messages(stored["messages"])
+    expected_hash = mvp_ingestion._project_scoped_conversation_hash(
+        raw_hash, project_id=mvp_ingestion.LOCAL_DEFAULT_PROJECT_ID
+    )
+    assert hashed_message_counts == [2, 3]
+    assert stored["metadata"]["conversation_hash"] == expected_hash
+
+
 def test_trusted_append_extracts_facts_only_from_new_messages() -> None:
     metadata, _ = _configure_stubs(allow_trusted_appends=True)
     base = _valid_conversation()

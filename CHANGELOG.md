@@ -6,6 +6,9 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Reused the already verified, project-scoped aggregate conversation identity
+  for complete-history trusted appends, while retaining safe recomputation for
+  sibling continuations whose payload omits part of the stored history.
 - Limited trusted-append graph extraction to newly appended messages while
   preserving absolute message-index provenance and conflict supersession.
 - Removed exact repeated token-window overlap from budgeted ask and handoff
