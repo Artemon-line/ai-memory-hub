@@ -1081,6 +1081,171 @@ def test_http_embedding_provider_uses_openai_compatible_endpoint(
     assert timeout == 60
 
 
+def test_http_embedding_provider_restores_response_index_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_urlopen(_request: Any, timeout: int) -> FakeEmbeddingHTTPResponse:
+        assert timeout == 60
+        return FakeEmbeddingHTTPResponse(
+            {
+                "data": [
+                    {"index": 1, "embedding": [4, 5, 6]},
+                    {"index": 0, "embedding": [1, 2, 3]},
+                ]
+            }
+        )
+
+    monkeypatch.setattr(mvp_ingestion.urllib.request, "urlopen", fake_urlopen)
+    provider = mvp_ingestion.HttpEmbeddingProvider(dimension=3, api_key="test-key")
+
+    assert provider.embed_texts(["alpha", "beta"]) == [
+        [1.0, 2.0, 3.0],
+        [4.0, 5.0, 6.0],
+    ]
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [
+            {"index": 0, "embedding": [1, 2, 3]},
+            {"index": 0, "embedding": [4, 5, 6]},
+        ],
+        [
+            {"index": 0, "embedding": [1, 2, 3]},
+            {"embedding": [4, 5, 6]},
+        ],
+    ],
+)
+def test_http_embedding_provider_rejects_ambiguous_response_indexes(
+    monkeypatch: pytest.MonkeyPatch,
+    data: list[dict[str, Any]],
+) -> None:
+    monkeypatch.setattr(
+        mvp_ingestion.urllib.request,
+        "urlopen",
+        lambda *_args, **_kwargs: FakeEmbeddingHTTPResponse({"data": data}),
+    )
+    provider = mvp_ingestion.HttpEmbeddingProvider(dimension=3, api_key="test-key")
+
+    with pytest.raises(RuntimeError, match="invalid index|mixes indexed"):
+        provider.embed_texts(["alpha", "beta"])
+
+
+def test_embed_chunks_uses_provider_batch_limits_and_preserves_mapping() -> None:
+    class BoundedEmbedder:
+        dimension = 2
+        max_batch_size = 2
+        max_batch_input_bytes = 12
+
+        def __init__(self) -> None:
+            self.calls: list[list[str]] = []
+
+        def embed_texts(self, texts: list[str]) -> list[list[float]]:
+            self.calls.append(list(texts))
+            return [[float(ord(text[0])), float(len(text))] for text in texts]
+
+    embedder = BoundedEmbedder()
+    mvp_ingestion.configure_runtime(
+        runtime=mvp_ingestion.RuntimeDependencies(
+            embedding_provider=embedder,
+            metadata_store=StubMetadataStore(),
+            vector_store=StubVectorStore(),
+            health_state={"embedding": {"provider": "test", "model": "bounded"}},
+        )
+    )
+    chunks = [
+        {
+            "chunk_id": f"chunk-{index}",
+            "chunk_index": index,
+            "message_hash": f"hash-{index}",
+            "role": "user",
+            "text": text,
+        }
+        for index, text in enumerate(["aa", "bbb", "cc", "d"])
+    ]
+
+    embeddings = mvp_ingestion.embed_chunks(chunks)
+
+    assert embedder.calls == [["aa", "bbb"], ["cc", "d"]]
+    assert [row["chunk_id"] for row in embeddings] == [
+        "chunk-0",
+        "chunk-1",
+        "chunk-2",
+        "chunk-3",
+    ]
+    assert [row["vector"] for row in embeddings] == [
+        [97.0, 2.0],
+        [98.0, 3.0],
+        [99.0, 2.0],
+        [100.0, 1.0],
+    ]
+
+
+def test_embed_chunks_rejects_one_input_above_provider_byte_limit() -> None:
+    embedder = StubEmbedder()
+    embedder.max_batch_size = 2
+    embedder.max_batch_input_bytes = 7
+    mvp_ingestion.configure_runtime(
+        runtime=mvp_ingestion.RuntimeDependencies(
+            embedding_provider=embedder,  # type: ignore[arg-type]
+            metadata_store=StubMetadataStore(),
+            vector_store=StubVectorStore(),
+            health_state={},
+        )
+    )
+    chunks = [
+        {
+            "chunk_id": "chunk-0",
+            "chunk_index": 0,
+            "message_hash": "hash-0",
+            "role": "user",
+            "text": "éé",
+        }
+    ]
+
+    with pytest.raises(ValueError, match="max_batch_input_bytes"):
+        mvp_ingestion.embed_chunks(chunks)
+    assert embedder.calls == []
+
+
+def test_ingestion_does_not_write_vectors_when_a_later_embedding_batch_fails() -> None:
+    class FailingSecondBatchEmbedder:
+        dimension = 2
+        max_batch_size = 2
+        max_batch_input_bytes = 100
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def embed_texts(self, texts: list[str]) -> list[list[float]]:
+            self.calls += 1
+            if self.calls == 2:
+                raise RuntimeError("synthetic second-batch failure")
+            return [[float(len(text)), 0.0] for text in texts]
+
+    metadata = StubMetadataStore()
+    vectors = StubVectorStore()
+    embedder = FailingSecondBatchEmbedder()
+    mvp_ingestion.configure_runtime(
+        runtime=mvp_ingestion.RuntimeDependencies(
+            embedding_provider=embedder,
+            metadata_store=metadata,
+            vector_store=vectors,
+            health_state={"mode": "ok"},
+        )
+    )
+    conversation = _valid_conversation()
+    conversation["messages"].append({"role": "user", "text": "third batch item"})
+
+    with pytest.raises(RuntimeError, match="synthetic second-batch failure"):
+        mvp_ingestion.ingest_messages(conversation)
+
+    assert embedder.calls == 2
+    assert vectors.insert_calls == []
+    assert vectors.rows == []
+
+
 def test_http_embedding_provider_redacts_http_errors(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

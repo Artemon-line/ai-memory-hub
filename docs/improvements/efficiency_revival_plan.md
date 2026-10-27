@@ -226,7 +226,7 @@ construction from 120 times to three times for three unique conversations
       derived-record write, and audit.
 - [x] Complete deduplication and append-delta detection before embedding or
       derived extraction wherever the contract permits.
-- [ ] Batch embedding inputs up to provider-advertised limits with bounded
+- [x] Batch embedding inputs up to provider-advertised limits with bounded
       payload size and deterministic result-to-chunk mapping.
 - [ ] Use metadata/vector batch-write capabilities when available; retain the
       current atomic or compensating behavior on partial failure.
@@ -290,6 +290,17 @@ deterministic `memory.benchmarks.append_hash_efficiency` fixture reduces
 aggregate hash passes and message-hash scans for a 64-message conversation plus
 one-message append from two/130 to one/65 (50%). Per-message normalization and
 broader unchanged-message derivation remain follow-up work.
+
+Implementation note (bounded embedding-batch slice): remote embedding inputs
+are now split sequentially by configured count and serialized UTF-8 JSON input
+bytes before provider calls. Vector persistence begins only after every batch succeeds,
+so a later provider failure cannot expose a partial vector write. HTTP response
+indexes are validated and restored to request order when present; legacy
+unindexed responses retain their declared order. The deterministic
+`memory.benchmarks.embedding_batch_efficiency` fixture preserves all ten
+chunk/vector mappings while reducing the largest request from ten inputs to
+three (70%); its four batches remain at or below both advertised limits. Bounded
+concurrency and remote-provider throughput measurements remain follow-up work.
 
 ## Phase 3: Reduce Retrieval Amplification
 
@@ -481,6 +492,7 @@ uv run python -m memory.benchmarks.cache_candidates --iterations 1000
 uv run python -m memory.benchmarks.ingestion_efficiency
 uv run python -m memory.benchmarks.append_graph_efficiency
 uv run python -m memory.benchmarks.append_hash_efficiency
+uv run python -m memory.benchmarks.embedding_batch_efficiency
 uv run python -m memory.benchmarks.reranker_efficiency
 uv run python -m memory.benchmarks.retrieval_amplification
 uv run python -m memory.benchmarks.context_overlap_efficiency

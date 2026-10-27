@@ -6,6 +6,8 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Bounded remote embedding batches by configured input count and UTF-8 byte
+  size, preserving deterministic chunk mapping and all-or-nothing vector writes.
 - Reused the already verified, project-scoped aggregate conversation identity
   for complete-history trusted appends, while retaining safe recomputation for
   sibling continuations whose payload omits part of the stored history.

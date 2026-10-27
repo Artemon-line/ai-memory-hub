@@ -243,3 +243,5 @@ observability:
 embedding_endpoint:
   base_url: 'http://localhost:11434/v1' # for Ollama usage
   api_key: 'dummy_key'
+  max_batch_size: 128
+  max_batch_input_bytes: 1000000

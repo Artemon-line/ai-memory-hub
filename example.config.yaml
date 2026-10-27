@@ -235,6 +235,8 @@ observability:
 embedding_endpoint:
   base_url: 'https://api.openai.com/v1'
   api_key: 'your_api_key_here'
+  max_batch_size: 128
+  max_batch_input_bytes: 1000000
 
 # ============================================================
 # VARIATIONS (examples)

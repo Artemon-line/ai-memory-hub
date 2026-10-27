@@ -635,6 +635,8 @@ class ChunkingConfig(BaseModel):
 class EmbeddingEndpointConfig(BaseModel):
     base_url: str = "http://localhost:11434/v1"
     api_key: str = "dummy_key"
+    max_batch_size: int = Field(default=128, ge=1, le=2048)
+    max_batch_input_bytes: int = Field(default=1_000_000, ge=1, le=16_000_000)
 
 
 class MCPConfig(BaseModel):
