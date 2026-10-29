@@ -2979,7 +2979,8 @@ history rather than as history deletion.</p>
    vectors, facts, or graph records are written.</li>
 <li>Detect exact duplicates and trusted same-thread appends.</li>
 <li>Store metadata and child message/chunk records.</li>
-<li>Embed only the chunks that need indexing.</li>
+<li>Embed only the chunks that need indexing, splitting remote inputs into
+    configured count- and byte-bounded batches while preserving chunk order.</li>
 <li>Store vectors and mark chunk indexing state.</li>
 <li>Derive facts and graph records, limiting trusted-append extraction to newly
     appended messages while retaining their absolute source indexes.</li>

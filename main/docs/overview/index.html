@@ -4743,7 +4743,14 @@ available in <code>example.config.yaml</code>.</p>
 <span class="nt">embedding_endpoint</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">base_url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://localhost:11434/v1</span>
 <span class="w">  </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">dummy_key</span>
+<span class="w">  </span><span class="nt">max_batch_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">128</span>
+<span class="w">  </span><span class="nt">max_batch_input_bytes</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1000000</span>
 </code></pre></div>
+<p><code>max_batch_size</code> and <code>max_batch_input_bytes</code> bound each HTTP embedding request
+by input count and serialized UTF-8 JSON input-array bytes. Ingestion processes
+the batches in source order and does not write any vectors until every batch
+succeeds. Reduce the limits for stricter provider quotas; increase them only
+within the validated configuration bounds supported by the remote endpoint.</p>
 <p><code>metadata_schema_versions</code> means "this app build supports these metadata store
 schema versions." It is an array so future rolling migrations can temporarily
 support old and new database layouts, for example <code>[1, 2]</code>. Version <code>1</code> is the

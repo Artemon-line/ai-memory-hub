@@ -2744,6 +2744,8 @@ releases may additionally use generated notes, but the release summary here
 should describe the supported public behavior for each tagged release.</p>
 <h2 id="unreleased">Unreleased</h2>
 <ul>
+<li>Bounded remote embedding batches by configured input count and UTF-8 byte
+  size, preserving deterministic chunk mapping and all-or-nothing vector writes.</li>
 <li>Reused the already verified, project-scoped aggregate conversation identity
   for complete-history trusted appends, while retaining safe recomputation for
   sibling continuations whose payload omits part of the stored history.</li>
