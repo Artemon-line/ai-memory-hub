@@ -288,53 +288,15 @@ the file to model context; reading the file first does. As a rough warning,
 
 ## Token-free automatic import
 
-The import itself does not need an LLM. A shell script called by an agent hook,
-file watcher, or manual command can upload the file directly for **zero model
-tokens**:
+The import itself does not need an LLM. The repository's shared safe uploader
+can send a completed artifact directly for **zero model tokens**. It snapshots
+the file, refuses unsafe or changing inputs, keeps credentials and conversation
+content out of output, and reports bounded deduplication receipts.
 
-```bash
-#!/usr/bin/env sh
-set -eu
-
-: "${MEMORY_HUB_URL:?Set MEMORY_HUB_URL}"
-: "${MEMORY_API_TOKEN:?Set MEMORY_API_TOKEN}"
-
-parser=${1:?Usage: import-to-memory.sh PARSER FILE [SOURCE]}
-file=${2:?Usage: import-to-memory.sh PARSER FILE [SOURCE]}
-source=${3:-}
-
-if [ ! -f "$file" ]; then
-  echo "File not found: $file" >&2
-  exit 1
-fi
-
-if [ -n "$source" ]; then
-  curl -fsS -X POST "${MEMORY_HUB_URL%/}/memory/import" \
-    -H "Authorization: Bearer $MEMORY_API_TOKEN" \
-    -F "parser=$parser" \
-    -F "source=$source" \
-    -F "file=@$file;type=application/octet-stream"
-else
-  curl -fsS -X POST "${MEMORY_HUB_URL%/}/memory/import" \
-    -H "Authorization: Bearer $MEMORY_API_TOKEN" \
-    -F "parser=$parser" \
-    -F "file=@$file;type=application/octet-stream"
-fi
-```
-
-Save it as `import-to-memory.sh`, make it executable, and configure the agent's
-hook to call it with the appropriate importer and exported file path. For
-example:
-
-```bash
-./import-to-memory.sh codex-rollout-jsonl "$CODEX_ROLLOUT_FILE"
-./import-to-memory.sh pi-session-jsonl "$PI_SESSION_FILE" pi
-```
-
-Only configure automatic hooks for files you intend to retain. Keep the token
-in the hook environment, restrict script permissions, and never echo it. Hook
-configuration differs between agents, but the script and API contract stay the
-same.
+See [Opt-in zero-token import hooks](./import_hooks.md) for tested Codex, Claude
+Code, OpenCode, and Gemini CLI recipes, client-version pins, credential setup,
+failure behavior, and removal instructions. Do not use an always-on watcher for
+live session files.
 
 ## Microsoft Copilot
 

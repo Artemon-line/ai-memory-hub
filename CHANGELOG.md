@@ -6,6 +6,9 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Added a shared zero-token conversation uploader with closed-file snapshots,
+  bounded safe receipts, and opt-in Codex, Claude Code, OpenCode, and Gemini CLI
+  import recipes.
 - Bounded remote embedding batches by configured input count and UTF-8 byte
   size, preserving deterministic chunk mapping and all-or-nothing vector writes.
 - Reused the already verified, project-scoped aggregate conversation identity
