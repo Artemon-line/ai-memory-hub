@@ -29,6 +29,13 @@ from memory.auth import (
 from memory.backend.log_safety import install_secret_redaction_filter, redact_secrets
 from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig, ensure_token_hash_secret, normalize_config
+from memory.import_outcomes import (
+    conflict_receipt,
+    import_counts,
+    ingestion_receipt,
+    is_conflict_error,
+    is_retryable_conflict,
+)
 from memory.ingestion.base_agent import BaseIngestionAgent
 from memory.ingestion.mvp_ingestion import reset_audit_context, set_audit_context
 from memory.ingestion.mvp_ingestion_agent import MVPIngestionAgent
@@ -543,6 +550,20 @@ def _register_api_routes(
             for index, prepared in enumerate(prepared_payloads):
                 try:
                     result = await execute_insert(prepared, request)
+                except ValueError as exc:
+                    if is_conflict_error(exc):
+                        results.append(
+                            conflict_receipt(
+                                index, retryable=is_retryable_conflict(exc)
+                            )
+                        )
+                        continue
+                    if not results:
+                        raise
+                    results.append(
+                        _record_partial_import_failure(imported.parser, index, exc)
+                    )
+                    return _import_response(imported, results, status="partial")
                 except Exception as exc:
                     if not results:
                         raise
@@ -551,7 +572,12 @@ def _register_api_routes(
                     )
                     return _import_response(imported, results, status="partial")
                 results.append(_import_receipt(index, result))
-            return _import_response(imported, results, status="ok")
+            status = (
+                "partial"
+                if any(result["status"] in {"conflict", "error"} for result in results)
+                else "ok"
+            )
+            return _import_response(imported, results, status=status)
         except ImportRequestError as exc:
             raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
         except jsonschema.ValidationError as exc:
@@ -821,15 +847,7 @@ def _pop_insert_project_id(conversation_json: dict[str, Any]) -> str | None:
 
 
 def _import_receipt(index: int, result: dict[str, Any]) -> dict[str, Any]:
-    status = str(result.get("status") or "ok")
-    if status == "ok":
-        status = "inserted"
-    return {
-        "index": index,
-        "id": result.get("id"),
-        "status": status,
-        "deduplicated": bool(result.get("deduplicated", False)),
-    }
+    return ingestion_receipt(index, result)
 
 
 def _import_error_receipt(index: int, exc: Exception) -> dict[str, Any]:
@@ -869,6 +887,7 @@ def _import_response(
         "conversation_count": len(imported.payloads),
         "results": results,
     }
+    response.update(import_counts(results))
     if imported.schema_version is not None:
         response["schema_version"] = imported.schema_version
     if imported.schema_fingerprint is not None:

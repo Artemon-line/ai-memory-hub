@@ -340,8 +340,19 @@ test("receipt summaries are bounded and never copy conversation or error content
   const results = Array.from({ length: MAX_RECEIPTS + 5 }, (_, index) => ({
     index,
     id: `memory-${index}`,
-    status: index === 2 ? "error" : "inserted",
-    deduplicated: index === 1,
+    status:
+      index === 1
+        ? "deduplicated"
+        : index === 2
+          ? "error"
+          : index === 3
+            ? "appended"
+            : index === 4
+              ? "stale"
+              : index === 5
+                ? "conflict"
+                : "inserted",
+    appended_messages: index === 3 ? 2 : undefined,
     text: privateText,
     error_message: privateText,
   }));
@@ -349,9 +360,14 @@ test("receipt summaries are bounded and never copy conversation or error content
   const summary = summarizeImport({ status: "partial", results });
 
   assert.equal(summary.results.length, MAX_RECEIPTS);
-  assert.equal(summary.imported, MAX_RECEIPTS - 1);
+  assert.equal(summary.processed, MAX_RECEIPTS);
+  assert.equal(summary.inserted, MAX_RECEIPTS - 5);
   assert.equal(summary.deduplicated, 1);
+  assert.equal(summary.appended, 1);
+  assert.equal(summary.stale, 1);
+  assert.equal(summary.conflicted, 1);
   assert.equal(summary.failed, 1);
+  assert.equal(summary.results[3].appendedMessages, 2);
   assert.equal(summary.partial, true);
   assert.equal(JSON.stringify(summary).includes(privateText), false);
 });

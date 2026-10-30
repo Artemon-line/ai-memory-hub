@@ -28,8 +28,9 @@ http://127.0.0.1:8000/connect/import
    registered parser; filenames are never used to choose a parser.
 3. Select or drag in one supported file, review the source-specific guidance,
    and choose **Import conversations**.
-4. Review the imported, deduplicated, and failed counts. Receipts contain only
-   bounded status metadata and memory IDs, never conversation text.
+4. Review the processed, inserted, deduplicated, appended, stale, conflicted,
+   and failed counts. Receipts contain only bounded status metadata and memory
+   IDs, never conversation text.
 
 The page accepts one UTF-8 JSON, JSONL/NDJSON, CSV, or text file up to 20 MB and
 at most 100 conversations. Its optional source suggestion inspects only a
@@ -78,8 +79,34 @@ curl -fsS -X POST "<HUB_URL>/memory/import" \
 
 For a hub running on the same computer, `<HUB_URL>` is commonly
 `http://127.0.0.1:8000`. Keep the token in an environment variable; do not paste
-it into an AI prompt. A successful response includes `conversation_count` and
-a `results` list containing each memory ID, status, and deduplication result.
+it into an AI prompt. A response includes `conversation_count`, aggregate
+counts, and a `results` list containing a bounded receipt for each processed
+conversation.
+
+### Import outcomes
+
+Recurring imports use the same outcomes in the API, CLI JSON, human-readable
+CLI output, and Connect UI:
+
+| Outcome | Meaning |
+| --- | --- |
+| `inserted` | This source session was stored for the first time. |
+| `deduplicated` | The stored session already has exactly this history. |
+| `appended` | New trailing messages were added to the stored session. The receipt can include `appended_messages`. |
+| `stale` | The imported history is an older prefix of the stored session, so nothing changed. |
+| `conflict` | The histories diverged, or a concurrent append could not be reconciled safely. Nothing is silently merged. |
+| `error` | This conversation could not be processed. The receipt contains a bounded error code. |
+
+The aggregate fields are `processed`, `inserted`, `deduplicated`, `appended`,
+`stale`, `conflicted`, and `failed`. `conversation_count` is the number parsed
+from the file; `processed` is the number with an indexed receipt. The CLI's
+legacy `imported` field now means newly inserted conversations and is equal to
+`inserted`, rather than the number merely processed.
+
+The CLI exits with code 0 when every conversation is inserted, deduplicated,
+appended, or stale. It exits with code 1 if any conversation conflicts or
+fails. API and CLI receipts never contain transcript text, content hashes,
+embeddings, provider exception details, or source file paths.
 
 ### Upload limits
 
@@ -527,9 +554,11 @@ before using it.
 
 ## Check the result with your agent
 
-A successful API response has status `ok`, a `conversation_count`, and one
-result for each stored conversation. A Microsoft Copilot or Hermes bulk file
-can import more than one conversation.
+An API response has a `conversation_count`, aggregate outcome counts, and one
+indexed result for each processed conversation. Its top-level status is `ok`
+when all outcomes are safe successes, or `partial` when any conversation has a
+conflict or error. A Microsoft Copilot or Hermes bulk file can import more than
+one conversation.
 
 Ask the agent to confirm the import and test that it is searchable:
 
@@ -539,8 +568,12 @@ Then search my memory for "<A PHRASE FROM THE CONVERSATION>" and show the matchi
 memory title and ID. Do not repeat private conversation text unnecessarily.
 ```
 
-Importing the same source file again is safe: normal hub hashing and
-deduplication rules still apply.
+Importing the same source file again is safe. An exact repeat is deduplicated;
+a strict extension appends only the new suffix; and an older snapshot is a
+stale no-op. Editing an earlier message creates a conflict instead of a
+synthetic merged history. Identity is project-scoped, so imports in different
+projects remain independent. These rules make scheduled recurring imports
+safe while still surfacing histories that need review.
 
 ## Discover and import the latest local session
 

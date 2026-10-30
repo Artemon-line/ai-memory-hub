@@ -601,6 +601,8 @@ def test_multipart_import_preserves_hermes_session_boundaries_and_safe_receipts(
     assert body["parser"] == "hermes-session-jsonl"
     assert body["schema_applied"] is False
     assert body["conversation_count"] == 2
+    assert body["processed"] == 2
+    assert body["inserted"] == 2
     assert [result["index"] for result in body["results"]] == [0, 1]
     assert all(result["status"] == "inserted" for result in body["results"])
     serialized = json.dumps(body)
@@ -1006,6 +1008,9 @@ def test_multipart_import_returns_indexed_receipt_after_partial_storage_failure(
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "partial"
+    assert body["processed"] == 2
+    assert body["inserted"] == 1
+    assert body["failed"] == 1
     assert body["results"] == [
         {
             "index": 0,
@@ -1016,6 +1021,47 @@ def test_multipart_import_returns_indexed_receipt_after_partial_storage_failure(
         {"index": 1, "status": "error", "error_code": "insert_failed"},
     ]
     assert "private provider failure detail" not in response.text
+
+
+def test_import_api_reports_reimport_outcomes_without_private_details(monkeypatch) -> None:
+    client, _, agent = _import_client()
+    outcomes: list[dict[str, object] | Exception] = [
+        {"status": "ok", "id": "memory-1"},
+        {"status": "ok", "id": "memory-1", "deduplicated": True},
+        {"status": "ok", "id": "memory-1", "appended_messages": 2},
+        {"status": "ok", "id": "memory-1", "stale": True},
+        ValueError("duplicate_conflict: private middle-edit content"),
+    ]
+
+    async def fake_ingest(*args, **kwargs):
+        outcome = outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+    monkeypatch.setattr(agent, "ingest_messages", fake_ingest)
+    export = (_IMPORT_FIXTURES / "opencode_session_anonymized.json").read_bytes()
+    bodies = []
+    for _ in range(5):
+        response = client.post(
+            "/memory/import",
+            data={"parser": "opencode-session-json"},
+            files={"file": ("session.json", export, "application/json")},
+        )
+        assert response.status_code == 200
+        bodies.append(response.json())
+
+    assert [body["results"][0]["status"] for body in bodies] == [
+        "inserted",
+        "deduplicated",
+        "appended",
+        "stale",
+        "conflict",
+    ]
+    assert bodies[2]["results"][0]["appended_messages"] == 2
+    assert bodies[4]["status"] == "partial"
+    assert bodies[4]["conflicted"] == 1
+    assert "private middle-edit content" not in json.dumps(bodies)
 
 
 def test_multipart_import_preserves_save_intent_policies() -> None:

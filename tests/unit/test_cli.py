@@ -463,6 +463,8 @@ def test_export_import_cli_ingests_anonymized_fixtures(
     assert exit_code == 0
     assert body["importer"] == importer
     assert body["imported"] == expected_count
+    assert body["processed"] == expected_count
+    assert body["inserted"] == expected_count
     assert len(captured_payloads) == expected_count
     assert all(payload["metadata"]["importer"] == importer for payload in captured_payloads)
 
@@ -531,7 +533,88 @@ def test_import_latest_interactive_previews_exact_artifact(
     assert exit_code == 0
     assert "session_id: pi-session-synthetic" in output
     assert f"path: {artifact.resolve()}" in output
-    assert "imported 1 conversation(s) with pi-session-jsonl" in output
+    assert "processed=1 inserted=1" in output
+    assert "importer=pi-session-jsonl" in output
+
+
+def test_import_cli_reports_multi_session_outcomes(capsys, monkeypatch) -> None:
+    fixture = Path(__file__).parents[1] / "fixtures" / "importers" / "hermes_sessions_anonymized.jsonl"
+    outcomes = [
+        {"status": "ok", "id": "memory-1", "deduplicated": True},
+        {"status": "ok", "id": "memory-2", "appended_messages": 2},
+    ]
+    monkeypatch.setattr(cli, "_configure_memory_runtime", lambda config_path: None)
+    monkeypatch.setattr(cli.mvp_ingestion, "ingest_messages", lambda payload: outcomes.pop(0))
+
+    exit_code = cli.main(["import", "hermes-session-jsonl", str(fixture), "--json"])
+
+    body = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert body["processed"] == 2
+    assert body["inserted"] == 0
+    assert body["deduplicated"] == 1
+    assert body["appended"] == 1
+    assert [result["status"] for result in body["results"]] == [
+        "deduplicated",
+        "appended",
+    ]
+
+
+def test_import_cli_conflict_is_safe_and_returns_failure(capsys, monkeypatch) -> None:
+    fixture = Path(__file__).parents[1] / "fixtures" / "importers" / "opencode_session_anonymized.json"
+    monkeypatch.setattr(cli, "_configure_memory_runtime", lambda config_path: None)
+
+    def conflict(payload):
+        raise ValueError("duplicate_conflict: private edited message")
+
+    monkeypatch.setattr(cli.mvp_ingestion, "ingest_messages", conflict)
+
+    exit_code = cli.main(["import", "opencode-session-json", str(fixture), "--json"])
+
+    output = capsys.readouterr().out
+    body = json.loads(output)
+    assert exit_code == 1
+    assert body["status"] == "partial"
+    assert body["processed"] == 1
+    assert body["conflicted"] == 1
+    assert body["results"] == [
+        {
+            "error_code": "duplicate_conflict",
+            "index": 0,
+            "retryable": False,
+            "status": "conflict",
+        }
+    ]
+    assert "private edited message" not in output
+
+
+def test_import_cli_partial_failure_has_deterministic_counts(
+    capsys, monkeypatch
+) -> None:
+    fixture = Path(__file__).parents[1] / "fixtures" / "importers" / "hermes_sessions_anonymized.jsonl"
+    calls = 0
+    monkeypatch.setattr(cli, "_configure_memory_runtime", lambda config_path: None)
+
+    def ingest(payload):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise RuntimeError("private provider failure")
+        return {"status": "ok", "id": "memory-1"}
+
+    monkeypatch.setattr(cli.mvp_ingestion, "ingest_messages", ingest)
+
+    exit_code = cli.main(["import", "hermes-session-jsonl", str(fixture), "--json"])
+
+    output = capsys.readouterr().out
+    body = json.loads(output)
+    assert exit_code == 1
+    assert body["processed"] == 2
+    assert body["inserted"] == 1
+    assert body["failed"] == 1
+    assert [result["index"] for result in body["results"]] == [0, 1]
+    assert body["results"][1]["error_code"] == "insert_failed"
+    assert "private provider failure" not in output
 
 
 def test_hermes_cli_schema_override_matches_importer_contract(

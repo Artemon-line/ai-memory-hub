@@ -697,6 +697,11 @@ only, limits files to 20,000,000 bytes, limits override schemas to 65,536 bytes,
 and returns bounded per-conversation IDs and statuses without echoing source
 text or schema contents. All sessions are parsed before insertion begins; if a
 later independent insertion fails, its index receives a redacted error receipt.
+Each receipt reports `inserted`, `deduplicated`, `appended`, `stale`, `conflict`,
+or `error`. The response also separates `processed` from `inserted` and includes
+aggregate counts for every outcome. See
+[Import Conversations](importing_conversations.md#import-outcomes) for the
+recurring-import and CLI exit-code contract.
 
 Shared options include `--config <path>`, `--json`, `--quiet`, and `--verbose`.
 `search` also supports `--source`, `--date-from`, `--date-to`, repeated `--tags`,
