@@ -6,6 +6,8 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Added an opt-in OpenClaw compatibility adapter for closed legacy version 3
+  JSONL trees, with explicit refusal of current SQLite and sidecar files.
 - Added a shared zero-token conversation uploader with closed-file snapshots,
   bounded safe receipts, and opt-in Codex, Claude Code, OpenCode, and Gemini CLI
   import recipes.
