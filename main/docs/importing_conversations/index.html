@@ -16,7 +16,7 @@
         <link rel="prev" href="../features/">
       
       
-        <link rel="next" href="../importer_compatibility/">
+        <link rel="next" href="../import_hooks/">
       
       
         
@@ -902,6 +902,34 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../import_hooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Zero-token Import Hooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -3990,47 +4018,14 @@ usage varies by agent and model. Uploading raw bytes through HTTP does not add
 the file to model context; reading the file first does. As a rough warning,
 1 MB of ordinary text can represent hundreds of thousands of tokens.</p>
 <h2 id="token-free-automatic-import">Token-free automatic import</h2>
-<p>The import itself does not need an LLM. A shell script called by an agent hook,
-file watcher, or manual command can upload the file directly for <strong>zero model
-tokens</strong>:</p>
-<div class="highlight"><pre><span></span><code><span class="ch">#!/usr/bin/env sh</span>
-<span class="nb">set</span><span class="w"> </span>-eu
-
-:<span class="w"> </span><span class="s2">"</span><span class="si">${</span><span class="nv">MEMORY_HUB_URL</span><span class="p">:?Set MEMORY_HUB_URL</span><span class="si">}</span><span class="s2">"</span>
-:<span class="w"> </span><span class="s2">"</span><span class="si">${</span><span class="nv">MEMORY_API_TOKEN</span><span class="p">:?Set MEMORY_API_TOKEN</span><span class="si">}</span><span class="s2">"</span>
-
-<span class="nv">parser</span><span class="o">=</span><span class="si">${</span><span class="nv">1</span><span class="p">:?Usage: import-to-memory.sh PARSER FILE [SOURCE]</span><span class="si">}</span>
-<span class="nv">file</span><span class="o">=</span><span class="si">${</span><span class="nv">2</span><span class="p">:?Usage: import-to-memory.sh PARSER FILE [SOURCE]</span><span class="si">}</span>
-<span class="nv">source</span><span class="o">=</span><span class="si">${</span><span class="nv">3</span><span class="k">:-</span><span class="si">}</span>
-
-<span class="k">if</span><span class="w"> </span><span class="o">[</span><span class="w"> </span>!<span class="w"> </span>-f<span class="w"> </span><span class="s2">"</span><span class="nv">$file</span><span class="s2">"</span><span class="w"> </span><span class="o">]</span><span class="p">;</span><span class="w"> </span><span class="k">then</span>
-<span class="w">  </span><span class="nb">echo</span><span class="w"> </span><span class="s2">"File not found: </span><span class="nv">$file</span><span class="s2">"</span><span class="w"> </span>&gt;<span class="p">&amp;</span><span class="m">2</span>
-<span class="w">  </span><span class="nb">exit</span><span class="w"> </span><span class="m">1</span>
-<span class="k">fi</span>
-
-<span class="k">if</span><span class="w"> </span><span class="o">[</span><span class="w"> </span>-n<span class="w"> </span><span class="s2">"</span><span class="nv">$source</span><span class="s2">"</span><span class="w"> </span><span class="o">]</span><span class="p">;</span><span class="w"> </span><span class="k">then</span>
-<span class="w">  </span>curl<span class="w"> </span>-fsS<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span><span class="s2">"</span><span class="si">${</span><span class="nv">MEMORY_HUB_URL</span><span class="p">%/</span><span class="si">}</span><span class="s2">/memory/import"</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>-H<span class="w"> </span><span class="s2">"Authorization: Bearer </span><span class="nv">$MEMORY_API_TOKEN</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>-F<span class="w"> </span><span class="s2">"parser=</span><span class="nv">$parser</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>-F<span class="w"> </span><span class="s2">"source=</span><span class="nv">$source</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>-F<span class="w"> </span><span class="s2">"file=@</span><span class="nv">$file</span><span class="s2">;type=application/octet-stream"</span>
-<span class="k">else</span>
-<span class="w">  </span>curl<span class="w"> </span>-fsS<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span><span class="s2">"</span><span class="si">${</span><span class="nv">MEMORY_HUB_URL</span><span class="p">%/</span><span class="si">}</span><span class="s2">/memory/import"</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>-H<span class="w"> </span><span class="s2">"Authorization: Bearer </span><span class="nv">$MEMORY_API_TOKEN</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>-F<span class="w"> </span><span class="s2">"parser=</span><span class="nv">$parser</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>-F<span class="w"> </span><span class="s2">"file=@</span><span class="nv">$file</span><span class="s2">;type=application/octet-stream"</span>
-<span class="k">fi</span>
-</code></pre></div>
-<p>Save it as <code>import-to-memory.sh</code>, make it executable, and configure the agent's
-hook to call it with the appropriate importer and exported file path. For
-example:</p>
-<div class="highlight"><pre><span></span><code>./import-to-memory.sh<span class="w"> </span>codex-rollout-jsonl<span class="w"> </span><span class="s2">"</span><span class="nv">$CODEX_ROLLOUT_FILE</span><span class="s2">"</span>
-./import-to-memory.sh<span class="w"> </span>pi-session-jsonl<span class="w"> </span><span class="s2">"</span><span class="nv">$PI_SESSION_FILE</span><span class="s2">"</span><span class="w"> </span>pi
-</code></pre></div>
-<p>Only configure automatic hooks for files you intend to retain. Keep the token
-in the hook environment, restrict script permissions, and never echo it. Hook
-configuration differs between agents, but the script and API contract stay the
-same.</p>
+<p>The import itself does not need an LLM. The repository's shared safe uploader
+can send a completed artifact directly for <strong>zero model tokens</strong>. It snapshots
+the file, refuses unsafe or changing inputs, keeps credentials and conversation
+content out of output, and reports bounded deduplication receipts.</p>
+<p>See <a href="../import_hooks/">Opt-in zero-token import hooks</a> for tested Codex, Claude
+Code, OpenCode, and Gemini CLI recipes, client-version pins, credential setup,
+failure behavior, and removal instructions. Do not use an always-on watcher for
+live session files.</p>
 <h2 id="microsoft-copilot">Microsoft Copilot</h2>
 <p>This works for a personal Microsoft account. Work or school accounts may show
 different controls.</p>
