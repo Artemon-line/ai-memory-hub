@@ -4183,7 +4183,12 @@ or project ownership. The endpoint requires <code>memory:write</code>, accepts U
 only, limits files to 20,000,000 bytes, limits override schemas to 65,536 bytes,
 and returns bounded per-conversation IDs and statuses without echoing source
 text or schema contents. All sessions are parsed before insertion begins; if a
-later independent insertion fails, its index receives a redacted error receipt.</p>
+later independent insertion fails, its index receives a redacted error receipt.
+Each receipt reports <code>inserted</code>, <code>deduplicated</code>, <code>appended</code>, <code>stale</code>, <code>conflict</code>,
+or <code>error</code>. The response also separates <code>processed</code> from <code>inserted</code> and includes
+aggregate counts for every outcome. See
+<a href="../importing_conversations/#import-outcomes">Import Conversations</a> for the
+recurring-import and CLI exit-code contract.</p>
 <p>Shared options include <code>--config &lt;path&gt;</code>, <code>--json</code>, <code>--quiet</code>, and <code>--verbose</code>.
 <code>search</code> also supports <code>--source</code>, <code>--date-from</code>, <code>--date-to</code>, repeated <code>--tags</code>,
 <code>--thread-id</code>, and <code>--result-mode chunks|compact|conversations|threads</code>.</p>

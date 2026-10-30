@@ -446,6 +446,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#import-outcomes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Import outcomes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#upload-limits" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3213,6 +3224,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#import-outcomes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Import outcomes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#upload-limits" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3721,8 +3743,9 @@ before importing a file that the app may still be writing.</p>
    registered parser; filenames are never used to choose a parser.</li>
 <li>Select or drag in one supported file, review the source-specific guidance,
    and choose <strong>Import conversations</strong>.</li>
-<li>Review the imported, deduplicated, and failed counts. Receipts contain only
-   bounded status metadata and memory IDs, never conversation text.</li>
+<li>Review the processed, inserted, deduplicated, appended, stale, conflicted,
+   and failed counts. Receipts contain only bounded status metadata and memory
+   IDs, never conversation text.</li>
 </ol>
 <p>The page accepts one UTF-8 JSON, JSONL/NDJSON, CSV, or text file up to 20 MB and
 at most 100 conversations. Its optional source suggestion inspects only a
@@ -3763,8 +3786,55 @@ bearer token must include <code>memory:write</code>.</p>
 </code></pre></div>
 <p>For a hub running on the same computer, <code>&lt;HUB_URL&gt;</code> is commonly
 <code>http://127.0.0.1:8000</code>. Keep the token in an environment variable; do not paste
-it into an AI prompt. A successful response includes <code>conversation_count</code> and
-a <code>results</code> list containing each memory ID, status, and deduplication result.</p>
+it into an AI prompt. A response includes <code>conversation_count</code>, aggregate
+counts, and a <code>results</code> list containing a bounded receipt for each processed
+conversation.</p>
+<h3 id="import-outcomes">Import outcomes</h3>
+<p>Recurring imports use the same outcomes in the API, CLI JSON, human-readable
+CLI output, and Connect UI:</p>
+<table>
+<thead>
+<tr>
+<th>Outcome</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>inserted</code></td>
+<td>This source session was stored for the first time.</td>
+</tr>
+<tr>
+<td><code>deduplicated</code></td>
+<td>The stored session already has exactly this history.</td>
+</tr>
+<tr>
+<td><code>appended</code></td>
+<td>New trailing messages were added to the stored session. The receipt can include <code>appended_messages</code>.</td>
+</tr>
+<tr>
+<td><code>stale</code></td>
+<td>The imported history is an older prefix of the stored session, so nothing changed.</td>
+</tr>
+<tr>
+<td><code>conflict</code></td>
+<td>The histories diverged, or a concurrent append could not be reconciled safely. Nothing is silently merged.</td>
+</tr>
+<tr>
+<td><code>error</code></td>
+<td>This conversation could not be processed. The receipt contains a bounded error code.</td>
+</tr>
+</tbody>
+</table>
+<p>The aggregate fields are <code>processed</code>, <code>inserted</code>, <code>deduplicated</code>, <code>appended</code>,
+<code>stale</code>, <code>conflicted</code>, and <code>failed</code>. <code>conversation_count</code> is the number parsed
+from the file; <code>processed</code> is the number with an indexed receipt. The CLI's
+legacy <code>imported</code> field now means newly inserted conversations and is equal to
+<code>inserted</code>, rather than the number merely processed.</p>
+<p>The CLI exits with code 0 when every conversation is inserted, deduplicated,
+appended, or stale. It exits with code 1 if any conversation conflicts or
+fails. API and CLI receipts never contain transcript text, content hashes,
+embeddings, provider exception details, or source file paths.</p>
 <h3 id="upload-limits">Upload limits</h3>
 <ul>
 <li>One file per request, with a maximum file size of 20 MB.</li>
@@ -4268,16 +4338,22 @@ provide a short source name, such as <code>claude-web</code> or <code>other-assi
 <code>droid exec</code>; see <a href="../overview/#cli">Droid capture details</a>
 before using it.</p>
 <h2 id="check-the-result-with-your-agent">Check the result with your agent</h2>
-<p>A successful API response has status <code>ok</code>, a <code>conversation_count</code>, and one
-result for each stored conversation. A Microsoft Copilot or Hermes bulk file
-can import more than one conversation.</p>
+<p>An API response has a <code>conversation_count</code>, aggregate outcome counts, and one
+indexed result for each processed conversation. Its top-level status is <code>ok</code>
+when all outcomes are safe successes, or <code>partial</code> when any conversation has a
+conflict or error. A Microsoft Copilot or Hermes bulk file can import more than
+one conversation.</p>
 <p>Ask the agent to confirm the import and test that it is searchable:</p>
 <div class="highlight"><pre><span></span><code>Tell me how many conversations were imported and whether any were deduplicated.
 Then search my memory for "&lt;A PHRASE FROM THE CONVERSATION&gt;" and show the matching
 memory title and ID. Do not repeat private conversation text unnecessarily.
 </code></pre></div>
-<p>Importing the same source file again is safe: normal hub hashing and
-deduplication rules still apply.</p>
+<p>Importing the same source file again is safe. An exact repeat is deduplicated;
+a strict extension appends only the new suffix; and an older snapshot is a
+stale no-op. Editing an earlier message creates a conflict instead of a
+synthetic merged history. Identity is project-scoped, so imports in different
+projects remain independent. These rules make scheduled recurring imports
+safe while still surfacing histories that need review.</p>
 <h2 id="discover-and-import-the-latest-local-session">Discover and import the latest local session</h2>
 <p>For clients with stable local session files, the CLI can select the newest
 supported session without a hook hard-coding project or date directories:</p>
