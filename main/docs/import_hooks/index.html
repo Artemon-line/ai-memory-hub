@@ -495,6 +495,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#pi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pi
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#failure-handling" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2802,6 +2813,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#pi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pi
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#failure-handling" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2853,7 +2875,7 @@ in a hook command or a repository file:</p>
 <div class="highlight"><pre><span></span><code>python3<span class="w"> </span>/absolute/path/to/ai-memory-hub/tools/import_to_memory.py<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>&lt;PARSER&gt;<span class="w"> </span>/absolute/path/to/completed-export.json
 </code></pre></div>
-<p>The uploader:</p>
+<p>The uploader (including client-specific adapters that delegate to it):</p>
 <ul>
 <li>accepts only regular, non-empty files up to 20 MB;</li>
 <li>normally refuses files modified in the last five seconds;</li>
@@ -2949,6 +2971,31 @@ session, create a supported export:</p>
 <p>Older Gemini releases may use <code>/export-session</code> instead of <code>/chat share</code>. Delete
 the exported file when it is no longer needed. There is no persistent automation
 to disable in this recipe. See the upstream <a href="https://geminicli.com/docs/hooks/reference/">Gemini CLI hooks reference</a>.</p>
+<h2 id="pi">Pi</h2>
+<p>This explicit recipe was checked with Pi coding agent 0.73.0 and its version 3
+JSONL session format. Pi does not provide a verified end event that supplies a
+closed session path, so this recipe deliberately does not install a watcher or
+guess which file is newest.</p>
+<p>Before leaving the intended Pi session, run <code>/session</code> and copy the exact session
+file path that Pi reports. Then exit Pi, wait at least five seconds so the shared
+uploader can reject a file that is still active, and run:</p>
+<div class="highlight"><pre><span></span><code>python3<span class="w"> </span>/absolute/path/to/ai-memory-hub/tools/import_pi_session.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>/absolute/path/reported-by-pi/completed-session.jsonl
+</code></pre></div>
+<p>The adapter accepts only an explicit absolute <code>.jsonl</code> path and delegates it to
+the shared uploader with parser <code>pi-session-jsonl</code> and source <code>pi</code>. It does not
+read or reconstruct the conversation. The existing hub importer validates the
+version 3 tree and reconstructs its active branch. Missing and ephemeral
+sessions, recent or changing files, files over 20 MB, and invalid session trees
+are refused by the adapter, uploader, or importer. Retrying the same completed
+session is safe because normal hub ingestion deduplicates it.</p>
+<p>Do not run the command while Pi still has the session open, use it for Oh My Pi
+or OpenClaw artifacts, or replace the reported path with a newest-file search.
+There is nothing persistent to disable or remove: this is an opt-in manual
+command. Keep <code>MEMORY_HUB_URL</code> and <code>MEMORY_API_TOKEN</code> only in the command
+environment, as described above.</p>
+<p>See Pi's upstream <a href="https://github.com/pi0/pi-mono/blob/main/packages/coding-agent/docs/sessions.md">session documentation</a>
+and <a href="https://github.com/pi0/pi-mono/blob/main/packages/coding-agent/docs/session-format.md">versioned session format</a>.</p>
 <h2 id="failure-handling">Failure handling</h2>
 <p>The command exits nonzero for missing credentials, missing or unsafe files,
 network failures, authentication errors, unsupported parser input, and partial
