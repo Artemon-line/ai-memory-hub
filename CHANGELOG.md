@@ -6,6 +6,8 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Added an opt-in, explicit zero-token import adapter for closed Pi 0.73.0
+  version 3 sessions without newest-file guessing or background watchers.
 - Added a shared zero-token conversation uploader with closed-file snapshots,
   bounded safe receipts, and opt-in Codex, Claude Code, OpenCode, and Gemini CLI
   import recipes.
