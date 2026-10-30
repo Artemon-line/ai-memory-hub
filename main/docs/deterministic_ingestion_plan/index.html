@@ -3349,16 +3349,20 @@ no same thread found?
 <div class="highlight"><pre><span></span><code>incoming is exact duplicate?
   -&gt; return existing ID
 incoming is same thread and has new messages?
-  -&gt; append new messages
+  -&gt; append only when stored hashes are an exact prefix
+incoming is a strict prefix of stored history?
+  -&gt; return stale/no-op without truncating
 incoming overlaps but conflicts in the middle?
-  -&gt; reject or store as fork, depending on configured policy
+  -&gt; reject without mutation
 incoming has no reliable thread match?
   -&gt; insert as new conversation
 </code></pre></div>
 <p>Conflict handling:</p>
 <ul>
 <li>Ordered prefix match plus extra messages: append.</li>
+<li>Incoming strict prefix of stored history: return stale without mutation.</li>
 <li>Same ID but different earlier message hash: reject as conflict.</li>
+<li>Any shared-prefix divergence: reject as conflict; never append the divergent suffix.</li>
 <li>Same upstream thread ID but reordered messages: reject as ambiguous.</li>
 <li>Partial overlap without stable thread identity: insert as separate conversation unless configured for merge review.</li>
 <li>Same ID from an unauthorized caller: reject as <code>unauthorized_update</code>.</li>
@@ -3366,6 +3370,9 @@ incoming has no reliable thread match?
 <p>Recommended default:</p>
 <ul>
 <li>Auto-append only for same authorized <code>id</code> or same trusted <code>upstream_thread_id</code>.</li>
+<li>Apply appends with an optimistic conversation-hash compare-and-swap; retry
+  compatible races against the new stored sequence and return a retryable
+  conflict if bounded retries are exhausted.</li>
 <li>Store fuzzy overlaps as separate conversations or mark them for review.</li>
 </ul>
 <h2 id="phase-6-chunking-strategy">Phase 6: Chunking Strategy</h2>
