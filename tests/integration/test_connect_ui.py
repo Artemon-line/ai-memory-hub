@@ -18,11 +18,15 @@ from joserfc import jwt
 from joserfc.jwk import RSAKey
 from starlette.requests import Request
 
-from memory.api import external_oidc
+from memory.api import connect_service, external_oidc
 from memory.api.connect_service import (
+    IMPORT_HOOK_MATRIX,
     ClientVerificationStatus,
+    ImportHookStatus,
     client_snippet_models,
+    import_hook_models,
     mcp_url_for_config,
+    validate_import_hook_matrix,
 )
 from memory.api.server import create_app
 from memory.backend.metadata_store import SQLiteMetadataStore
@@ -398,6 +402,66 @@ def test_connect_ui_lists_new_client_snippet_statuses() -> None:
     )
 
 
+def test_import_hook_models_match_pinned_initial_matrix() -> None:
+    hooks = import_hook_models()
+    hooks_by_name = {hook["name"]: hook for hook in hooks}
+
+    assert len(hooks) == 8
+    assert hooks_by_name["Codex CLI and app"] == {
+        "name": "Codex CLI and app",
+        "status": "Implemented",
+        "verified_version": "0.152.0",
+        "trigger": "SessionEnd hook",
+        "parser": "codex-rollout-jsonl",
+        "source": None,
+        "parser_label": "codex-rollout-jsonl",
+        "docs_url": (
+            "https://artemon-line.github.io/ai-memory-hub/latest/import_hooks/"
+            "#codex-cli-and-app"
+        ),
+        "tracking_issue_url": None,
+    }
+    assert hooks_by_name["Pi"]["status"] == "Planned"
+    assert hooks_by_name["Pi"]["verified_version"] == "Pending verification"
+    assert hooks_by_name["Pi"]["parser_label"] == "pi-session-jsonl with source=pi"
+    assert hooks_by_name["Pi"]["tracking_issue_url"].endswith("/issues/326")
+    assert hooks_by_name["Hermes Agent"]["tracking_issue_url"].endswith("/issues/327")
+    assert hooks_by_name["DeepSeek Harness"]["tracking_issue_url"].endswith("/issues/328")
+    assert hooks_by_name["OpenClaw"]["parser_label"] == (
+        "pi-session-jsonl with source=openclaw"
+    )
+    assert hooks_by_name["OpenClaw"]["tracking_issue_url"].endswith("/issues/329")
+
+
+@pytest.mark.parametrize(
+    "field,value,message",
+    [
+        ("status", "Unknown", "unknown status"),
+        ("parser", "unknown-parser", "unknown parser"),
+        ("verified_version", "Pending verification", "needs a version pin"),
+        ("docs_anchor", "", "invalid documentation anchor"),
+    ],
+)
+def test_import_hook_matrix_rejects_invalid_implemented_entries(
+    field: str, value: object, message: str
+) -> None:
+    invalid = dict(IMPORT_HOOK_MATRIX[0])
+    invalid[field] = value
+
+    with pytest.raises(ValueError, match=message):
+        validate_import_hook_matrix((invalid,))
+
+
+def test_import_hook_matrix_rejects_duplicates_and_plans_without_issues() -> None:
+    with pytest.raises(ValueError, match="unique"):
+        validate_import_hook_matrix((IMPORT_HOOK_MATRIX[0], IMPORT_HOOK_MATRIX[0]))
+
+    planned = dict(IMPORT_HOOK_MATRIX[4])
+    planned["tracking_issue"] = None
+    with pytest.raises(ValueError, match="tracking issue"):
+        validate_import_hook_matrix((planned,))
+
+
 def test_connect_routes_are_public_secret_free_and_use_configured_mcp_url(
     tmp_path, monkeypatch
 ) -> None:
@@ -483,6 +547,45 @@ def test_connect_routes_are_public_secret_free_and_use_configured_mcp_url(
     assert "local / local" in connect.text
     assert "OpenTelemetry traces" in connect.text
     assert "disabled" in connect.text
+    assert "Zero-token import hooks" in connect.text
+    assert "Codex CLI and app" in connect.text
+    assert "0.152.0" in connect.text
+    assert "Pending verification" in connect.text
+    assert "pi-session-jsonl with source=pi" in connect.text
+    assert "pi-session-jsonl with source=openclaw" in connect.text
+    assert (
+        "https://artemon-line.github.io/ai-memory-hub/latest/import_hooks/"
+        "#codex-cli-and-app"
+    ) in connect.text
+    for issue in range(326, 330):
+        assert f"https://github.com/Artemon-line/ai-memory-hub/issues/{issue}" in connect.text
+    hook_html = connect.text.split('id="import-hooks-title"', 1)[1]
+    assert "<textarea" not in hook_html
+    assert "MEMORY_API_TOKEN" not in hook_html
+    assert "Authorization: Bearer" not in hook_html
+    assert "/absolute/path" not in hook_html
+
+
+def test_import_hook_cards_escape_declarative_metadata(tmp_path, monkeypatch) -> None:
+    escaped_hook = dict(IMPORT_HOOK_MATRIX[0])
+    escaped_hook.update(
+        {
+            "name": "<script>alert(1)</script>",
+            "status": ImportHookStatus.IMPLEMENTED,
+            "verified_version": "<version>",
+            "trigger": '"><img src=x onerror=alert(1)>',
+        }
+    )
+    monkeypatch.setattr(connect_service, "IMPORT_HOOK_MATRIX", (escaped_hook,))
+    client = _client(tmp_path, monkeypatch)
+
+    page = client.get("/connect")
+
+    assert page.status_code == 200
+    assert "<script>alert(1)</script>" not in page.text
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in page.text
+    assert "&lt;version&gt;" in page.text
+    assert "<img src=x" not in page.text
 
 
 def test_connect_import_accepts_bearer_token_with_write_scope(tmp_path, monkeypatch) -> None:

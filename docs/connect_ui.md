@@ -368,3 +368,30 @@ until the exact command or config has been tested.
 </div>
 
 Do not commit OAuth client secrets or captured bearer tokens.
+
+## Zero-token Import Hook Matrix
+
+The Connect page has a separate **Zero-token import hooks** section for moving
+completed conversation artifacts into the hub without adding their contents to
+model context. These cards do not install or enable hooks and are intentionally
+separate from the live MCP client setup snippets.
+
+Each card shows the recipe state, pinned client version (or **Pending
+verification**), trigger boundary, registered parser, and a link to the exact
+client section in the published import-hook guide. Planned recipes also link to
+their tracking issue and do not show copyable commands.
+
+| Client | State | Version | Trigger | Parser |
+| --- | --- | --- | --- | --- |
+| Codex CLI and app | Implemented | `0.152.0` | `SessionEnd` hook | `codex-rollout-jsonl` |
+| Claude Code | Implemented | `2.1.288` | `SessionEnd` hook | `claude-code-session-jsonl` |
+| OpenCode | Implemented | `1.19.0` | Explicit post-session export | `opencode-session-json` |
+| Gemini CLI | Implemented | `0.57.0` | Explicit export and upload | `gemini-cli-session-json` |
+| Pi | Planned | Pending verification | To be verified | `pi-session-jsonl` with `source=pi` |
+| Hermes Agent | Planned | Pending verification | To be verified | `hermes-session-jsonl` |
+| DeepSeek Harness | Planned | Pending verification | Explicit downloaded export | `deepseek-harness-session-jsonl` |
+| OpenClaw | Planned | Pending verification | Coordinated export/backup | `pi-session-jsonl` with `source=openclaw` |
+
+Recipe status is a compatibility claim independent of each client's MCP setup
+status. When a planned recipe is verified, its implementation PR must update the
+version, trigger, documentation section, and matrix state together.

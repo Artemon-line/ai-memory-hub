@@ -6,6 +6,8 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Added a distinct Connect UI matrix for implemented and planned zero-token
+  import hooks, with pinned versions, parser metadata, and safe documentation links.
 - Added a shared zero-token conversation uploader with closed-file snapshots,
   bounded safe receipts, and opt-in Codex, Claude Code, OpenCode, and Gemini CLI
   import recipes.

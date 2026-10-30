@@ -149,6 +149,34 @@ Older Gemini releases may use `/export-session` instead of `/chat share`. Delete
 the exported file when it is no longer needed. There is no persistent automation
 to disable in this recipe. See the upstream [Gemini CLI hooks reference](https://geminicli.com/docs/hooks/reference/).
 
+## Pi
+
+**Planned.** The Pi recipe still needs a pinned client version, a verified
+closed-session lifecycle boundary, and deterministic refusal tests. Track the
+implementation in [issue #326](https://github.com/Artemon-line/ai-memory-hub/issues/326).
+No command is published until that verification is complete.
+
+## Hermes Agent
+
+**Planned.** The Hermes Agent recipe still needs a pinned client version and a
+verified export workflow that never copies its live database. Track the
+implementation in [issue #327](https://github.com/Artemon-line/ai-memory-hub/issues/327).
+No command is published until that verification is complete.
+
+## DeepSeek Harness
+
+**Planned.** The DeepSeek Harness recipe still needs a verified downloaded-log
+workflow with bounded ZIP extraction and explicit root selection. Track the
+implementation in [issue #328](https://github.com/Artemon-line/ai-memory-hub/issues/328).
+No command is published until that verification is complete.
+
+## OpenClaw
+
+**Planned.** The OpenClaw recipe still needs a pinned client version and a
+coordinated export or backup boundary that never copies live SQLite files. Track
+the implementation in [issue #329](https://github.com/Artemon-line/ai-memory-hub/issues/329).
+No command is published until that verification is complete.
+
 ## Failure handling
 
 The command exits nonzero for missing credentials, missing or unsafe files,

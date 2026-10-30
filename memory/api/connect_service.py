@@ -4,8 +4,10 @@ import base64
 import hashlib
 import json
 import os
+import re
 import secrets
 import time
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any, TypedDict
@@ -16,6 +18,7 @@ from memory.api.connect_security import csrf_matches, hash_secret
 from memory.auth import READ_SCOPE, WRITE_SCOPE
 from memory.backend.redaction import redact_content_hashes
 from memory.config import HubConfig
+from memory.importers.registry import importer_names
 from memory.ingestion.base_agent import BaseIngestionAgent
 
 
@@ -110,6 +113,119 @@ CLIENT_MATRIX: tuple[ClientSnippetDefinition, ...] = (
 )
 
 
+class ImportHookStatus(str, Enum):
+    IMPLEMENTED = "Implemented"
+    PLANNED = "Planned"
+
+
+class ImportHookDefinition(TypedDict):
+    name: str
+    status: ImportHookStatus
+    verified_version: str
+    trigger: str
+    parser: str
+    source: str | None
+    docs_anchor: str
+    tracking_issue: int | None
+
+
+class ImportHookModel(TypedDict):
+    name: str
+    status: str
+    verified_version: str
+    trigger: str
+    parser: str
+    source: str | None
+    parser_label: str
+    docs_url: str
+    tracking_issue_url: str | None
+
+
+IMPORT_HOOK_DOCS_BASE = "https://artemon-line.github.io/ai-memory-hub/latest/import_hooks/"
+IMPORT_HOOK_MATRIX: tuple[ImportHookDefinition, ...] = (
+    {
+        "name": "Codex CLI and app",
+        "status": ImportHookStatus.IMPLEMENTED,
+        "verified_version": "0.152.0",
+        "trigger": "SessionEnd hook",
+        "parser": "codex-rollout-jsonl",
+        "source": None,
+        "docs_anchor": "codex-cli-and-app",
+        "tracking_issue": None,
+    },
+    {
+        "name": "Claude Code",
+        "status": ImportHookStatus.IMPLEMENTED,
+        "verified_version": "2.1.288",
+        "trigger": "SessionEnd hook",
+        "parser": "claude-code-session-jsonl",
+        "source": None,
+        "docs_anchor": "claude-code",
+        "tracking_issue": None,
+    },
+    {
+        "name": "OpenCode",
+        "status": ImportHookStatus.IMPLEMENTED,
+        "verified_version": "1.19.0",
+        "trigger": "Explicit post-session export",
+        "parser": "opencode-session-json",
+        "source": None,
+        "docs_anchor": "opencode",
+        "tracking_issue": None,
+    },
+    {
+        "name": "Gemini CLI",
+        "status": ImportHookStatus.IMPLEMENTED,
+        "verified_version": "0.57.0",
+        "trigger": "Explicit export and upload",
+        "parser": "gemini-cli-session-json",
+        "source": None,
+        "docs_anchor": "gemini-cli",
+        "tracking_issue": None,
+    },
+    {
+        "name": "Pi",
+        "status": ImportHookStatus.PLANNED,
+        "verified_version": "Pending verification",
+        "trigger": "To be verified",
+        "parser": "pi-session-jsonl",
+        "source": "pi",
+        "docs_anchor": "pi",
+        "tracking_issue": 326,
+    },
+    {
+        "name": "Hermes Agent",
+        "status": ImportHookStatus.PLANNED,
+        "verified_version": "Pending verification",
+        "trigger": "To be verified",
+        "parser": "hermes-session-jsonl",
+        "source": None,
+        "docs_anchor": "hermes-agent",
+        "tracking_issue": 327,
+    },
+    {
+        "name": "DeepSeek Harness",
+        "status": ImportHookStatus.PLANNED,
+        "verified_version": "Pending verification",
+        "trigger": "Explicit downloaded export",
+        "parser": "deepseek-harness-session-jsonl",
+        "source": None,
+        "docs_anchor": "deepseek-harness",
+        "tracking_issue": 328,
+    },
+    {
+        "name": "OpenClaw",
+        "status": ImportHookStatus.PLANNED,
+        "verified_version": "Pending verification",
+        "trigger": "Coordinated export/backup",
+        "parser": "pi-session-jsonl",
+        "source": "openclaw",
+        "docs_anchor": "openclaw",
+        "tracking_issue": 329,
+    },
+)
+
+
 class ConnectLoginResult(TypedDict):
     identity: dict[str, object]
     session_id: str
@@ -174,6 +290,7 @@ class ConnectService:
             "mcp_url": mcp_url,
             "providers": enabled_passport_provider_models(self.config),
             "client_snippets": client_snippet_models(mcp_url=mcp_url),
+            "import_hooks": import_hook_models(),
             "diagnostics": diagnostics_model(config=self.config, health_state=health_state),
         }
 
@@ -349,6 +466,75 @@ def client_snippet_models(*, mcp_url: str) -> list[ClientSnippetModel]:
             }
         )
     return snippets
+
+
+def validate_import_hook_matrix(
+    matrix: Sequence[ImportHookDefinition] | None = None,
+) -> None:
+    matrix = IMPORT_HOOK_MATRIX if matrix is None else matrix
+    supported_parsers = set(importer_names())
+    seen_names: set[str] = set()
+    seen_anchors: set[str] = set()
+    for hook in matrix:
+        name = hook.get("name", "").strip()
+        name_key = name.casefold()
+        if not name or name_key in seen_names:
+            raise ValueError("import hook client names must be non-empty and unique")
+        seen_names.add(name_key)
+
+        status = hook.get("status")
+        if not isinstance(status, ImportHookStatus):
+            raise ValueError(f"import hook {name!r} has an unknown status")
+        parser = hook.get("parser", "")
+        if parser not in supported_parsers:
+            raise ValueError(f"import hook {name!r} has an unknown parser")
+        anchor = hook.get("docs_anchor", "")
+        if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", anchor):
+            raise ValueError(f"import hook {name!r} has an invalid documentation anchor")
+        if anchor in seen_anchors:
+            raise ValueError("import hook documentation anchors must be unique")
+        seen_anchors.add(anchor)
+
+        version = hook.get("verified_version", "").strip()
+        tracking_issue = hook.get("tracking_issue")
+        if status is ImportHookStatus.IMPLEMENTED:
+            if not version or version == "Pending verification":
+                raise ValueError(f"implemented import hook {name!r} needs a version pin")
+        elif version != "Pending verification":
+            raise ValueError(f"planned import hook {name!r} must be pending verification")
+        if status is ImportHookStatus.PLANNED and (
+            not isinstance(tracking_issue, int) or tracking_issue <= 0
+        ):
+            raise ValueError(f"planned import hook {name!r} needs a tracking issue")
+
+
+def import_hook_models() -> list[ImportHookModel]:
+    validate_import_hook_matrix()
+    models: list[ImportHookModel] = []
+    for hook in IMPORT_HOOK_MATRIX:
+        source = hook["source"]
+        parser_label = hook["parser"]
+        if source:
+            parser_label = f"{parser_label} with source={source}"
+        issue = hook["tracking_issue"]
+        models.append(
+            {
+                "name": hook["name"],
+                "status": hook["status"].value,
+                "verified_version": hook["verified_version"],
+                "trigger": hook["trigger"],
+                "parser": hook["parser"],
+                "source": source,
+                "parser_label": parser_label,
+                "docs_url": f"{IMPORT_HOOK_DOCS_BASE}#{hook['docs_anchor']}",
+                "tracking_issue_url": (
+                    f"https://github.com/Artemon-line/ai-memory-hub/issues/{issue}"
+                    if issue is not None
+                    else None
+                ),
+            }
+        )
+    return models
 
 
 def mcp_url_for_config(config: HubConfig, *, request: Request | None = None) -> str:
