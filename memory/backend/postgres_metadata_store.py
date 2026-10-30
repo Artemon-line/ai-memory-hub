@@ -6,7 +6,11 @@ import uuid
 from typing import Any, Callable
 
 from memory.backend.contracts import ProviderCapabilities
-from memory.backend.errors import OAuthClientQuotaExceeded, SchemaVersionError
+from memory.backend.errors import (
+    ConcurrentAppendError,
+    OAuthClientQuotaExceeded,
+    SchemaVersionError,
+)
 from memory.backend.handoff_records import (
     prepare_handoff_record,
     public_handoff_record,
@@ -1443,10 +1447,44 @@ class PostgresMetadataStore:
         return memory_id, True
 
     def append_messages(
-        self, conversation_json: dict[str, Any], new_messages: list[dict[str, Any]]
+        self,
+        conversation_json: dict[str, Any],
+        new_messages: list[dict[str, Any]],
+        *,
+        expected_conversation_hash: str | None = None,
     ) -> str:
         _ = new_messages
-        return self.insert(conversation_json)
+        if expected_conversation_hash is None:
+            return self.insert(conversation_json)
+        memory_id = self._validate_memory_id(conversation_json["id"])
+        project_id = self._ensure_payload_project(conversation_json)
+        payload = json.dumps(conversation_json, separators=(",", ":"), ensure_ascii=False)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                self._ensure_project_for_payload(cur, conversation_json)
+                cur.execute(
+                    """
+                    UPDATE conversations
+                    SET source = %s, timestamp = %s, title = %s,
+                        conversation_hash = %s, project_id = %s,
+                        upstream_thread_id = %s, payload = %s::jsonb
+                    WHERE id = %s AND conversation_hash = %s
+                    """,
+                    (
+                        str(conversation_json.get("source", "")),
+                        str(conversation_json.get("timestamp", "")),
+                        conversation_json.get("title"),
+                        self._conversation_hash(conversation_json),
+                        project_id,
+                        self._upstream_thread_id(conversation_json),
+                        payload,
+                        memory_id,
+                        expected_conversation_hash,
+                    ),
+                )
+                if cur.rowcount != 1:
+                    raise ConcurrentAppendError("conversation changed during append")
+        return memory_id
 
     def get(self, memory_id: str) -> dict[str, Any] | None:
         validated = self._validate_memory_id(memory_id)

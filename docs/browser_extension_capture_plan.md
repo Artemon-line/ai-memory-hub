@@ -136,6 +136,11 @@ When a user captures the same visible web thread multiple times, use:
 
 With `storage.allow_trusted_appends: true`, the hub can append newly observed
 messages to the existing conversation instead of creating duplicate memories.
+The incoming ordered message hashes must exactly equal the stored history or
+extend it with a strict suffix. A strict prefix is treated as a stale no-op;
+reordering or editing any stored message is a conflict and never merges two
+branches. Concurrent compatible snapshots use an optimistic retry so no valid
+suffix is lost.
 
 ## Future API Stabilization
 

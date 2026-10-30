@@ -343,7 +343,7 @@ def test_api_initial_thread_then_mcp_append_by_upstream_thread_metadata(
     ]
 
 
-def test_concurrent_api_continuations_preserve_both_same_thread_appends(
+def test_concurrent_compatible_api_snapshots_preserve_ordered_suffix(
     tmp_path: Path,
 ) -> None:
     first_message = {"role": "user", "text": "thread concurrent first message"}
@@ -361,14 +361,14 @@ def test_concurrent_api_continuations_preserve_both_same_thread_appends(
         upstream_thread_id="thread-concurrent-append",
         messages=[first_message, second_message],
     )
-    copilot_continuation = _conversation(
+    complete_continuation = _conversation(
         text="unused",
         source="codex",
         upstream_thread_id="thread-concurrent-append",
-        messages=[first_message, third_message],
+        messages=[first_message, second_message, third_message],
     )
     codex_continuation.pop("id")
-    copilot_continuation.pop("id")
+    complete_continuation.pop("id")
 
     with _sqlite_agent_client(tmp_path) as client:
         initial_response = client.post("/memory/insert", json=initial)
@@ -377,18 +377,73 @@ def test_concurrent_api_continuations_preserve_both_same_thread_appends(
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
             futures = [
                 executor.submit(client.post, "/memory/insert", json=codex_continuation),
-                executor.submit(client.post, "/memory/insert", json=copilot_continuation),
+                executor.submit(client.post, "/memory/insert", json=complete_continuation),
             ]
             append_responses = [future.result(timeout=5.0) for future in futures]
 
         retrieve = client.post("/memory/retrieve", json={"id": initial["id"]})
 
     assert [response.status_code for response in append_responses] == [200, 200]
-    assert sorted(response.json()["appended_messages"] for response in append_responses) == [1, 1]
+    appended_counts = sorted(
+        response.json()["appended_messages"] for response in append_responses
+    )
+    assert appended_counts in ([0, 2], [1, 1])
     assert retrieve.status_code == 200, retrieve.text
     texts = [message["text"] for message in retrieve.json()["memory"]["messages"]]
-    assert texts[0] == first_message["text"]
-    assert set(texts[1:]) == {second_message["text"], third_message["text"]}
+    assert texts == [
+        first_message["text"],
+        second_message["text"],
+        third_message["text"],
+    ]
+
+
+def test_concurrent_divergent_api_snapshots_never_merge_branches(
+    tmp_path: Path,
+) -> None:
+    first_message = {"role": "user", "text": "thread concurrent branch root"}
+    left_message = {"role": "assistant", "text": "left branch"}
+    right_message = {"role": "assistant", "text": "right branch"}
+    initial = _conversation(
+        text="unused",
+        source="codex",
+        upstream_thread_id="thread-concurrent-divergence",
+        messages=[first_message],
+    )
+    left = _conversation(
+        text="unused",
+        source="codex",
+        upstream_thread_id="thread-concurrent-divergence",
+        messages=[first_message, left_message],
+    )
+    right = _conversation(
+        text="unused",
+        source="codex",
+        upstream_thread_id="thread-concurrent-divergence",
+        messages=[first_message, right_message],
+    )
+    left.pop("id")
+    right.pop("id")
+
+    with _sqlite_agent_client(tmp_path) as client:
+        assert client.post("/memory/insert", json=initial).status_code == 200
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            responses = [
+                future.result(timeout=5.0)
+                for future in (
+                    executor.submit(client.post, "/memory/insert", json=left),
+                    executor.submit(client.post, "/memory/insert", json=right),
+                )
+            ]
+        retrieve = client.post("/memory/retrieve", json={"id": initial["id"]})
+
+    assert sorted(response.status_code for response in responses) == [200, 400]
+    conflict = next(response for response in responses if response.status_code == 400)
+    assert "divergent message history" in conflict.json()["detail"]
+    stored_texts = [
+        message["text"] for message in retrieve.json()["memory"]["messages"]
+    ]
+    assert stored_texts[0] == first_message["text"]
+    assert stored_texts[1:] in ([left_message["text"]], [right_message["text"]])
 
 
 def test_mcp_initial_thread_then_api_append_by_upstream_thread_metadata(

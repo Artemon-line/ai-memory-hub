@@ -15,7 +15,11 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from memory.backend.contracts import ProviderCapabilities
-from memory.backend.errors import NotSupportedError, OAuthClientQuotaExceeded
+from memory.backend.errors import (
+    ConcurrentAppendError,
+    NotSupportedError,
+    OAuthClientQuotaExceeded,
+)
 from memory.backend.handoff_records import (
     prepare_handoff_record,
     public_handoff_record,
@@ -1507,10 +1511,47 @@ class SQLiteMetadataStore:
         return memory_id, True
 
     def append_messages(
-        self, conversation_json: dict[str, Any], new_messages: list[dict[str, Any]]
+        self,
+        conversation_json: dict[str, Any],
+        new_messages: list[dict[str, Any]],
+        *,
+        expected_conversation_hash: str | None = None,
     ) -> str:
         _ = new_messages
-        return self.insert(conversation_json)
+        if expected_conversation_hash is None:
+            return self.insert(conversation_json)
+        memory_id = self._validate_memory_id(conversation_json["id"])
+        source = str(conversation_json.get("source", ""))
+        timestamp = str(conversation_json.get("timestamp", ""))
+        title = conversation_json.get("title")
+        self._validate_field_lengths(source=source, timestamp=timestamp, title=title)
+        project_id = self._ensure_payload_project(conversation_json)
+        payload = json.dumps(conversation_json, separators=(",", ":"), ensure_ascii=False)
+        with self._connect() as conn:
+            self._ensure_project_for_payload(conn, conversation_json)
+            cursor = conn.execute(
+                """
+                UPDATE conversations
+                SET source = ?, timestamp = ?, title = ?, conversation_hash = ?,
+                    project_id = ?, upstream_thread_id = ?, payload = ?
+                WHERE id = ? AND conversation_hash = ?
+                """,
+                (
+                    source,
+                    timestamp,
+                    title,
+                    self._conversation_hash(conversation_json),
+                    project_id,
+                    self._upstream_thread_id(conversation_json),
+                    payload,
+                    memory_id,
+                    expected_conversation_hash,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise ConcurrentAppendError("conversation changed during append")
+            self._replace_child_rows(conn, conversation_json)
+        return memory_id
 
     def get_by_conversation_hash(
         self, conversation_hash: str | None, project_id: str | None = None

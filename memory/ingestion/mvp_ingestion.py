@@ -27,7 +27,11 @@ from memory.advanced_memory import (
 )
 from memory.backend.contracts import VectorDateRange, VectorSearchFilters
 from memory.backend.dry_run import DryRunMetadataStore, DryRunVectorStore
-from memory.backend.errors import SchemaVersionError, VectorDimensionError
+from memory.backend.errors import (
+    ConcurrentAppendError,
+    SchemaVersionError,
+    VectorDimensionError,
+)
 from memory.backend.log_safety import redact_secrets
 from memory.backend.metadata_store import (
     LOCAL_DEFAULT_PROJECT_ID,
@@ -592,8 +596,15 @@ class _ProfileSummaryLine:
 
 @dataclass(frozen=True)
 class _AppendDelta:
+    relation: "_SnapshotRelation"
     messages: list[dict[str, Any]]
     incoming_covers_updated_history: bool
+
+
+class _SnapshotRelation(StrEnum):
+    EQUAL = "equal"
+    APPEND = "append"
+    STALE = "stale"
 
 
 _PayloadKey = TypeVar("_PayloadKey", bound=StrEnum)
@@ -630,6 +641,7 @@ _MAX_AUTO_TAGS = 24
 _MAX_SENSITIVE_FINDINGS = 16
 _MAX_LINEAGE_DEPTH = 16
 _MAX_LINEAGE_VALIDATION_DEPTH = 1024
+_MAX_APPEND_ATTEMPTS = 3
 _SENSITIVE_SCAN_EXCLUDED_KEYS = {
     "id",
     "conversation_id",
@@ -1761,23 +1773,19 @@ def _lookup_by_conversation_hash(
 def _lookup_same_thread(
     incoming: dict[str, Any], *, owner_id: str | None = None, project_id: str | None = None
 ) -> dict[str, Any] | None:
-    if not _runtime().allow_trusted_appends:
-        return None
     store = _runtime().metadata_store
-    memory_id = str(incoming.get("id", ""))
-    if memory_id:
-        existing = store.get(memory_id) if hasattr(store, "get") else None
-        if isinstance(existing, dict):
-            return existing if _conversation_allowed(existing, owner_id, project_id) else None
-
     metadata = incoming.get("metadata", {})
     imported_session_identity = (
         metadata.get(IMPORTED_SESSION_IDENTITY_KEY)
         if isinstance(metadata, dict)
         else None
     )
-    if isinstance(imported_session_identity, str) and imported_session_identity:
-        if hasattr(store, "get_by_imported_session") and project_id is not None:
+    if (
+        isinstance(imported_session_identity, str)
+        and imported_session_identity
+        and project_id is not None
+    ):
+        if hasattr(store, "get_by_imported_session"):
             candidate = store.get_by_imported_session(
                 imported_session_identity, project_id
             )
@@ -1795,9 +1803,20 @@ def _lookup_same_thread(
                         isinstance(conversation_metadata, dict)
                         and conversation_metadata.get(IMPORTED_SESSION_IDENTITY_KEY)
                         == imported_session_identity
-                        and _conversation_allowed(conversation, owner_id, project_id)
+                        and _conversation_allowed(
+                            conversation, owner_id, project_id
+                        )
                     ):
                         return conversation
+    if not _runtime().allow_trusted_appends:
+        return None
+
+    memory_id = str(incoming.get("id", ""))
+    if memory_id:
+        existing = store.get(memory_id) if hasattr(store, "get") else None
+        if isinstance(existing, dict):
+            return existing if _conversation_allowed(existing, owner_id, project_id) else None
+
     upstream_thread_id = (
         metadata.get(ThreadMetadataKey.UPSTREAM_THREAD_ID) if isinstance(metadata, dict) else None
     )
@@ -1892,14 +1911,32 @@ def _append_conversation(
         _merge_thread_metadata(metadata, incoming_metadata)
     updated["messages"] = messages
     updated["metadata"] = metadata
+    return updated
+
+
+def _persist_appended_conversation(
+    existing: dict[str, Any],
+    updated: dict[str, Any],
+    new_messages: list[dict[str, Any]],
+) -> None:
     store = _runtime().metadata_store
     provider = str(_runtime().health_state.get("metadata_provider") or "unknown")
+    expected_conversation_hash = _conversation_hash(existing)
     with _ingestion_stage("metadata_insert", metadata_provider=provider, append=True):
         if hasattr(store, "append_messages"):
-            store.append_messages(updated, new_messages)
+            store.append_messages(
+                updated,
+                new_messages,
+                expected_conversation_hash=expected_conversation_hash,
+            )
         else:
+            current = store.get(str(updated["id"])) if hasattr(store, "get") else None
+            if (
+                not isinstance(current, dict)
+                or _conversation_hash(current) != expected_conversation_hash
+            ):
+                raise ConcurrentAppendError("conversation changed during append")
             store.insert(updated)
-    return updated
 
 
 def _conversation_hash(conversation: dict[str, Any]) -> str | None:
@@ -2296,34 +2333,25 @@ def _detect_append_delta(
         raise ValueError("duplicate_conflict: stored or incoming messages are invalid")
     existing_hashes = [str(message.get("hash", "")) for message in existing_messages]
     incoming_hashes = [str(message.get("hash", "")) for message in incoming_messages]
-    shared_prefix_len = 0
-    for existing_hash, incoming_hash in zip(existing_hashes, incoming_hashes, strict=False):
-        if existing_hash != incoming_hash:
-            break
-        shared_prefix_len += 1
-    common_prefix_len = min(len(existing_hashes), len(incoming_hashes))
-    if shared_prefix_len == 0 and common_prefix_len > 0:
-        raise ValueError("duplicate_conflict: same thread has conflicting message history")
-    if shared_prefix_len == common_prefix_len and len(incoming_hashes) <= len(existing_hashes):
-        return _AppendDelta(messages=[], incoming_covers_updated_history=False)
-    seen = set(existing_hashes)
-    new_messages: list[dict[str, Any]] = []
-    suffix_start = (
-        len(existing_hashes) if shared_prefix_len == common_prefix_len else shared_prefix_len
-    )
-    for message in incoming_messages[suffix_start:]:
-        message_hash = str(message["hash"])
-        if message_hash not in seen:
-            new_messages.append(message)
-            seen.add(message_hash)
-    incoming_covers_updated_history = (
-        shared_prefix_len == len(existing_messages)
-        and len(incoming_messages) == len(existing_messages) + len(new_messages)
-    )
-    return _AppendDelta(
-        messages=new_messages,
-        incoming_covers_updated_history=incoming_covers_updated_history,
-    )
+    if existing_hashes == incoming_hashes:
+        return _AppendDelta(
+            relation=_SnapshotRelation.EQUAL,
+            messages=[],
+            incoming_covers_updated_history=True,
+        )
+    if incoming_hashes[: len(existing_hashes)] == existing_hashes:
+        return _AppendDelta(
+            relation=_SnapshotRelation.APPEND,
+            messages=list(incoming_messages[len(existing_hashes) :]),
+            incoming_covers_updated_history=True,
+        )
+    if existing_hashes[: len(incoming_hashes)] == incoming_hashes:
+        return _AppendDelta(
+            relation=_SnapshotRelation.STALE,
+            messages=[],
+            incoming_covers_updated_history=False,
+        )
+    raise ValueError("duplicate_conflict: same thread has divergent message history")
 
 
 def _utc_now_iso() -> str:
@@ -2856,15 +2884,39 @@ def ingest_messages(
         conversation_json, owner_id=owner_id, project_id=effective_project_id
     )
     if same_thread is not None:
-        append_delta = _detect_append_delta(same_thread, conversation_json)
-        new_messages = append_delta.messages
-        if not new_messages:
-            # Re-index check for same_thread
-            # If it's already fully indexed, we COULD skip,
-            # but for consistency we fall through to ensure vectors are there.
-            start_index = 0
-            updated = same_thread
-        else:
+        append_attempt = 0
+        while True:
+            append_delta = _detect_append_delta(same_thread, conversation_json)
+            if append_delta.relation is _SnapshotRelation.STALE:
+                return _stale_snapshot_ingestion_result(
+                    same_thread,
+                    owner_id=owner_id,
+                    project_id=effective_project_id,
+                )
+            if append_delta.relation is _SnapshotRelation.EQUAL:
+                if duplicate_metadata_id is None:
+                    return _deduplicated_ingestion_result(
+                        same_thread,
+                        owner_id=owner_id,
+                        project_id=effective_project_id,
+                    )
+                start_index = 0
+                new_messages = []
+                updated = same_thread
+                indexing_messages = updated.get("messages", [])
+                with _ingestion_stage("chunk", message_count=len(indexing_messages)):
+                    chunks = chunk_selected_messages(
+                        updated, indexing_messages, start_index=0
+                    )
+                _attach_index_chunks(updated, chunks)
+                provider = str(
+                    _runtime().health_state.get("metadata_provider") or "unknown"
+                )
+                with _ingestion_stage("metadata_insert", metadata_provider=provider):
+                    store.insert(updated)
+                break
+
+            new_messages = append_delta.messages
             start_index = len(same_thread.get("messages", []))
             updated = _append_conversation(
                 same_thread,
@@ -2876,29 +2928,47 @@ def ingest_messages(
             )
             enrich_topics(updated)
             enrich_auto_tags(updated)
+            chunk_start_index = _next_chunk_index(
+                updated, fallback_start_index=start_index
+            )
+            with _ingestion_stage("chunk", message_count=len(new_messages)):
+                chunks = chunk_selected_messages(
+                    updated, new_messages, start_index=chunk_start_index
+                )
+            _extend_index_chunks(updated, chunks)
+            try:
+                _persist_appended_conversation(same_thread, updated, new_messages)
+            except ConcurrentAppendError as exc:
+                append_attempt += 1
+                if append_attempt >= _MAX_APPEND_ATTEMPTS:
+                    raise ValueError(
+                        "concurrent_append_conflict: retry import"
+                    ) from exc
+                refreshed = _lookup_same_thread(
+                    conversation_json,
+                    owner_id=owner_id,
+                    project_id=effective_project_id,
+                )
+                if refreshed is None:
+                    raise ValueError(
+                        "concurrent_append_conflict: conversation no longer available"
+                    ) from exc
+                same_thread = refreshed
+                continue
+
             _attach_generated_summaries(
                 updated,
                 owner_id=owner_id,
                 project_id=effective_project_id,
             )
+            try:
+                _persist_appended_conversation(updated, updated, [])
+            except ConcurrentAppendError:
+                # A later compatible append already owns the current transcript.
+                # Never overwrite it merely to refresh derived summary metadata.
+                pass
+            break
 
-        # If we are here, we either have new messages or we are re-indexing existing
-        indexing_messages = new_messages if new_messages else updated.get("messages", [])
-        chunk_start_index = (
-            _next_chunk_index(updated, fallback_start_index=start_index) if new_messages else 0
-        )
-        with _ingestion_stage("chunk", message_count=len(indexing_messages)):
-            chunks = chunk_selected_messages(
-                updated, indexing_messages, start_index=chunk_start_index
-            )
-        if new_messages:
-            _extend_index_chunks(updated, chunks)
-        else:
-            _attach_index_chunks(updated, chunks)
-        if new_messages or chunks:
-            provider = str(_runtime().health_state.get("metadata_provider") or "unknown")
-            with _ingestion_stage("metadata_insert", metadata_provider=provider):
-                store.insert(updated)
         try:
             embeddings = embed_chunks(chunks, project_id=effective_project_id, owner_id=owner_id)
             store_vectors(str(updated["id"]), embeddings, replace=(start_index == 0))
@@ -3125,6 +3195,48 @@ def _store_review_memory(
         "memory_status": memory_status,
         "inserted": inserted,
         "chunks": 0,
+    }
+
+
+def _stale_snapshot_ingestion_result(
+    conversation: dict[str, Any],
+    *,
+    owner_id: str | None,
+    project_id: str,
+) -> dict[str, Any]:
+    memory_id = str(conversation["id"])
+    logger.info(
+        "Stale conversation snapshot ignored",
+        extra={
+            "event": "conversation_snapshot_stale",
+            "operation": "memory_insert",
+            "conversation_id": memory_id,
+        },
+    )
+    _record_audit_event(
+        "memory.inserted",
+        owner_id=owner_id,
+        project_id=project_id,
+        memory_id=memory_id,
+        metadata={
+            "deduplicated": False,
+            "stale": True,
+            "appended_messages": 0,
+            "embedded_chunks": 0,
+            "memory_status": _memory_status(conversation),
+        },
+    )
+    return {
+        "status": "ok",
+        "id": memory_id,
+        "deduplicated": False,
+        "stale": True,
+        "appended_messages": 0,
+        "embedded_chunks": 0,
+        "chunks": 0,
+        "facts": 0,
+        "graph_entities": 0,
+        "graph_relationships": 0,
     }
 
 

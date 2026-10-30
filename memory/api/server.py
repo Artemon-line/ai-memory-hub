@@ -528,7 +528,8 @@ def _register_api_routes(
         except PermissionError as exc:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
         except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            status_code = 409 if str(exc).startswith("concurrent_append_conflict") else 400
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
         except Exception as exc:
             raise provider_failure("insert", "insert_failed", exc) from exc
 

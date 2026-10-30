@@ -9,6 +9,7 @@ import jsonschema
 import pytest
 
 from memory.backend.contracts import ProviderCapabilities, VectorSearchFilters
+from memory.backend.errors import ConcurrentAppendError
 from memory.backend.metadata_store import IndexChunkField, IndexState, MetadataField
 from memory.ingestion import mvp_ingestion
 from memory.ingestion import validate as ingestion_validate
@@ -54,11 +55,37 @@ class StubMetadataStore:
         self.get_many_calls: list[list[str]] = []
         self._generated_summaries: dict[str, dict[str, Any]] = {}
         self.generated_summary_upserts: list[str] = []
+        self.append_conflicts_remaining = 0
 
     def insert(self, conversation_json: dict[str, Any]) -> str:
         memory_id = str(conversation_json["id"])
         self.by_id[memory_id] = conversation_json
         return memory_id
+
+    def append_messages(
+        self,
+        conversation_json: dict[str, Any],
+        new_messages: list[dict[str, Any]],
+        *,
+        expected_conversation_hash: str | None = None,
+    ) -> str:
+        _ = new_messages
+        if self.append_conflicts_remaining > 0:
+            self.append_conflicts_remaining -= 1
+            raise ConcurrentAppendError("simulated append race")
+        memory_id = str(conversation_json["id"])
+        current = self.by_id.get(memory_id)
+        current_metadata = current.get("metadata", {}) if isinstance(current, dict) else {}
+        if (
+            expected_conversation_hash is not None
+            and (
+                not isinstance(current_metadata, dict)
+                or current_metadata.get("conversation_hash")
+                != expected_conversation_hash
+            )
+        ):
+            raise ConcurrentAppendError("conversation changed during append")
+        return self.insert(conversation_json)
 
     def is_fully_indexed(self, conversation_id: str) -> bool:
         # For tests, if it's in by_id, consider it indexed
@@ -873,7 +900,7 @@ def test_trusted_full_history_append_reuses_verified_conversation_hash(monkeypat
     assert hashed_message_counts == [3, 3]
 
 
-def test_trusted_sibling_append_recomputes_combined_conversation_hash(monkeypatch) -> None:
+def test_trusted_sibling_append_reports_divergence_without_mutation(monkeypatch) -> None:
     original_hash_ordered_messages = mvp_ingestion.hash_ordered_messages
     hashed_message_counts: list[int] = []
 
@@ -897,6 +924,7 @@ def test_trusted_sibling_append_recomputes_combined_conversation_hash(monkeypatc
         {"role": "assistant", "text": "first continuation"},
     ]
     mvp_ingestion.ingest_messages(first)
+    stored_hash = metadata.by_id[str(base["id"])]["metadata"]["conversation_hash"]
     hashed_message_counts.clear()
     sibling = _valid_conversation()
     sibling["id"] = "33333333-3333-4333-8333-333333333333"
@@ -907,15 +935,16 @@ def test_trusted_sibling_append_recomputes_combined_conversation_hash(monkeypatc
         {"role": "assistant", "text": "sibling continuation"},
     ]
 
-    mvp_ingestion.ingest_messages(sibling)
+    with pytest.raises(ValueError, match="divergent message history"):
+        mvp_ingestion.ingest_messages(sibling)
 
     stored = metadata.by_id[str(base["id"])]
-    raw_hash = original_hash_ordered_messages(stored["messages"])
-    expected_hash = mvp_ingestion._project_scoped_conversation_hash(
-        raw_hash, project_id=mvp_ingestion.LOCAL_DEFAULT_PROJECT_ID
-    )
-    assert hashed_message_counts == [2, 3]
-    assert stored["metadata"]["conversation_hash"] == expected_hash
+    assert hashed_message_counts == [2]
+    assert stored["metadata"]["conversation_hash"] == stored_hash
+    assert [message["text"] for message in stored["messages"]] == [
+        "first thread note",
+        "first continuation",
+    ]
 
 
 def test_trusted_append_extracts_facts_only_from_new_messages() -> None:
@@ -1004,7 +1033,7 @@ def test_trusted_append_resolves_registered_import_by_stable_session_identity() 
     assert stored["metadata"]["imported_session_identity"].startswith("sha256:")
 
 
-def test_trusted_append_accepts_sibling_same_thread_continuation() -> None:
+def test_trusted_append_rejects_sibling_same_thread_continuation() -> None:
     metadata, vectors = _configure_stubs(allow_trusted_appends=True)
     base = _valid_conversation()
     base["source"] = "opencode"
@@ -1030,19 +1059,133 @@ def test_trusted_append_accepts_sibling_same_thread_continuation() -> None:
     ]
 
     first_result = mvp_ingestion.ingest_messages(first_continuation)
-    second_result = mvp_ingestion.ingest_messages(second_continuation)
+    with pytest.raises(ValueError, match="divergent message history"):
+        mvp_ingestion.ingest_messages(second_continuation)
 
     assert first_result["id"] == base["id"]
     assert first_result["appended_messages"] == 1
-    assert second_result["id"] == base["id"]
-    assert second_result["appended_messages"] == 1
     stored = metadata.by_id[base["id"]]
     assert [message["text"] for message in stored["messages"]] == [
         "first thread note",
         "codex continuation",
-        "copilot continuation",
     ]
-    assert [row["chunk_index"] for row in vectors.rows] == [0, 1, 2]
+    assert [row["chunk_index"] for row in vectors.rows] == [0, 1]
+
+
+def test_imported_session_identity_reconciles_without_general_append_trust() -> None:
+    metadata, _ = _configure_stubs(allow_trusted_appends=False)
+    base = _valid_conversation()
+    base["source"] = "opencode"
+    base["metadata"].update(
+        {
+            "import_parser": "opencode-session-json",
+            "source_session_id": "session-without-general-append-trust",
+        }
+    )
+    base["messages"] = [{"role": "user", "text": "first imported note"}]
+    mvp_ingestion.ingest_messages(base)
+
+    continuation = _valid_conversation()
+    continuation["id"] = "22222222-2222-4222-8222-222222222222"
+    continuation["source"] = "opencode"
+    continuation["metadata"].update(
+        {
+            "import_parser": "opencode-session-json",
+            "source_session_id": "session-without-general-append-trust",
+        }
+    )
+    continuation["messages"] = [
+        {"role": "user", "text": "first imported note"},
+        {"role": "assistant", "text": "second imported note"},
+    ]
+
+    result = mvp_ingestion.ingest_messages(continuation)
+
+    assert result["id"] == base["id"]
+    assert result["appended_messages"] == 1
+
+
+def test_trusted_append_ignores_strict_prefix_as_stale() -> None:
+    metadata, vectors = _configure_stubs(allow_trusted_appends=True)
+    current = _valid_conversation()
+    current["source"] = "opencode"
+    current["metadata"]["upstream_thread_id"] = "thread-stale"
+    current["messages"] = [
+        {"role": "user", "text": "first thread note"},
+        {"role": "assistant", "text": "current thread note"},
+    ]
+    mvp_ingestion.ingest_messages(current)
+    vector_calls = list(vectors.insert_calls)
+    summary_upserts = list(metadata.generated_summary_upserts)
+
+    stale = _valid_conversation()
+    stale["id"] = "22222222-2222-4222-8222-222222222222"
+    stale["source"] = "opencode"
+    stale["metadata"]["upstream_thread_id"] = "thread-stale"
+    stale["messages"] = [{"role": "user", "text": "first thread note"}]
+
+    result = mvp_ingestion.ingest_messages(stale)
+
+    assert result["stale"] is True
+    assert result["appended_messages"] == 0
+    assert result["embedded_chunks"] == 0
+    assert vectors.insert_calls == vector_calls
+    assert metadata.generated_summary_upserts == summary_upserts
+    stored = metadata.by_id[current["id"]]
+    assert [message["text"] for message in stored["messages"]] == [
+        "first thread note",
+        "current thread note",
+    ]
+
+
+def test_trusted_append_returns_retryable_conflict_after_bounded_storage_races() -> None:
+    metadata, vectors = _configure_stubs(allow_trusted_appends=True)
+    base = _valid_conversation()
+    mvp_ingestion.ingest_messages(base)
+    vector_calls = list(vectors.insert_calls)
+    metadata.append_conflicts_remaining = 3
+    longer = _valid_conversation()
+    longer["messages"].append({"role": "user", "text": "next"})
+
+    with pytest.raises(ValueError, match="concurrent_append_conflict: retry import"):
+        mvp_ingestion.ingest_messages(longer)
+
+    assert vectors.insert_calls == vector_calls
+    assert len(metadata.by_id[base["id"]]["messages"]) == 2
+
+
+def test_trusted_append_rejects_middle_message_edit() -> None:
+    metadata, vectors = _configure_stubs(allow_trusted_appends=True)
+    current = _valid_conversation()
+    current["source"] = "opencode"
+    current["metadata"]["upstream_thread_id"] = "thread-middle-edit"
+    current["messages"] = [
+        {"role": "user", "text": "first"},
+        {"role": "assistant", "text": "second"},
+        {"role": "user", "text": "third"},
+    ]
+    mvp_ingestion.ingest_messages(current)
+    vector_calls = list(vectors.insert_calls)
+
+    edited = _valid_conversation()
+    edited["id"] = "22222222-2222-4222-8222-222222222222"
+    edited["source"] = "opencode"
+    edited["metadata"]["upstream_thread_id"] = "thread-middle-edit"
+    edited["messages"] = [
+        {"role": "user", "text": "first"},
+        {"role": "assistant", "text": "edited second"},
+        {"role": "user", "text": "third"},
+    ]
+
+    with pytest.raises(ValueError, match="divergent message history"):
+        mvp_ingestion.ingest_messages(edited)
+
+    assert vectors.insert_calls == vector_calls
+    assert [message["text"] for message in metadata.by_id[current["id"]]["messages"]] == [
+        "first",
+        "second",
+        "third",
+    ]
 
 
 def test_ingest_messages_rejects_same_id_append_without_trust() -> None:
