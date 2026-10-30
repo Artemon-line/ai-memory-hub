@@ -21,3 +21,18 @@ def test_import_hook_guide_pins_clients_and_shared_uploader_contract() -> None:
     assert "never prints the token" in guide
     assert "deduplicated: true" in guide
     assert "Remove" in guide
+
+
+def test_hermes_recipe_uses_private_supported_export_and_cleanup() -> None:
+    guide = (_ROOT / "docs" / "import_hooks.md").read_text(encoding="utf-8")
+    section = guide.split("## Hermes Agent", 1)[1].split("## Failure handling", 1)[0]
+
+    assert "0.22.5" in section
+    assert "tools/import_hermes_session.py" in section
+    assert "hermes-session-jsonl" in section
+    assert "--session-id" in section
+    assert "--ended-older-than" in section
+    assert "--redact" in section
+    assert "state.db" in section
+    assert "temporary" in section
+    assert "nothing persistent to disable" in section

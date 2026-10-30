@@ -149,6 +149,42 @@ Older Gemini releases may use `/export-session` instead of `/chat share`. Delete
 the exported file when it is no longer needed. There is no persistent automation
 to disable in this recipe. See the upstream [Gemini CLI hooks reference](https://geminicli.com/docs/hooks/reference/).
 
+## Hermes Agent
+
+This explicit export-and-upload recipe was checked with Hermes Agent 0.22.5.
+Hermes stores current sessions in `~/.hermes/state.db`; never copy that database,
+its `-wal` file, or its `-shm` file. Exit or otherwise end the intended session,
+find its ID with `hermes sessions list`, then run:
+
+```bash
+python3 /absolute/path/to/ai-memory-hub/tools/import_hermes_session.py \
+  --session-id <SESSION_ID>
+```
+
+Add `--redact` to ask Hermes to scrub recognized API keys, tokens, and
+credentials from the exported copy before upload. For an explicit batch of
+ended sessions, use an upstream ended-session age filter instead of an
+unfiltered database export:
+
+```bash
+python3 /absolute/path/to/ai-memory-hub/tools/import_hermes_session.py \
+  --ended-older-than 2d --redact
+```
+
+The adapter creates a private temporary directory, installs cleanup before it
+runs `hermes sessions export`, and deletes the JSONL after success or failure.
+It invokes only the supported Hermes export command, suppresses its output, and
+then delegates the immutable artifact to the shared uploader with parser
+`hermes-session-jsonl` and `--min-age-seconds 0`. The existing importer retains
+single- and multi-session boundaries. Missing or invalid IDs, failed or empty
+exports, files over 20 MB, invalid envelopes, and network failures are refused
+without printing export content or credentials. Safe retries use normal hub
+deduplication and emit only the uploader's bounded receipt.
+
+There is nothing persistent to disable or remove: both forms are opt-in manual
+commands. Keep `MEMORY_HUB_URL` and `MEMORY_API_TOKEN` only in the command
+environment. See the upstream [Hermes session guide](https://github.com/NousResearch/hermes-agent/blob/v0.22.5/website/docs/user-guide/sessions.md).
+
 ## Failure handling
 
 The command exits nonzero for missing credentials, missing or unsafe files,

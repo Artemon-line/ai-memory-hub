@@ -6,6 +6,8 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Added an opt-in zero-token Hermes Agent 0.22.5 export adapter with private
+  temporary files, optional redaction, ended-session batches, and cleanup.
 - Added a shared zero-token conversation uploader with closed-file snapshots,
   bounded safe receipts, and opt-in Codex, Claude Code, OpenCode, and Gemini CLI
   import recipes.
