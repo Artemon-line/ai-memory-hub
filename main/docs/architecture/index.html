@@ -3049,7 +3049,9 @@ are ignored without blocking deterministic ingestion.</p>
 <li>Validate schema.</li>
 <li>Normalize message <code>role</code>, <code>text</code>, and common <code>content</code> aliases.</li>
 <li>Normalize timestamps and metadata defaults.</li>
-<li>Attach stable message hashes, conversation hashes, import timestamps, and topic metadata.</li>
+<li>Attach stable message hashes, conversation hashes, import timestamps, topic
+  metadata, and a project/source/parser-scoped digest when a registered importer
+  provides a reliable upstream session ID.</li>
 <li>Produce deterministic message-level or token-window chunks with stable chunk IDs.</li>
 </ul>
 <p>Role normalization from arbitrary upstream exports is not yet a full platform-importer layer. Platform-specific parsers remain planned work.</p>

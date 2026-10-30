@@ -456,6 +456,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#stable-imported-session-identity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stable imported-session identity
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3212,6 +3223,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#stable-imported-session-identity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stable imported-session identity
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3756,6 +3778,25 @@ a <code>results</code> list containing each memory ID, status, and deduplication
 <li>The <code>parser</code> and <code>file</code> parts are required. Optional <code>source</code> and <code>title</code>
   fields can override the stored source or title.</li>
 </ul>
+<h3 id="stable-imported-session-identity">Stable imported-session identity</h3>
+<p>When a registered importer supplies a reliable <code>metadata.source_session_id</code>,
+the hub derives a stable identity from the project, normalized source, parser,
+and upstream session ID. The identity is a versioned SHA-256 digest; storage
+indexes and logs do not expose the raw upstream session ID. The same source ID
+can therefore be reused safely by a different parser, source, or project. A
+source without a reliable session ID continues to use content-hash
+deduplication, and filenames are never treated as session identity.</p>
+<p>SQLite, PostgreSQL, and MongoDB create a project-scoped unique index for this
+derived identity. Dry-run mode delegates identity lookups to its wrapped
+provider. Authorization still runs before a matching conversation can be
+returned or changed, so a session ID cannot bridge owner or project access.</p>
+<p>Existing conversations are not guessed or automatically backfilled during the
+schema migration. Their new index field remains empty. This keeps upgrades and
+rollbacks safe when old exports contain missing or ambiguous provenance. An
+unchanged retry can still deduplicate by content hash; records created by a
+new import after the upgrade receive stable identity. Rollback only requires
+dropping the optional identity index and column (or leaving them unused), since
+the canonical payload remains backward compatible.</p>
 <h2 id="quick-chooser">Quick chooser</h2>
 <table>
 <thead>
