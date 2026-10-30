@@ -94,6 +94,29 @@ a `results` list containing each memory ID, status, and deduplication result.
 - The `parser` and `file` parts are required. Optional `source` and `title`
   fields can override the stored source or title.
 
+### Stable imported-session identity
+
+When a registered importer supplies a reliable `metadata.source_session_id`,
+the hub derives a stable identity from the project, normalized source, parser,
+and upstream session ID. The identity is a versioned SHA-256 digest; storage
+indexes and logs do not expose the raw upstream session ID. The same source ID
+can therefore be reused safely by a different parser, source, or project. A
+source without a reliable session ID continues to use content-hash
+deduplication, and filenames are never treated as session identity.
+
+SQLite, PostgreSQL, and MongoDB create a project-scoped unique index for this
+derived identity. Dry-run mode delegates identity lookups to its wrapped
+provider. Authorization still runs before a matching conversation can be
+returned or changed, so a session ID cannot bridge owner or project access.
+
+Existing conversations are not guessed or automatically backfilled during the
+schema migration. Their new index field remains empty. This keeps upgrades and
+rollbacks safe when old exports contain missing or ambiguous provenance. An
+unchanged retry can still deduplicate by content hash; records created by a
+new import after the upgrade receive stable identity. Rollback only requires
+dropping the optional identity index and column (or leaving them unused), since
+the canonical payload remains backward compatible.
+
 ## Quick chooser
 
 | Source | What to get | Importer |

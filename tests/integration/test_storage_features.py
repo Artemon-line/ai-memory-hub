@@ -72,6 +72,7 @@ def _assert_metadata_store_contract(store: Any) -> None:
     memory_id = str(uuid4())
     thread_id = f"thread-{uuid4().hex}"
     conversation_hash = "sha256:" + ("1" * 64)
+    imported_session_identity = "sha256:" + ("4" * 64)
     conversation = {
         "id": memory_id,
         "source": "contract",
@@ -87,6 +88,7 @@ def _assert_metadata_store_contract(store: Any) -> None:
         "metadata": {
             "conversation_hash": conversation_hash,
             "upstream_thread_id": thread_id,
+            "imported_session_identity": imported_session_identity,
             "index_chunks": [
                 {
                     "chunk_id": f"{memory_id}:0",
@@ -107,6 +109,10 @@ def _assert_metadata_store_contract(store: Any) -> None:
     assert store.get_many([memory_id]) == {memory_id: conversation}
     assert store.get_by_conversation_hash(conversation_hash) == conversation
     assert store.get_by_upstream_thread("contract", thread_id) == conversation
+    assert (
+        store.get_by_imported_session(imported_session_identity, "local-default")
+        == conversation
+    )
     assert store.is_fully_indexed(memory_id) is False
 
     store.mark_chunks_indexed(memory_id, [f"{memory_id}:0"])
@@ -122,6 +128,63 @@ def test_metadata_store_contract_for_mongodb_fake_client() -> None:
     _assert_metadata_store_contract(
         MongoDBMetadataStore(uri="mongodb://example", client=FakeMongoClient())
     )
+
+
+@pytest.mark.parametrize("provider", ["sqlite", "mongodb"])
+def test_imported_session_collision_requires_reconciliation(
+    provider: str, tmp_path: Path
+) -> None:
+    store: Any
+    if provider == "sqlite":
+        store = SQLiteMetadataStore(tmp_path / "metadata.sqlite3")
+    else:
+        store = MongoDBMetadataStore(
+            uri="mongodb://example", client=FakeMongoClient()
+        )
+    identity = "sha256:" + ("4" * 64)
+    first = {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "source": "opencode",
+        "timestamp": "2026-01-01T00:00:00Z",
+        "messages": [
+            {
+                "role": "user",
+                "text": "first",
+                "hash": "sha256:" + ("1" * 64),
+            }
+        ],
+        "metadata": {
+            "conversation_hash": "sha256:" + ("a" * 64),
+            "project_id": "local-default",
+            "imported_session_identity": identity,
+        },
+    }
+    second = {
+        **first,
+        "id": "22222222-2222-4222-8222-222222222222",
+        "messages": [
+            {
+                "role": "user",
+                "text": "first",
+                "hash": "sha256:" + ("1" * 64),
+            },
+            {
+                "role": "assistant",
+                "text": "second",
+                "hash": "sha256:" + ("2" * 64),
+            },
+        ],
+        "metadata": {
+            **first["metadata"],
+            "conversation_hash": "sha256:" + ("b" * 64),
+        },
+    }
+
+    assert store.insert_new(first) == (first["id"], True)
+    with pytest.raises(ValueError, match="imported_session_conflict"):
+        store.insert_new(second)
+    assert store.get(first["id"]) == first
+    assert store.get(second["id"]) is None
 
 
 def test_mongodb_insert_new_rejects_same_id_different_hash() -> None:
@@ -268,6 +331,15 @@ def test_mongodb_schema_version_document_and_indexes() -> None:
     assert {
         "args": ([("project_id", 1), ("source", 1), ("upstream_thread_id", 1)],),
         "kwargs": {"partialFilterExpression": {"upstream_thread_id": {"$type": "string"}}},
+    } in conversation_indexes
+    assert {
+        "args": ([("project_id", 1), ("imported_session_identity", 1)],),
+        "kwargs": {
+            "unique": True,
+            "partialFilterExpression": {
+                "imported_session_identity": {"$type": "string"}
+            },
+        },
     } in conversation_indexes
 
 
@@ -3935,7 +4007,7 @@ def test_postgres_insert_stamps_missing_default_project() -> None:
         if query.startswith("INSERT INTO conversations")
     )
     assert insert_params[5] == expected_project
-    stored_payload = json.loads(str(insert_params[7]))
+    stored_payload = json.loads(str(insert_params[8]))
     assert stored_payload["metadata"]["project_id"] == expected_project
 
 
@@ -3963,7 +4035,7 @@ def test_postgres_insert_new_stamps_missing_local_default_project() -> None:
         if query.startswith("INSERT INTO conversations")
     )
     assert insert_params[5] == LOCAL_DEFAULT_PROJECT_ID
-    stored_payload = json.loads(str(insert_params[7]))
+    stored_payload = json.loads(str(insert_params[8]))
     assert stored_payload["metadata"]["project_id"] == LOCAL_DEFAULT_PROJECT_ID
 
 

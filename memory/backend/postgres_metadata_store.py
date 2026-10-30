@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS conversations (
     conversation_hash TEXT NULL,
     project_id TEXT NULL,
     upstream_thread_id TEXT NULL,
+    imported_session_identity TEXT NULL,
     payload JSONB NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 )
@@ -64,6 +65,12 @@ CREATE_UPSTREAM_THREAD_INDEX_SQL = """
 CREATE INDEX IF NOT EXISTS idx_conversations_upstream_thread
 ON conversations(source, upstream_thread_id)
 WHERE upstream_thread_id IS NOT NULL
+"""
+
+CREATE_IMPORTED_SESSION_INDEX_SQL = """
+CREATE UNIQUE INDEX IF NOT EXISTS idx_conversations_project_imported_session
+ON conversations(project_id, imported_session_identity)
+WHERE imported_session_identity IS NOT NULL
 """
 
 CREATE_GENERATED_SUMMARIES_TABLE_SQL = """
@@ -385,8 +392,8 @@ ON CONFLICT (id) DO NOTHING
 """
 
 INSERT_CONVERSATION_SQL = """
-INSERT INTO conversations (id, source, timestamp, title, conversation_hash, project_id, upstream_thread_id, payload)
-VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+INSERT INTO conversations (id, source, timestamp, title, conversation_hash, project_id, upstream_thread_id, imported_session_identity, payload)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
 ON CONFLICT (id) DO UPDATE
 SET source = EXCLUDED.source,
     timestamp = EXCLUDED.timestamp,
@@ -394,12 +401,13 @@ SET source = EXCLUDED.source,
     conversation_hash = EXCLUDED.conversation_hash,
     project_id = EXCLUDED.project_id,
     upstream_thread_id = EXCLUDED.upstream_thread_id,
+    imported_session_identity = EXCLUDED.imported_session_identity,
     payload = EXCLUDED.payload
 """
 
 INSERT_NEW_CONVERSATION_SQL = """
-INSERT INTO conversations (id, source, timestamp, title, conversation_hash, project_id, upstream_thread_id, payload)
-VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+INSERT INTO conversations (id, source, timestamp, title, conversation_hash, project_id, upstream_thread_id, imported_session_identity, payload)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
 """
 
 GET_CONVERSATION_SQL = "SELECT payload::text FROM conversations WHERE id = %s"
@@ -452,11 +460,15 @@ class PostgresMetadataStore:
                     "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS upstream_thread_id TEXT NULL"
                 )
                 cur.execute(
+                    "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS imported_session_identity TEXT NULL"
+                )
+                cur.execute(
                     "ALTER TABLE conversations DROP CONSTRAINT IF EXISTS conversations_conversation_hash_key"
                 )
                 cur.execute("DROP INDEX IF EXISTS idx_conversations_conversation_hash")
                 cur.execute(CREATE_CONVERSATION_PROJECT_HASH_INDEX_SQL)
                 cur.execute(CREATE_UPSTREAM_THREAD_INDEX_SQL)
+                cur.execute(CREATE_IMPORTED_SESSION_INDEX_SQL)
                 cur.execute(CREATE_GENERATED_SUMMARIES_TABLE_SQL)
                 cur.execute(CREATE_GENERATED_SUMMARIES_TARGET_INDEX_SQL)
                 cur.execute(CREATE_SCHEMA_VERSION_TABLE_SQL)
@@ -560,6 +572,7 @@ class PostgresMetadataStore:
                         self._conversation_hash(conversation_json),
                         project_id,
                         self._upstream_thread_id(conversation_json),
+                        self._imported_session_identity(conversation_json),
                         payload,
                     ),
                 )
@@ -1413,6 +1426,7 @@ class PostgresMetadataStore:
                             conversation_hash,
                             project_id,
                             self._upstream_thread_id(conversation_json),
+                            self._imported_session_identity(conversation_json),
                             payload,
                         ),
                     )
@@ -1421,6 +1435,9 @@ class PostgresMetadataStore:
                 exc,
                 memory_id=memory_id,
                 conversation_hash=conversation_hash,
+                imported_session_identity=self._imported_session_identity(
+                    conversation_json
+                ),
                 project_id=self._project_id(conversation_json),
             )
         return memory_id, True
@@ -1858,6 +1875,25 @@ class PostgresMetadataStore:
             return None
         return json.loads(str(row[0]))
 
+    def get_by_imported_session(
+        self, imported_session_identity: str, project_id: str
+    ) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT payload::text FROM conversations
+                    WHERE imported_session_identity = %s AND project_id = %s
+                    ORDER BY created_at ASC
+                    LIMIT 1
+                    """,
+                    (imported_session_identity, _validate_project_id(project_id)),
+                )
+                row = cur.fetchone()
+        if row is None:
+            return None
+        return json.loads(str(row[0]))
+
     def mark_chunks_indexed(self, memory_id: str, chunk_ids: list[str]) -> None:
         self._mark_chunks_state(memory_id, chunk_ids, IndexState.INDEXED)
 
@@ -2218,6 +2254,15 @@ class PostgresMetadataStore:
             return str(value) if value is not None else None
         return None
 
+    def _imported_session_identity(
+        self, conversation_json: dict[str, Any]
+    ) -> str | None:
+        metadata = conversation_json.get("metadata", {})
+        if isinstance(metadata, dict):
+            value = metadata.get("imported_session_identity")
+            return str(value) if value is not None else None
+        return None
+
     def _is_unique_violation(self, exc: Exception) -> bool:
         if getattr(exc, "sqlstate", None) == "23505":
             return True
@@ -2233,6 +2278,7 @@ class PostgresMetadataStore:
         *,
         memory_id: str,
         conversation_hash: str | None,
+        imported_session_identity: str | None,
         project_id: str | None,
     ) -> tuple[str, bool]:
         if not self._is_unique_violation(exc):
@@ -2240,6 +2286,7 @@ class PostgresMetadataStore:
         return self._resolve_insert_new_conflict(
             memory_id=memory_id,
             conversation_hash=conversation_hash,
+            imported_session_identity=imported_session_identity,
             project_id=project_id,
             cause=exc,
         )
@@ -2398,16 +2445,29 @@ class PostgresMetadataStore:
         *,
         memory_id: str,
         conversation_hash: str | None,
+        imported_session_identity: str | None,
         project_id: str | None,
         cause: Exception,
     ) -> tuple[str, bool]:
         existing = self._get_by_conversation_hash_for_conflict(
             conversation_hash, project_id=project_id
         )
+        if existing is None and imported_session_identity and project_id:
+            existing = self.get_by_imported_session(
+                imported_session_identity, project_id
+            )
         if existing is None:
             existing = self.get(memory_id)
         if existing is None:
             raise cause
+        same_imported_session = (
+            imported_session_identity is not None
+            and self._imported_session_identity(existing) == imported_session_identity
+        )
+        if same_imported_session and self._conversation_hash(existing) != conversation_hash:
+            raise ValueError(
+                "imported_session_conflict: snapshot reconciliation required"
+            ) from cause
         if self._conversation_hash(existing) != conversation_hash:
             raise ValueError("unauthorized_update: conversation id already exists") from cause
         if self._project_id(existing) != project_id:
