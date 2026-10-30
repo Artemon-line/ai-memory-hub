@@ -21,3 +21,17 @@ def test_import_hook_guide_pins_clients_and_shared_uploader_contract() -> None:
     assert "never prints the token" in guide
     assert "deduplicated: true" in guide
     assert "Remove" in guide
+
+
+def test_pi_recipe_is_explicit_versioned_and_reversible() -> None:
+    guide = (_ROOT / "docs" / "import_hooks.md").read_text(encoding="utf-8")
+    pi_section = guide.split("## Pi", 1)[1].split("## Failure handling", 1)[0]
+
+    assert "0.73.0" in pi_section
+    assert "tools/import_pi_session.py" in pi_section
+    assert "pi-session-jsonl" in pi_section
+    assert "source `pi`" in pi_section
+    assert "/session" in pi_section
+    assert "version 3" in pi_section
+    assert "Do not" in pi_section
+    assert "nothing persistent to disable" in pi_section
