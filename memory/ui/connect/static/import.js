@@ -37,11 +37,19 @@
       id: typeof (result && result.id) === "string" ? result.id : null,
       status: typeof (result && result.status) === "string" ? result.status : "unknown",
       deduplicated: result && result.deduplicated === true,
+      appendedMessages:
+        Number.isInteger(result && result.appended_messages) && result.appended_messages >= 0
+          ? result.appended_messages
+          : 0,
     }));
     const failed = safeResults.filter((result) => result.status === "error").length;
     return {
-      imported: safeResults.length - failed,
-      deduplicated: safeResults.filter((result) => result.deduplicated).length,
+      processed: safeResults.length,
+      inserted: safeResults.filter((result) => result.status === "inserted").length,
+      deduplicated: safeResults.filter((result) => result.status === "deduplicated").length,
+      appended: safeResults.filter((result) => result.status === "appended").length,
+      stale: safeResults.filter((result) => result.status === "stale").length,
+      conflicted: safeResults.filter((result) => result.status === "conflict").length,
       failed,
       results: safeResults,
       partial: payload && payload.status === "partial",
@@ -170,16 +178,18 @@
 
     showResult(summary) {
       const { counts, receipts, result, resultStatus } = this.elements;
-      counts.textContent = `Imported ${summary.imported} · Deduplicated ${summary.deduplicated} · Failed ${summary.failed}`;
+      counts.textContent = `Processed ${summary.processed} · Inserted ${summary.inserted} · Deduplicated ${summary.deduplicated} · Appended ${summary.appended} · Stale ${summary.stale} · Conflicts ${summary.conflicted} · Failed ${summary.failed}`;
       resultStatus.textContent = summary.partial
         ? "Some conversations could not be imported."
         : "The hub finished processing the file.";
       receipts.replaceChildren();
       summary.results.forEach((receipt) => {
         const item = document.createElement("li");
-        const deduplicated = receipt.deduplicated ? " · deduplicated" : "";
+        const appended = receipt.appendedMessages
+          ? ` · ${receipt.appendedMessages} new message(s)`
+          : "";
         const identifier = receipt.id ? ` · memory ${receipt.id}` : "";
-        item.textContent = `Conversation ${receipt.index + 1}: ${receipt.status}${deduplicated}${identifier}`;
+        item.textContent = `Conversation ${receipt.index + 1}: ${receipt.status}${appended}${identifier}`;
         receipts.appendChild(item);
       });
       result.hidden = false;

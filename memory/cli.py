@@ -18,6 +18,13 @@ from memory.import_discovery import (
     build_discovery_service,
     discovery_source_names,
 )
+from memory.import_outcomes import (
+    conflict_receipt,
+    import_counts,
+    ingestion_receipt,
+    is_conflict_error,
+    is_retryable_conflict,
+)
 from memory.importers import get_importer
 from memory.ingestion import mvp_ingestion
 from memory.ingestion.thread_models import SearchResultMode
@@ -635,7 +642,7 @@ def _import_conversations(args: argparse.Namespace) -> int:
 
     result = _execute_import(args)
     _emit_result(args, result, text_formatter=_format_import_text)
-    return EXIT_OK
+    return _import_exit_code(result)
 
 
 def _execute_import(args: argparse.Namespace, *, text: str | None = None) -> dict[str, Any]:
@@ -659,15 +666,44 @@ def _execute_import(args: argparse.Namespace, *, text: str | None = None) -> dic
     stamp_import_provenance(payloads, parser=args.importer, schema=schema)
 
     _configure_memory_runtime(args.config)
-    results = [
-        redact_content_hashes(mvp_ingestion.ingest_messages(payload))
-        for payload in payloads
-    ]
+    results: list[dict[str, Any]] = []
+    for index, payload in enumerate(payloads):
+        try:
+            ingestion_result = redact_content_hashes(
+                mvp_ingestion.ingest_messages(payload)
+            )
+        except ValueError as exc:
+            if is_conflict_error(exc):
+                results.append(
+                    conflict_receipt(index, retryable=is_retryable_conflict(exc))
+                )
+            else:
+                results.append(
+                    {"index": index, "status": "error", "error_code": "validation_failed"}
+                )
+        except PermissionError:
+            results.append(
+                {"index": index, "status": "error", "error_code": "permission_denied"}
+            )
+        except Exception:
+            results.append(
+                {"index": index, "status": "error", "error_code": "insert_failed"}
+            )
+        else:
+            results.append(ingestion_receipt(index, ingestion_result))
+    counts = import_counts(results)
     return _envelope(
-        status="ok",
+        status="partial" if counts["conflicted"] or counts["failed"] else "ok",
         results=results,
         importer=args.importer,
-        imported=len(results),
+        imported=counts["inserted"],
+        processed=counts["processed"],
+        inserted=counts["inserted"],
+        deduplicated=counts["deduplicated"],
+        appended=counts["appended"],
+        stale=counts["stale"],
+        conflicted=counts["conflicted"],
+        failed=counts["failed"],
     )
 
 
@@ -704,14 +740,26 @@ def _import_latest(args: argparse.Namespace) -> int:
     )
     import_result = _execute_import(import_args, text=text)
     result = _envelope(
-        status="ok",
+        status=import_result["status"],
         results=import_result["results"],
         importer=artifact.importer,
         imported=import_result["imported"],
         discovery=artifact.as_dict(),
+        **{
+            key: import_result[key]
+            for key in (
+                "processed",
+                "inserted",
+                "deduplicated",
+                "appended",
+                "stale",
+                "conflicted",
+                "failed",
+            )
+        },
     )
     _emit_result(args, result, text_formatter=_format_latest_import_text)
-    return EXIT_OK
+    return _import_exit_code(result)
 
 
 def _handoff(args: argparse.Namespace) -> int:
@@ -1233,14 +1281,25 @@ def _format_reindex_text(result: dict[str, Any]) -> str:
 
 
 def _format_import_text(result: dict[str, Any]) -> str:
-    return f"imported {result.get('imported', 0)} conversation(s) with {result.get('importer')}"
+    return (
+        f"processed={result.get('processed', 0)} inserted={result.get('inserted', 0)} "
+        f"deduplicated={result.get('deduplicated', 0)} "
+        f"appended={result.get('appended', 0)} stale={result.get('stale', 0)} "
+        f"conflicted={result.get('conflicted', 0)} failed={result.get('failed', 0)} "
+        f"importer={result.get('importer')}"
+    )
 
 
 def _format_latest_import_text(result: dict[str, Any]) -> str:
     discovery = result.get("discovery", {})
+    return f"{_format_import_text(result)} from {discovery.get('path')}"
+
+
+def _import_exit_code(result: dict[str, Any]) -> int:
     return (
-        f"imported {result.get('imported', 0)} conversation(s) with {result.get('importer')} "
-        f"from {discovery.get('path')}"
+        EXIT_COMMAND_FAILURE
+        if result.get("conflicted", 0) or result.get("failed", 0)
+        else EXIT_OK
     )
 
 
