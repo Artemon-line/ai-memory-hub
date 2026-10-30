@@ -6,6 +6,8 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Added a bounded zero-token DeepSeek Harness ZIP import command with safe
+  extraction, explicit descendant selection, and formats 0 through 4 support.
 - Added a shared zero-token conversation uploader with closed-file snapshots,
   bounded safe receipts, and opt-in Codex, Claude Code, OpenCode, and Gemini CLI
   import recipes.
