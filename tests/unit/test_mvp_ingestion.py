@@ -72,6 +72,20 @@ class StubMetadataStore:
         self.get_many_calls.append(list(ids))
         return {id_: self.by_id[id_] for id_ in ids if id_ in self.by_id}
 
+    def get_by_imported_session(
+        self, imported_session_identity: str, project_id: str
+    ) -> dict[str, Any] | None:
+        for conversation in self.by_id.values():
+            metadata = conversation.get("metadata", {})
+            if (
+                isinstance(metadata, dict)
+                and metadata.get("imported_session_identity")
+                == imported_session_identity
+                and metadata.get("project_id") == project_id
+            ):
+                return conversation
+        return None
+
     def upsert_generated_summary(self, summary: dict[str, Any]) -> None:
         summary_id = str(summary["id"])
         self.generated_summary_upserts.append(summary_id)
@@ -953,6 +967,41 @@ def test_trusted_append_continues_same_upstream_thread_with_new_id() -> None:
         "second thread note",
     ]
     assert [row["chunk_index"] for row in vectors.rows] == [0, 1]
+
+
+def test_trusted_append_resolves_registered_import_by_stable_session_identity() -> None:
+    metadata, _ = _configure_stubs(allow_trusted_appends=True)
+    base = _valid_conversation()
+    base["source"] = "opencode"
+    base["metadata"].update(
+        {
+            "import_parser": "opencode-session-json",
+            "source_session_id": "session-alpha",
+        }
+    )
+    base["messages"] = [{"role": "user", "text": "first imported note"}]
+    mvp_ingestion.ingest_messages(base)
+
+    continuation = _valid_conversation()
+    continuation["id"] = "22222222-2222-4222-8222-222222222222"
+    continuation["source"] = "opencode"
+    continuation["metadata"].update(
+        {
+            "import_parser": "opencode-session-json",
+            "source_session_id": "session-alpha",
+        }
+    )
+    continuation["messages"] = [
+        {"role": "user", "text": "first imported note"},
+        {"role": "assistant", "text": "second imported note"},
+    ]
+
+    result = mvp_ingestion.ingest_messages(continuation)
+
+    assert result["id"] == base["id"]
+    assert result["appended_messages"] == 1
+    stored = metadata.by_id[base["id"]]
+    assert stored["metadata"]["imported_session_identity"].startswith("sha256:")
 
 
 def test_trusted_append_accepts_sibling_same_thread_continuation() -> None:

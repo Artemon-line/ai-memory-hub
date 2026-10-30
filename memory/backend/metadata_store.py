@@ -161,6 +161,7 @@ class SQLiteMetadataStore:
     _MIGRATION_COLUMNS = {
         ("conversations", "conversation_hash"): "TEXT",
         ("conversations", "upstream_thread_id"): "TEXT",
+        ("conversations", "imported_session_identity"): "TEXT",
         ("conversations", "project_id"): "TEXT",
         ("auth_tokens", "token_id"): "TEXT",
         ("auth_tokens", "token_prefix"): "TEXT",
@@ -200,6 +201,7 @@ class SQLiteMetadataStore:
                     conversation_hash TEXT,
                     project_id TEXT,
                     upstream_thread_id TEXT,
+                    imported_session_identity TEXT,
                     payload TEXT NOT NULL,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP
                 )
@@ -232,6 +234,9 @@ class SQLiteMetadataStore:
             )
             self._ensure_column(conn, "conversations", "conversation_hash", "TEXT")
             self._ensure_column(conn, "conversations", "upstream_thread_id", "TEXT")
+            self._ensure_column(
+                conn, "conversations", "imported_session_identity", "TEXT"
+            )
             self._ensure_column(conn, "conversations", "project_id", "TEXT")
             conn.execute(
                 """
@@ -457,6 +462,13 @@ class SQLiteMetadataStore:
             )
             conn.execute(
                 """
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_conversations_project_imported_session
+                ON conversations(project_id, imported_session_identity)
+                WHERE imported_session_identity IS NOT NULL
+                """
+            )
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS messages (
                     conversation_id TEXT NOT NULL,
                     message_index INTEGER NOT NULL,
@@ -672,13 +684,14 @@ class SQLiteMetadataStore:
         project_id = self._ensure_payload_project(conversation_json)
         conversation_hash = self._conversation_hash(conversation_json)
         upstream_thread_id = self._upstream_thread_id(conversation_json)
+        imported_session_identity = self._imported_session_identity(conversation_json)
         payload = json.dumps(conversation_json, separators=(",", ":"), ensure_ascii=False)
         with self._connect() as conn:
             self._ensure_project_for_payload(conn, conversation_json)
             conn.execute(
                 """
-                INSERT INTO conversations (id, source, timestamp, title, conversation_hash, project_id, upstream_thread_id, payload)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO conversations (id, source, timestamp, title, conversation_hash, project_id, upstream_thread_id, imported_session_identity, payload)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     source = excluded.source,
                     timestamp = excluded.timestamp,
@@ -686,6 +699,7 @@ class SQLiteMetadataStore:
                     conversation_hash = excluded.conversation_hash,
                     project_id = excluded.project_id,
                     upstream_thread_id = excluded.upstream_thread_id,
+                    imported_session_identity = excluded.imported_session_identity,
                     payload = excluded.payload
                 """,
                 (
@@ -696,6 +710,7 @@ class SQLiteMetadataStore:
                     conversation_hash,
                     project_id,
                     upstream_thread_id,
+                    imported_session_identity,
                     payload,
                 ),
             )
@@ -1459,14 +1474,15 @@ class SQLiteMetadataStore:
         project_id = self._ensure_payload_project(conversation_json)
         conversation_hash = self._conversation_hash(conversation_json)
         upstream_thread_id = self._upstream_thread_id(conversation_json)
+        imported_session_identity = self._imported_session_identity(conversation_json)
         payload = json.dumps(conversation_json, separators=(",", ":"), ensure_ascii=False)
         try:
             with self._connect() as conn:
                 self._ensure_project_for_payload(conn, conversation_json)
                 conn.execute(
                     """
-                    INSERT INTO conversations (id, source, timestamp, title, conversation_hash, project_id, upstream_thread_id, payload)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO conversations (id, source, timestamp, title, conversation_hash, project_id, upstream_thread_id, imported_session_identity, payload)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         memory_id,
@@ -1476,6 +1492,7 @@ class SQLiteMetadataStore:
                         conversation_hash,
                         project_id,
                         upstream_thread_id,
+                        imported_session_identity,
                         payload,
                     ),
                 )
@@ -1484,6 +1501,7 @@ class SQLiteMetadataStore:
             return self._resolve_insert_new_conflict(
                 memory_id=memory_id,
                 conversation_hash=conversation_hash,
+                imported_session_identity=imported_session_identity,
                 project_id=project_id,
             )
         return memory_id, True
@@ -1534,6 +1552,23 @@ class SQLiteMetadataStore:
                 LIMIT 1
                 """,
                 params,
+            ).fetchone()
+        if row is None:
+            return None
+        return json.loads(str(row["payload"]))
+
+    def get_by_imported_session(
+        self, imported_session_identity: str, project_id: str
+    ) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT payload FROM conversations
+                WHERE imported_session_identity = ? AND project_id = ?
+                ORDER BY created_at ASC
+                LIMIT 1
+                """,
+                (imported_session_identity, _validate_project_id(project_id)),
             ).fetchone()
         if row is None:
             return None
@@ -2243,8 +2278,8 @@ class SQLiteMetadataStore:
                 payload = json.dumps(conversation_json, separators=(",", ":"), ensure_ascii=False)
                 conn.execute(
                     """
-                    INSERT INTO conversations (id, source, timestamp, title, conversation_hash, project_id, upstream_thread_id, payload)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO conversations (id, source, timestamp, title, conversation_hash, project_id, upstream_thread_id, imported_session_identity, payload)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(id) DO UPDATE SET
                         source = excluded.source,
                         timestamp = excluded.timestamp,
@@ -2252,6 +2287,7 @@ class SQLiteMetadataStore:
                         conversation_hash = excluded.conversation_hash,
                         project_id = excluded.project_id,
                         upstream_thread_id = excluded.upstream_thread_id,
+                        imported_session_identity = excluded.imported_session_identity,
                         payload = excluded.payload
                     """,
                     (
@@ -2262,6 +2298,7 @@ class SQLiteMetadataStore:
                         self._conversation_hash(conversation_json),
                         project_id,
                         self._upstream_thread_id(conversation_json),
+                        self._imported_session_identity(conversation_json),
                         payload,
                     ),
                 )
@@ -2306,6 +2343,15 @@ class SQLiteMetadataStore:
             return str(value) if value is not None else None
         return None
 
+    def _imported_session_identity(
+        self, conversation_json: dict[str, Any]
+    ) -> str | None:
+        metadata = conversation_json.get("metadata", {})
+        if isinstance(metadata, dict):
+            value = metadata.get("imported_session_identity")
+            return str(value) if value is not None else None
+        return None
+
     def _project_id(self, conversation_json: dict[str, Any]) -> str | None:
         metadata = conversation_json.get("metadata", {})
         if isinstance(metadata, dict):
@@ -2329,13 +2375,28 @@ class SQLiteMetadataStore:
         self._ensure_default_project(conn, owner_id)
 
     def _resolve_insert_new_conflict(
-        self, *, memory_id: str, conversation_hash: str | None, project_id: str | None
+        self,
+        *,
+        memory_id: str,
+        conversation_hash: str | None,
+        imported_session_identity: str | None,
+        project_id: str | None,
     ) -> tuple[str, bool]:
         existing = self.get_by_conversation_hash(conversation_hash, project_id=project_id)
+        if existing is None and imported_session_identity and project_id:
+            existing = self.get_by_imported_session(imported_session_identity, project_id)
         if existing is None:
             existing = self.get(memory_id)
         if existing is None:
             raise sqlite3.IntegrityError("conversation insert conflict could not be resolved")
+        same_imported_session = (
+            imported_session_identity is not None
+            and self._imported_session_identity(existing) == imported_session_identity
+        )
+        if same_imported_session and self._conversation_hash(existing) != conversation_hash:
+            raise ValueError(
+                "imported_session_conflict: snapshot reconciliation required"
+            )
         if self._conversation_hash(existing) != conversation_hash:
             raise ValueError("unauthorized_update: conversation id already exists")
         if self._project_id(existing) != project_id:

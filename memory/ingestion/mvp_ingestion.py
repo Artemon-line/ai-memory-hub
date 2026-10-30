@@ -84,6 +84,10 @@ from memory.ingestion.handoff_models import (
     HandoffResumeHint,
     HandoffStatus,
 )
+from memory.ingestion.imported_session import (
+    IMPORTED_SESSION_IDENTITY_KEY,
+    stamp_imported_session_identity,
+)
 from memory.ingestion.query_planning import RetrievalQueryPlan, plan_retrieval_query
 from memory.ingestion.retrieval_ranking import SemanticReranker, rank_candidate_lists
 from memory.ingestion.summary_models import (
@@ -635,6 +639,7 @@ _SENSITIVE_SCAN_EXCLUDED_KEYS = {
     "embedding_index",
     "hash",
     "imported_at",
+    "imported_session_identity",
     "index_chunks",
     "message_hashes",
     "message_index",
@@ -1766,6 +1771,33 @@ def _lookup_same_thread(
             return existing if _conversation_allowed(existing, owner_id, project_id) else None
 
     metadata = incoming.get("metadata", {})
+    imported_session_identity = (
+        metadata.get(IMPORTED_SESSION_IDENTITY_KEY)
+        if isinstance(metadata, dict)
+        else None
+    )
+    if isinstance(imported_session_identity, str) and imported_session_identity:
+        if hasattr(store, "get_by_imported_session") and project_id is not None:
+            candidate = store.get_by_imported_session(
+                imported_session_identity, project_id
+            )
+            if isinstance(candidate, dict) and _conversation_allowed(
+                candidate, owner_id, project_id
+            ):
+                return candidate
+            return None
+        for attr in ("by_id", "rows"):
+            rows = getattr(store, attr, None)
+            if isinstance(rows, dict):
+                for conversation in rows.values():
+                    conversation_metadata = conversation.get("metadata", {})
+                    if (
+                        isinstance(conversation_metadata, dict)
+                        and conversation_metadata.get(IMPORTED_SESSION_IDENTITY_KEY)
+                        == imported_session_identity
+                        and _conversation_allowed(conversation, owner_id, project_id)
+                    ):
+                        return conversation
     upstream_thread_id = (
         metadata.get(ThreadMetadataKey.UPSTREAM_THREAD_ID) if isinstance(metadata, dict) else None
     )
@@ -2734,6 +2766,7 @@ def validate_messages(
     )
     _stamp_owner(normalized, owner_id=owner_id)
     _stamp_project(normalized, project_id=effective_project_id)
+    stamp_imported_session_identity(normalized)
     _scope_conversation_hash(normalized, project_id=effective_project_id)
     validate_json(normalized)
     _validate_lineage_parent(
@@ -2760,6 +2793,7 @@ def ingest_messages(
         )
         _stamp_owner(conversation_json, owner_id=owner_id)
         _stamp_project(conversation_json, project_id=effective_project_id)
+        stamp_imported_session_identity(conversation_json)
         _scope_conversation_hash(conversation_json, project_id=effective_project_id)
 
     # 1. Validate JSON against schema

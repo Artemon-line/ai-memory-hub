@@ -6,6 +6,7 @@ _REDACTED_HASH_KEYS = {
     "chunk_id",
     "conversation_hash",
     "hash",
+    "imported_session_identity",
     "message_hash",
     "message_hashes",
 }

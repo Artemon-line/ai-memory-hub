@@ -132,7 +132,9 @@ Responsibilities:
 - Validate schema.
 - Normalize message `role`, `text`, and common `content` aliases.
 - Normalize timestamps and metadata defaults.
-- Attach stable message hashes, conversation hashes, import timestamps, and topic metadata.
+- Attach stable message hashes, conversation hashes, import timestamps, topic
+  metadata, and a project/source/parser-scoped digest when a registered importer
+  provides a reliable upstream session ID.
 - Produce deterministic message-level or token-window chunks with stable chunk IDs.
 
 Role normalization from arbitrary upstream exports is not yet a full platform-importer layer. Platform-specific parsers remain planned work.

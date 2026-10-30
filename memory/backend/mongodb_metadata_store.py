@@ -75,6 +75,20 @@ class MongoDBMetadataStore:
         )
         if existing_hash is not None:
             return str(existing_hash["id"]), False
+        imported_session_identity = self._imported_session_identity(conversation_json)
+        project_id = self._project_id(conversation_json)
+        if imported_session_identity is not None and project_id is not None:
+            existing_session = self.get_by_imported_session(
+                imported_session_identity, project_id
+            )
+            if existing_session is not None:
+                if self._conversation_hash(existing_session) != self._conversation_hash(
+                    conversation_json
+                ):
+                    raise ValueError(
+                        "imported_session_conflict: snapshot reconciliation required"
+                    )
+                return str(existing_session["id"]), False
         try:
             self._conversations.insert_one(conversation)
         except Exception as exc:
@@ -163,6 +177,18 @@ class MongoDBMetadataStore:
         if project_id is not None:
             query["project_id"] = _validate_project_id(project_id)
         row = self._conversations.find_one(query, sort=[("timestamp", -1)])
+        return _payload(row)
+
+    def get_by_imported_session(
+        self, imported_session_identity: str, project_id: str
+    ) -> dict[str, Any] | None:
+        row = self._conversations.find_one(
+            {
+                "imported_session_identity": str(imported_session_identity),
+                "project_id": _validate_project_id(project_id),
+            },
+            sort=[("created_at", 1)],
+        )
         return _payload(row)
 
     def mark_chunks_indexed(self, memory_id: str, chunk_ids: list[str]) -> None:
@@ -379,6 +405,13 @@ class MongoDBMetadataStore:
             [("project_id", 1), ("source", 1), ("upstream_thread_id", 1)],
             partialFilterExpression={"upstream_thread_id": {"$type": "string"}},
         )
+        self._conversations.create_index(
+            [("project_id", 1), ("imported_session_identity", 1)],
+            unique=True,
+            partialFilterExpression={
+                "imported_session_identity": {"$type": "string"}
+            },
+        )
         self._facts.create_index([("subject", 1), ("predicate", 1), ("project_id", 1)])
         self._summaries.create_index("id", unique=True)
         self._schema_versions.create_index("id", unique=True)
@@ -418,6 +451,7 @@ class MongoDBMetadataStore:
             "conversation_hash": self._conversation_hash(payload),
             "project_id": project_id,
             "upstream_thread_id": self._upstream_thread_id(payload),
+            "imported_session_identity": self._imported_session_identity(payload),
             "payload": payload,
             "updated_at": _utc_now(),
             "created_at": _utc_now(),
@@ -446,10 +480,26 @@ class MongoDBMetadataStore:
             self._conversation_hash(conversation_json),
             project_id=self._project_id(conversation_json),
         )
+        imported_session_identity = self._imported_session_identity(conversation_json)
+        project_id = self._project_id(conversation_json)
+        if existing is None and imported_session_identity and project_id:
+            existing = self.get_by_imported_session(
+                imported_session_identity, project_id
+            )
         if existing is None:
             existing = self.get(memory_id)
         if existing is None:
             raise RuntimeError("conversation insert conflict could not be resolved")
+        same_imported_session = (
+            imported_session_identity is not None
+            and self._imported_session_identity(existing) == imported_session_identity
+        )
+        if same_imported_session and self._conversation_hash(
+            existing
+        ) != self._conversation_hash(conversation_json):
+            raise ValueError(
+                "imported_session_conflict: snapshot reconciliation required"
+            )
         if self._conversation_hash(existing) != self._conversation_hash(conversation_json):
             raise ValueError("unauthorized_update: conversation id already exists")
         if self._project_id(existing) != self._project_id(conversation_json):
@@ -501,6 +551,15 @@ class MongoDBMetadataStore:
         metadata = conversation_json.get("metadata", {})
         if isinstance(metadata, dict):
             value = metadata.get("upstream_thread_id")
+            return str(value) if value else None
+        return None
+
+    def _imported_session_identity(
+        self, conversation_json: dict[str, Any]
+    ) -> str | None:
+        metadata = conversation_json.get("metadata", {})
+        if isinstance(metadata, dict):
+            value = metadata.get("imported_session_identity")
             return str(value) if value else None
         return None
 
