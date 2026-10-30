@@ -81,14 +81,22 @@ Steps:
 6. Enrich metadata topics with deterministic keyword rules.
 7. Quarantine likely secrets and high-confidence sensitive PII before chunks,
    vectors, facts, or graph records are written.
-8. Detect exact duplicates and trusted same-thread appends.
-9. Store metadata and child message/chunk records.
+8. Compare ordered message hashes for a matched conversation: equal snapshots
+   deduplicate, strict supersets append, strict prefixes are stale no-ops, and
+   every other divergence is rejected without mutation.
+9. Store metadata and child message/chunk records. Appends use an optimistic
+   conversation-hash compare-and-swap so a concurrent writer cannot be lost or
+   reordered; compatible races are reclassified against the new stored state.
 10. Embed only the chunks that need indexing, splitting remote inputs into
     configured count- and byte-bounded batches while preserving chunk order.
 11. Store vectors and mark chunk indexing state.
 12. Derive facts and graph records, limiting trusted-append extraction to newly
     appended messages while retaining their absolute source indexes.
 13. Return deterministic outcome fields, including `deduplicated`, `appended_messages`, and `embedded_chunks`.
+
+Timestamp freshness never overrides the ordered hash comparison. A stale
+snapshot cannot truncate newer history, and a first-message or middle-message
+edit cannot be silently combined into a transcript that never existed.
 
 ### Fact validation and confidence
 

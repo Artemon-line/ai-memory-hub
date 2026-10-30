@@ -5,6 +5,10 @@ class StorageError(RuntimeError):
     """Base storage-layer error."""
 
 
+class ConcurrentAppendError(StorageError):
+    """Raised when an optimistic conversation append loses a storage race."""
+
+
 class NotSupportedError(StorageError):
     """Raised when an optional feature is not supported by a provider."""
 

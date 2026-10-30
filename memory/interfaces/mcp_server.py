@@ -701,6 +701,8 @@ def _validate_optional_limit(limit: Any, *, field_name: str = "limit") -> int | 
 
 
 def _ingest_value_error_code(message: str) -> str:
+    if message.startswith("concurrent_append_conflict"):
+        return "concurrent_append_conflict"
     if message.startswith("duplicate_conflict"):
         return "duplicate_conflict"
     if message.startswith("unauthorized_update"):

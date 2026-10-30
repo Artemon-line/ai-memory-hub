@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from memory.backend.contracts import ProviderCapabilities
-from memory.backend.errors import NotSupportedError
+from memory.backend.errors import ConcurrentAppendError, NotSupportedError
 from memory.backend.metadata_store import (
     LOCAL_DEFAULT_PROJECT_ID,
     IndexState,
@@ -98,10 +98,24 @@ class MongoDBMetadataStore:
         return memory_id, True
 
     def append_messages(
-        self, conversation_json: dict[str, Any], new_messages: list[dict[str, Any]]
+        self,
+        conversation_json: dict[str, Any],
+        new_messages: list[dict[str, Any]],
+        *,
+        expected_conversation_hash: str | None = None,
     ) -> str:
         _ = new_messages
-        return self.insert(conversation_json)
+        if expected_conversation_hash is None:
+            return self.insert(conversation_json)
+        memory_id = self._validate_memory_id(conversation_json["id"])
+        conversation = self._prepare_conversation(conversation_json)
+        result = self._conversations.replace_one(
+            {"id": memory_id, "conversation_hash": expected_conversation_hash},
+            conversation,
+        )
+        if int(getattr(result, "modified_count", 0)) != 1:
+            raise ConcurrentAppendError("conversation changed during append")
+        return memory_id
 
     def get(self, memory_id: str) -> dict[str, Any] | None:
         row = self._conversations.find_one({"id": self._validate_memory_id(memory_id)})

@@ -10,6 +10,7 @@ import sys
 import types
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -18,6 +19,7 @@ import pytest
 
 from memory.backend.contracts import ProviderCapabilities, VectorSearchFilters
 from memory.backend.errors import (
+    ConcurrentAppendError,
     NotSupportedError,
     OAuthClientQuotaExceeded,
     SchemaVersionError,
@@ -185,6 +187,63 @@ def test_imported_session_collision_requires_reconciliation(
         store.insert_new(second)
     assert store.get(first["id"]) == first
     assert store.get(second["id"]) is None
+
+
+@pytest.mark.parametrize("provider", ["sqlite", "mongodb"])
+def test_metadata_store_append_compare_and_swap(
+    provider: str, tmp_path: Path
+) -> None:
+    store: Any
+    if provider == "sqlite":
+        store = SQLiteMetadataStore(tmp_path / "metadata.sqlite3")
+    else:
+        store = MongoDBMetadataStore(
+            uri="mongodb://example", client=FakeMongoClient()
+        )
+    original_hash = "sha256:" + ("a" * 64)
+    updated_hash = "sha256:" + ("b" * 64)
+    memory_id = "11111111-1111-4111-8111-111111111111"
+    first_message = {
+        "role": "user",
+        "text": "first",
+        "hash": "sha256:" + ("1" * 64),
+    }
+    second_message = {
+        "role": "assistant",
+        "text": "second",
+        "hash": "sha256:" + ("2" * 64),
+    }
+    original = {
+        "id": memory_id,
+        "source": "contract",
+        "timestamp": "2026-01-01T00:00:00Z",
+        "messages": [first_message],
+        "metadata": {
+            "conversation_hash": original_hash,
+            "project_id": "local-default",
+        },
+    }
+    updated = deepcopy(original)
+    updated["messages"].append(second_message)
+    updated["metadata"]["conversation_hash"] = updated_hash
+
+    assert store.insert_new(original) == (memory_id, True)
+    assert (
+        store.append_messages(
+            updated,
+            [second_message],
+            expected_conversation_hash=original_hash,
+        )
+        == memory_id
+    )
+    assert store.get(memory_id) == updated
+
+    with pytest.raises(ConcurrentAppendError):
+        store.append_messages(
+            updated,
+            [second_message],
+            expected_conversation_hash=original_hash,
+        )
 
 
 def test_mongodb_insert_new_rejects_same_id_different_hash() -> None:
@@ -3806,6 +3865,7 @@ class _PostgresMetadataRecordingCursor:
     def __init__(self, state: dict[str, Any]):
         self.state = state
         self._current: list[tuple[Any, ...]] = []
+        self.rowcount = 0
 
     def __enter__(self):
         return self
@@ -3817,6 +3877,11 @@ class _PostgresMetadataRecordingCursor:
         normalized = " ".join(query.split())
         self.state["queries"].append(normalized)
         self.state["params"].append(params)
+        self.rowcount = (
+            int(self.state.get("append_rowcount", 1))
+            if normalized.startswith("UPDATE conversations")
+            else 0
+        )
         if normalized.startswith("SELECT id FROM projects"):
             self._current = []
         elif normalized.startswith("SELECT provider, provider_subject, user_id, username"):
@@ -3853,6 +3918,50 @@ def _recording_postgres_metadata_store(state: dict[str, Any]) -> PostgresMetadat
     store = PostgresMetadataStore.__new__(PostgresMetadataStore)
     store._connect = lambda: _PostgresMetadataRecordingConnection(state)
     return store
+
+
+def test_postgres_append_compare_and_swap() -> None:
+    state: dict[str, Any] = {"queries": [], "params": [], "append_rowcount": 1}
+    store = _recording_postgres_metadata_store(state)
+    payload = {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "source": "contract",
+        "timestamp": "2026-01-01T00:00:00Z",
+        "messages": [
+            {
+                "role": "user",
+                "text": "first",
+                "hash": "sha256:" + ("1" * 64),
+            }
+        ],
+        "metadata": {
+            "conversation_hash": "sha256:" + ("b" * 64),
+            "project_id": "local-default",
+        },
+    }
+
+    assert (
+        store.append_messages(
+            payload,
+            payload["messages"],
+            expected_conversation_hash="sha256:" + ("a" * 64),
+        )
+        == payload["id"]
+    )
+    update_params = next(
+        params
+        for query, params in zip(state["queries"], state["params"])
+        if query.startswith("UPDATE conversations")
+    )
+    assert update_params[-1] == "sha256:" + ("a" * 64)
+
+    state["append_rowcount"] = 0
+    with pytest.raises(ConcurrentAppendError):
+        store.append_messages(
+            payload,
+            payload["messages"],
+            expected_conversation_hash="sha256:" + ("a" * 64),
+        )
 
 
 def test_postgres_external_identity_preserves_explicit_owner_and_profile_fields() -> None:

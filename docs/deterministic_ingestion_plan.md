@@ -267,9 +267,11 @@ Decision tree:
 incoming is exact duplicate?
   -> return existing ID
 incoming is same thread and has new messages?
-  -> append new messages
+  -> append only when stored hashes are an exact prefix
+incoming is a strict prefix of stored history?
+  -> return stale/no-op without truncating
 incoming overlaps but conflicts in the middle?
-  -> reject or store as fork, depending on configured policy
+  -> reject without mutation
 incoming has no reliable thread match?
   -> insert as new conversation
 ```
@@ -277,7 +279,9 @@ incoming has no reliable thread match?
 Conflict handling:
 
 - Ordered prefix match plus extra messages: append.
+- Incoming strict prefix of stored history: return stale without mutation.
 - Same ID but different earlier message hash: reject as conflict.
+- Any shared-prefix divergence: reject as conflict; never append the divergent suffix.
 - Same upstream thread ID but reordered messages: reject as ambiguous.
 - Partial overlap without stable thread identity: insert as separate conversation unless configured for merge review.
 - Same ID from an unauthorized caller: reject as `unauthorized_update`.
@@ -285,6 +289,9 @@ Conflict handling:
 Recommended default:
 
 - Auto-append only for same authorized `id` or same trusted `upstream_thread_id`.
+- Apply appends with an optimistic conversation-hash compare-and-swap; retry
+  compatible races against the new stored sequence and return a retryable
+  conflict if bounded retries are exhausted.
 - Store fuzzy overlaps as separate conversations or mark them for review.
 
 ## Phase 6: Chunking Strategy
