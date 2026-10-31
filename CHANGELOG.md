@@ -8,6 +8,8 @@ should describe the supported public behavior for each tagged release.
 
 - Added a bounded zero-token DeepSeek Harness ZIP import command with safe
   extraction, explicit descendant selection, and formats 0 through 4 support.
+- Added an opt-in OpenClaw compatibility adapter for closed legacy version 3
+  JSONL trees, with explicit refusal of current SQLite and sidecar files.
 - Added an opt-in, explicit zero-token import adapter for closed Pi 0.73.0
   version 3 sessions without newest-file guessing or background watchers.
 - Added a shared zero-token conversation uploader with closed-file snapshots,

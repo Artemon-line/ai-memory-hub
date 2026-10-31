@@ -38,6 +38,20 @@ def test_deepseek_harness_recipe_is_bounded_explicit_and_reversible() -> None:
     assert "nothing persistent to disable" in section
 
 
+def test_openclaw_recipe_separates_current_storage_from_legacy_jsonl() -> None:
+    guide = (_ROOT / "docs" / "import_hooks.md").read_text(encoding="utf-8")
+    section = guide.split("## OpenClaw", 1)[1].split("## Failure handling", 1)[0]
+
+    assert "2026.10.7" in section
+    assert "tools/import_openclaw_session.py" in section
+    assert "pi-session-jsonl" in section
+    assert "source `openclaw`" in section
+    assert "SQLite" in section
+    assert "WAL" in section
+    assert "version 3" in section
+    assert "nothing persistent to disable" in section
+
+
 def test_pi_recipe_is_explicit_versioned_and_reversible() -> None:
     guide = (_ROOT / "docs" / "import_hooks.md").read_text(encoding="utf-8")
     pi_section = guide.split("## Pi", 1)[1].split("## Failure handling", 1)[0]

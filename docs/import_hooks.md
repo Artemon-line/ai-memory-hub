@@ -190,6 +190,40 @@ or remove: the adapter is an opt-in manual command. Keep
 
 See the upstream [DeepSeek Harness export documentation](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/session-query/session-log-export/README.md).
 
+## OpenClaw
+
+This safety boundary was checked against OpenClaw 2026.10.7. Current OpenClaw
+stores session rows and transcripts in per-agent SQLite databases. Its supported
+backup commands create verified database snapshots, and its public transcript
+JSONL export is not the legacy Pi-family version 3 tree accepted by
+`pi-session-jsonl`. Do not upload or copy a live `.sqlite`, `.db`, WAL, SHM, or
+journal file, and do not reinterpret a current transcript export as a legacy
+tree. Supporting that newer envelope requires a separately scoped importer.
+
+For an older OpenClaw installation, or a coordinated third-party export that
+already produces a closed, compatible version 3 JSONL tree, select the intended
+session explicitly, close the writer, wait at least five seconds, and run:
+
+```bash
+python3 /absolute/path/to/ai-memory-hub/tools/import_openclaw_session.py \
+  /absolute/path/to/closed-openclaw-session.jsonl
+```
+
+The adapter requires one absolute `.jsonl` path, refuses symbolic links and
+database/sidecar filenames, and checks only the bounded session header before
+delegating to the shared uploader with parser `pi-session-jsonl` and source `openclaw`.
+It never searches for a newest artifact and does not transform or
+parse conversation messages. The existing importer remains authoritative for
+the complete version 3 tree, active-branch reconstruction, and unsupported
+input rejection. The shared uploader retains recent/changing-file, empty-file,
+20 MB, private-snapshot, cleanup, bounded-receipt, and credential protections.
+Repeated runs use normal hub deduplication.
+
+There is nothing persistent to disable or remove: this is an opt-in manual
+compatibility command. Keep `MEMORY_HUB_URL` and `MEMORY_API_TOKEN` only in the
+command environment. See the upstream [OpenClaw session storage](https://github.com/openclaw/openclaw/blob/v2026.10.7/docs/concepts/session.md)
+and [backup safety guide](https://docs.openclaw.ai/install/backups).
+
 ## Pi
 
 This explicit recipe was checked with Pi coding agent 0.73.0 and its version 3
