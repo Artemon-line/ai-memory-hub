@@ -6,6 +6,9 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Added credential-free local concurrency profiles for insert, search, and ask,
+  reporting completion, throughput, and latency percentiles at configurable
+  worker levels against versioned synthetic corpora.
 - Added deterministic small, medium, and large synthetic efficiency corpora with
   broad and selective filter cases, streamable JSONL output, and fingerprinted
   machine-readable manifests.
