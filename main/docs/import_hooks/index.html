@@ -495,6 +495,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#openclaw" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenClaw
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#pi" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2813,6 +2824,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#openclaw" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenClaw
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#pi" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2971,6 +2993,33 @@ session, create a supported export:</p>
 <p>Older Gemini releases may use <code>/export-session</code> instead of <code>/chat share</code>. Delete
 the exported file when it is no longer needed. There is no persistent automation
 to disable in this recipe. See the upstream <a href="https://geminicli.com/docs/hooks/reference/">Gemini CLI hooks reference</a>.</p>
+<h2 id="openclaw">OpenClaw</h2>
+<p>This safety boundary was checked against OpenClaw 2026.10.7. Current OpenClaw
+stores session rows and transcripts in per-agent SQLite databases. Its supported
+backup commands create verified database snapshots, and its public transcript
+JSONL export is not the legacy Pi-family version 3 tree accepted by
+<code>pi-session-jsonl</code>. Do not upload or copy a live <code>.sqlite</code>, <code>.db</code>, WAL, SHM, or
+journal file, and do not reinterpret a current transcript export as a legacy
+tree. Supporting that newer envelope requires a separately scoped importer.</p>
+<p>For an older OpenClaw installation, or a coordinated third-party export that
+already produces a closed, compatible version 3 JSONL tree, select the intended
+session explicitly, close the writer, wait at least five seconds, and run:</p>
+<div class="highlight"><pre><span></span><code>python3<span class="w"> </span>/absolute/path/to/ai-memory-hub/tools/import_openclaw_session.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>/absolute/path/to/closed-openclaw-session.jsonl
+</code></pre></div>
+<p>The adapter requires one absolute <code>.jsonl</code> path, refuses symbolic links and
+database/sidecar filenames, and checks only the bounded session header before
+delegating to the shared uploader with parser <code>pi-session-jsonl</code> and source <code>openclaw</code>.
+It never searches for a newest artifact and does not transform or
+parse conversation messages. The existing importer remains authoritative for
+the complete version 3 tree, active-branch reconstruction, and unsupported
+input rejection. The shared uploader retains recent/changing-file, empty-file,
+20 MB, private-snapshot, cleanup, bounded-receipt, and credential protections.
+Repeated runs use normal hub deduplication.</p>
+<p>There is nothing persistent to disable or remove: this is an opt-in manual
+compatibility command. Keep <code>MEMORY_HUB_URL</code> and <code>MEMORY_API_TOKEN</code> only in the
+command environment. See the upstream <a href="https://github.com/openclaw/openclaw/blob/v2026.10.7/docs/concepts/session.md">OpenClaw session storage</a>
+and <a href="https://docs.openclaw.ai/install/backups">backup safety guide</a>.</p>
 <h2 id="pi">Pi</h2>
 <p>This explicit recipe was checked with Pi coding agent 0.73.0 and its version 3
 JSONL session format. Pi does not provide a verified end event that supplies a
