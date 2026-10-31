@@ -1577,10 +1577,14 @@ uv run python -m memory.benchmarks.token_budget --iterations 200
 uv run python -m memory.benchmarks.retrieval_quality
 uv run python -m memory.benchmarks.quality_gate --output reports/quality/quality-gate.json
 uv run python -m memory.benchmarks.cache_candidates --iterations 1000
+uv run python tools/run_efficiency_reports.py --output-dir reports/efficiency
 ```
 
 The [representative quality gate](quality_evaluation.md) is credential-free in
 CI and also accepts optional provider/model observations for comparable reports.
+The efficiency report suite writes individual JSON reports and a manifest. Its
+GitHub Actions workflow runs weekly or by manual dispatch, not on normal pushes
+or pull requests, and uploads the report set with 30-day retention.
 
 Container CI verifies Hadolint, image build, packaged `aim serve` startup,
 `/ready`, MCP initialize at `/mcp/`, arbitrary non-root UID behavior, and

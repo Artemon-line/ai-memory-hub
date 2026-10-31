@@ -5,6 +5,7 @@ import gc
 import hashlib
 import json
 import math
+import sqlite3
 import threading
 from collections import Counter
 from collections.abc import Callable, Sequence
@@ -30,6 +31,28 @@ class _DeterministicEmbedder:
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         return [_hash_vector(text) for text in texts]
+
+
+class _BenchmarkMetadataStore(SQLiteMetadataStore):
+    """Count expected audit contention without polluting benchmark profiles."""
+
+    def __init__(self, db_path: str) -> None:
+        super().__init__(db_path)
+        self.audit_attempts = 0
+        self.audit_failures = 0
+        self._audit_counter_lock = threading.Lock()
+
+    def append_audit_event(self, event: dict[str, Any]) -> dict[str, Any]:
+        with self._audit_counter_lock:
+            self.audit_attempts += 1
+        try:
+            return super().append_audit_event(event)
+        except sqlite3.OperationalError as exc:
+            if "locked" not in str(exc).lower():
+                raise
+            with self._audit_counter_lock:
+                self.audit_failures += 1
+            return event
 
 
 def run_benchmark(
@@ -176,7 +199,7 @@ def _run_level(
 ) -> dict[str, Any]:
     original_runtime = mvp_ingestion._RUNTIME
     with TemporaryDirectory(prefix="ai-memory-hub-concurrency-") as temp_dir:
-        metadata_store = SQLiteMetadataStore(f"{temp_dir}/metadata.db")
+        metadata_store = _BenchmarkMetadataStore(f"{temp_dir}/metadata.db")
         vector_store = InMemoryVectorStore(dimension=_EMBEDDING_DIMENSION)
         runtime = mvp_ingestion.RuntimeDependencies(
             embedding_provider=_DeterministicEmbedder(),
@@ -241,6 +264,8 @@ def _run_level(
                         stored_conversations - int(insert["completed"]),
                         0,
                     ),
+                    "audit_write_attempts": metadata_store.audit_attempts,
+                    "audit_write_failures": metadata_store.audit_failures,
                     "vector_rows": vector_store.get_stats()["rows"],
                     "search_results": search_results,
                     "ask_citations": ask_citations,

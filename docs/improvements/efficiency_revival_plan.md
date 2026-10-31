@@ -130,8 +130,8 @@ Deliver this phase before changing production algorithms.
       including high-selectivity and low-selectivity filters.
 - [x] Add concurrency runners for insert, search, and ask without external
       credentials.
-- [ ] Persist machine-readable before/after reports as CI artifacts.
-- [ ] Keep deterministic CI gates short; run provider load profiles on demand or
+- [x] Persist machine-readable before/after reports as CI artifacts.
+- [x] Keep deterministic CI gates short; run provider load profiles on demand or
       on a scheduled workflow.
 
 Acceptance criteria:
@@ -148,9 +148,8 @@ Implementation status:
   budget benchmark, separates first-call and warm latency, reports warm
   average/p50/p95/p99/min/max distributions, and records per-request search,
   candidate, audit-write, and result/context amplification. Cache-candidate
-  operations now report first-call and warm percentile distributions. Scale
-  corpora, broader provider work ledgers, and persisted CI comparison artifacts
-  remain follow-up work.
+  operations now report first-call and warm percentile distributions. Broader
+  provider work ledgers remain follow-up work.
 
 The synthetic scale-corpus slice adds deterministic 128, 4,096, and 32,768
 conversation profiles with schema-valid messages, stable identities, timestamps,
@@ -158,17 +157,25 @@ and hashes. Each profile includes unfiltered, 50%-selectivity, and 0.78%-selecti
 retrieval cases. The generator can stream JSONL plus a manifest containing the
 canonical byte count and SHA-256 fingerprint, so local and CI measurements can
 prove they used identical synthetic inputs without retaining the large corpus in
-memory. Concurrency runners and persisted CI comparison artifacts remain
-follow-up work.
+memory.
 
 The credential-free concurrency slice runs real insert, search, and ask paths
 against fresh SQLite and in-memory vector providers at configurable concurrency
 levels (1, 4, 16, and 32 by default). Every level starts from the same versioned
 synthetic corpus and reports request completion, privacy-safe failure classes,
-durable rows after failed requests, wall time, throughput, and
+durable rows after failed requests, audit-write attempts/failures, wall time, throughput, and
 average/p50/p95/p99 latency. The runner uses a
 deterministic hash embedder and fallback answers, so it requires no network or
-provider credentials. Persisted CI comparison artifacts remain follow-up work.
+provider credentials.
+
+The report-artifact slice adds a weekly and manually dispatched efficiency
+workflow without push or pull-request triggers. It writes the deterministic
+before/after, quality, scale, and local concurrency reports as individual JSON
+files plus a manifest containing the commit, runner class, configuration,
+duration, and privacy-safe status for every report. Artifacts upload even when a
+benchmark fails, use 30-day retention, and keep raw exception messages out of
+the report set. Normal deterministic CI remains unchanged; larger synthetic
+profiles are opt-in through workflow inputs.
 
 ## Phase 1: Remove Request-Path Waste
 
