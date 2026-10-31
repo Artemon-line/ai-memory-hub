@@ -23,6 +23,20 @@ def test_import_hook_guide_pins_clients_and_shared_uploader_contract() -> None:
     assert "Remove" in guide
 
 
+def test_openclaw_recipe_separates_current_storage_from_legacy_jsonl() -> None:
+    guide = (_ROOT / "docs" / "import_hooks.md").read_text(encoding="utf-8")
+    section = guide.split("## OpenClaw", 1)[1].split("## Failure handling", 1)[0]
+
+    assert "2026.10.7" in section
+    assert "tools/import_openclaw_session.py" in section
+    assert "pi-session-jsonl" in section
+    assert "source `openclaw`" in section
+    assert "SQLite" in section
+    assert "WAL" in section
+    assert "version 3" in section
+    assert "nothing persistent to disable" in section
+
+
 def test_pi_recipe_is_explicit_versioned_and_reversible() -> None:
     guide = (_ROOT / "docs" / "import_hooks.md").read_text(encoding="utf-8")
     pi_section = guide.split("## Pi", 1)[1].split("## Hermes Agent", 1)[0]
@@ -43,7 +57,6 @@ def test_planned_hook_sections_have_stable_anchors_without_commands() -> None:
     for heading, issue in (
         ("Hermes Agent", 327),
         ("DeepSeek Harness", 328),
-        ("OpenClaw", 329),
     ):
         section = guide.split(f"## {heading}", 1)[1].split("## ", 1)[0]
         assert "**Planned.**" in section

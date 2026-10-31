@@ -215,13 +215,13 @@ IMPORT_HOOK_MATRIX: tuple[ImportHookDefinition, ...] = (
     },
     {
         "name": "OpenClaw",
-        "status": ImportHookStatus.PLANNED,
-        "verified_version": "Pending verification",
-        "trigger": "Coordinated export/backup",
+        "status": ImportHookStatus.IMPLEMENTED,
+        "verified_version": "2026.10.7",
+        "trigger": "Explicit compatible export upload",
         "parser": "pi-session-jsonl",
         "source": "openclaw",
         "docs_anchor": "openclaw",
-        "tracking_issue": 329,
+        "tracking_issue": None,
     },
 )
 

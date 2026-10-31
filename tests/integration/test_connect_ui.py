@@ -431,7 +431,9 @@ def test_import_hook_models_match_current_matrix() -> None:
     assert hooks_by_name["OpenClaw"]["parser_label"] == (
         "pi-session-jsonl with source=openclaw"
     )
-    assert hooks_by_name["OpenClaw"]["tracking_issue_url"].endswith("/issues/329")
+    assert hooks_by_name["OpenClaw"]["status"] == "Implemented"
+    assert hooks_by_name["OpenClaw"]["verified_version"] == "2026.10.7"
+    assert hooks_by_name["OpenClaw"]["tracking_issue_url"] is None
 
 
 @pytest.mark.parametrize(
@@ -558,7 +560,7 @@ def test_connect_routes_are_public_secret_free_and_use_configured_mcp_url(
         "https://artemon-line.github.io/ai-memory-hub/latest/import_hooks/"
         "#codex-cli-and-app"
     ) in connect.text
-    for issue in range(327, 330):
+    for issue in range(327, 329):
         assert f"https://github.com/Artemon-line/ai-memory-hub/issues/{issue}" in connect.text
     hook_html = connect.text.split('id="import-hooks-title"', 1)[1]
     assert "<textarea" not in hook_html

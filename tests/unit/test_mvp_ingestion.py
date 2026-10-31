@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -2333,6 +2334,7 @@ def test_ask_handoff_returns_cited_structured_packet() -> None:
 
 def test_ask_handoff_returns_evidence_only_resume_hint_under_default_budget() -> None:
     _configure_stubs()
+    first_timestamp = datetime.now(UTC).replace(microsecond=0) - timedelta(days=4)
     messages = (
         "resumehint Goal: publish the release",
         "resumehint Confirmed progress: package and documentation checks passed",
@@ -2342,7 +2344,9 @@ def test_ask_handoff_returns_evidence_only_resume_hint_under_default_budget() ->
     for index, text in enumerate(messages, start=1):
         conversation = _valid_conversation()
         conversation["id"] = f"10000000-0000-4000-8000-{index:012d}"
-        conversation["timestamp"] = f"2026-09-{26 + index:02d}T10:00:00Z"
+        conversation["timestamp"] = (
+            (first_timestamp + timedelta(days=index)).isoformat().replace("+00:00", "Z")
+        )
         conversation["messages"] = [{"role": "assistant", "text": text}]
         mvp_ingestion.ingest_messages(conversation)
 
