@@ -29,7 +29,7 @@ python3 /absolute/path/to/ai-memory-hub/tools/import_to_memory.py \
   <PARSER> /absolute/path/to/completed-export.json
 ```
 
-The uploader:
+The uploader (including client-specific adapters that delegate to it):
 
 - accepts only regular, non-empty files up to 20 MB;
 - normally refuses files modified in the last five seconds;
@@ -151,10 +151,36 @@ to disable in this recipe. See the upstream [Gemini CLI hooks reference](https:/
 
 ## Pi
 
-**Planned.** The Pi recipe still needs a pinned client version, a verified
-closed-session lifecycle boundary, and deterministic refusal tests. Track the
-implementation in [issue #326](https://github.com/Artemon-line/ai-memory-hub/issues/326).
-No command is published until that verification is complete.
+This explicit recipe was checked with Pi coding agent 0.73.0 and its version 3
+JSONL session format. Pi does not provide a verified end event that supplies a
+closed session path, so this recipe deliberately does not install a watcher or
+guess which file is newest.
+
+Before leaving the intended Pi session, run `/session` and copy the exact session
+file path that Pi reports. Then exit Pi, wait at least five seconds so the shared
+uploader can reject a file that is still active, and run:
+
+```bash
+python3 /absolute/path/to/ai-memory-hub/tools/import_pi_session.py \
+  /absolute/path/reported-by-pi/completed-session.jsonl
+```
+
+The adapter accepts only an explicit absolute `.jsonl` path and delegates it to
+the shared uploader with parser `pi-session-jsonl` and source `pi`. It does not
+read or reconstruct the conversation. The existing hub importer validates the
+version 3 tree and reconstructs its active branch. Missing and ephemeral
+sessions, recent or changing files, files over 20 MB, and invalid session trees
+are refused by the adapter, uploader, or importer. Retrying the same completed
+session is safe because normal hub ingestion deduplicates it.
+
+Do not run the command while Pi still has the session open, use it for Oh My Pi
+or OpenClaw artifacts, or replace the reported path with a newest-file search.
+There is nothing persistent to disable or remove: this is an opt-in manual
+command. Keep `MEMORY_HUB_URL` and `MEMORY_API_TOKEN` only in the command
+environment, as described above.
+
+See Pi's upstream [session documentation](https://github.com/pi0/pi-mono/blob/main/packages/coding-agent/docs/sessions.md)
+and [versioned session format](https://github.com/pi0/pi-mono/blob/main/packages/coding-agent/docs/session-format.md).
 
 ## Hermes Agent
 
@@ -165,8 +191,8 @@ No command is published until that verification is complete.
 
 ## DeepSeek Harness
 
-**Planned.** The DeepSeek Harness recipe still needs a verified downloaded-log
-workflow with bounded ZIP extraction and explicit root selection. Track the
+**Planned.** The DeepSeek Harness recipe still needs a pinned format contract
+and adversarial archive tests before its command is published. Track the
 implementation in [issue #328](https://github.com/Artemon-line/ai-memory-hub/issues/328).
 No command is published until that verification is complete.
 

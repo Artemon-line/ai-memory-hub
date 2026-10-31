@@ -185,13 +185,13 @@ IMPORT_HOOK_MATRIX: tuple[ImportHookDefinition, ...] = (
     },
     {
         "name": "Pi",
-        "status": ImportHookStatus.PLANNED,
-        "verified_version": "Pending verification",
-        "trigger": "To be verified",
+        "status": ImportHookStatus.IMPLEMENTED,
+        "verified_version": "0.73.0",
+        "trigger": "Explicit closed-session upload",
         "parser": "pi-session-jsonl",
         "source": "pi",
         "docs_anchor": "pi",
-        "tracking_issue": 326,
+        "tracking_issue": None,
     },
     {
         "name": "Hermes Agent",

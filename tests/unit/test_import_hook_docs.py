@@ -23,11 +23,24 @@ def test_import_hook_guide_pins_clients_and_shared_uploader_contract() -> None:
     assert "Remove" in guide
 
 
+def test_pi_recipe_is_explicit_versioned_and_reversible() -> None:
+    guide = (_ROOT / "docs" / "import_hooks.md").read_text(encoding="utf-8")
+    pi_section = guide.split("## Pi", 1)[1].split("## Hermes Agent", 1)[0]
+
+    assert "0.73.0" in pi_section
+    assert "tools/import_pi_session.py" in pi_section
+    assert "pi-session-jsonl" in pi_section
+    assert "source `pi`" in pi_section
+    assert "/session" in pi_section
+    assert "version 3" in pi_section
+    assert "Do not" in pi_section
+    assert "nothing persistent to disable" in pi_section
+
+
 def test_planned_hook_sections_have_stable_anchors_without_commands() -> None:
     guide = (_ROOT / "docs" / "import_hooks.md").read_text(encoding="utf-8")
 
     for heading, issue in (
-        ("Pi", 326),
         ("Hermes Agent", 327),
         ("DeepSeek Harness", 328),
         ("OpenClaw", 329),

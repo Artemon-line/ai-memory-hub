@@ -402,7 +402,7 @@ def test_connect_ui_lists_new_client_snippet_statuses() -> None:
     )
 
 
-def test_import_hook_models_match_pinned_initial_matrix() -> None:
+def test_import_hook_models_match_current_matrix() -> None:
     hooks = import_hook_models()
     hooks_by_name = {hook["name"]: hook for hook in hooks}
 
@@ -421,10 +421,11 @@ def test_import_hook_models_match_pinned_initial_matrix() -> None:
         ),
         "tracking_issue_url": None,
     }
-    assert hooks_by_name["Pi"]["status"] == "Planned"
-    assert hooks_by_name["Pi"]["verified_version"] == "Pending verification"
+    assert hooks_by_name["Pi"]["status"] == "Implemented"
+    assert hooks_by_name["Pi"]["verified_version"] == "0.73.0"
+    assert hooks_by_name["Pi"]["trigger"] == "Explicit closed-session upload"
     assert hooks_by_name["Pi"]["parser_label"] == "pi-session-jsonl with source=pi"
-    assert hooks_by_name["Pi"]["tracking_issue_url"].endswith("/issues/326")
+    assert hooks_by_name["Pi"]["tracking_issue_url"] is None
     assert hooks_by_name["Hermes Agent"]["tracking_issue_url"].endswith("/issues/327")
     assert hooks_by_name["DeepSeek Harness"]["tracking_issue_url"].endswith("/issues/328")
     assert hooks_by_name["OpenClaw"]["parser_label"] == (
@@ -456,7 +457,7 @@ def test_import_hook_matrix_rejects_duplicates_and_plans_without_issues() -> Non
     with pytest.raises(ValueError, match="unique"):
         validate_import_hook_matrix((IMPORT_HOOK_MATRIX[0], IMPORT_HOOK_MATRIX[0]))
 
-    planned = dict(IMPORT_HOOK_MATRIX[4])
+    planned = dict(IMPORT_HOOK_MATRIX[5])
     planned["tracking_issue"] = None
     with pytest.raises(ValueError, match="tracking issue"):
         validate_import_hook_matrix((planned,))
@@ -557,7 +558,7 @@ def test_connect_routes_are_public_secret_free_and_use_configured_mcp_url(
         "https://artemon-line.github.io/ai-memory-hub/latest/import_hooks/"
         "#codex-cli-and-app"
     ) in connect.text
-    for issue in range(326, 330):
+    for issue in range(327, 330):
         assert f"https://github.com/Artemon-line/ai-memory-hub/issues/{issue}" in connect.text
     hook_html = connect.text.split('id="import-hooks-title"', 1)[1]
     assert "<textarea" not in hook_html
