@@ -36,3 +36,17 @@ def test_hermes_recipe_uses_private_supported_export_and_cleanup() -> None:
     assert "state.db" in section
     assert "temporary" in section
     assert "nothing persistent to disable" in section
+
+
+def test_pi_recipe_is_explicit_versioned_and_reversible() -> None:
+    guide = (_ROOT / "docs" / "import_hooks.md").read_text(encoding="utf-8")
+    pi_section = guide.split("## Pi", 1)[1].split("## Failure handling", 1)[0]
+
+    assert "0.73.0" in pi_section
+    assert "tools/import_pi_session.py" in pi_section
+    assert "pi-session-jsonl" in pi_section
+    assert "source `pi`" in pi_section
+    assert "/session" in pi_section
+    assert "version 3" in pi_section
+    assert "Do not" in pi_section
+    assert "nothing persistent to disable" in pi_section
