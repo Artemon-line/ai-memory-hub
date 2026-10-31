@@ -69,7 +69,7 @@ def test_openclaw_recipe_separates_current_storage_from_legacy_jsonl() -> None:
 
 def test_pi_recipe_is_explicit_versioned_and_reversible() -> None:
     guide = (_ROOT / "docs" / "import_hooks.md").read_text(encoding="utf-8")
-    pi_section = guide.split("## Pi", 1)[1].split("## Failure handling", 1)[0]
+    pi_section = guide.split("## Pi", 1)[1].split("## Hermes Agent", 1)[0]
 
     assert "0.73.0" in pi_section
     assert "tools/import_pi_session.py" in pi_section

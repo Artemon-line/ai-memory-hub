@@ -1,0 +1,26 @@
+<article class="import-hook-card">
+  <header class="client-card-header">
+    <h3>{{ hook.name|e }}</h3>
+    <span class="status-pill{% if hook.status == 'Implemented' %} status-pill--ok{% else %} status-pill--pending{% endif %}">{{ hook.status|e }}</span>
+  </header>
+  <dl class="hook-details">
+    <div>
+      <dt>Verified version</dt>
+      <dd>{{ hook.verified_version|e }}</dd>
+    </div>
+    <div>
+      <dt>Trigger</dt>
+      <dd>{{ hook.trigger|e }}</dd>
+    </div>
+    <div>
+      <dt>Parser</dt>
+      <dd><code>{{ hook.parser_label|e }}</code></dd>
+    </div>
+  </dl>
+  <div class="hook-links">
+    <a href="{{ hook.docs_url|e }}" rel="noopener noreferrer">View instructions</a>
+    {% if hook.tracking_issue_url %}
+      <a href="{{ hook.tracking_issue_url|e }}" rel="noopener noreferrer">Tracking issue</a>
+    {% endif %}
+  </div>
+</article>

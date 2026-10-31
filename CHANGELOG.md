@@ -6,6 +6,8 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Added a distinct Connect UI matrix for implemented and planned zero-token
+  import hooks, with pinned versions, parser metadata, and safe documentation links.
 - Added a bounded zero-token DeepSeek Harness ZIP import command with safe
   extraction, explicit descendant selection, and formats 0 through 4 support.
 - Added an opt-in zero-token Hermes Agent 0.22.5 export adapter with private

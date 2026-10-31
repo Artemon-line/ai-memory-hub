@@ -136,7 +136,8 @@ h3 {
 
 .hero-panel,
 .panel,
-.client-card {
+.client-card,
+.import-hook-card {
   border: 1px solid rgba(22, 32, 39, .1);
   border-radius: 8px;
   background: var(--surface);
@@ -547,12 +548,63 @@ input[type="password"] {
   gap: 16px;
 }
 
+.hook-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
 .client-card {
   display: grid;
   grid-template-rows: auto 1fr auto;
   gap: 14px;
   min-height: 230px;
   padding: 18px;
+}
+
+.import-hook-card {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 16px;
+  min-height: 250px;
+  padding: 18px;
+}
+
+.hook-details {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+
+.hook-details > div {
+  display: grid;
+  gap: 4px;
+}
+
+.hook-details dt {
+  color: var(--muted);
+  font-size: .76rem;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.hook-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+}
+
+.hook-details code {
+  color: var(--accent-strong);
+  font-size: .82rem;
+}
+
+.hook-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  font-size: .88rem;
+  font-weight: 700;
 }
 
 .client-card-header {
@@ -612,6 +664,7 @@ button:focus-visible,
   .hero-panel,
   .panel,
   .client-card,
+  .import-hook-card,
   .action-card {
     border-color: rgba(231, 236, 233, .1);
   }
@@ -633,6 +686,7 @@ button:focus-visible,
   .diagnostics-grid,
   .section-heading,
   .client-grid,
+  .hook-grid,
   .import-layout {
     grid-template-columns: 1fr;
   }
@@ -659,6 +713,7 @@ button:focus-visible,
   .hero,
   .panel,
   .client-card,
+  .import-hook-card,
   .action-card {
     padding: 18px;
   }

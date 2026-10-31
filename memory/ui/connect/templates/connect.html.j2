@@ -53,6 +53,21 @@
       {% endfor %}
     </div>
   </section>
+
+  <section class="client-section" aria-labelledby="import-hooks-title">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">Completed conversations</p>
+        <h2 id="import-hooks-title">Zero-token import hooks</h2>
+      </div>
+      <p>Import hooks transport completed conversation artifacts without adding them to model context. They are separate from live MCP connectivity and are never enabled from this page.</p>
+    </div>
+    <div class="hook-grid">
+      {% for hook in import_hooks %}
+        {% include "partials/import_hook.html.j2" %}
+      {% endfor %}
+    </div>
+  </section>
 </main>
 <script src="/connect/static/connect.js"></script>
 </body>
