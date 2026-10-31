@@ -6,6 +6,8 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Added an opt-in zero-token Hermes Agent 0.22.5 export adapter with private
+  temporary files, optional redaction, ended-session batches, and cleanup.
 - Added an opt-in OpenClaw compatibility adapter for closed legacy version 3
   JSONL trees, with explicit refusal of current SQLite and sidecar files.
 - Added an opt-in, explicit zero-token import adapter for closed Pi 0.73.0
