@@ -495,6 +495,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#hermes-agent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hermes Agent
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#openclaw" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2824,6 +2835,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#hermes-agent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hermes Agent
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#openclaw" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2993,6 +3015,33 @@ session, create a supported export:</p>
 <p>Older Gemini releases may use <code>/export-session</code> instead of <code>/chat share</code>. Delete
 the exported file when it is no longer needed. There is no persistent automation
 to disable in this recipe. See the upstream <a href="https://geminicli.com/docs/hooks/reference/">Gemini CLI hooks reference</a>.</p>
+<h2 id="hermes-agent">Hermes Agent</h2>
+<p>This explicit export-and-upload recipe was checked with Hermes Agent 0.22.5.
+Hermes stores current sessions in <code>~/.hermes/state.db</code>; never copy that database,
+its <code>-wal</code> file, or its <code>-shm</code> file. Exit or otherwise end the intended session,
+find its ID with <code>hermes sessions list</code>, then run:</p>
+<div class="highlight"><pre><span></span><code>python3<span class="w"> </span>/absolute/path/to/ai-memory-hub/tools/import_hermes_session.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--session-id<span class="w"> </span>&lt;SESSION_ID&gt;
+</code></pre></div>
+<p>Add <code>--redact</code> to ask Hermes to scrub recognized API keys, tokens, and
+credentials from the exported copy before upload. For an explicit batch of
+ended sessions, use an upstream ended-session age filter instead of an
+unfiltered database export:</p>
+<div class="highlight"><pre><span></span><code>python3<span class="w"> </span>/absolute/path/to/ai-memory-hub/tools/import_hermes_session.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--ended-older-than<span class="w"> </span>2d<span class="w"> </span>--redact
+</code></pre></div>
+<p>The adapter creates a private temporary directory, installs cleanup before it
+runs <code>hermes sessions export</code>, and deletes the JSONL after success or failure.
+It invokes only the supported Hermes export command, suppresses its output, and
+then delegates the immutable artifact to the shared uploader with parser
+<code>hermes-session-jsonl</code> and <code>--min-age-seconds 0</code>. The existing importer retains
+single- and multi-session boundaries. Missing or invalid IDs, failed or empty
+exports, files over 20 MB, invalid envelopes, and network failures are refused
+without printing export content or credentials. Safe retries use normal hub
+deduplication and emit only the uploader's bounded receipt.</p>
+<p>There is nothing persistent to disable or remove: both forms are opt-in manual
+commands. Keep <code>MEMORY_HUB_URL</code> and <code>MEMORY_API_TOKEN</code> only in the command
+environment. See the upstream <a href="https://github.com/NousResearch/hermes-agent/blob/v0.22.5/website/docs/user-guide/sessions.md">Hermes session guide</a>.</p>
 <h2 id="openclaw">OpenClaw</h2>
 <p>This safety boundary was checked against OpenClaw 2026.10.7. Current OpenClaw
 stores session rows and transcripts in per-agent SQLite databases. Its supported
