@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from memory.backend.metadata_store import IndexChunkField, IndexState, MetadataField
+from memory.benchmarks.work_ledger import WorkLedger
 from memory.ingestion import mvp_ingestion
 
 _PAYLOAD = {
@@ -30,24 +31,24 @@ _APPEND_PAYLOAD = {
 
 
 @dataclass
-class _WorkLedger:
-    embedding_calls: int = 0
+class _WorkLedger(WorkLedger):
     embedding_inputs: int = 0
     vector_write_calls: int = 0
     vector_rows_written: int = 0
     metadata_rows_written: int = 0
     derived_rows_written: int = 0
-    audit_rows_written: int = 0
     bytes_written: int = 0
 
-    def reset(self) -> None:
-        for field_name in self.__dataclass_fields__:
-            setattr(self, field_name, 0)
-
-    def snapshot(self) -> dict[str, int]:
+    def detailed_snapshot(self) -> dict[str, int]:
         return {
-            field_name: int(getattr(self, field_name))
-            for field_name in self.__dataclass_fields__
+            "embedding_inputs": self.embedding_inputs,
+            "vector_write_calls": self.vector_write_calls,
+            "vector_rows_written": self.vector_rows_written,
+            "metadata_rows_written": self.metadata_rows_written,
+            "derived_rows_written": self.derived_rows_written,
+            "audit_rows_written": self.audit_writes,
+            "bytes_written": self.bytes_written,
+            **super().snapshot()["totals"],
         }
 
 
@@ -59,6 +60,7 @@ class _CountingEmbedder:
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         self._ledger.embedding_calls += 1
+        self._ledger.embedding_texts += len(texts)
         self._ledger.embedding_inputs += len(texts)
         return [[float(len(text)), float(index)] for index, text in enumerate(texts)]
 
@@ -70,6 +72,7 @@ class _CountingMetadataStore:
         self._generated_summaries: dict[str, dict[str, Any]] = {}
 
     def insert_new(self, conversation: dict[str, Any]) -> tuple[str, bool]:
+        self._ledger.storage_calls += 1
         duplicate = self.get_by_conversation_hash(
             str(conversation["metadata"]["conversation_hash"])
         )
@@ -81,12 +84,14 @@ class _CountingMetadataStore:
         return memory_id, True
 
     def insert(self, conversation: dict[str, Any]) -> str:
+        self._ledger.storage_calls += 1
         memory_id = str(conversation["id"])
         self.rows[memory_id] = conversation
         self._record_metadata_write(conversation)
         return memory_id
 
     def get(self, memory_id: str) -> dict[str, Any] | None:
+        self._ledger.storage_calls += 1
         return self.rows.get(memory_id)
 
     def get_by_conversation_hash(
@@ -95,6 +100,7 @@ class _CountingMetadataStore:
         *,
         project_id: str | None = None,
     ) -> dict[str, Any] | None:
+        self._ledger.storage_calls += 1
         for conversation in self.rows.values():
             metadata = conversation.get("metadata", {})
             if (
@@ -105,6 +111,7 @@ class _CountingMetadataStore:
         return None
 
     def mark_chunks_indexed(self, memory_id: str, chunk_ids: list[str]) -> None:
+        self._ledger.storage_calls += 1
         conversation = self.rows[memory_id]
         targets = set(chunk_ids)
         for chunk in conversation["metadata"].get(MetadataField.INDEX_CHUNKS.value, []):
@@ -113,12 +120,14 @@ class _CountingMetadataStore:
         self._record_metadata_write(conversation)
 
     def upsert_generated_summary(self, summary: dict[str, Any]) -> None:
+        self._ledger.storage_calls += 1
         self._generated_summaries[str(summary["id"])] = summary
         self._ledger.derived_rows_written += 1
         self._ledger.bytes_written += _json_size(summary)
 
     def append_audit_event(self, event: dict[str, Any]) -> None:
-        self._ledger.audit_rows_written += 1
+        self._ledger.storage_calls += 1
+        self._ledger.audit_writes += 1
         self._ledger.bytes_written += _json_size(event)
 
     def _record_metadata_write(self, conversation: dict[str, Any]) -> None:
@@ -137,6 +146,7 @@ class _CountingVectorStore:
         embeddings: list[dict[str, Any]],
         replace: bool = False,
     ) -> None:
+        self._ledger.storage_calls += 1
         self._ledger.vector_write_calls += 1
         self._ledger.vector_rows_written += len(embeddings)
         self._ledger.bytes_written += _json_size(embeddings)
@@ -145,6 +155,7 @@ class _CountingVectorStore:
         self.rows.extend({"memory_id": memory_id, **embedding} for embedding in embeddings)
 
     def get_indexed_chunk_ids(self, memory_id: str) -> list[str]:
+        self._ledger.storage_calls += 1
         return [
             str(row[IndexChunkField.CHUNK_ID.value])
             for row in self.rows
@@ -173,17 +184,20 @@ def run_benchmark() -> dict[str, Any]:
     try:
         mvp_ingestion.configure_runtime(runtime=runtime)
         accepted_result = mvp_ingestion.ingest_messages(deepcopy(_PAYLOAD))
-        accepted_work = ledger.snapshot()
+        accepted_work = ledger.detailed_snapshot()
+        accepted_ledger = ledger.snapshot()
 
         ledger.reset()
         duplicate = deepcopy(_PAYLOAD)
         duplicate["id"] = "00000000-0000-4000-8000-000000000102"
         duplicate_result = mvp_ingestion.ingest_messages(duplicate)
-        duplicate_work = ledger.snapshot()
+        duplicate_work = ledger.detailed_snapshot()
+        duplicate_ledger = ledger.snapshot()
 
         ledger.reset()
         append_result = mvp_ingestion.ingest_messages(deepcopy(_APPEND_PAYLOAD))
-        append_work = ledger.snapshot()
+        append_work = ledger.detailed_snapshot()
+        append_ledger = ledger.snapshot()
     finally:
         mvp_ingestion._RUNTIME = original_runtime
 
@@ -195,16 +209,19 @@ def run_benchmark() -> dict[str, Any]:
         "accepted": {
             "result": accepted_result,
             "work": accepted_work,
+            "work_ledger": accepted_ledger,
             "work_per_message": _per_message(accepted_work, message_count),
         },
         "duplicate": {
             "result": duplicate_result,
             "work": duplicate_work,
+            "work_ledger": duplicate_ledger,
             "work_per_message": _per_message(duplicate_work, message_count),
         },
         "append": {
             "result": append_result,
             "work": append_work,
+            "work_ledger": append_ledger,
             "work_per_new_message": _per_message(
                 append_work,
                 int(append_result["appended_messages"]),

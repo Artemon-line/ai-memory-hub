@@ -23,15 +23,37 @@ def test_token_budget_benchmark_reports_latency_and_context_metrics() -> None:
     assert report["chunking"]["message_strategy_chunks"] == 1
     assert report["chunking"]["token_strategy_chunks"] > 1
     assert report["work_amplification"]["default_unbudgeted"]["warm"]["per_request"] == {
-        "search_calls": 1.0,
-        "candidate_rows": 8.0,
+        "storage_calls": 1.0,
+        "embedding_calls": 0.0,
+        "embedding_texts": 0.0,
+        "candidate_count": 8.0,
+        "filtered_candidates": 0.0,
+        "reranker_calls": 0.0,
         "audit_writes": 1.0,
+        "selected_chunks": 8.0,
+        "context_tokens": 0.0,
     }
-    assert report["work_amplification"]["budgeted_request"]["warm"]["per_request"] == {
-        "search_calls": 1.0,
-        "candidate_rows": 8.0,
-        "audit_writes": 1.0,
+    budgeted_per_request = report["work_amplification"]["budgeted_request"]["warm"][
+        "per_request"
+    ]
+    assert set(budgeted_per_request) == {
+        "storage_calls",
+        "embedding_calls",
+        "embedding_texts",
+        "candidate_count",
+        "filtered_candidates",
+        "reranker_calls",
+        "audit_writes",
+        "selected_chunks",
+        "context_tokens",
     }
+    assert budgeted_per_request["storage_calls"] == 1.0
+    assert budgeted_per_request["candidate_count"] == 8.0
+    assert budgeted_per_request["filtered_candidates"] == (
+        8.0 - budgeted_per_request["selected_chunks"]
+    )
+    assert budgeted_per_request["audit_writes"] == 1.0
+    assert 0 < budgeted_per_request["context_tokens"] <= 80
     assert report["work_amplification"]["default_unbudgeted"]["result"] == {
         "returned_results": 8,
         "selected_chunks": 8,

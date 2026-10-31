@@ -4,6 +4,7 @@ import argparse
 import json
 from typing import Any
 
+from memory.benchmarks.work_ledger import WorkLedger
 from memory.ingestion import mvp_ingestion
 
 _ENCODING = "cl100k_base"
@@ -78,12 +79,19 @@ def _measure_context(matches: list[dict[str, Any]]) -> dict[str, Any]:
             encoding=_ENCODING,
         )
     )
+    ledger = WorkLedger(
+        candidate_count=len(matches),
+        filtered_candidates=dropped,
+        selected_chunks=len(selected),
+        context_tokens=tokens,
+    )
     return {
         "tokens": tokens,
         "chunks": len(selected),
         "dropped": dropped,
         "truncated": truncated,
         "text": " ".join(str(row.get("text", "")).strip() for row in selected),
+        "work": ledger.snapshot(),
     }
 
 

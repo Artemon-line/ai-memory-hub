@@ -6,6 +6,9 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Added a shared request-work ledger to deterministic efficiency reports for
+  comparable storage, embedding, candidate, reranker, audit, and context-work
+  totals and per-request amplification.
 - Added a scheduled and manually dispatched efficiency report suite that uploads
   machine-readable benchmark manifests and before/after reports without adding
   load profiles to normal push or pull-request CI.

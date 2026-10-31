@@ -3,11 +3,13 @@ from __future__ import annotations
 import json
 from typing import Any, Mapping, Sequence
 
+from memory.benchmarks.work_ledger import WorkLedger
 from memory.ingestion.retrieval_ranking import RerankCandidate, rank_candidate_lists
 
 
 class _CountingReranker:
-    def __init__(self) -> None:
+    def __init__(self, ledger: WorkLedger) -> None:
+        self._ledger = ledger
         self.calls = 0
         self.candidates = 0
 
@@ -17,18 +19,22 @@ class _CountingReranker:
         _ = query
         self.calls += 1
         self.candidates += len(candidates)
+        self._ledger.reranker_calls += 1
         return {candidate.key: float(index) for index, candidate in enumerate(candidates)}
 
 
 def run_benchmark() -> dict[str, Any]:
     """Measure reranker calls for candidate sets that can and cannot change order."""
-    single_reranker = _CountingReranker()
+    single_ledger = WorkLedger(candidate_count=1)
+    single_reranker = _CountingReranker(single_ledger)
     single = rank_candidate_lists(
         "bounded reranker",
         {"dense": [_row("only", "only candidate")]},
         reranker=single_reranker,
     )
-    multi_reranker = _CountingReranker()
+    single_ledger.selected_chunks = len(single.rows)
+    multi_ledger = WorkLedger(candidate_count=2)
+    multi_reranker = _CountingReranker(multi_ledger)
     multiple = rank_candidate_lists(
         "bounded reranker",
         {
@@ -39,10 +45,12 @@ def run_benchmark() -> dict[str, Any]:
         },
         reranker=multi_reranker,
     )
+    multi_ledger.selected_chunks = len(multiple.rows)
     previous_single_calls = 1
     return {
         "measurement": "deterministic_reranker_call_amplification",
         "single_candidate": {
+            "work": single_ledger.snapshot(),
             "previous_calls": previous_single_calls,
             "optimized_calls": single_reranker.calls,
             "optimized_candidates_sent": single_reranker.candidates,
@@ -50,6 +58,7 @@ def run_benchmark() -> dict[str, Any]:
             "result_ids": [str(row["id"]) for row in single.rows],
         },
         "multi_candidate": {
+            "work": multi_ledger.snapshot(),
             "optimized_calls": multi_reranker.calls,
             "optimized_candidates_sent": multi_reranker.candidates,
             "diagnostic_mode": multiple.diagnostics["reranker"],

@@ -11,6 +11,9 @@ def test_context_overlap_benchmark_reduces_tokens_without_losing_unique_text() -
     assert report["before"]["chunks"] == 2
     assert report["after"]["chunks"] == 2
     assert report["after"]["tokens"] < report["before"]["tokens"]
+    assert report["after"]["work"]["totals"]["candidate_count"] == 2
+    assert report["after"]["work"]["totals"]["selected_chunks"] == 2
+    assert report["after"]["work"]["totals"]["context_tokens"] == report["after"]["tokens"]
     assert report["tokens_avoided"] > 0
     assert report["reduction_percent"] >= 1.0
     assert report["unique_evidence_preserved"] is True

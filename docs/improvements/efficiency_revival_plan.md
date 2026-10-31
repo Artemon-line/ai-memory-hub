@@ -119,9 +119,9 @@ Each optimization must state which profiles benefit and which may regress.
 
 Deliver this phase before changing production algorithms.
 
-- [ ] Fix benchmark/test audit sinks so expected unsupported persistence does
+- [x] Fix benchmark/test audit sinks so expected unsupported persistence does
       not emit exception traces per request.
-- [ ] Add a request-scoped work ledger to benchmark reports: storage calls,
+- [x] Add a request-scoped work ledger to benchmark reports: storage calls,
       embedding calls/texts, candidate counts, filtered candidates, reranker
       calls, audit writes, selected chunks, and context tokens.
 - [ ] Add cold/warm separation and p50/p95/p99 output to performance helpers;
@@ -150,6 +150,15 @@ Implementation status:
   candidate, audit-write, and result/context amplification. Cache-candidate
   operations now report first-call and warm percentile distributions. Broader
   provider work ledgers remain follow-up work.
+
+The shared work-ledger slice gives deterministic ask, ingestion, reranker, and
+context-selection reports one fixed counter schema for storage calls, embedding
+calls/texts, candidates and filtered candidates, reranker calls, audit writes,
+selected chunks, and context tokens. Reports retain specialized counters where
+needed, while common totals and per-request values remain directly comparable.
+The token-budget and local-concurrency audit sinks now treat expected unsupported
+or lock-contention persistence as bounded benchmark data without emitting a
+trace per request; unrelated database failures still propagate.
 
 The synthetic scale-corpus slice adds deterministic 128, 4,096, and 32,768
 conversation profiles with schema-valid messages, stable identities, timestamps,
