@@ -6,6 +6,9 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Added deterministic small, medium, and large synthetic efficiency corpora with
+  broad and selective filter cases, streamable JSONL output, and fingerprinted
+  machine-readable manifests.
 - Added a distinct Connect UI matrix for implemented and planned zero-token
   import hooks, with pinned versions, parser metadata, and safe documentation links.
 - Added a bounded zero-token DeepSeek Harness ZIP import command with safe
