@@ -128,7 +128,7 @@ Deliver this phase before changing production algorithms.
       averages alone hide tail regressions.
 - [x] Add reproducible synthetic corpora at small, medium, and large scales,
       including high-selectivity and low-selectivity filters.
-- [ ] Add concurrency runners for insert, search, and ask without external
+- [x] Add concurrency runners for insert, search, and ask without external
       credentials.
 - [ ] Persist machine-readable before/after reports as CI artifacts.
 - [ ] Keep deterministic CI gates short; run provider load profiles on demand or
@@ -149,8 +149,8 @@ Implementation status:
   average/p50/p95/p99/min/max distributions, and records per-request search,
   candidate, audit-write, and result/context amplification. Cache-candidate
   operations now report first-call and warm percentile distributions. Scale
-  corpora, concurrency runners, broader provider work ledgers, and persisted CI
-  comparison artifacts remain follow-up work.
+  corpora, broader provider work ledgers, and persisted CI comparison artifacts
+  remain follow-up work.
 
 The synthetic scale-corpus slice adds deterministic 128, 4,096, and 32,768
 conversation profiles with schema-valid messages, stable identities, timestamps,
@@ -160,6 +160,15 @@ canonical byte count and SHA-256 fingerprint, so local and CI measurements can
 prove they used identical synthetic inputs without retaining the large corpus in
 memory. Concurrency runners and persisted CI comparison artifacts remain
 follow-up work.
+
+The credential-free concurrency slice runs real insert, search, and ask paths
+against fresh SQLite and in-memory vector providers at configurable concurrency
+levels (1, 4, 16, and 32 by default). Every level starts from the same versioned
+synthetic corpus and reports request completion, privacy-safe failure classes,
+durable rows after failed requests, wall time, throughput, and
+average/p50/p95/p99 latency. The runner uses a
+deterministic hash embedder and fallback answers, so it requires no network or
+provider credentials. Persisted CI comparison artifacts remain follow-up work.
 
 ## Phase 1: Remove Request-Path Waste
 
