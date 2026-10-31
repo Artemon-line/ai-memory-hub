@@ -4893,9 +4893,13 @@ docker<span class="w"> </span>rm<span class="w"> </span>-f<span class="w"> </spa
 uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>memory.benchmarks.retrieval_quality
 uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>memory.benchmarks.quality_gate<span class="w"> </span>--output<span class="w"> </span>reports/quality/quality-gate.json
 uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>memory.benchmarks.cache_candidates<span class="w"> </span>--iterations<span class="w"> </span><span class="m">1000</span>
+uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>tools/run_efficiency_reports.py<span class="w"> </span>--output-dir<span class="w"> </span>reports/efficiency
 </code></pre></div>
 <p>The <a href="../quality_evaluation/">representative quality gate</a> is credential-free in
-CI and also accepts optional provider/model observations for comparable reports.</p>
+CI and also accepts optional provider/model observations for comparable reports.
+The efficiency report suite writes individual JSON reports and a manifest. Its
+GitHub Actions workflow runs weekly or by manual dispatch, not on normal pushes
+or pull requests, and uploads the report set with 30-day retention.</p>
 <p>Container CI verifies Hadolint, image build, packaged <code>aim serve</code> startup,
 <code>/ready</code>, MCP initialize at <code>/mcp/</code>, arbitrary non-root UID behavior, and
 writable runtime paths.</p>
