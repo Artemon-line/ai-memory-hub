@@ -4,20 +4,19 @@ import argparse
 import gc
 import hashlib
 import json
-import math
 import sqlite3
 import threading
 from collections import Counter
 from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
-from statistics import mean
 from tempfile import TemporaryDirectory
 from time import perf_counter
 from typing import Any
 
 from memory.backend.metadata_store import SQLiteMetadataStore
 from memory.backend.vector_store import InMemoryVectorStore
+from memory.benchmarks.latency import summarize_latency_ms
 from memory.benchmarks.scale_corpora import build_manifest, iter_conversations
 from memory.ingestion import mvp_ingestion
 
@@ -339,20 +338,8 @@ def _run_ask_case(case: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _latency_summary(samples: list[float]) -> dict[str, float]:
-    ordered = sorted(samples)
-    return {
-        "avg": mean(ordered),
-        "min": ordered[0],
-        "p50": _percentile(ordered, 0.50),
-        "p95": _percentile(ordered, 0.95),
-        "p99": _percentile(ordered, 0.99),
-        "max": ordered[-1],
-    }
-
-
-def _percentile(ordered: list[float], percentile: float) -> float:
-    return ordered[min(math.ceil(len(ordered) * percentile) - 1, len(ordered) - 1)]
+def _latency_summary(samples: list[float]) -> dict[str, float | int]:
+    return summarize_latency_ms(samples)
 
 
 def _hash_vector(text: str) -> list[float]:

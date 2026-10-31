@@ -20,7 +20,11 @@ def test_cache_candidate_benchmark_reports_ranked_operations() -> None:
         "token_count",
     }
     assert report["cache_info"]["schema"]["maxsize"] == 16
+    assert report["cache_info"]["schema"]["misses"] == 1
+    assert report["cache_info"]["schema"]["hits"] == 2
     assert "get_encoding_hits" in report["cache_info"]["tokenizer"]
+    assert report["cache_info"]["tokenizer"]["get_encoding_misses"] == 1
+    assert report["cache_info"]["tokenizer"]["get_encoding_hits"] == 2
     assert report["candidates"]
     assert "operation" in report["candidates"][0]
     assert "cache_when" in report["candidates"][0]
@@ -28,6 +32,10 @@ def test_cache_candidate_benchmark_reports_ranked_operations() -> None:
         set(values) >= {"samples", "first_call_ms", "p50_ms", "p95_ms", "p99_ms"}
         for values in report["operations"].values()
     )
+    for values in report["operations"].values():
+        assert values["cold_warm"]["cold_ms"] == values["first_call_ms"]
+        assert values["cold_warm"]["warm_ms"]["samples"] == 2
+        assert values["cold_warm"]["warm_ms"]["p99"] == values["p99_ms"]
 
 
 def test_cache_candidate_benchmark_rejects_invalid_iterations() -> None:

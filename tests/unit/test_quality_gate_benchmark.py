@@ -27,6 +27,9 @@ def test_quality_gate_covers_representative_quality_dimensions() -> None:
         "answers",
         "latency_ms",
     }
+    latency = report["metrics"]["latency_ms"]
+    assert latency["samples"] > 0
+    assert latency["p50"] <= latency["p95"] <= latency["p99"] <= latency["max"]
 
 
 def test_quality_gate_exercises_sparse_filters_and_fallbacks() -> None:

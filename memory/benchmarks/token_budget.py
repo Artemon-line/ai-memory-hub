@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
-from statistics import mean
 from time import perf_counter
 from typing import Any, Callable
 
+from memory.benchmarks.latency import cold_warm_latency_ms
 from memory.benchmarks.work_ledger import WorkLedger
-from memory.ingestion import mvp_ingestion
+from memory.ingestion import mvp_ingestion, tokenizer
 
 _QUESTION = "What stored implementation details mention token budgets?"
 _TOP_K = 8
@@ -239,14 +238,14 @@ def main(argv: list[str] | None = None) -> int:
 
 def _measure_default(
     *, iterations: int, ledger: WorkLedger
-) -> tuple[dict[str, Any], dict[str, float], dict[str, Any]]:
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     _configure_runtime(tokenizer_enabled=False, ledger=ledger)
     return _measure(lambda: mvp_ingestion.ask(_QUESTION, top_k=_TOP_K), iterations, ledger)
 
 
 def _measure_budgeted(
     *, iterations: int, budget: int, tokenizer_enabled: bool, ledger: WorkLedger
-) -> tuple[dict[str, Any], dict[str, float], dict[str, Any]]:
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     _configure_runtime(
         tokenizer_enabled=tokenizer_enabled,
         ask_max_context_tokens=budget,
@@ -267,8 +266,9 @@ def _measure_budgeted(
 
 def _measure(
     fn: Callable[[], dict[str, Any]], iterations: int, ledger: WorkLedger
-) -> tuple[dict[str, Any], dict[str, float], dict[str, Any]]:
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     ledger.reset()
+    tokenizer._get_encoding.cache_clear()
     start = perf_counter()
     result = fn()
     _record_result_work(ledger, result)
@@ -352,21 +352,22 @@ def _safe_ratio(value: float, baseline: float) -> float:
     return value / baseline
 
 
-def _latency_summary(*, first_call_ms: float, samples: list[float]) -> dict[str, float]:
-    ordered = sorted(samples)
+def _latency_summary(*, first_call_ms: float, samples: list[float]) -> dict[str, Any]:
+    cold_warm = cold_warm_latency_ms(
+        cold_ms=first_call_ms,
+        warm_samples=samples,
+    )
+    warm = cold_warm["warm_ms"]
     return {
+        "cold_warm": cold_warm,
         "first_call": first_call_ms,
-        "warm_avg": mean(ordered),
-        "warm_min": ordered[0],
-        "warm_p50": _percentile(ordered, 0.50),
-        "warm_p95": _percentile(ordered, 0.95),
-        "warm_p99": _percentile(ordered, 0.99),
-        "warm_max": ordered[-1],
+        "warm_avg": warm["avg"],
+        "warm_min": warm["min"],
+        "warm_p50": warm["p50"],
+        "warm_p95": warm["p95"],
+        "warm_p99": warm["p99"],
+        "warm_max": warm["max"],
     }
-
-
-def _percentile(ordered: list[float], percentile: float) -> float:
-    return ordered[min(math.ceil(len(ordered) * percentile) - 1, len(ordered) - 1)]
 
 
 def _with_result_work(work: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:

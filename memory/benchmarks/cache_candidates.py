@@ -4,12 +4,11 @@ import argparse
 import cProfile
 import io
 import json
-import math
 import pstats
-from statistics import mean
 from time import perf_counter
 from typing import Any, Callable
 
+from memory.benchmarks.latency import cold_warm_latency_ms
 from memory.config import parse_config
 from memory.ingestion import validate
 from memory.ingestion.tokenizer import count_tokens
@@ -51,7 +50,11 @@ def run_benchmark(*, iterations: int = 1000) -> dict[str, Any]:
             lambda: validate.validate_schema_compatibility(original_schema),
             iterations,
         ),
-        "schema_validator_load": _measure(validate.load_conversation_validator, iterations),
+        "schema_validator_load": _measure(
+            validate.load_conversation_validator,
+            iterations,
+            before_cold=validate.clear_schema_cache,
+        ),
         "schema_validation_rebuild": _measure(
             lambda: validate.validate_conversation(_VALID_PAYLOAD, original_schema),
             validation_iterations,
@@ -64,7 +67,11 @@ def run_benchmark(*, iterations: int = 1000) -> dict[str, Any]:
             validation_iterations,
         ),
         "config_parse": _measure(lambda: parse_config(_CONFIG), iterations),
-        "token_count": _measure(lambda: count_tokens(_TEXT, "cl100k_base"), iterations),
+        "token_count": _measure(
+            lambda: count_tokens(_TEXT, "cl100k_base"),
+            iterations,
+            before_cold=_clear_tokenizer_cache,
+        ),
     }
     cache_info = {
         "schema": validate.schema_cache_info(),
@@ -105,7 +112,14 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _measure(fn: Callable[[], Any], iterations: int) -> dict[str, float]:
+def _measure(
+    fn: Callable[[], Any],
+    iterations: int,
+    *,
+    before_cold: Callable[[], None] | None = None,
+) -> dict[str, Any]:
+    if before_cold is not None:
+        before_cold()
     first_start = perf_counter()
     fn()
     first_ms = (perf_counter() - first_start) * 1000.0
@@ -114,25 +128,23 @@ def _measure(fn: Callable[[], Any], iterations: int) -> dict[str, float]:
         start = perf_counter()
         fn()
         samples.append((perf_counter() - start) * 1000.0)
-    ordered = sorted(samples)
+    cold_warm = cold_warm_latency_ms(cold_ms=first_ms, warm_samples=samples)
+    warm = cold_warm["warm_ms"]
     return {
-        "samples": len(ordered),
+        "cold_warm": cold_warm,
+        "samples": warm["samples"],
         "first_call_ms": first_ms,
-        "avg_ms": mean(ordered),
-        "total_ms": sum(samples),
-        "min_ms": ordered[0],
-        "p50_ms": _percentile(ordered, 0.50),
-        "p95_ms": _percentile(ordered, 0.95),
-        "p99_ms": _percentile(ordered, 0.99),
-        "max_ms": ordered[-1],
+        "avg_ms": warm["avg"],
+        "total_ms": warm["total"],
+        "min_ms": warm["min"],
+        "p50_ms": warm["p50"],
+        "p95_ms": warm["p95"],
+        "p99_ms": warm["p99"],
+        "max_ms": warm["max"],
     }
 
 
-def _percentile(ordered: list[float], percentile: float) -> float:
-    return ordered[min(math.ceil(len(ordered) * percentile) - 1, len(ordered) - 1)]
-
-
-def _candidate_summary(measurements: dict[str, dict[str, float]]) -> list[dict[str, Any]]:
+def _candidate_summary(measurements: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
     ranked = sorted(
         measurements.items(),
         key=lambda item: item[1]["avg_ms"],
@@ -179,6 +191,12 @@ def _tokenizer_cache_info() -> dict[str, Any]:
         "get_encoding_maxsize": info.maxsize,
         "get_encoding_currsize": info.currsize,
     }
+
+
+def _clear_tokenizer_cache() -> None:
+    from memory.ingestion import tokenizer
+
+    tokenizer._get_encoding.cache_clear()
 
 
 def _profile_top(profiler: cProfile.Profile, *, limit: int) -> list[str]:

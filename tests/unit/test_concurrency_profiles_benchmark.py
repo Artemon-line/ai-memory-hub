@@ -37,6 +37,8 @@ def test_concurrency_profiles_complete_insert_search_and_ask_without_credentials
             assert operation["completed"] == operation["requests"]
             assert operation["throughput_per_second"] > 0
             assert operation["latency_ms"]["p95"] >= 0
+            assert operation["latency_ms"]["p99"] >= operation["latency_ms"]["p95"]
+            assert operation["latency_ms"]["samples"] == operation["requests"]
     assert_thresholds(report)
 
     report["thresholds"]["max_failure_rate"] = 0.0
