@@ -672,6 +672,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#zero-token-import-hook-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zero-token Import Hook Matrix
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2922,6 +2933,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#zero-token-import-hook-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zero-token Import Hook Matrix
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -3271,6 +3293,87 @@ until the exact command or config has been tested.</p>
 </div>
 
 <p>Do not commit OAuth client secrets or captured bearer tokens.</p>
+<h2 id="zero-token-import-hook-matrix">Zero-token Import Hook Matrix</h2>
+<p>The Connect page has a separate <strong>Zero-token import hooks</strong> section for moving
+completed conversation artifacts into the hub without adding their contents to
+model context. These cards do not install or enable hooks and are intentionally
+separate from the live MCP client setup snippets.</p>
+<p>Each card shows the recipe state, pinned client version (or <strong>Pending
+verification</strong>), trigger boundary, registered parser, and a link to the exact
+client section in the published import-hook guide. Planned recipes also link to
+their tracking issue and do not show copyable commands.</p>
+<table>
+<thead>
+<tr>
+<th>Client</th>
+<th>State</th>
+<th>Version</th>
+<th>Trigger</th>
+<th>Parser</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Codex CLI and app</td>
+<td>Implemented</td>
+<td><code>0.152.0</code></td>
+<td><code>SessionEnd</code> hook</td>
+<td><code>codex-rollout-jsonl</code></td>
+</tr>
+<tr>
+<td>Claude Code</td>
+<td>Implemented</td>
+<td><code>2.1.288</code></td>
+<td><code>SessionEnd</code> hook</td>
+<td><code>claude-code-session-jsonl</code></td>
+</tr>
+<tr>
+<td>OpenCode</td>
+<td>Implemented</td>
+<td><code>1.19.0</code></td>
+<td>Explicit post-session export</td>
+<td><code>opencode-session-json</code></td>
+</tr>
+<tr>
+<td>Gemini CLI</td>
+<td>Implemented</td>
+<td><code>0.57.0</code></td>
+<td>Explicit export and upload</td>
+<td><code>gemini-cli-session-json</code></td>
+</tr>
+<tr>
+<td>Pi</td>
+<td>Planned</td>
+<td>Pending verification</td>
+<td>To be verified</td>
+<td><code>pi-session-jsonl</code> with <code>source=pi</code></td>
+</tr>
+<tr>
+<td>Hermes Agent</td>
+<td>Planned</td>
+<td>Pending verification</td>
+<td>To be verified</td>
+<td><code>hermes-session-jsonl</code></td>
+</tr>
+<tr>
+<td>DeepSeek Harness</td>
+<td>Planned</td>
+<td>Pending verification</td>
+<td>Explicit downloaded export</td>
+<td><code>deepseek-harness-session-jsonl</code></td>
+</tr>
+<tr>
+<td>OpenClaw</td>
+<td>Planned</td>
+<td>Pending verification</td>
+<td>Coordinated export/backup</td>
+<td><code>pi-session-jsonl</code> with <code>source=openclaw</code></td>
+</tr>
+</tbody>
+</table>
+<p>Recipe status is a compatibility claim independent of each client's MCP setup
+status. When a planned recipe is verified, its implementation PR must update the
+version, trigger, documentation section, and matrix state together.</p>
 
 
 
