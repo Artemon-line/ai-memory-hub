@@ -3,11 +3,11 @@ from __future__ import annotations
 import argparse
 import json
 import math
-from dataclasses import dataclass
 from statistics import mean
 from time import perf_counter
 from typing import Any, Callable
 
+from memory.benchmarks.work_ledger import WorkLedger
 from memory.ingestion import mvp_ingestion
 
 _QUESTION = "What stored implementation details mention token budgets?"
@@ -23,34 +23,8 @@ class _Embedder:
         return [[1.0] for _ in texts]
 
 
-@dataclass
-class _WorkLedger:
-    search_calls: int = 0
-    candidate_rows: int = 0
-    audit_writes: int = 0
-
-    def reset(self) -> None:
-        self.search_calls = 0
-        self.candidate_rows = 0
-        self.audit_writes = 0
-
-    def snapshot(self, *, requests: int) -> dict[str, Any]:
-        divisor = max(requests, 1)
-        return {
-            "requests": requests,
-            "search_calls": self.search_calls,
-            "candidate_rows": self.candidate_rows,
-            "audit_writes": self.audit_writes,
-            "per_request": {
-                "search_calls": self.search_calls / divisor,
-                "candidate_rows": self.candidate_rows / divisor,
-                "audit_writes": self.audit_writes / divisor,
-            },
-        }
-
-
 class _BenchmarkAuditStore:
-    def __init__(self, ledger: _WorkLedger):
+    def __init__(self, ledger: WorkLedger):
         self._ledger = ledger
 
     def append_audit_event(self, _event: dict[str, Any]) -> None:
@@ -58,14 +32,14 @@ class _BenchmarkAuditStore:
 
 
 class _BenchmarkSearch:
-    def __init__(self, ledger: _WorkLedger):
+    def __init__(self, ledger: WorkLedger):
         self._ledger = ledger
 
     def __call__(self, query: str, top_k: int = 5, **_kwargs: Any) -> dict[str, Any]:
         _ = query
         rows = _FIXED_MATCHES[:top_k]
-        self._ledger.search_calls += 1
-        self._ledger.candidate_rows += len(rows)
+        self._ledger.storage_calls += 1
+        self._ledger.candidate_count += len(rows)
         return {"status": "ok", "results": rows}
 
 
@@ -157,7 +131,7 @@ def run_benchmark(
 
     original_runtime = mvp_ingestion._RUNTIME
     original_search = mvp_ingestion.search
-    ledger = _WorkLedger()
+    ledger = WorkLedger()
     try:
         mvp_ingestion.search = _BenchmarkSearch(ledger)  # type: ignore[method-assign]
         default_result, default_latency, default_work = _measure_default(
@@ -264,14 +238,14 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _measure_default(
-    *, iterations: int, ledger: _WorkLedger
+    *, iterations: int, ledger: WorkLedger
 ) -> tuple[dict[str, Any], dict[str, float], dict[str, Any]]:
     _configure_runtime(tokenizer_enabled=False, ledger=ledger)
     return _measure(lambda: mvp_ingestion.ask(_QUESTION, top_k=_TOP_K), iterations, ledger)
 
 
 def _measure_budgeted(
-    *, iterations: int, budget: int, tokenizer_enabled: bool, ledger: _WorkLedger
+    *, iterations: int, budget: int, tokenizer_enabled: bool, ledger: WorkLedger
 ) -> tuple[dict[str, Any], dict[str, float], dict[str, Any]]:
     _configure_runtime(
         tokenizer_enabled=tokenizer_enabled,
@@ -292,11 +266,12 @@ def _measure_budgeted(
 
 
 def _measure(
-    fn: Callable[[], dict[str, Any]], iterations: int, ledger: _WorkLedger
+    fn: Callable[[], dict[str, Any]], iterations: int, ledger: WorkLedger
 ) -> tuple[dict[str, Any], dict[str, float], dict[str, Any]]:
     ledger.reset()
     start = perf_counter()
     result = fn()
+    _record_result_work(ledger, result)
     first_call_ms = (perf_counter() - start) * 1000.0
     first_call_work = ledger.snapshot(requests=1)
     ledger.reset()
@@ -304,6 +279,7 @@ def _measure(
     for _ in range(iterations):
         start = perf_counter()
         result = fn()
+        _record_result_work(ledger, result)
         samples.append((perf_counter() - start) * 1000.0)
     return result, _latency_summary(first_call_ms=first_call_ms, samples=samples), {
         "first_call": first_call_work,
@@ -311,7 +287,7 @@ def _measure(
     }
 
 
-def _measure_chunking(*, ledger: _WorkLedger) -> dict[str, Any]:
+def _measure_chunking(*, ledger: WorkLedger) -> dict[str, Any]:
     message = {
         "role": "user",
         "hash": "sha256:" + ("a" * 64),
@@ -352,7 +328,7 @@ def _configure_runtime(
     chunking_strategy: str = "message",
     chunking_max_tokens: int = 800,
     chunking_overlap_tokens: int = 80,
-    ledger: _WorkLedger,
+    ledger: WorkLedger,
 ) -> None:
     mvp_ingestion.configure_runtime(
         runtime=mvp_ingestion.RuntimeDependencies(
@@ -395,9 +371,7 @@ def _percentile(ordered: list[float], percentile: float) -> float:
 
 def _with_result_work(work: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
     selected_chunks = int(result.get("chunks_selected", len(result.get("citations", []))))
-    candidate_rows = int(work["warm"]["candidate_rows"])
-    requests = max(int(work["warm"]["requests"]), 1)
-    candidates_per_request = candidate_rows / requests
+    candidates_per_request = float(work["warm"]["per_request"]["candidate_count"])
     return {
         **work,
         "result": {
@@ -410,6 +384,13 @@ def _with_result_work(work: dict[str, Any], result: dict[str, Any]) -> dict[str,
             ),
         },
     }
+
+
+def _record_result_work(ledger: WorkLedger, result: dict[str, Any]) -> None:
+    selected = int(result.get("chunks_selected", len(result.get("citations", []))))
+    ledger.selected_chunks += selected
+    ledger.context_tokens += int(result.get("context_tokens_used", 0))
+    ledger.filtered_candidates += max(int(result.get("chunks_dropped", 0)), 0)
 
 
 if __name__ == "__main__":

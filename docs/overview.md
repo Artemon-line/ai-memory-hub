@@ -1584,7 +1584,9 @@ The [representative quality gate](quality_evaluation.md) is credential-free in
 CI and also accepts optional provider/model observations for comparable reports.
 The efficiency report suite writes individual JSON reports and a manifest. Its
 GitHub Actions workflow runs weekly or by manual dispatch, not on normal pushes
-or pull requests, and uploads the report set with 30-day retention.
+or pull requests, and uploads the report set with 30-day retention. Deterministic
+ask, ingestion, reranker, and context-selection reports share a stable work
+ledger with total and per-request amplification counters.
 
 Container CI verifies Hadolint, image build, packaged `aim serve` startup,
 `/ready`, MCP initialize at `/mcp/`, arbitrary non-root UID behavior, and

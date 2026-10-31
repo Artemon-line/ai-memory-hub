@@ -12,11 +12,16 @@ def test_ingestion_efficiency_reports_zero_duplicate_indexing_work() -> None:
     assert "latency_ms" not in report["accepted"]
     assert "latency_ms" not in report["duplicate"]
     assert report["accepted"]["work"]["embedding_inputs"] == 2
+    assert report["accepted"]["work"]["embedding_texts"] == 2
+    assert report["accepted"]["work"]["storage_calls"] > 0
+    assert report["accepted"]["work_ledger"]["totals"]["embedding_texts"] == 2
+    assert report["accepted"]["work_ledger"]["per_request"]["storage_calls"] > 0
     assert report["accepted"]["work"]["vector_rows_written"] == 2
     assert report["duplicate"]["result"]["embedded_chunks"] == 0
     assert report["duplicate"]["work"]["embedding_calls"] == 0
     assert report["duplicate"]["work"]["vector_write_calls"] == 0
     assert report["duplicate"]["work"]["audit_rows_written"] == 1
+    assert report["duplicate"]["work"]["audit_writes"] == 1
     assert report["reductions"] == {
         "embedding_inputs": 1.0,
         "vector_rows_written": 1.0,
