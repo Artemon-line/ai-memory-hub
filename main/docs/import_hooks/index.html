@@ -495,6 +495,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#deepseek-harness" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DeepSeek Harness
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#hermes-agent" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2835,6 +2846,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#deepseek-harness" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DeepSeek Harness
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#hermes-agent" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3015,6 +3037,37 @@ session, create a supported export:</p>
 <p>Older Gemini releases may use <code>/export-session</code> instead of <code>/chat share</code>. Delete
 the exported file when it is no longer needed. There is no persistent automation
 to disable in this recipe. See the upstream <a href="https://geminicli.com/docs/hooks/reference/">Gemini CLI hooks reference</a>.</p>
+<h2 id="deepseek-harness">DeepSeek Harness</h2>
+<p>This explicit recipe is pinned to the documented DeepSeek Harness session-log
+export contract and the canonical session formats 0 through 4. In the Harness
+web interface, finish the session, choose <strong>Download session log</strong> from the
+Session Header menu (or enter <code>/export</code>), and wait for the
+<code>dsh-session-&lt;SESSION_ID&gt;.zip</code> download to complete. Then run:</p>
+<div class="highlight"><pre><span></span><code>python3<span class="w"> </span>/absolute/path/to/ai-memory-hub/tools/import_deepseek_harness_export.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>/absolute/path/to/dsh-session-&lt;SESSION_ID&gt;.zip
+</code></pre></div>
+<p>The adapter refuses archives modified in the last five seconds, then validates
+entry count and compressed/uncompressed sizes before extracting into a private
+temporary directory. It rejects path traversal, absolute paths, duplicate
+names, encrypted entries, links, devices, malformed ZIPs, oversized members,
+and more than one root <code>session.jsonl</code> or <code>session.vN.jsonl</code>. Attachments are
+validated but not extracted. The selected immutable root is delegated to the
+shared uploader with parser <code>deepseek-harness-session-jsonl</code> and
+<code>--min-age-seconds 0</code>; the existing importer remains responsible for parsing
+and supported-version validation.</p>
+<p>Sessions below <code>subagents/</code> are separate conversations and are never merged or
+uploaded automatically. To import one intentionally, name its exact archive
+member in a separate run:</p>
+<div class="highlight"><pre><span></span><code>python3<span class="w"> </span>/absolute/path/to/ai-memory-hub/tools/import_deepseek_harness_export.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>/absolute/path/to/dsh-session-&lt;SESSION_ID&gt;.zip<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--member<span class="w"> </span>subagents/&lt;SUBAGENT_ID&gt;/session.v4.jsonl
+</code></pre></div>
+<p>The temporary directory is removed after success or failure. Retrying the same
+root or descendant is safe because hub ingestion deduplicates it, and only the
+shared uploader's bounded receipt is printed. There is nothing persistent to disable
+or remove: the adapter is an opt-in manual command. Keep
+<code>MEMORY_HUB_URL</code> and <code>MEMORY_API_TOKEN</code> only in the command environment.</p>
+<p>See the upstream <a href="https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/session-query/session-log-export/README.md">DeepSeek Harness export documentation</a>.</p>
 <h2 id="hermes-agent">Hermes Agent</h2>
 <p>This explicit export-and-upload recipe was checked with Hermes Agent 0.22.5.
 Hermes stores current sessions in <code>~/.hermes/state.db</code>; never copy that database,
