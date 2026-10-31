@@ -3318,9 +3318,9 @@ deployments.</p>
 <h2 id="phase-0-make-measurements-trustworthy">Phase 0: Make Measurements Trustworthy</h2>
 <p>Deliver this phase before changing production algorithms.</p>
 <ul>
-<li>[ ] Fix benchmark/test audit sinks so expected unsupported persistence does
+<li>[x] Fix benchmark/test audit sinks so expected unsupported persistence does
       not emit exception traces per request.</li>
-<li>[ ] Add a request-scoped work ledger to benchmark reports: storage calls,
+<li>[x] Add a request-scoped work ledger to benchmark reports: storage calls,
       embedding calls/texts, candidate counts, filtered candidates, reranker
       calls, audit writes, selected chunks, and context tokens.</li>
 <li>[ ] Add cold/warm separation and p50/p95/p99 output to performance helpers;
@@ -3350,6 +3350,14 @@ deployments.</p>
   operations now report first-call and warm percentile distributions. Broader
   provider work ledgers remain follow-up work.</li>
 </ul>
+<p>The shared work-ledger slice gives deterministic ask, ingestion, reranker, and
+context-selection reports one fixed counter schema for storage calls, embedding
+calls/texts, candidates and filtered candidates, reranker calls, audit writes,
+selected chunks, and context tokens. Reports retain specialized counters where
+needed, while common totals and per-request values remain directly comparable.
+The token-budget and local-concurrency audit sinks now treat expected unsupported
+or lock-contention persistence as bounded benchmark data without emitting a
+trace per request; unrelated database failures still propagate.</p>
 <p>The synthetic scale-corpus slice adds deterministic 128, 4,096, and 32,768
 conversation profiles with schema-valid messages, stable identities, timestamps,
 and hashes. Each profile includes unfiltered, 50%-selectivity, and 0.78%-selectivity
