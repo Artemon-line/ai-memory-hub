@@ -9,6 +9,7 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
+from memory.benchmarks.latency import summarize_latency_ms
 from memory.ingestion.fact_timeline import FactTimelineProjector
 from memory.ingestion.mvp_ingestion import extract_facts
 from memory.ingestion.query_planning import plan_retrieval_query
@@ -336,17 +337,13 @@ def _evaluate_observations(corpus: Mapping[str, Any], observations: Mapping[str,
             and observed.get("answer") == expected["expected_answer"]
             and observed.get("evidence_ids") == expected["expected_evidence_ids"]
         )
-    latency_values = sorted(float(value) for value in observations.get("latency_ms", []))
+    latency_values = [float(value) for value in observations.get("latency_ms", [])]
     return {
         "retrieval": retrieval,
         "extraction": extraction,
         "temporal": temporal,
         "answers": {"contract_accuracy": _mean(float(value) for value in answer_rows)},
-        "latency_ms": {
-            "p50": _percentile(latency_values, 0.50),
-            "p95": _percentile(latency_values, 0.95),
-            "samples": len(latency_values),
-        },
+        "latency_ms": summarize_latency_ms(latency_values),
     }
 
 
@@ -363,12 +360,6 @@ def _ndcg(gains: list[float], ideal_relevant: int) -> float:
 def _mean(values: Iterable[float]) -> float:
     collected = list(values)
     return statistics.fmean(collected) if collected else 0.0
-
-
-def _percentile(values: list[float], percentile: float) -> float:
-    if not values:
-        return 0.0
-    return values[min(math.ceil(len(values) * percentile) - 1, len(values) - 1)]
 
 
 def _validate_thresholds(thresholds: Mapping[str, float]) -> None:

@@ -17,6 +17,14 @@ def test_token_budget_benchmark_reports_latency_and_context_metrics() -> None:
     assert report["latency_ms"]["default_unbudgeted"]["warm_p50"] >= 0
     assert report["latency_ms"]["default_unbudgeted"]["warm_p95"] >= 0
     assert report["latency_ms"]["default_unbudgeted"]["warm_p99"] >= 0
+    cold_warm = report["latency_ms"]["default_unbudgeted"]["cold_warm"]
+    assert cold_warm["cold_ms"] == report["latency_ms"]["default_unbudgeted"][
+        "first_call"
+    ]
+    assert cold_warm["warm_ms"]["samples"] == 2
+    assert cold_warm["warm_ms"]["p99"] == report["latency_ms"][
+        "default_unbudgeted"
+    ]["warm_p99"]
     assert report["selected_context"]["default_chunks"] == 8
     assert report["selected_context"]["budgeted_tokens"] <= 80
     assert report["selected_context"]["config_enabled_tokens"] <= 80

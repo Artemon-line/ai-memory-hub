@@ -124,7 +124,7 @@ Deliver this phase before changing production algorithms.
 - [x] Add a request-scoped work ledger to benchmark reports: storage calls,
       embedding calls/texts, candidate counts, filtered candidates, reranker
       calls, audit writes, selected chunks, and context tokens.
-- [ ] Add cold/warm separation and p50/p95/p99 output to performance helpers;
+- [x] Add cold/warm separation and p50/p95/p99 output to performance helpers;
       averages alone hide tail regressions.
 - [x] Add reproducible synthetic corpora at small, medium, and large scales,
       including high-selectivity and low-selectivity filters.
@@ -159,6 +159,14 @@ needed, while common totals and per-request values remain directly comparable.
 The token-budget and local-concurrency audit sinks now treat expected unsupported
 or lock-contention persistence as bounded benchmark data without emitting a
 trace per request; unrelated database failures still propagate.
+
+The latency-reporting slice centralizes nearest-rank distributions for cache,
+token-budget, concurrency, and quality reports. Cache and token-budget
+measurements expose a canonical cache-reset `cold_ms` value plus a warm
+distribution with sample count, average, total, min, p50, p95, p99, and max;
+their existing flat fields remain as compatibility aliases. Concurrency and
+quality reports use the same distribution helper, including explicit p99
+output. This completes the Phase 0 implementation checklist.
 
 The synthetic scale-corpus slice adds deterministic 128, 4,096, and 32,768
 conversation profiles with schema-valid messages, stable identities, timestamps,

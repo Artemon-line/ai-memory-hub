@@ -6,6 +6,9 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Standardized benchmark latency distributions and separated cold first-call
+  measurements from warm p50/p95/p99 samples while preserving existing report
+  fields.
 - Added a shared request-work ledger to deterministic efficiency reports for
   comparable storage, embedding, candidate, reranker, audit, and context-work
   totals and per-request amplification.
