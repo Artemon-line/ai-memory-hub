@@ -3325,7 +3325,7 @@ deployments.</p>
       calls, audit writes, selected chunks, and context tokens.</li>
 <li>[ ] Add cold/warm separation and p50/p95/p99 output to performance helpers;
       averages alone hide tail regressions.</li>
-<li>[ ] Add reproducible synthetic corpora at small, medium, and large scales,
+<li>[x] Add reproducible synthetic corpora at small, medium, and large scales,
       including high-selectivity and low-selectivity filters.</li>
 <li>[ ] Add concurrency runners for insert, search, and ask without external
       credentials.</li>
@@ -3351,6 +3351,14 @@ deployments.</p>
   corpora, concurrency runners, broader provider work ledgers, and persisted CI
   comparison artifacts remain follow-up work.</li>
 </ul>
+<p>The synthetic scale-corpus slice adds deterministic 128, 4,096, and 32,768
+conversation profiles with schema-valid messages, stable identities, timestamps,
+and hashes. Each profile includes unfiltered, 50%-selectivity, and 0.78%-selectivity
+retrieval cases. The generator can stream JSONL plus a manifest containing the
+canonical byte count and SHA-256 fingerprint, so local and CI measurements can
+prove they used identical synthetic inputs without retaining the large corpus in
+memory. Concurrency runners and persisted CI comparison artifacts remain
+follow-up work.</p>
 <h2 id="phase-1-remove-request-path-waste">Phase 1: Remove Request-Path Waste</h2>
 <p>Start with low-risk work that should not alter ranking or storage semantics.</p>
 <ul>
