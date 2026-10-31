@@ -426,8 +426,12 @@ def test_import_hook_models_match_current_matrix() -> None:
     assert hooks_by_name["Pi"]["trigger"] == "Explicit closed-session upload"
     assert hooks_by_name["Pi"]["parser_label"] == "pi-session-jsonl with source=pi"
     assert hooks_by_name["Pi"]["tracking_issue_url"] is None
-    assert hooks_by_name["Hermes Agent"]["tracking_issue_url"].endswith("/issues/327")
-    assert hooks_by_name["DeepSeek Harness"]["tracking_issue_url"].endswith("/issues/328")
+    assert hooks_by_name["Hermes Agent"]["status"] == "Implemented"
+    assert hooks_by_name["Hermes Agent"]["verified_version"] == "0.22.5"
+    assert hooks_by_name["Hermes Agent"]["tracking_issue_url"] is None
+    assert hooks_by_name["DeepSeek Harness"]["status"] == "Implemented"
+    assert hooks_by_name["DeepSeek Harness"]["verified_version"] == "Session formats 0-4"
+    assert hooks_by_name["DeepSeek Harness"]["tracking_issue_url"] is None
     assert hooks_by_name["OpenClaw"]["parser_label"] == (
         "pi-session-jsonl with source=openclaw"
     )
@@ -460,6 +464,8 @@ def test_import_hook_matrix_rejects_duplicates_and_plans_without_issues() -> Non
         validate_import_hook_matrix((IMPORT_HOOK_MATRIX[0], IMPORT_HOOK_MATRIX[0]))
 
     planned = dict(IMPORT_HOOK_MATRIX[5])
+    planned["status"] = ImportHookStatus.PLANNED
+    planned["verified_version"] = "Pending verification"
     planned["tracking_issue"] = None
     with pytest.raises(ValueError, match="tracking issue"):
         validate_import_hook_matrix((planned,))
@@ -553,15 +559,16 @@ def test_connect_routes_are_public_secret_free_and_use_configured_mcp_url(
     assert "Zero-token import hooks" in connect.text
     assert "Codex CLI and app" in connect.text
     assert "0.152.0" in connect.text
-    assert "Pending verification" in connect.text
+    assert "0.22.5" in connect.text
+    assert "Session formats 0-4" in connect.text
     assert "pi-session-jsonl with source=pi" in connect.text
     assert "pi-session-jsonl with source=openclaw" in connect.text
     assert (
         "https://artemon-line.github.io/ai-memory-hub/latest/import_hooks/"
         "#codex-cli-and-app"
     ) in connect.text
-    for issue in range(327, 329):
-        assert f"https://github.com/Artemon-line/ai-memory-hub/issues/{issue}" in connect.text
+    assert "https://github.com/Artemon-line/ai-memory-hub/issues/327" not in connect.text
+    assert "https://github.com/Artemon-line/ai-memory-hub/issues/328" not in connect.text
     hook_html = connect.text.split('id="import-hooks-title"', 1)[1]
     assert "<textarea" not in hook_html
     assert "MEMORY_API_TOKEN" not in hook_html

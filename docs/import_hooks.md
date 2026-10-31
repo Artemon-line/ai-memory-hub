@@ -293,20 +293,6 @@ environment, as described above.
 See Pi's upstream [session documentation](https://github.com/pi0/pi-mono/blob/main/packages/coding-agent/docs/sessions.md)
 and [versioned session format](https://github.com/pi0/pi-mono/blob/main/packages/coding-agent/docs/session-format.md).
 
-## Hermes Agent
-
-**Planned.** The Hermes Agent recipe still needs a pinned client version and a
-verified export workflow that never copies its live database. Track the
-implementation in [issue #327](https://github.com/Artemon-line/ai-memory-hub/issues/327).
-No command is published until that verification is complete.
-
-## DeepSeek Harness
-
-**Planned.** The DeepSeek Harness recipe still needs a pinned format contract
-and adversarial archive tests before its command is published. Track the
-implementation in [issue #328](https://github.com/Artemon-line/ai-memory-hub/issues/328).
-No command is published until that verification is complete.
-
 ## Failure handling
 
 The command exits nonzero for missing credentials, missing or unsafe files,

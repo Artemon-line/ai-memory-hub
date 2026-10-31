@@ -79,17 +79,3 @@ def test_pi_recipe_is_explicit_versioned_and_reversible() -> None:
     assert "version 3" in pi_section
     assert "Do not" in pi_section
     assert "nothing persistent to disable" in pi_section
-
-
-def test_planned_hook_sections_have_stable_anchors_without_commands() -> None:
-    guide = (_ROOT / "docs" / "import_hooks.md").read_text(encoding="utf-8")
-
-    for heading, issue in (
-        ("Hermes Agent", 327),
-        ("DeepSeek Harness", 328),
-    ):
-        section = guide.split(f"## {heading}", 1)[1].split("## ", 1)[0]
-        assert "**Planned.**" in section
-        assert f"issues/{issue}" in section
-        assert "No command is published" in section
-        assert "```" not in section
