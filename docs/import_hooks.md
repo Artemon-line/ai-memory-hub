@@ -149,6 +149,83 @@ Older Gemini releases may use `/export-session` instead of `/chat share`. Delete
 the exported file when it is no longer needed. There is no persistent automation
 to disable in this recipe. See the upstream [Gemini CLI hooks reference](https://geminicli.com/docs/hooks/reference/).
 
+## DeepSeek Harness
+
+This explicit recipe is pinned to the documented DeepSeek Harness session-log
+export contract and the canonical session formats 0 through 4. In the Harness
+web interface, finish the session, choose **Download session log** from the
+Session Header menu (or enter `/export`), and wait for the
+`dsh-session-<SESSION_ID>.zip` download to complete. Then run:
+
+```bash
+python3 /absolute/path/to/ai-memory-hub/tools/import_deepseek_harness_export.py \
+  /absolute/path/to/dsh-session-<SESSION_ID>.zip
+```
+
+The adapter refuses archives modified in the last five seconds, then validates
+entry count and compressed/uncompressed sizes before extracting into a private
+temporary directory. It rejects path traversal, absolute paths, duplicate
+names, encrypted entries, links, devices, malformed ZIPs, oversized members,
+and more than one root `session.jsonl` or `session.vN.jsonl`. Attachments are
+validated but not extracted. The selected immutable root is delegated to the
+shared uploader with parser `deepseek-harness-session-jsonl` and
+`--min-age-seconds 0`; the existing importer remains responsible for parsing
+and supported-version validation.
+
+Sessions below `subagents/` are separate conversations and are never merged or
+uploaded automatically. To import one intentionally, name its exact archive
+member in a separate run:
+
+```bash
+python3 /absolute/path/to/ai-memory-hub/tools/import_deepseek_harness_export.py \
+  /absolute/path/to/dsh-session-<SESSION_ID>.zip \
+  --member subagents/<SUBAGENT_ID>/session.v4.jsonl
+```
+
+The temporary directory is removed after success or failure. Retrying the same
+root or descendant is safe because hub ingestion deduplicates it, and only the
+shared uploader's bounded receipt is printed. There is nothing persistent to disable
+or remove: the adapter is an opt-in manual command. Keep
+`MEMORY_HUB_URL` and `MEMORY_API_TOKEN` only in the command environment.
+
+See the upstream [DeepSeek Harness export documentation](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/session-query/session-log-export/README.md).
+
+## Hermes Agent
+
+This explicit export-and-upload recipe was checked with Hermes Agent 0.22.5.
+Hermes stores current sessions in `~/.hermes/state.db`; never copy that database,
+its `-wal` file, or its `-shm` file. Exit or otherwise end the intended session,
+find its ID with `hermes sessions list`, then run:
+
+```bash
+python3 /absolute/path/to/ai-memory-hub/tools/import_hermes_session.py \
+  --session-id <SESSION_ID>
+```
+
+Add `--redact` to ask Hermes to scrub recognized API keys, tokens, and
+credentials from the exported copy before upload. For an explicit batch of
+ended sessions, use an upstream ended-session age filter instead of an
+unfiltered database export:
+
+```bash
+python3 /absolute/path/to/ai-memory-hub/tools/import_hermes_session.py \
+  --ended-older-than 2d --redact
+```
+
+The adapter creates a private temporary directory, installs cleanup before it
+runs `hermes sessions export`, and deletes the JSONL after success or failure.
+It invokes only the supported Hermes export command, suppresses its output, and
+then delegates the immutable artifact to the shared uploader with parser
+`hermes-session-jsonl` and `--min-age-seconds 0`. The existing importer retains
+single- and multi-session boundaries. Missing or invalid IDs, failed or empty
+exports, files over 20 MB, invalid envelopes, and network failures are refused
+without printing export content or credentials. Safe retries use normal hub
+deduplication and emit only the uploader's bounded receipt.
+
+There is nothing persistent to disable or remove: both forms are opt-in manual
+commands. Keep `MEMORY_HUB_URL` and `MEMORY_API_TOKEN` only in the command
+environment. See the upstream [Hermes session guide](https://github.com/NousResearch/hermes-agent/blob/v0.22.5/website/docs/user-guide/sessions.md).
+
 ## OpenClaw
 
 This safety boundary was checked against OpenClaw 2026.10.7. Current OpenClaw

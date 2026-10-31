@@ -23,6 +23,36 @@ def test_import_hook_guide_pins_clients_and_shared_uploader_contract() -> None:
     assert "Remove" in guide
 
 
+def test_deepseek_harness_recipe_is_bounded_explicit_and_reversible() -> None:
+    guide = (_ROOT / "docs" / "import_hooks.md").read_text(encoding="utf-8")
+    section = guide.split("## DeepSeek Harness", 1)[1].split(
+        "## Failure handling", 1
+    )[0]
+
+    assert "formats 0 through 4" in section
+    assert "tools/import_deepseek_harness_export.py" in section
+    assert "deepseek-harness-session-jsonl" in section
+    assert "--member" in section
+    assert "subagents/" in section
+    assert "path traversal" in section
+    assert "nothing persistent to disable" in section
+
+
+def test_hermes_recipe_uses_private_supported_export_and_cleanup() -> None:
+    guide = (_ROOT / "docs" / "import_hooks.md").read_text(encoding="utf-8")
+    section = guide.split("## Hermes Agent", 1)[1].split("## Failure handling", 1)[0]
+
+    assert "0.22.5" in section
+    assert "tools/import_hermes_session.py" in section
+    assert "hermes-session-jsonl" in section
+    assert "--session-id" in section
+    assert "--ended-older-than" in section
+    assert "--redact" in section
+    assert "state.db" in section
+    assert "temporary" in section
+    assert "nothing persistent to disable" in section
+
+
 def test_openclaw_recipe_separates_current_storage_from_legacy_jsonl() -> None:
     guide = (_ROOT / "docs" / "import_hooks.md").read_text(encoding="utf-8")
     section = guide.split("## OpenClaw", 1)[1].split("## Failure handling", 1)[0]
