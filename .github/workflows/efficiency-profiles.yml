@@ -1,0 +1,85 @@
+name: efficiency-profiles
+
+on:
+  schedule:
+    - cron: "23 3 * * 6"
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Synthetic corpus profile
+        required: true
+        type: choice
+        default: small
+        options:
+          - small
+          - medium
+          - large
+      corpus_limit:
+        description: Conversations to ingest per concurrency level
+        required: true
+        type: number
+        default: 128
+      query_requests:
+        description: Search and ask requests per concurrency level
+        required: true
+        type: number
+        default: 32
+      concurrency_levels:
+        description: Comma-separated worker levels
+        required: true
+        type: string
+        default: "1,4,16,32"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: efficiency-profiles-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  local-profile:
+    name: Local Efficiency Profile
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      EFFICIENCY_PROFILE: ${{ inputs.profile || 'small' }}
+      EFFICIENCY_CORPUS_LIMIT: ${{ inputs.corpus_limit || 128 }}
+      EFFICIENCY_QUERY_REQUESTS: ${{ inputs.query_requests || 32 }}
+      EFFICIENCY_CONCURRENCY: ${{ inputs.concurrency_levels || '1,4,16,32' }}
+      PYTHONHASHSEED: "0"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Generate efficiency reports
+        run: |
+          uv run python tools/run_efficiency_reports.py \
+            --output-dir reports/efficiency \
+            --profile "$EFFICIENCY_PROFILE" \
+            --corpus-limit "$EFFICIENCY_CORPUS_LIMIT" \
+            --query-requests "$EFFICIENCY_QUERY_REQUESTS" \
+            --concurrency "$EFFICIENCY_CONCURRENCY"
+
+      - name: Upload efficiency reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: efficiency-reports-${{ github.run_id }}-${{ github.run_attempt }}
+          path: reports/efficiency/*.json
+          if-no-files-found: error
+          retention-days: 30

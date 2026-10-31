@@ -5,7 +5,9 @@ import pytest
 from memory.benchmarks.concurrency_profiles import assert_thresholds, run_benchmark
 
 
-def test_concurrency_profiles_complete_insert_search_and_ask_without_credentials() -> None:
+def test_concurrency_profiles_complete_insert_search_and_ask_without_credentials(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     report = run_benchmark(
         concurrency_levels=(1, 2),
         query_requests=4,
@@ -24,6 +26,8 @@ def test_concurrency_profiles_complete_insert_search_and_ask_without_credentials
     for profile in report["profiles"]:
         assert profile["result_counts"]["stored_conversations"] == 8
         assert profile["result_counts"]["stored_after_failed_request"] == 0
+        assert profile["result_counts"]["audit_write_attempts"] >= 16
+        assert profile["result_counts"]["audit_write_failures"] >= 0
         assert profile["result_counts"]["vector_rows"] == 16
         assert profile["result_counts"]["search_results"] >= 1
         assert profile["result_counts"]["ask_citations"] >= 1
@@ -40,6 +44,7 @@ def test_concurrency_profiles_complete_insert_search_and_ask_without_credentials
     report["profiles"][0]["operations"]["ask"]["failed"] = 1
     with pytest.raises(AssertionError, match="failure rate"):
         assert_thresholds(report)
+    assert "Audit event persistence failed" not in caplog.text
 
 
 @pytest.mark.parametrize(
