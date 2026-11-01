@@ -238,8 +238,11 @@ IMPORTER_COMPATIBILITY: tuple[ImporterCompatibility, ...] = (
         "Successful share response with messages under `data.biz_data`.",
         (Fixture.DEEPSEEK_SHARE,),
         (FocusedTest.DEEPSEEK_SHARE,),
-        "Account history, search snippets, and unrelated browser-extension JSON.",
-        "Copy reviewed visible text into a speaker-labelled file and use `manual`.",
+        "Account data ZIP/JSON, search snippets, and unrelated browser-extension JSON.",
+        (
+            "Create a public share response, or copy reviewed visible text into a "
+            "speaker-labelled file and use `manual`."
+        ),
     ),
     ImporterCompatibility(
         ImporterId.DROID_EXEC_JSON,

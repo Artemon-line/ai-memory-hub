@@ -430,13 +430,11 @@ the `opencode-session-json` importer. See the current
 ## DeepSeek
 
 DeepSeek web conversations are handled one at a time; the hub does not scrape
-your account or browser.
+your account or browser. As verified on 2026-11-01, the web UI offered a public
+share for an individual conversation and a separate account-wide **Download all
+data** ZIP, but no native per-conversation JSON download.
 
-If DeepSeek shows **Export as JSON** for the open conversation, download that
-file and check that it contains `data.biz_data`. Give it to your agent and use
-the `deepseek-share-json` importer.
-
-If the downloaded JSON has a different shape, use the supported share method:
+Use the supported public-share method:
 
 1. Open the conversation in DeepSeek.
 2. Create a share link for the messages you want to import.
@@ -451,7 +449,23 @@ curl -fsS \
 
 Delete or disable the share link afterwards if you no longer need it. This
 importer expects DeepSeek's share response, whose JSON contains
-`data.biz_data`; unrelated browser-extension JSON formats are not interchangeable.
+`data.biz_data`.
+
+The account-wide ZIP is a different, unsupported contract. Its root contains
+`user.json` and `conversations.json`; the latter is an array of conversations
+with `id`, `title`, `inserted_at`, `updated_at`, and a parent/child `mapping`.
+Mapping nodes contain `message` objects with timestamps, model metadata, and
+`REQUEST`, `RESPONSE`, `FILE`, or `SEARCH` fragments. Regenerations appear as
+nodes with multiple children. The ZIP can therefore contain branches and
+attachments that the flat public-share response does not expose in the same
+envelope. Account-export support remains tracked separately in
+[#197](https://github.com/Artemon-line/ai-memory-hub/issues/197); do not pass the
+ZIP or its `conversations.json` to `deepseek-share-json`.
+
+DeepSeek Harness is also separate: it produces versioned session JSONL rather
+than DeepSeek web account data. Third-party browser extensions may use still
+other JSON shapes. Neither Harness nor extension output is accepted by
+`deepseek-share-json`, and filenames alone are never used to infer a parser.
 
 ### DeepSeek Harness
 

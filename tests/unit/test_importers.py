@@ -1575,6 +1575,23 @@ def test_deepseek_share_json_rejects_invalid_exports(text: str, message: str) ->
         DeepSeekShareJsonImporter().import_text(text)
 
 
+def test_deepseek_share_json_rejects_account_export_with_actionable_safe_error() -> None:
+    text = (_FIXTURES / "deepseek_account_export_shape_synthetic.json").read_text(
+        encoding="utf-8"
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "account data exports are not supported by deepseek-share-json; "
+            "use a public share-content response containing data.biz_data"
+        ),
+    ) as exc_info:
+        DeepSeekShareJsonImporter().import_text(text)
+
+    assert "Synthetic" not in str(exc_info.value)
+
+
 def test_opencode_session_json_fixture_maps_text_and_provenance() -> None:
     text = (_FIXTURES / "opencode_session_anonymized.json").read_text(encoding="utf-8")
 

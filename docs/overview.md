@@ -491,14 +491,19 @@ records fail with their physical line number. Multipart archive upload remains
 outside this importer contract.
 
 This format is distinct from `deepseek-share-json`, which consumes the public
-DeepSeek chat share-content response. A future DeepSeek account-history CSV
-importer is tracked separately; neither format should be passed to the Harness
-session importer.
+DeepSeek chat share-content response. DeepSeek web's account-wide **Download
+all data** ZIP contains `user.json` plus graph-shaped `conversations.json` and
+is tracked separately in [#197](https://github.com/Artemon-line/ai-memory-hub/issues/197).
+No native per-conversation JSON download was present in the web UI verified on
+2026-11-01. Account data, public-share JSON, third-party extension formats, and
+Harness session JSONL are not interchangeable.
 
 For a public DeepSeek share link, save the response from its share-content API
 as JSON, then pass that file to `deepseek-share-json`. The importer keeps request
 and response text, represents file-only turns by their attachment names, and
-does not copy search-result snippets into memory. For example:
+does not copy search-result snippets into memory. It rejects the account-wide
+export with a non-content-echoing error that directs users back to the public
+share response. For example:
 
 ```bash
 curl -fsS \
