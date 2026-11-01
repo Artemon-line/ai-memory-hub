@@ -2735,11 +2735,10 @@ the <code>opencode-session-json</code> importer. See the current
 <a href="https://opencode.ai/v2/docs/cli/commands/">OpenCode CLI commands</a>.</p>
 <h2 id="deepseek">DeepSeek</h2>
 <p>DeepSeek web conversations are handled one at a time; the hub does not scrape
-your account or browser.</p>
-<p>If DeepSeek shows <strong>Export as JSON</strong> for the open conversation, download that
-file and check that it contains <code>data.biz_data</code>. Give it to your agent and use
-the <code>deepseek-share-json</code> importer.</p>
-<p>If the downloaded JSON has a different shape, use the supported share method:</p>
+your account or browser. As verified on 2026-11-01, the web UI offered a public
+share for an individual conversation and a separate account-wide <strong>Download all
+data</strong> ZIP, but no native per-conversation JSON download.</p>
+<p>Use the supported public-share method:</p>
 <ol>
 <li>Open the conversation in DeepSeek.</li>
 <li>Create a share link for the messages you want to import.</li>
@@ -2752,7 +2751,21 @@ the <code>deepseek-share-json</code> importer.</p>
 </code></pre></div>
 <p>Delete or disable the share link afterwards if you no longer need it. This
 importer expects DeepSeek's share response, whose JSON contains
-<code>data.biz_data</code>; unrelated browser-extension JSON formats are not interchangeable.</p>
+<code>data.biz_data</code>.</p>
+<p>The account-wide ZIP is a different, unsupported contract. Its root contains
+<code>user.json</code> and <code>conversations.json</code>; the latter is an array of conversations
+with <code>id</code>, <code>title</code>, <code>inserted_at</code>, <code>updated_at</code>, and a parent/child <code>mapping</code>.
+Mapping nodes contain <code>message</code> objects with timestamps, model metadata, and
+<code>REQUEST</code>, <code>RESPONSE</code>, <code>FILE</code>, or <code>SEARCH</code> fragments. Regenerations appear as
+nodes with multiple children. The ZIP can therefore contain branches and
+attachments that the flat public-share response does not expose in the same
+envelope. Account-export support remains tracked separately in
+<a href="https://github.com/Artemon-line/ai-memory-hub/issues/197">#197</a>; do not pass the
+ZIP or its <code>conversations.json</code> to <code>deepseek-share-json</code>.</p>
+<p>DeepSeek Harness is also separate: it produces versioned session JSONL rather
+than DeepSeek web account data. Third-party browser extensions may use still
+other JSON shapes. Neither Harness nor extension output is accepted by
+<code>deepseek-share-json</code>, and filenames alone are never used to infer a parser.</p>
 <h3 id="deepseek-harness_1">DeepSeek Harness</h3>
 <p>In the Harness web interface, open the session and choose <strong>Download session
 log</strong>, or enter <code>/export</code>. Extract the downloaded
