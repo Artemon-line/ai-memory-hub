@@ -6,6 +6,8 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Raised the optional OAuth dependency floor to `joserfc>=1.7.6` and locked
+  `1.7.7` to address GHSA-9pg5-8c7x-5hfx.
 - Reconciled historical Markdown plans against shipped code and tests, moved
   remaining work into GitHub epics, and simplified public documentation around
   current features, evidence-based project status, and issue-backed planning.
