@@ -1,5 +1,7 @@
 # Real-Client MCP Smoke Plan
 
+> Historical plan. Remaining client validation is tracked in [#350](https://github.com/Artemon-line/ai-memory-hub/issues/350).
+
 ## Goal
 
 Run a CI smoke lane that launches real agent CLIs against ai-memory-hub MCP and

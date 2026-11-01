@@ -12,7 +12,7 @@ inventory for GitHub Pages readers.
 | MCP server | Memory validate, insert, search, retrieve, ask, fact, profile, review, and project tools plus health/search/timeline-style resources. | [Agent integration](agents.md) |
 | CLI | `aim ingest`, `aim search`, `aim retrieve`, `aim ask`, `aim serve`, `aim health`, config inspection, and storage checks. | [Technical overview](overview.md#cli) |
 | Containers | Non-root container image, readiness and liveness checks, and provider-specific compose examples. | [Storage provider examples](storage_provider_examples.md) |
-| Docs site | GitHub Pages build through MkDocs Material. | [Documentation map](plans.md) |
+| Docs site | GitHub Pages build through MkDocs Material. | [Documentation and planning](plans.md) |
 
 ## Memory Capabilities
 

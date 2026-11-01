@@ -1,5 +1,7 @@
 # OIDC And PKCE Hardening Plan
 
+> Historical plan. Remaining work is tracked in [#347](https://github.com/Artemon-line/ai-memory-hub/issues/347).
+
 ## Goal
 
 Raise the Connect UI Google sign-in flow from early functional OAuth/OIDC support

@@ -1,5 +1,7 @@
 # Release, Container, and Docs Publishing Plan
 
+> Historical plan. Remaining work is tracked in [#345](https://github.com/Artemon-line/ai-memory-hub/issues/345).
+
 Plan for keeping the project container image aligned with the codebase, publishing Docker Hub
 images for every GitHub release, and generating GitHub Pages from README/docs Markdown.
 
@@ -52,7 +54,7 @@ Container contract:
 
 CLI dependency:
 
-- [x] Implement the serve command tracked in `docs/cli_implementation_plan.md`.
+- [x] Implement the `aim serve` command documented in `docs/overview.md`.
 - [x] Preferred final container command:
 
 ```bash

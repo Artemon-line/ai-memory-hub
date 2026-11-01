@@ -1,5 +1,7 @@
 # Temporal Memory Index Plan
 
+> Historical plan. Remaining work is tracked in [#346](https://github.com/Artemon-line/ai-memory-hub/issues/346).
+
 ## Context
 
 The hub should store memory as timestamped events, not as a hidden user-profile

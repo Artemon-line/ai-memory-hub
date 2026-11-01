@@ -1,5 +1,7 @@
 # MCP Utility Compliance Plan
 
+> Historical plan. Remaining client-driven work is tracked in [#350](https://github.com/Artemon-line/ai-memory-hub/issues/350).
+
 ## Goal
 
 Add and maintain MCP server protocol features that improve client compatibility

@@ -1,5 +1,7 @@
 # Memory Quality And Fact Layer Plan
 
+> Historical plan. Remaining intelligence and UI work is tracked in [#351](https://github.com/Artemon-line/ai-memory-hub/issues/351) and [#352](https://github.com/Artemon-line/ai-memory-hub/issues/352).
+
 ## Goal
 
 Make ai-memory-hub better at answering practical memory questions by moving beyond raw chunk retrieval into confidence-aware answers, compact provenance, deduplicated results, extracted facts, and explicit correction workflows.

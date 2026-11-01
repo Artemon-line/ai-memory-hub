@@ -1,5 +1,7 @@
 # App-Level Memory Encryption Plan
 
+> Historical design plan. Implementation is tracked in [#348](https://github.com/Artemon-line/ai-memory-hub/issues/348).
+
 ## Why This Is P0
 
 ai-memory-hub protects memory access through API auth, owner/project scoping,

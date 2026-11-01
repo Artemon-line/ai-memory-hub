@@ -1,5 +1,7 @@
 # Plugin Readiness Plan
 
+> Historical plan. Implementation is tracked in [#350](https://github.com/Artemon-line/ai-memory-hub/issues/350).
+
 This plan tracks the work needed to make ai-memory-hub usable as a Codex-ready
 plugin. The hub remains the local-first memory service; the plugin becomes the
 installable wrapper for setup guidance, MCP wiring, skills, onboarding, and the
@@ -289,8 +291,8 @@ Done when:
   - storage provider unavailable
   - embeddings unavailable
   - degraded fallback active
-- [ ] Link to `mcp_plan.md`, `mcp_client_smoke_plan.md`, and
-  `bearer_api_key_auth_plan.md` for deep details.
+- [ ] Link to `agents.md`, `mcp_client_smoke_plan.md`, `connect_ui.md`, and
+  `external_oidc.md` for deep details.
 - [ ] Keep examples in bash style.
 
 Done when:
@@ -392,8 +394,9 @@ Done when:
 ## Related Docs
 
 - Agent integration: `agents.md`
-- MCP plan: `mcp_plan.md`
+- Agent and MCP contract: `agents.md`
 - MCP client smoke plan: `mcp_client_smoke_plan.md`
-- MCP authorization compliance plan: `bearer_api_key_auth_plan.md`
+- Connect and OAuth setup: `connect_ui.md`
+- External OIDC setup: `external_oidc.md`
 - Explicit memory save intent plan: `improvements/explicit_memory_save_intent_plan.md`
 - First release readiness plan: `first_release_readiness_plan.md`

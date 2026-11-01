@@ -6,6 +6,9 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Reconciled historical Markdown plans against shipped code and tests, moved
+  remaining work into GitHub epics, and simplified public documentation around
+  current features, evidence-based project status, and issue-backed planning.
 - Standardized benchmark latency distributions and separated cold first-call
   measurements from warm p50/p95/p99 samples while preserving existing report
   fields.
