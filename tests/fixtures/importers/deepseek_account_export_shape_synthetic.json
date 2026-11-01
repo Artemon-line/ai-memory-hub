@@ -1,0 +1,117 @@
+[
+  {
+    "id": "synthetic-linear-conversation",
+    "title": "Synthetic linear conversation",
+    "inserted_at": 1793500000,
+    "updated_at": 1793500060,
+    "mapping": {
+      "root": {
+        "id": "root",
+        "parent": null,
+        "children": ["user-1"],
+        "message": null
+      },
+      "user-1": {
+        "id": "user-1",
+        "parent": "root",
+        "children": ["assistant-1"],
+        "message": {
+          "fragments": [
+            {
+              "type": "REQUEST",
+              "content": "Synthetic request."
+            }
+          ],
+          "inserted_at": 1793500001,
+          "model": "synthetic-model"
+        }
+      },
+      "assistant-1": {
+        "id": "assistant-1",
+        "parent": "user-1",
+        "children": [],
+        "message": {
+          "fragments": [
+            {
+              "type": "RESPONSE",
+              "content": "Synthetic response."
+            }
+          ],
+          "inserted_at": 1793500002,
+          "model": "synthetic-model"
+        }
+      }
+    }
+  },
+  {
+    "id": "synthetic-branched-conversation",
+    "title": "Synthetic branched conversation",
+    "inserted_at": 1793500100,
+    "updated_at": 1793500200,
+    "mapping": {
+      "root": {
+        "id": "root",
+        "parent": null,
+        "children": ["user-1"],
+        "message": null
+      },
+      "user-1": {
+        "id": "user-1",
+        "parent": "root",
+        "children": ["assistant-1", "assistant-2"],
+        "message": {
+          "fragments": [
+            {
+              "type": "REQUEST",
+              "content": "Synthetic request with attachment."
+            },
+            {
+              "type": "FILE",
+              "files": [
+                {
+                  "file_name": "synthetic.txt"
+                }
+              ]
+            }
+          ],
+          "inserted_at": 1793500101,
+          "model": "synthetic-model"
+        }
+      },
+      "assistant-1": {
+        "id": "assistant-1",
+        "parent": "user-1",
+        "children": [],
+        "message": {
+          "fragments": [
+            {
+              "type": "RESPONSE",
+              "content": "Synthetic first branch."
+            }
+          ],
+          "inserted_at": 1793500102,
+          "model": "synthetic-model"
+        }
+      },
+      "assistant-2": {
+        "id": "assistant-2",
+        "parent": "user-1",
+        "children": [],
+        "message": {
+          "fragments": [
+            {
+              "type": "SEARCH",
+              "results": []
+            },
+            {
+              "type": "RESPONSE",
+              "content": "Synthetic regenerated branch."
+            }
+          ],
+          "inserted_at": 1793500103,
+          "model": "synthetic-model"
+        }
+      }
+    }
+  }
+]

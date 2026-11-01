@@ -8,6 +8,15 @@ from memory.importers.base import ConversationImporter
 
 _MAX_INPUT_BYTES = 20_000_000
 _ROLES = {"USER": "user", "ASSISTANT": "assistant"}
+_ACCOUNT_EXPORT_ERROR = (
+    "DeepSeek account data exports are not supported by deepseek-share-json; "
+    "use a public share-content response containing data.biz_data"
+)
+_UNSUPPORTED_ENVELOPE_ERROR = (
+    "DeepSeek share JSON has an unsupported envelope; use a public share-content "
+    "response containing data.biz_data, while DeepSeek Harness and third-party JSON "
+    "require their own importer"
+)
 
 
 class DeepSeekShareJsonImporter(ConversationImporter):
@@ -73,15 +82,35 @@ class DeepSeekShareJsonImporter(ConversationImporter):
 
 
 def _conversation_data(document: Any) -> dict[str, Any]:
+    if _is_account_data_export(document):
+        raise ValueError(_ACCOUNT_EXPORT_ERROR)
     if not isinstance(document, dict):
-        raise ValueError("DeepSeek share JSON must be an object")
+        raise ValueError(_UNSUPPORTED_ENVELOPE_ERROR)
     try:
         data = document["data"]["biz_data"]
     except (KeyError, TypeError) as exc:
-        raise ValueError("DeepSeek share JSON has an unsupported envelope") from exc
+        raise ValueError(_UNSUPPORTED_ENVELOPE_ERROR) from exc
     if not isinstance(data, dict):
-        raise ValueError("DeepSeek share JSON has an unsupported envelope")
+        raise ValueError(_UNSUPPORTED_ENVELOPE_ERROR)
     return data
+
+
+def _is_account_data_export(document: Any) -> bool:
+    if isinstance(document, list):
+        conversations = document
+    elif isinstance(document, dict) and isinstance(document.get("conversations"), list):
+        conversations = document["conversations"]
+    elif isinstance(document, dict):
+        conversations = [document]
+    else:
+        return False
+    return bool(conversations) and all(
+        isinstance(conversation, dict)
+        and isinstance(conversation.get("mapping"), dict)
+        and "inserted_at" in conversation
+        and "updated_at" in conversation
+        for conversation in conversations
+    )
 
 
 def _message_text(fragments: Any, *, index: int) -> str:

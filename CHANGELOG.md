@@ -6,6 +6,10 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Verified that DeepSeek web exposes per-conversation public shares and a
+  separate account-wide data ZIP, not a native per-conversation JSON download;
+  documented the observed contracts and added privacy-safe diagnostics that
+  reject account exports passed to `deepseek-share-json`.
 - Raised the optional OAuth dependency floor to `joserfc>=1.7.6` and locked
   `1.7.7` to address GHSA-9pg5-8c7x-5hfx.
 - Reconciled historical Markdown plans against shipped code and tests, moved

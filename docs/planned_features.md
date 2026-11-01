@@ -9,8 +9,6 @@ classification.
 
 - Multi-profile efficiency and operational hardening is tracked in
   [#344](https://github.com/Artemon-line/ai-memory-hub/issues/344).
-- DeepSeek per-conversation export validation is tracked in
-  [#256](https://github.com/Artemon-line/ai-memory-hub/issues/256).
 - Release governance [#345](https://github.com/Artemon-line/ai-memory-hub/issues/345),
   provenance [#346](https://github.com/Artemon-line/ai-memory-hub/issues/346),
   security hardening [#347](https://github.com/Artemon-line/ai-memory-hub/issues/347),

@@ -469,6 +469,23 @@ def test_export_import_cli_ingests_anonymized_fixtures(
     assert all(payload["metadata"]["importer"] == importer for payload in captured_payloads)
 
 
+def test_deepseek_share_cli_rejects_account_export_without_echoing_content(capsys) -> None:
+    fixture = (
+        Path(__file__).parents[1]
+        / "fixtures"
+        / "importers"
+        / "deepseek_account_export_shape_synthetic.json"
+    )
+
+    exit_code = cli.main(["import", "deepseek-share-json", str(fixture), "--json"])
+
+    body = json.loads(capsys.readouterr().out)
+    assert exit_code == 1
+    assert body["error_code"] == "validation_error"
+    assert "account data exports are not supported" in body["error_message"]
+    assert "Synthetic" not in body["error_message"]
+
+
 def test_import_latest_non_interactive_json_uses_registered_pipeline(
     capsys, monkeypatch, tmp_path
 ) -> None:

@@ -700,6 +700,27 @@ def test_multipart_import_supports_registered_export_parsers(
     assert response.json()["parser"] == parser
 
 
+def test_multipart_deepseek_share_rejects_account_export_without_echoing_content() -> None:
+    client, _, _ = _import_client()
+    fixture_name = "deepseek_account_export_shape_synthetic.json"
+
+    response = client.post(
+        "/memory/import",
+        data={"parser": "deepseek-share-json"},
+        files={
+            "file": (
+                fixture_name,
+                (_IMPORT_FIXTURES / fixture_name).read_bytes(),
+                "application/json",
+            )
+        },
+    )
+
+    assert response.status_code == 400
+    assert "account data exports are not supported" in response.text
+    assert "Synthetic" not in response.text
+
+
 def test_multipart_import_supports_manual_plain_text() -> None:
     client, _, _ = _import_client()
     response = client.post(
