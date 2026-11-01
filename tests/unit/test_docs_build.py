@@ -48,3 +48,16 @@ def test_published_docs_default_to_releases_and_keep_main_experimental() -> None
     assert 'mike deploy --push --title "main (experimental)" main' in workflow
     assert 'mike set-default --push latest' in workflow
     assert "experimental,\n    unreleased, or untested behavior" in warning
+
+
+def test_docs_flag_and_version_banner_markup_are_browser_safe() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+    config = Path("mkdocs.yml").read_text(encoding="utf-8")
+    outdated_script = Path(
+        "docs/overrides/partials/javascripts/outdated.html"
+    ).read_text(encoding="utf-8")
+
+    assert 'alt="Ukraine flag" width="18" height="14"' in readme
+    assert '<svg xmlns="http://www.w3.org/2000/svg"' in config
+    assert 'src="docs/assets/flags/ua.svg"' not in config
+    assert 'new URL("{{ base_url }}",location)' in outdated_script
