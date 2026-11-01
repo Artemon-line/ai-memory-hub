@@ -47,7 +47,10 @@ class CopilotActivityCsvImporter(ConversationImporter):
             if author not in _ROLES:
                 raise ValueError(f"Copilot activity row {index + 2} has unknown author: {author}")
             if not message.strip():
-                raise ValueError(f"Copilot activity row {index + 2} has an empty message")
+                # Microsoft emits an empty Human row for attachment-only turns because
+                # the activity CSV does not include the attachment itself. Keep the
+                # surrounding textual conversation instead of rejecting the export.
+                continue
             timestamp = _parse_timestamp(row.get("Time") or "", row=index + 2)
             if conversation not in grouped:
                 order.append(conversation)
