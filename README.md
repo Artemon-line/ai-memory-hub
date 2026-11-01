@@ -452,7 +452,7 @@ Dedicated to my little brother,
 
 Andrii Hladenko.
 
-Вічна Слава Героям. ![Ukraine flag](docs/assets/flags/ua.svg)
+Вічна Слава Героям. <img src="docs/assets/flags/ua.svg" alt="Ukraine flag" width="18" height="14">
 
 ## License
 
