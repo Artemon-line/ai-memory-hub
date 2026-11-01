@@ -1,5 +1,7 @@
 # Google OAuth Connect UI Plan
 
+> Historical plan. Remaining security work is tracked in [#347](https://github.com/Artemon-line/ai-memory-hub/issues/347).
+
 ## Goal
 
 Provide a simple first-run UI that helps users connect ai-memory-hub to MCP

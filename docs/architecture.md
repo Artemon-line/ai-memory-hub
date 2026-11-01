@@ -5,12 +5,11 @@ ai-memory-hub is a local-first memory engine built around a unified JSON schema,
 Related docs:
 - Project overview: `../README.md`
 - Agent integration: `agents.md`
-- Roadmap and priority order: `roadmap.md`
-- Prioritized implementation plan: `prioritized_feature_plan.md`
+- Current status and remaining programs: `project_status.md`
+- GitHub issue-backed planning: `plans.md`
 - MCP client smoke testing: `mcp_client_smoke_plan.md`
-- Deterministic ingestion details: `deterministic_ingestion_plan.md`
 - Storage/provider details: `storage_agnostic_byoa_plan.md`
-- MCP contract details: `mcp_plan.md`
+- MCP and agent contract: `agents.md`
 - MCP utility compliance: `mcp_utility_compliance_plan.md`
 
 ## Current Status
@@ -48,10 +47,11 @@ Archive/restore remains a near-term retention and storage-optimization feature;
 when it ships, it should be implemented as a visibility state over preserved
 history rather than as history deletion.
 
-Planned or partial:
-
-- Retrieval precision improvements, including similarity thresholds, hybrid keyword/vector search, and metadata-aware reranking, are partially implemented. Representative-data tuning remains planned in `improvements/retrieval_precision_plan.md`.
-- Claude MCP smoke profile, negative client payload cases, explicit E2E retrieve checks, platform-specific importers, CLI commands, summaries, UI, SDKs, framework-specific agent examples, graph memory, shared memory, plugins, and optional cloud sync remain roadmap work.
+Remaining programs are tracked through the [roadmap](roadmap.md) and linked
+GitHub epics. They include release hardening, exact agent/model provenance,
+remaining import compatibility, plugin packaging, the memory workspace and SDKs,
+advanced memory lifecycle controls, application encryption, and optional graph
+provider expansion.
 
 ## High-Level System Diagram
 
@@ -416,4 +416,5 @@ interfaces:
   api: true
 ```
 
-See `prioritized_feature_plan.md` for the current implementation priority order for unimplemented features.
+See `project_status.md` for the current implementation classification and
+`plans.md` for the issue-backed planning policy.

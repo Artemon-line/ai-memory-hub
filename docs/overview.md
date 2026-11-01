@@ -59,8 +59,8 @@ supported external formats into that shared schema before using the same hub
 ingestion path. Manual speaker-labelled transcripts are supported;
 export-specific capture/import adapters are tracked in the roadmap. Browser
 extension capture is supported as a separate extension-repo workflow that posts
-normalized web chat payloads to the existing insert API; see the
-[browser extension capture plan](browser_extension_capture_plan.md).
+normalized web chat payloads to the existing insert API. Remaining capture
+compatibility work is tracked in the [roadmap](roadmap.md).
 
 ## API Endpoints
 
@@ -1598,8 +1598,7 @@ A Bruno integration layer provides black-box local and CI smoke tests for the
 live API/MCP surface against a running server and configured metadata/vector
 stores. The Bruno lane uploads HTML and JUnit artifacts and publishes JUnit
 results through GitHub Actions test summaries. Pytest CI jobs also emit JUnit
-XML artifacts for unit/integration, E2E, and storage lanes. See the
-[Bruno integration test plan](bruno_integration_test_plan.md).
+XML artifacts for unit/integration, E2E, and storage lanes.
 
 ## Project Structure
 
@@ -1626,14 +1625,11 @@ tests/          unit, integration, and end-to-end tests
 
 - [Architecture](architecture.md)
 - [Agent integration](agents.md)
+- [Project status](project_status.md)
 - [Roadmap](roadmap.md)
-- [Release, container, and docs publishing plan](release_container_docs_plan.md)
-- [First release readiness plan](first_release_readiness_plan.md)
+- [Documentation and planning](plans.md)
 - [Project promotion plan](project_promotion_plan.md)
-- [Bruno integration test plan](bruno_integration_test_plan.md)
-- [Browser extension capture plan](browser_extension_capture_plan.md)
 - [Observability, logging, and telemetry plan](observability_logging_telemetry_plan.md)
 - [Recurring codebase cleanup plan](recurring_codebase_cleanup_plan.md)
-- [Bearer/API-key auth plan](bearer_api_key_auth_plan.md)
 - [Project workspace collaboration plan](project_workspace_collaboration_plan.md)
-- [Improvement plans](improvements.md)
+- [Planned features](planned_features.md)

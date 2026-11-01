@@ -1,5 +1,8 @@
 # Storage-Agnostic BYOA Plan (Adjusted)
 
+> The shipped provider baseline is documented here. Remaining graph/provider
+> expansion is tracked in [#353](https://github.com/Artemon-line/ai-memory-hub/issues/353).
+
 Plan for evolving `ai-memory-hub` from SQLite-first persistence to a storage-agnostic
 architecture with explicit provider capabilities, schema compatibility checks, vector dimensionality guards,
 controlled fallback behavior, and dry-run support.

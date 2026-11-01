@@ -1,386 +1,70 @@
-# ai-memory-hub — roadmap
+# Roadmap
 
-Structured plan for a **local-first**, **deterministic**, **MCP-native** memory engine that unifies AI conversations into one searchable, 
-RAG-ready knowledge hub with **pluggable storage backends**.
+ai-memory-hub has completed its core local-first memory-service foundation. The
+roadmap now focuses on making that foundation easier to release, safer to
+operate, simpler to adopt from agent clients, and more useful as a memory
+product without weakening immutable history, authorization, provenance, or
+provider-neutral behavior.
 
-**How to use this doc:** work **phases in order** or parallelize **within** a phase when tasks are independent. 
-Each phase ends with a **milestone** you can demo or ship.
+GitHub owns roadmap scheduling and implementation detail:
 
-**Related docs:** 
-[Architecture](architecture.md) 
-[Agent integration](agents.md) 
-[Deterministic ingestion plan](deterministic_ingestion_plan.md) 
-[Storage-agnostic BYOA plan](storage_agnostic_byoa_plan.md) 
-[Browser extension capture plan](browser_extension_capture_plan.md)
-[Project overview](../README.md)
+- [All GitHub milestones](https://github.com/Artemon-line/ai-memory-hub/milestones)
+- [Current `1.0.1` milestone](https://github.com/Artemon-line/ai-memory-hub/milestone/1)
+- [Open roadmap epics](https://github.com/Artemon-line/ai-memory-hub/issues?q=is%3Aissue%20is%3Aopen%20%22%5BEpic%5D%22)
 
----
+Milestones answer *when a reviewed set of work is targeted*. Epics describe the
+larger outcome and its compatibility boundaries. Child issues should contain
+the PR-sized implementation work.
 
-## At a glance (humans)
+## Current Direction
 
-| Phase | Focus | Milestone (one line) |
-|-------|--------|----------------------|
-| 1 | Core MVP: MCP/API capture, normalize, store, search, retrieve | MCP tools/resources + HTTP `/memory/*` over SQLite + LanceDB |
-| 1.5 | Storage abstraction | Unified metadata/vector provider interfaces with local, hosted, and existing-stack backends |
-| 1.7 | App-level encryption | Canonical memory payloads are encrypted before local/self-hosted storage |
-| 2 | Multi-source capture/import adapters | One hub across platforms, including those without official exports (e.g. Copilot) |
-| 3 | Intelligence: summaries, topics, timelines, consolidation | Knowledge engine, not just storage |
-| 4 | UI & DX | Dashboard + SDKs + packaging |
-| 5 | Agent integration | LangGraph, Llama Stack, Assistants using MCP/API memory backend |
-| 6 | Advanced memory | Graphs, decay, shared memory, plugins |
-| 7 | Optional cloud | Encrypted sync, multi-device, backup (opt-in only) |
-
----
-
-## At a glance (agents)
+### Stabilize and release
 
-When planning or estimating work, treat phases as **ordered capability layers**:
-
-- **Phase 1** defines the minimum **pipeline**: **capture through MCP/API payloads** → **schema-first ingestion** → **unified schema** → **embeddings** → **vector search** → **HTTP** `/memory/search`, 
-`/memory/retrieve` + MCP `memory_*` tools/resources.
-- **Phase 1.5** promotes storage to a **first-class subsystem**: `VectorStore` interface → LanceDB/ChromaDB/Qdrant/Milvus/Weaviate/PGVector/MongoDB Atlas/Elasticsearch/OpenSearch/Redis/Pinecone/Turbopuffer/Vespa/Typesense/in-memory providers → deterministic startup checks → fallback behavior.
-- **Phase 1.7** adds app-level encryption for local and self-hosted deployments:
-canonical memory payloads are encrypted before metadata storage while auth,
-owner/project boundaries, search behavior, and storage-provider contracts remain
-stable.
-- **Phase 2** adds **platform-specific capture/import adapters** (Gemini Takeout, Copilot workarounds, Claude HTML, local LLM logs);
-**schema and storage stay stable** if normalization boundaries are respected.
-- Browser extension capture has a Phase 2-compatible hub contract:
-extension repos parse ChatGPT, Microsoft Copilot, Claude, Gemini, and similar
-web UIs, then post normalized payloads to `POST /memory/insert`.
-- **Phase 3** is **offline/batch intelligence** on top of stored chunks (summaries, clustering, timelines).
-- **Phase 4** is **presentation and distribution** (UI, SDKs, OpenAPI, pip).
-- **Phase 5** aligns with [agents.md](agents.md): external agent frameworks consume the same memory API/MCP backend with their choice of supported metadata and vector providers.
-- **Phases 6–7** are **extensions**; **local-first** remains default until Phase 7 is explicitly enabled.
+Complete repository governance, release rehearsal, security-boundary hardening,
+and the remaining verified import compatibility work. This is the shortest path
+from the implemented service to a repeatable, supportable release.
 
----
+- [Release governance and distribution #345](https://github.com/Artemon-line/ai-memory-hub/issues/345)
+- [OIDC, SQL, and exposure hardening #347](https://github.com/Artemon-line/ai-memory-hub/issues/347)
+- [Capture and import coverage #349](https://github.com/Artemon-line/ai-memory-hub/issues/349)
+- [Efficiency and operational hardening #344](https://github.com/Artemon-line/ai-memory-hub/issues/344)
 
-## Phase 1 — Core MVP (Minimum Viable Product)
+### Improve provenance and adoption
 
-**Goal:** A working memory engine with MCP/API capture, hub ingestion, storage,
-search, and retrieval.
+Preserve exact agent/model provenance, package the existing MCP surface for
+Codex, and make setup and failure recovery clear across supported clients.
 
-### 1.1 Ingestion (MCP/API-first for MVP)
+- [Agent provenance and temporal semantics #346](https://github.com/Artemon-line/ai-memory-hub/issues/346)
+- [Codex plugin and MCP client experience #350](https://github.com/Artemon-line/ai-memory-hub/issues/350)
 
-- [x] Schema-validated ingestion payload (`conversation_json` -> normalized runtime object)
-- [x] MCP tool ingestion (`memory_insert`)
-- [x] HTTP ingestion (`POST /memory/insert`)
+### Build the memory product
 
-- [x] Basic metadata capture (timestamps, roles, source)
-- [x] Chunking messages for embedding
+Add a user-facing workspace and supported SDKs, then expand cited and
+rebuildable intelligence over immutable source memories. Lifecycle controls
+must remain explicit, audited, and permission-aware.
 
-### 1.2 Normalization
+- [Memory workspace UI and SDKs #351](https://github.com/Artemon-line/ai-memory-hub/issues/351)
+- [Advanced intelligence and lifecycle #352](https://github.com/Artemon-line/ai-memory-hub/issues/352)
 
-- [x] Unified conversation schema
-- [ ] Message role normalization from non-conforming upstream sources
-- [ ] Basic topic tagging
+### Expand privacy and storage deliberately
 
-### 1.3 Storage
+Add opt-in application encryption and graph/provider capabilities only with
+migration, recovery, isolation, quality, and operational evidence.
 
-- [x] Vector store (LanceDB with in-memory fallback)
-- [x] Metadata DB (SQLite)
-- [x] Embedding pipeline (HTTP endpoint or local deterministic provider)
+- [App-level encryption and key operations #348](https://github.com/Artemon-line/ai-memory-hub/issues/348)
+- [Neo4j and provider expansion #353](https://github.com/Artemon-line/ai-memory-hub/issues/353)
 
-### 1.4 Query API
+## Roadmap Constraints
 
-- [x] `POST /memory/search` — semantic search
-- [x] `POST /memory/retrieve` — retrieve conversation by ID
-- [x] MCP `memory_search` and `memory_retrieve`
+Every milestone and epic must preserve:
 
-### 1.6 CLI (optional)
+- local-first operation and explicit opt-in for hosted or sync behavior;
+- immutable source-memory evidence and cited, rebuildable derived records;
+- owner, project, auth-scope, quarantine, and audit boundaries;
+- stable HTTP/MCP contracts or an explicit compatibility plan;
+- provider-neutral behavior, bounded fallback, and secret-safe diagnostics;
+- measurable quality, latency, storage, and model-cost guardrails.
 
-- [x] `aim ingest <file>`
-- [x] `aim search "<query>"`
-- [x] `aim retrieve <id>`
-- [x] `aim ask "<question>"`
-- [x] `aim serve`
-
-**Milestone:** Ingest via MCP/API, validate against unified schema, store in SQLite+vector DB, and retrieve via HTTP or MCP.
-
----
-
-## Phase 1.5 — Storage abstraction and provider expansion
-
-**Goal:** Make storage pluggable and keep every storage backend behind stable metadata and vector interfaces.
-
-### 1.5.1 Storage abstraction layer
-
-- [x] Define `VectorStore` interface:
-  - `insert(chunks)`
-  - `search(query_embedding, top_k)`
-  - `delete(ids)` for provider-level vector maintenance, not user-facing
-    destructive memory deletion in `v0.1.0-beta`
-  - `get_stats()`
-- [x] Move LanceDB implementation behind the interface
-- [x] Formalize in-memory implementation as a supported provider
-- [x] Keep metadata and vector storage boundaries explicit
-
-### 1.5.2 PGVector provider
-
-- [x] Configure PGVector through `storage.vector_providers.pgvector.url`
-- [x] Create vector table (for example, `memory_vectors`)
-- [x] Support cosine, L2, and inner product distance modes
-- [x] Add HNSW index creation
-- [x] Add deterministic startup checks:
-  - vector extension installed or installable (`CREATE EXTENSION vector`)
-  - embedding dimension matches configured provider
-  - schema version is compatible
-  - selected distance mode is supported
-- [x] Add fallback logic:
-  - if PGVector init fails, fallback to in-memory vectors when enabled
-  - if LanceDB init fails, fallback to in-memory vectors when enabled
-  - emit clear diagnostics when fallback changes runtime behavior
-
-### 1.5.3 Config changes
-
-- [x] `providers.vector_db: lancedb | chromadb | qdrant | milvus | weaviate | pgvector | mongodb_atlas | elasticsearch | opensearch | redis | pinecone | turbopuffer | vespa | typesense | memory`
-- [x] `providers.metadata_db: sqlite | postgres | mongodb`
-- [x] `storage.vector.allow_fallback: true`
-- [x] `storage.vector.distance: cosine | l2 | inner_product`
-
-### 1.5.4 Tests
-
-- [x] PGVector integration tests
-- [x] LanceDB parity tests
-- [x] In-memory parity tests
-- [x] Fallback tests
-- [x] Dry-run/startup validation tests
-
-**Milestone:** ai-memory-hub supports **LanceDB**, **PGVector**, and **in-memory** vector storage with identical search behavior at the API/MCP boundary.
-
----
-
-## Phase 1.7 - App-level encryption
-
-**Goal:** Protect canonical memory payloads in local and self-hosted storage
-when an attacker gets a database dump, persistent volume, backup archive, or
-storage credentials without the encryption master key.
-
-Use [App-level memory encryption plan](improvements/app_level_encryption_plan.md)
-as the source of truth.
-
-- [ ] Add disabled-by-default encryption config and fail-closed key loading.
-- [ ] Encrypt canonical conversation payloads before SQLite/Postgres metadata
-      writes.
-- [ ] Preserve legacy plaintext reads until explicit migration.
-- [ ] Decrypt only after auth, owner, and project checks pass.
-- [ ] Add CLI keygen, status, encrypt-existing, and rotation commands.
-- [ ] Document K3s/Helm secret wiring and encrypted backup guidance.
-- [ ] Add follow-up search-index text hardening for stronger privacy mode.
-
-**Milestone:** Raw metadata database access is no longer enough to read
-canonical memory payloads.
-
----
-
-## Phase 2 — Multi-source capture and import adapters
-
-**Goal:** Support multiple AI platforms with different capture and import requirements.
-
-PGVector makes large captured/imported sets more practical, but ingestion code should stay storage-agnostic. Each adapter emits normalized records; the configured storage backend handles persistence.
-
-### 2.1 Gemini
-
-- [ ] Google Takeout parser
-- [ ] Thread reconstruction
-
-### 2.2 Copilot (no official export — custom capture/import)
-
-Copilot does not provide a structured export comparable to ChatGPT. Capture/import must use one or more of the following strategies:
-
-- [x] **Manual paste importer** — user pastes a speaker-labelled chat; parser extracts roles and messages.
-- [x] **Copilot activity-history CSV importer** — group exported rows by conversation and restore chronological turns.
-- [x] **DeepSeek share JSON importer** — flatten request, response, and attachment fragments from public-share JSON.
-
-- [ ] **VS Code Copilot logs (optional)** — parse local `.jsonl` logs when available.
-
-- [ ] **Future: Copilot API capture** — if Microsoft exposes conversation-history APIs, add a dedicated capture adapter.
-
-### 2.3 Claude
-
-- [ ] HTML export parser
-- [ ] Conversation grouping
-
-### 2.4 Local LLMs
-
-- [ ] Ollama conversation logs
-- [ ] LM Studio logs
-- [ ] Llama Stack logs
-
-### 2.5 Browser extension capture
-
-- [x] Keep browser extension implementations in separate repos.
-- [x] Have extensions parse platform web UIs and send normalized conversation
-  JSON to the existing `POST /memory/insert` API.
-- [x] Do not parse raw HTML or DOM snapshots in the ai-memory-hub API layer.
-- [ ] Add API contract tests, CORS allowlist config, bearer-token guidance, and
-  trusted append guidance before recommending this path for daily use.
-
-**Milestone:** ai-memory-hub becomes a unified memory layer for all your AI tools, even those without official export formats.
-
----
-
-## Phase 3 — Intelligence layer
-
-**Goal:** Higher-level reasoning and memory organization.
-
-PGVector unlocks larger local memory sets, faster clustering workflows, and SQL-friendly analysis when Postgres is selected.
-
-### 3.1 Summaries
-
-- [ ] Per-conversation summaries
-- [ ] Per-topic summaries
-- [ ] Daily/weekly digest generation
-
-### 3.2 Topic extraction
-
-- [ ] LLM-based topic labeling
-- [ ] Hosted LLM fact extractor implementation with prompt/schema tuning
-- [ ] HDBSCAN clustering
-- [ ] Topic graph
-
-### 3.3 Timeline reconstruction
-
-- [ ] Chronological view of discussions
-- [ ] “What did I work on last month?”
-- [ ] “Show all GPU upgrade conversations”
-
-### 3.4 Memory consolidation
-
-- [ ] Merge redundant conversations
-- [ ] Extract stable facts
-- [ ] Long-term memory store
-
-**Milestone:** The hub behaves as a knowledge engine, not only a storage system.
-
----
-
-## Phase 4 — UI and developer experience
-
-**Goal:** Pleasant day-to-day use and integration.
-
-### 4.1 Web UI
-
-- [ ] MaterializeCSS dashboard
-- [ ] Upload exports
-- [ ] Search interface
-- [ ] Conversation viewer
-- [ ] RAG query console
-- [ ] Fact review, edit, supersession, and audit workflows
-- [ ] Vector backend diagnostics
-- [ ] Storage health panel
-- [ ] Embedding dimension inspector
-
-### 4.2 Developer tools
-
-- [ ] Python SDK
-- [ ] TypeScript SDK
-- [ ] API documentation (OpenAPI)
-
-### 4.3 Packaging
-
-- [ ] `pip install ai-memory-hub`
-- [ ] Dockerfile (optional)
-
-**Milestone:** Polished interface and clear developer path to adopt the project.
-
----
-
-## Phase 5 — Agent integration
-
-**Goal:** Make ai-memory-hub the **memory provider** for agents.
-
-Agents should be able to choose local LanceDB, Postgres+PGVector, or ephemeral in-memory storage without changing their MCP/API integration.
-
-### 5.1 LangGraph
-
-- [ ] Tools for search, retrieve, ask
-- [ ] Memory-aware agent examples
-
-### 5.2 Llama Stack
-
-- [ ] External memory provider
-- [ ] Configurable memory routing
-
-### 5.3 OpenAI Assistants
-
-- [ ] Function calling integration
-- [ ] Memory-aware assistant template
-
-### 5.4 MCP (Model Context Protocol)
-
-- [ ] `memory_search`
-- [ ] `memory_retrieve`
-- [ ] `memory.summarize`
-- [ ] `memory.timeline`
-
-**Milestone:** Any compatible agent can retrieve relevant context from your memory.
-
----
-
-## Phase 6 — Advanced features
-
-**Goal:** Long-term, richer memory behavior.
-
-PGVector and Postgres enable future hybrid search, SQL-based memory analytics, and graph-adjacent workflows without requiring a separate hosted vector service.
-
-### 6.1 Memory graph
-
-- [ ] Entity extraction
-- [ ] Relationship mapping
-- [ ] Graph-based retrieval
-
-### 6.2 Relevance decay
-
-- [ ] Time-based weighting
-- [ ] Importance scoring
-- [ ] “Forget” low-value conversations
-
-### 6.3 Multi-agent shared memory
-
-- [ ] Shared memory spaces
-- [ ] Agent-specific memory filters
-
-### 6.4 Plugins And Extension Points
-
-- [ ] Custom capture/import adapters
-- [ ] Custom hub ingestion enrichers
-- [ ] Custom embedding providers
-- [ ] Custom vector stores
-
-**Milestone:** General-purpose memory platform beyond a single-user notebook flow.
-
----
-
-## Phase 7 — Optional cloud and sync
-
-**Only if you choose to — the project stays local-first by default.**
-
-- [ ] Encrypted cloud sync
-- [ ] Multi-device support
-- [ ] Backup/restore
-- [ ] SQLite metadata sync
-- [ ] PGVector table sync
-- [ ] LanceDB bundle sync
-
----
-
-## Summary
-
-Evolution path:
-
-1. **MVP** — capture, ingest, store, search, RAG
-2. **Storage abstraction** — supported metadata and vector providers behind stable interfaces
-3. **App-level encryption**
-4. **Multi-source capture/import adapters**
-5. **Intelligence layer**
-6. **UI and developer experience**
-7. **Agent integration**
-8. **Advanced memory features**
-9. **Optional sync**
-
-Phases stack modularly so scope stays focused and components remain swappable (see [architecture.md](architecture.md)).
-
-Positioning:
-
-> ai-memory-hub is the SQLite of agent memory: deterministic, local-first, pluggable, and MCP-native.
+See [Project status](project_status.md) for the evidence-based classification of
+what is done, partial, or not started. See
+[Documentation and planning](plans.md) for the repository planning policy.

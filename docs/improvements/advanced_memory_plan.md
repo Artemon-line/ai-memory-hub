@@ -1,5 +1,7 @@
 # Advanced Memory Plan
 
+> Historical plan. Remaining work is tracked in [#352](https://github.com/Artemon-line/ai-memory-hub/issues/352).
+
 ## Goal
 
 Turn ai-memory-hub from a searchable conversation and fact store into a richer
@@ -90,7 +92,7 @@ Implementation note:
 
 ## Phase 3: Entity And Graph Quality Metrics
 
-Use `graph_quality_gate_plan.md` as the source of truth for the benchmark,
+Use `../quality_evaluation.md` as the source of truth for the benchmark,
 metric definitions, thresholds, and graph-retrieval promotion rule.
 
 - [x] Create a representative graph-memory evaluation corpus with source

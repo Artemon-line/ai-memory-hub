@@ -1,5 +1,7 @@
 # P1 SQL Hardening Plan
 
+> Historical plan. Remaining work is tracked in [#347](https://github.com/Artemon-line/ai-memory-hub/issues/347).
+
 Source date: `27-08-2026`
 
 Status: planned

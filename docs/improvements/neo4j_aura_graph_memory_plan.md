@@ -1,5 +1,7 @@
 # Neo4j Aura Graph Memory Plan
 
+> Historical design plan. Implementation is tracked in [#353](https://github.com/Artemon-line/ai-memory-hub/issues/353).
+
 ## Goal
 
 Add Neo4j AuraDB as a first-class cloud graph backend for `ai-memory-hub`,

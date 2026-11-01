@@ -390,12 +390,10 @@ provider fixture matrix, smoke commands, CI coverage, and hosted-provider notes.
 - [Technical overview](docs/overview.md)
 - [Architecture](docs/architecture.md)
 - [Agent integration](docs/agents.md)
-- [MCP plan](docs/mcp_plan.md)
-- [Google OAuth Connect UI plan](docs/improvements/google_oauth_connect_ui_plan.md)
+- [Roadmap](docs/roadmap.md)
+- [Project status and remaining work](docs/project_status.md)
 - [Real-client MCP smoke plan](docs/real_client_mcp_smoke_plan.md)
-- [Browser extension capture plan](docs/browser_extension_capture_plan.md)
-- [Plugin readiness plan](docs/plugin_readiness_plan.md)
-- [First release readiness plan](docs/first_release_readiness_plan.md)
+- [Documentation and planning](docs/plans.md)
 - [Release CI gap analysis](docs/release_ci_gap_analysis.md)
 - [Release security scan notes](docs/release_security_scan_notes.md)
 - [Repository governance settings](docs/repository_governance_settings.md)
@@ -405,8 +403,7 @@ provider fixture matrix, smoke commands, CI coverage, and hosted-provider notes.
 - [Security policy](SECURITY.md)
 - [Project promotion plan](docs/project_promotion_plan.md)
 - [Storage provider examples](docs/storage_provider_examples.md)
-- [Roadmap](docs/roadmap.md)
-- [Improvements](docs/improvements.md)
+- [Planned features](docs/planned_features.md)
 
 Build the docs locally:
 

@@ -1,5 +1,7 @@
 # Client Feedback Improvement Plan
 
+> Historical plan. Remaining lifecycle work is tracked in [#352](https://github.com/Artemon-line/ai-memory-hub/issues/352).
+
 Source date: `15-06-2026`
 
 Status: partial
@@ -391,7 +393,7 @@ Decision:
 
 Plan:
 
-- Track remaining work in `../bruno_integration_test_plan.md`.
+- Keep black-box API/MCP coverage aligned with `../overview.md#testing`.
 - Start with unauthenticated health, API memory flow, and MCP memory flow.
   Done.
 - Add bearer-token/project smoke coverage after the base collection is stable.

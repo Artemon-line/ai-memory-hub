@@ -1,5 +1,7 @@
 # Efficiency Revival Plan
 
+> Historical implementation record. Remaining work is tracked in [#344](https://github.com/Artemon-line/ai-memory-hub/issues/344).
+
 Source date: `25-10-2026`
 
 ## Goal

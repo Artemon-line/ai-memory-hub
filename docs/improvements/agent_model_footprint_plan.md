@@ -1,5 +1,7 @@
 # Agent Model Footprint Plan
 
+> Historical plan. Remaining work is tracked in [#346](https://github.com/Artemon-line/ai-memory-hub/issues/346).
+
 Source date: `24-08-2026`
 
 Status: partially implemented

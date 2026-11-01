@@ -1,5 +1,7 @@
 # First Release Readiness Plan
 
+> Historical plan. Remaining work is tracked in [#345](https://github.com/Artemon-line/ai-memory-hub/issues/345).
+
 This plan tracks what must be true before the first public release of
 ai-memory-hub. It complements `release_container_docs_plan.md`, which focuses on
 container and docs publishing mechanics. This plan covers the broader release
@@ -217,7 +219,7 @@ release requirements:
 
 ## P0: Agent-Facing MCP Response Formats
 
-Use `improvements/mcp_response_format_plan.md` as the source of truth.
+The implemented concise/detailed contract is documented in `agents.md`.
 
 This is required before `v0.1.0` because MCP read tools are the main public
 agent contract. Agent recall should default to concise, high-signal payloads

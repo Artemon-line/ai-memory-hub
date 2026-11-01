@@ -1,5 +1,7 @@
 # Project Promotion Plan
 
+> Historical plan. Remaining release and promotion work is tracked in [#345](https://github.com/Artemon-line/ai-memory-hub/issues/345).
+
 This plan turns the general GitHub star-growth guidance from
 `iostyle/github-stars-guide` into a repeatable promotion workflow for
 ai-memory-hub. The goal is not one launch post. The goal is a regular cadence
