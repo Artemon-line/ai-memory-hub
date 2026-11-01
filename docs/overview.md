@@ -338,7 +338,9 @@ not enter canonical memory.
 
 Microsoft Copilot activity exports must use the columns `Conversation`, `Time`,
 `Author`, and `Message`. The importer groups rows by conversation and restores
-the chronological user/assistant order used by the hub.
+chronological order. Attachment-only turns appear as empty `Human` rows in some
+Microsoft exports; the importer omits those placeholders because the CSV does
+not contain the attachment, while preserving the surrounding textual messages.
 
 GitHub Copilot CLI stores resumable sessions under
 `$COPILOT_HOME/session-state/<session-id>/events.jsonl`, with

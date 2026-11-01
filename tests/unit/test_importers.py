@@ -915,6 +915,30 @@ def test_copilot_activity_csv_fixture_is_grouped_and_chronological() -> None:
     }
 
 
+def test_copilot_activity_csv_skips_attachment_only_placeholders() -> None:
+    text = """Conversation,Time,Author,Message
+Screenshot help,2026-09-22T11:52:14,Human,
+Screenshot help,2026-09-22T11:52:14,AI,I can help with that screenshot.
+Screenshot help,2026-09-22T11:53:00,Human,What should I do next?
+"""
+
+    payload = CopilotActivityCsvImporter().import_text(text)[0]
+
+    assert payload["messages"] == [
+        {"role": "assistant", "text": "I can help with that screenshot."},
+        {"role": "user", "text": "What should I do next?"},
+    ]
+
+
+def test_copilot_activity_csv_rejects_export_without_text_messages() -> None:
+    text = """Conversation,Time,Author,Message
+Screenshot help,2026-09-22T11:52:14,Human,
+"""
+
+    with pytest.raises(ValueError, match="contains no messages"):
+        CopilotActivityCsvImporter().import_text(text)
+
+
 def test_codex_rollout_jsonl_fixture_maps_only_canonical_messages_and_provenance() -> None:
     text = (_FIXTURES / "codex_rollout_anonymized.jsonl").read_text(encoding="utf-8")
 
