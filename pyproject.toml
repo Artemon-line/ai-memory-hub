@@ -48,7 +48,7 @@ oauth = [
     "python-multipart>=0.0.32",
 ]
 postgres = [
-    "pg8000>=1.31.5",
+    "pg8000>=1.31.6",
 ]
 pinecone = [
     "pinecone>=7.0.0",
