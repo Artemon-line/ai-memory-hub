@@ -32,7 +32,7 @@ opensearch = [
     "opensearch-py>=2.7.0",
 ]
 observability = [
-    "opentelemetry-api>=1.29.0",
+    "opentelemetry-api>=1.45.2",
     "opentelemetry-sdk>=1.45.0",
     "opentelemetry-exporter-otlp-proto-grpc>=1.45.1",
     "opentelemetry-instrumentation-fastapi>=0.50b0",
