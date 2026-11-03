@@ -32,7 +32,12 @@ def _config(**overrides: object):
     )
 
 
-def _token(key: RSAKey, **overrides: object) -> str:
+def _token(
+    key: RSAKey,
+    *,
+    omit_claims: tuple[str, ...] = (),
+    **overrides: object,
+) -> str:
     now = int(time.time())
     claims: dict[str, object] = {
         "iss": "https://keycloak.example.test/realms/home",
@@ -51,6 +56,8 @@ def _token(key: RSAKey, **overrides: object) -> str:
         "jti": "token-123",
     }
     claims.update(overrides)
+    for claim in omit_claims:
+        claims.pop(claim, None)
     return jwt.encode({"alg": "RS256", "kid": "key-a"}, claims, key)
 
 
@@ -202,6 +209,59 @@ async def test_external_oidc_rejects_invalid_or_disallowed_claims(
     validator = ExternalOIDCValidator(_config().api.oidc)
 
     assert await validator.validate(_token(key, **overrides)) is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "email_verified",
+    [None, False, True, "true", "false", 0, 1, [], {}],
+)
+async def test_external_oidc_domain_allowlist_requires_verified_email_boolean(
+    monkeypatch: pytest.MonkeyPatch,
+    email_verified: object,
+) -> None:
+    key = RSAKey.generate_key(2048, parameters={"kid": "key-a", "alg": "RS256"})
+
+    async def fetch(url: str) -> dict[str, object]:
+        if url.endswith("openid-configuration"):
+            return {
+                "issuer": "https://keycloak.example.test/realms/home",
+                "jwks_uri": "https://keycloak.example.test/keys",
+            }
+        return {"keys": [key.as_dict(private=False)]}
+
+    monkeypatch.setattr(external_oidc, "_fetch_json", fetch)
+    claims = await ExternalOIDCValidator(_config().api.oidc).validate(
+        _token(key, email_verified=email_verified)
+    )
+
+    if email_verified is True:
+        assert claims is not None
+        assert claims.email == "alice@example.test"
+    else:
+        assert claims is None
+
+
+@pytest.mark.asyncio
+async def test_external_oidc_domain_allowlist_rejects_missing_email_verification(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    key = RSAKey.generate_key(2048, parameters={"kid": "key-a", "alg": "RS256"})
+
+    async def fetch(url: str) -> dict[str, object]:
+        if url.endswith("openid-configuration"):
+            return {
+                "issuer": "https://keycloak.example.test/realms/home",
+                "jwks_uri": "https://keycloak.example.test/keys",
+            }
+        return {"keys": [key.as_dict(private=False)]}
+
+    monkeypatch.setattr(external_oidc, "_fetch_json", fetch)
+    claims = await ExternalOIDCValidator(_config().api.oidc).validate(
+        _token(key, omit_claims=("email_verified",))
+    )
+
+    assert claims is None
 
 
 @pytest.mark.asyncio

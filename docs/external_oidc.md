@@ -59,6 +59,10 @@ email explicitly marked `email_verified: false` is not stored. Access tokens,
 groups, roles, scopes, and other raw claims are not persisted or logged by this
 validation path.
 
+When `allowed_domains` is configured, the email claim is an authorization
+boundary and the token must contain `email_verified: true`. Missing or
+non-boolean verification values are rejected.
+
 The profile claim names default to the standard Keycloak claims shown above
 and may use dotted paths for nested provider payloads. Claim synchronization is
 cached in-process for unchanged profiles to avoid a metadata write on every
