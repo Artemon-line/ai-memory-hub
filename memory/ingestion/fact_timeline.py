@@ -135,13 +135,11 @@ class FactTimelineProjection:
 
     @property
     def historical_entries(self) -> tuple[FactTimelineEntry, ...]:
-        latest_ids = {
-            str(entry.fact.get(FactField.ID.value, "")) for entry in self.latest_entries
-        }
+        latest_entry_ids = {id(entry) for entry in self.latest_entries}
         return tuple(
             entry
             for entry in self.entries
-            if str(entry.fact.get(FactField.ID.value, "")) not in latest_ids
+            if id(entry) not in latest_entry_ids
         )
 
     def latest_payload(self) -> dict[str, Any] | None:

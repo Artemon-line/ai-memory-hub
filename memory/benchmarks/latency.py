@@ -9,8 +9,8 @@ from typing import Any
 def summarize_latency_ms(samples: Sequence[float]) -> dict[str, float | int]:
     """Return one stable nearest-rank latency distribution in milliseconds."""
     values = [float(sample) for sample in samples]
-    if any(value < 0 for value in values):
-        raise ValueError("latency samples must be non-negative")
+    if any(not math.isfinite(value) or value < 0 for value in values):
+        raise ValueError("latency samples must be finite and non-negative")
     if not values:
         return {
             "samples": 0,
@@ -39,8 +39,8 @@ def cold_warm_latency_ms(
     *, cold_ms: float, warm_samples: Sequence[float]
 ) -> dict[str, Any]:
     """Separate first-call latency from a non-empty warm distribution."""
-    if cold_ms < 0:
-        raise ValueError("cold latency must be non-negative")
+    if not math.isfinite(cold_ms) or cold_ms < 0:
+        raise ValueError("cold latency must be finite and non-negative")
     if not warm_samples:
         raise ValueError("warm latency samples must not be empty")
     return {

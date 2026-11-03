@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from typing import Any
 
 from memory.ingestion.mvp_ingestion import _adaptive_candidate_limit
@@ -98,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         assert_thresholds(report)
     except AssertionError as exc:
-        print(str(exc))
+        print(str(exc), file=sys.stderr)
         return 1
     return 0
 

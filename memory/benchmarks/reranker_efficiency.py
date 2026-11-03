@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from typing import Any, Mapping, Sequence
 
 from memory.benchmarks.work_ledger import WorkLedger
@@ -88,7 +89,7 @@ def main() -> int:
     try:
         assert_thresholds(report)
     except AssertionError as exc:
-        print(str(exc))
+        print(str(exc), file=sys.stderr)
         return 1
     return 0
 

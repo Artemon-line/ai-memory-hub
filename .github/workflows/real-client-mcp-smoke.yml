@@ -39,6 +39,7 @@ jobs:
           PYTHONHASHSEED: '0'
         run: >
           uv run python -m memory.tools.real_client_smoke
+          --require-any-success
           --artifact-dir artifacts/real-client-mcp-smoke
 
       - name: Upload real-client smoke artifacts

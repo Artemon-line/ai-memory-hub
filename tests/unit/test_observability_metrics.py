@@ -21,6 +21,15 @@ class StubAgent(BaseIngestionAgent):
         return {"status": "ok", "id": str(conversation_json.get("id") or "generated")}
 
 
+@pytest.fixture(autouse=True)
+def _isolate_metrics_state():
+    metrics.reset()
+    try:
+        yield
+    finally:
+        metrics.reset()
+
+
 def test_metrics_config_defaults_to_disabled() -> None:
     config = parse_config({})
 
@@ -75,7 +84,6 @@ def test_metrics_setup_does_not_raise_when_optional_dependencies_are_missing(
 
 @pytest.mark.asyncio
 async def test_mcp_tool_metrics_increment_for_success_and_error() -> None:
-    metrics.reset()
     agent = StubAgent(config={"providers": {"agent": "mvp"}, "interfaces": {"api": "true"}})
     handlers = build_tool_handlers(agent)
 

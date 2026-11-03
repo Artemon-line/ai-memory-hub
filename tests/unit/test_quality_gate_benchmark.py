@@ -58,6 +58,32 @@ def test_provider_observations_produce_comparable_report(tmp_path) -> None:
     assert report["thresholds"]["failures"] == []
 
 
+@pytest.mark.parametrize("mutation", ["missing", "duplicate", "unknown"])
+def test_provider_observations_require_exact_case_coverage(
+    tmp_path, mutation: str
+) -> None:
+    corpus = quality_gate.load_corpus()
+    observations = quality_gate._run_deterministic_provider(corpus)
+    rows = observations["retrieval"]
+    if mutation == "missing":
+        rows.pop()
+    elif mutation == "duplicate":
+        rows[-1] = dict(rows[0])
+    else:
+        rows[-1]["name"] = "unknown-case"
+    observations_path = tmp_path / "observations.json"
+    observations_path.write_text(json.dumps(observations), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="coverage mismatch"):
+        quality_gate.run_evaluation(observations_path=observations_path)
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_quality_gate_rejects_non_finite_thresholds(value: float) -> None:
+    with pytest.raises(ValueError, match="finite"):
+        quality_gate.run_evaluation(thresholds={"precision_at_1": value})
+
+
 def test_quality_gate_threshold_failures_are_explicit() -> None:
     report = quality_gate.run_evaluation(thresholds={"max_fallback_rate": 0.1})
 

@@ -56,6 +56,7 @@ def run_evaluation(
         if observations_path is not None
         else _run_deterministic_provider(corpus)
     )
+    _validate_observation_coverage(corpus, observations)
     metrics = _evaluate_observations(corpus, observations)
     failures = _threshold_failures(metrics, effective_thresholds)
     return {
@@ -364,11 +365,40 @@ def _mean(values: Iterable[float]) -> float:
 
 def _validate_thresholds(thresholds: Mapping[str, float]) -> None:
     for name, value in thresholds.items():
+        if not math.isfinite(value):
+            raise ValueError(f"threshold {name} must be finite")
         if name == "max_latency_p95_ms":
             if value <= 0:
                 raise ValueError("latency threshold must be positive")
         elif not 0.0 <= value <= 1.0:
             raise ValueError(f"threshold {name} must be between 0 and 1")
+
+
+def _validate_observation_coverage(
+    corpus: Mapping[str, Any], observations: Mapping[str, Any]
+) -> None:
+    categories = {
+        "retrieval": "retrieval_cases",
+        "extraction": "extraction_cases",
+        "temporal": "temporal_cases",
+        "answers": "answer_cases",
+    }
+    for observation_key, corpus_key in categories.items():
+        rows = observations.get(observation_key)
+        if not isinstance(rows, list):
+            raise ValueError(f"observations {observation_key} must be a list")
+        expected = [str(case["name"]) for case in corpus[corpus_key]]
+        observed = [str(row.get("name")) for row in rows if isinstance(row, Mapping)]
+        if len(observed) != len(rows):
+            raise ValueError(f"observations {observation_key} contains an invalid row")
+        duplicates = sorted({name for name in observed if observed.count(name) > 1})
+        missing = sorted(set(expected) - set(observed))
+        unknown = sorted(set(observed) - set(expected))
+        if duplicates or missing or unknown:
+            raise ValueError(
+                f"observations {observation_key} coverage mismatch: "
+                f"duplicates={duplicates}, missing={missing}, unknown={unknown}"
+            )
 
 
 def _threshold_failures(metrics: Mapping[str, Any], thresholds: Mapping[str, float]) -> list[str]:

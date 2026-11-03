@@ -183,14 +183,40 @@ def test_summary_is_written_for_all_skipped_clients(tmp_path: Path, monkeypatch)
         client_timeout=1,
         require_configured=False,
         require_success_for=[],
+        allow_all_skipped=True,
     )
 
     result = real_client_smoke.run_harness(args)
     real_client_smoke._write_json(tmp_path / "summary.json", real_client_smoke._result_to_dict(result))
 
     summary = json.loads((tmp_path / "summary.json").read_text(encoding="utf-8"))
-    assert summary["status"] == "ok"
+    assert summary["status"] == "skipped"
     assert summary["clients"][0]["status"] == "skipped"
+
+
+def test_all_skipped_clients_fail_without_explicit_local_opt_out() -> None:
+    results = [
+        real_client_smoke.ClientResult("claude", "skipped", "not configured", [])
+    ]
+
+    assert (
+        real_client_smoke._aggregate_status(results, require_success_for=())
+        == "failed"
+    )
+    assert (
+        real_client_smoke._aggregate_status(
+            results, require_success_for=(), allow_all_skipped=True
+        )
+        == "skipped"
+    )
+
+
+def test_real_client_workflow_explicitly_requires_a_success() -> None:
+    workflow = (
+        Path(__file__).parents[2] / ".github/workflows/real-client-mcp-smoke.yml"
+    ).read_text(encoding="utf-8")
+
+    assert "--require-any-success" in workflow
 
 
 def test_run_harness_removes_temporary_workspace(tmp_path: Path, monkeypatch) -> None:
@@ -217,11 +243,12 @@ def test_run_harness_removes_temporary_workspace(tmp_path: Path, monkeypatch) ->
         client_timeout=1,
         require_configured=False,
         require_success_for=[],
+        allow_all_skipped=True,
     )
 
     result = real_client_smoke.run_harness(args)
 
-    assert result.status == "ok"
+    assert result.status == "skipped"
     assert artifact_dir.exists()
     assert not workspace.exists()
     assert terminated == [gateway_process, hub_process]
@@ -254,6 +281,7 @@ def test_run_harness_removes_temporary_workspace_after_startup_failure(
         client_timeout=1,
         require_configured=False,
         require_success_for=[],
+        allow_all_skipped=True,
     )
 
     with pytest.raises(RuntimeError, match="gateway failed"):

@@ -88,3 +88,21 @@ def test_extract_memory_graph_rejects_negative_start_message_index() -> None:
         assert str(exc) == "start_message_index must be non-negative"
     else:
         raise AssertionError("negative message indexes must be rejected")
+
+
+def test_extract_memory_graph_matches_known_names_only_at_boundaries() -> None:
+    conversation = {
+        "id": "conv-graph-boundaries",
+        "messages": [
+            {
+                "role": "user",
+                "text": "An opencodex label is not Codex. Docker, PGVector; and OpenSearch are.",
+            }
+        ],
+    }
+
+    graph = extract_memory_graph(conversation)
+
+    names = {entity["normalized_name"] for entity in graph["entities"]}
+    assert {"codex", "docker", "pgvector", "opensearch"} <= names
+    assert "opencode" not in names

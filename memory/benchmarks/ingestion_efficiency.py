@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
@@ -165,7 +166,6 @@ class _CountingVectorStore:
 
 def run_benchmark() -> dict[str, Any]:
     """Measure work for an accepted insert, duplicate, and trusted append."""
-    original_runtime = mvp_ingestion._RUNTIME
     ledger = _WorkLedger()
     metadata_store = _CountingMetadataStore(ledger)
     vector_store = _CountingVectorStore(ledger)
@@ -181,8 +181,7 @@ def run_benchmark() -> dict[str, Any]:
         },
         allow_trusted_appends=True,
     )
-    try:
-        mvp_ingestion.configure_runtime(runtime=runtime)
+    with mvp_ingestion.runtime_context(runtime):
         accepted_result = mvp_ingestion.ingest_messages(deepcopy(_PAYLOAD))
         accepted_work = ledger.detailed_snapshot()
         accepted_ledger = ledger.snapshot()
@@ -198,8 +197,6 @@ def run_benchmark() -> dict[str, Any]:
         append_result = mvp_ingestion.ingest_messages(deepcopy(_APPEND_PAYLOAD))
         append_work = ledger.detailed_snapshot()
         append_ledger = ledger.snapshot()
-    finally:
-        mvp_ingestion._RUNTIME = original_runtime
 
     message_count = len(_PAYLOAD["messages"])
     baseline_embedding_inputs = int(accepted_result["embedded_chunks"])
@@ -280,7 +277,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         assert_thresholds(report)
     except AssertionError as exc:
-        print(str(exc))
+        print(str(exc), file=sys.stderr)
         return 1
     return 0
 

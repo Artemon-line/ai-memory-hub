@@ -112,7 +112,11 @@ def run_harness(args: argparse.Namespace) -> HarnessResult:
             )
             for name in selected_clients
         ]
-        status = _aggregate_status(results, require_success_for=tuple(args.require_success_for or ()))
+        status = _aggregate_status(
+            results,
+            require_success_for=tuple(args.require_success_for or ()),
+            allow_all_skipped=bool(getattr(args, "allow_all_skipped", False)),
+        )
         return HarnessResult(
             status=status,
             hub_url=hub_url,
@@ -891,13 +895,20 @@ def _get_json(url: str, *, timeout: float = 10.0) -> dict[str, Any]:
         return json.loads(response.read().decode("utf-8"))
 
 
-def _aggregate_status(results: Iterable[ClientResult], *, require_success_for: tuple[str, ...]) -> str:
+def _aggregate_status(
+    results: Iterable[ClientResult],
+    *,
+    require_success_for: tuple[str, ...],
+    allow_all_skipped: bool = False,
+) -> str:
     result_list = list(results)
     if any(result.status == "failed" for result in result_list):
         return "failed"
     by_name = {result.name: result for result in result_list}
     if any(by_name.get(name, ClientResult(name, "skipped", "", [])).status != "passed" for name in require_success_for):
         return "failed"
+    if not any(result.status == "passed" for result in result_list):
+        return "skipped" if allow_all_skipped else "failed"
     return "ok"
 
 
@@ -976,6 +987,17 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--client-timeout", type=int, default=90)
     parser.add_argument("--require-configured", action="store_true", help="Treat missing command templates as failures.")
     parser.add_argument("--require-success-for", action="append", choices=DEFAULT_CLIENTS, default=[])
+    strictness = parser.add_mutually_exclusive_group()
+    strictness.add_argument(
+        "--require-any-success",
+        action="store_true",
+        help="Require at least one configured client to pass (the default).",
+    )
+    strictness.add_argument(
+        "--allow-all-skipped",
+        action="store_true",
+        help="Local-only permissive mode; report all-skipped runs as skipped.",
+    )
     parser.add_argument("--gateway-server", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--gateway-host", default="127.0.0.1", help=argparse.SUPPRESS)
     parser.add_argument("--gateway-port", type=int, default=0, help=argparse.SUPPRESS)

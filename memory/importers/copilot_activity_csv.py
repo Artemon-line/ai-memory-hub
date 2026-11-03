@@ -68,7 +68,7 @@ class CopilotActivityCsvImporter(ConversationImporter):
                 key=lambda item: (
                     item[0],
                     0 if item[2]["role"] == "user" else 1,
-                    -item[1],
+                    item[1],
                 )
             )
             payloads.append(

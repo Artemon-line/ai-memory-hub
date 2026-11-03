@@ -128,11 +128,8 @@ def run_benchmark(
     if budget < 1:
         raise ValueError("budget must be positive")
 
-    original_runtime = mvp_ingestion._RUNTIME
-    original_search = mvp_ingestion.search
     ledger = WorkLedger()
-    try:
-        mvp_ingestion.search = _BenchmarkSearch(ledger)  # type: ignore[method-assign]
+    with mvp_ingestion.search_context(_BenchmarkSearch(ledger)):
         default_result, default_latency, default_work = _measure_default(
             iterations=iterations, ledger=ledger
         )
@@ -149,9 +146,6 @@ def run_benchmark(
             ledger=ledger,
         )
         chunking_result = _measure_chunking(ledger=ledger)
-    finally:
-        mvp_ingestion.search = original_search  # type: ignore[method-assign]
-        mvp_ingestion._RUNTIME = original_runtime
 
     default_avg = float(default_latency["warm_avg"])
     budgeted_avg = float(budgeted_latency["warm_avg"])
@@ -239,29 +233,33 @@ def main(argv: list[str] | None = None) -> int:
 def _measure_default(
     *, iterations: int, ledger: WorkLedger
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-    _configure_runtime(tokenizer_enabled=False, ledger=ledger)
-    return _measure(lambda: mvp_ingestion.ask(_QUESTION, top_k=_TOP_K), iterations, ledger)
+    runtime = _runtime(tokenizer_enabled=False, ledger=ledger)
+    with mvp_ingestion.runtime_context(runtime):
+        return _measure(
+            lambda: mvp_ingestion.ask(_QUESTION, top_k=_TOP_K), iterations, ledger
+        )
 
 
 def _measure_budgeted(
     *, iterations: int, budget: int, tokenizer_enabled: bool, ledger: WorkLedger
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-    _configure_runtime(
+    runtime = _runtime(
         tokenizer_enabled=tokenizer_enabled,
         ask_max_context_tokens=budget,
         ledger=ledger,
     )
-    if tokenizer_enabled:
+    with mvp_ingestion.runtime_context(runtime):
+        if tokenizer_enabled:
+            return _measure(
+                lambda: mvp_ingestion.ask(_QUESTION, top_k=_TOP_K), iterations, ledger
+            )
         return _measure(
-            lambda: mvp_ingestion.ask(_QUESTION, top_k=_TOP_K), iterations, ledger
+            lambda: mvp_ingestion.ask(
+                _QUESTION, top_k=_TOP_K, max_context_tokens=budget
+            ),
+            iterations,
+            ledger,
         )
-    return _measure(
-        lambda: mvp_ingestion.ask(
-            _QUESTION, top_k=_TOP_K, max_context_tokens=budget
-        ),
-        iterations,
-        ledger,
-    )
 
 
 def _measure(
@@ -298,21 +296,25 @@ def _measure_chunking(*, ledger: WorkLedger) -> dict[str, Any]:
         "messages": [message],
     }
 
-    _configure_runtime(tokenizer_enabled=False, chunking_strategy="message", ledger=ledger)
-    default_chunks = mvp_ingestion.chunk_selected_messages(
-        obj, obj["messages"], start_index=0
+    default_runtime = _runtime(
+        tokenizer_enabled=False, chunking_strategy="message", ledger=ledger
     )
+    with mvp_ingestion.runtime_context(default_runtime):
+        default_chunks = mvp_ingestion.chunk_selected_messages(
+            obj, obj["messages"], start_index=0
+        )
 
-    _configure_runtime(
+    token_runtime = _runtime(
         tokenizer_enabled=False,
         chunking_strategy="token",
         chunking_max_tokens=40,
         chunking_overlap_tokens=10,
         ledger=ledger,
     )
-    token_chunks = mvp_ingestion.chunk_selected_messages(
-        obj, obj["messages"], start_index=0
-    )
+    with mvp_ingestion.runtime_context(token_runtime):
+        token_chunks = mvp_ingestion.chunk_selected_messages(
+            obj, obj["messages"], start_index=0
+        )
 
     return {
         "message_strategy_chunks": len(default_chunks),
@@ -321,7 +323,7 @@ def _measure_chunking(*, ledger: WorkLedger) -> dict[str, Any]:
     }
 
 
-def _configure_runtime(
+def _runtime(
     *,
     tokenizer_enabled: bool,
     ask_max_context_tokens: int = _BUDGET,
@@ -329,20 +331,18 @@ def _configure_runtime(
     chunking_max_tokens: int = 800,
     chunking_overlap_tokens: int = 80,
     ledger: WorkLedger,
-) -> None:
-    mvp_ingestion.configure_runtime(
-        runtime=mvp_ingestion.RuntimeDependencies(
-            embedding_provider=_Embedder(),
-            metadata_store=_BenchmarkAuditStore(ledger),
-            vector_store=object(),
-            health_state={"mode": "ok"},
-            tokenizer_enabled=tokenizer_enabled,
-            tokenizer_encoding=_ENCODING,
-            ask_max_context_tokens=ask_max_context_tokens,
-            chunking_strategy=chunking_strategy,
-            chunking_max_tokens=chunking_max_tokens,
-            chunking_overlap_tokens=chunking_overlap_tokens,
-        )
+) -> mvp_ingestion.RuntimeDependencies:
+    return mvp_ingestion.RuntimeDependencies(
+        embedding_provider=_Embedder(),
+        metadata_store=_BenchmarkAuditStore(ledger),
+        vector_store=object(),
+        health_state={"mode": "ok"},
+        tokenizer_enabled=tokenizer_enabled,
+        tokenizer_encoding=_ENCODING,
+        ask_max_context_tokens=ask_max_context_tokens,
+        chunking_strategy=chunking_strategy,
+        chunking_max_tokens=chunking_max_tokens,
+        chunking_overlap_tokens=chunking_overlap_tokens,
     )
 
 

@@ -23,7 +23,11 @@ from memory.importers import (
     get_importer,
     importer_names,
 )
-from memory.importers.schema_override import parse_schema_override, schema_fingerprint
+from memory.importers.schema_override import (
+    parse_schema_override,
+    schema_fingerprint,
+    stamp_import_provenance,
+)
 
 _FIXTURES = Path(__file__).parents[1] / "fixtures" / "importers"
 
@@ -444,6 +448,37 @@ def test_schema_override_fingerprint_is_deterministic() -> None:
     assert schema_fingerprint(first) == schema_fingerprint(second)
 
 
+@pytest.mark.parametrize("constant", ["NaN", "Infinity", "-Infinity"])
+def test_schema_override_parser_rejects_non_finite_numbers(constant: str) -> None:
+    with pytest.raises(ValueError, match="non-finite number"):
+        parse_schema_override(f'{{"version":1,"value":{constant}}}')
+
+
+def test_schema_override_parser_normalizes_excessive_nesting_error() -> None:
+    raw = '{"value":' + ("[" * 2_000) + "0" + ("]" * 2_000) + "}"
+
+    with pytest.raises(ValueError, match="schema nesting"):
+        parse_schema_override(raw)
+
+
+def test_import_provenance_clears_stale_schema_fields() -> None:
+    payloads = [
+        {
+            "metadata": {
+                "import_schema_fingerprint": "sha256:stale",
+                "import_schema_version": 99,
+            }
+        }
+    ]
+
+    stamp_import_provenance(payloads, parser="manual", schema=None)
+
+    assert payloads[0]["metadata"] == {
+        "import_parser": "manual",
+        "import_schema_applied": False,
+    }
+
+
 def test_copilot_cli_v1_fixture_maps_text_and_safe_provenance() -> None:
     text = (_FIXTURES / "copilot_cli_events_v1_anonymized.jsonl").read_text(
         encoding="utf-8"
@@ -510,6 +545,26 @@ def test_copilot_cli_importer_accepts_overrides() -> None:
     assert payload["source"] == "custom-copilot"
     assert payload["title"] == "Imported session"
     assert payload["metadata"]["title"] == "Imported session"
+
+
+def test_copilot_cli_namespaces_message_identifiers_and_interaction_roles() -> None:
+    text = "\n".join(
+        [
+            '{"type":"user.message","data":{"content":"Question","messageId":"shared"}}',
+            '{"type":"assistant.message","data":{"content":"Answer"},"id":"shared"}',
+            '{"type":"user.message","data":{"content":"Follow up","interactionId":"turn"}}',
+            '{"type":"assistant.message","data":{"content":"Response","interactionId":"turn"}}',
+        ]
+    )
+
+    payload = CopilotCliEventsJsonlImporter().import_text(text)[0]
+
+    assert [message["text"] for message in payload["messages"]] == [
+        "Question",
+        "Answer",
+        "Follow up",
+        "Response",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -930,6 +985,17 @@ Screenshot help,2026-09-22T11:53:00,Human,What should I do next?
     ]
 
 
+def test_copilot_activity_csv_preserves_source_order_for_equal_sort_keys() -> None:
+    text = """Conversation,Time,Author,Message
+Same time,2026-09-22T11:52:14,Human,First
+Same time,2026-09-22T11:52:14,Human,Second
+"""
+
+    payload = CopilotActivityCsvImporter().import_text(text)[0]
+
+    assert [message["text"] for message in payload["messages"]] == ["First", "Second"]
+
+
 def test_copilot_activity_csv_rejects_export_without_text_messages() -> None:
     text = """Conversation,Time,Author,Message
 Screenshot help,2026-09-22T11:52:14,Human,
@@ -1206,6 +1272,19 @@ def test_qwen_code_message_only_jsonl_accepts_overrides_and_message_time() -> No
     assert payload["timestamp"] == "2026-04-12T12:00:01+00:00"
     assert payload["metadata"]["title"] == "Imported session"
     assert payload["metadata"]["model"] == "qwen-model"
+
+
+def test_qwen_code_empty_duplicate_does_not_suppress_later_message() -> None:
+    text = "\n".join(
+        [
+            '{"uuid":"u1","timestamp":"2026-04-12T12:00:01Z","type":"user","message":{"content":""}}',
+            '{"uuid":"u1","timestamp":"2026-04-12T12:00:02Z","type":"user","message":{"content":"Question"}}',
+        ]
+    )
+
+    payload = QwenCodeSessionExportImporter().import_text(text)[0]
+
+    assert payload["messages"] == [{"role": "user", "text": "Question"}]
 
 
 @pytest.mark.parametrize(
@@ -1614,6 +1693,30 @@ def test_deepseek_share_json_rejects_account_export_with_actionable_safe_error()
         DeepSeekShareJsonImporter().import_text(text)
 
     assert "Synthetic" not in str(exc_info.value)
+
+
+@pytest.mark.parametrize("timestamp", [float("nan"), float("inf"), 1e100])
+def test_deepseek_share_json_ignores_invalid_optional_timestamps(
+    timestamp: float,
+) -> None:
+    document = {
+        "data": {
+            "biz_data": {
+                "messages": [
+                    {
+                        "role": "USER",
+                        "inserted_at": timestamp,
+                        "fragments": [{"type": "REQUEST", "content": "Question"}],
+                    }
+                ]
+            }
+        }
+    }
+
+    payload = DeepSeekShareJsonImporter().import_text(json.dumps(document))[0]
+
+    assert payload["messages"] == [{"role": "user", "text": "Question"}]
+    assert "timestamp" not in payload
 
 
 def test_opencode_session_json_fixture_maps_text_and_provenance() -> None:
