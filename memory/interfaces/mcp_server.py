@@ -24,7 +24,7 @@ from memory.auth import (
 )
 from memory.backend.log_safety import redact_secrets
 from memory.backend.redaction import redact_content_hashes
-from memory.config import HubConfig
+from memory.config import HubConfig, MCPToolProfile
 from memory.ingestion.base_agent import BaseIngestionAgent
 from memory.ingestion.mvp_ingestion import (
     normalize_conversation_json,
@@ -61,6 +61,7 @@ logger = logging.getLogger(__name__)
 MCP_LOGGER_NAME = "ai-memory-hub.mcp"
 MCP_LOG_NOTIFICATION_LIMIT = 100
 _MCP_LOG_NOTIFICATION_COUNT_ATTR = "_amh_mcp_log_notification_count"
+_SIMPLE_TOOL_ALIASES = {"memory_save": "memory_insert", "memory_ask": "memory_ask"}
 ConversationJsonArg = Annotated[
     Any, Field(json_schema_extra={"type": "object", "additionalProperties": True})
 ]
@@ -115,6 +116,15 @@ SERVER_INSTRUCTIONS = (
     "source_quality, save-intent, and freshness filters, plus the same response_format option."
 )
 
+SIMPLE_SERVER_INSTRUCTIONS = (
+    "Use ai-memory-hub tools directly. Use memory_save only when the user asked to save, "
+    "confirmed a save, or enabled auto-save; include metadata.save_intent as "
+    "explicit_user_request, user_confirmed, or client_auto_save. Pass conversation_json "
+    "as a nested JSON object, not as a JSON string, and omit id by default so the hub "
+    "generates the canonical UUID. Use memory_ask for all recall questions. Pass project_id "
+    "when saving to or reading from a shared project; omit it for the default private project."
+)
+
 
 TOOL_DESCRIPTIONS: dict[str, str] = {
     "memory_validate": (
@@ -130,6 +140,12 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "optionally include a short factual `metadata.summary` retrieval hint, "
         "include `metadata.save_intent` when the user asked to save, confirmed saving, or enabled auto-save, "
         "and optionally pass `project_id` for a shared workspace."
+    ),
+    "memory_save": (
+        "Validate and save one complete conversation into local memory. Requires the "
+        "`memory:write` auth scope when MCP auth is enabled. This simple-profile name "
+        "uses the same ingestion behavior as memory_insert. Include metadata.save_intent "
+        "when the user asked to save, confirmed saving, or enabled auto-save."
     ),
     "memory_search": (
         "Read-only search of existing memory by text query. Optional filters: source, source_client, "
@@ -243,6 +259,7 @@ NON_DESTRUCTIVE_WRITE_POLICY = MCPToolPolicy(
 MCP_TOOL_POLICIES: dict[str, MCPToolPolicy] = {
     "memory_validate": READ_ONLY_TOOL_POLICY,
     "memory_insert": MEMORY_INSERT_POLICY,
+    "memory_save": MEMORY_INSERT_POLICY,
     "memory_search": READ_ONLY_TOOL_POLICY,
     "memory_retrieve": READ_ONLY_WITH_INTERNAL_WRITES_POLICY,
     "memory_ask": READ_ONLY_TOOL_POLICY,
@@ -295,7 +312,7 @@ def _tool_policy(tool_name: str) -> MCPToolPolicy:
 
 def _tool_meta(tool_name: str, *, config: HubConfig | None = None) -> dict[str, Any]:
     meta: dict[str, Any] = {}
-    if tool_name in {"memory_validate", "memory_insert"}:
+    if tool_name in {"memory_validate", "memory_insert", "memory_save"}:
         meta.update(CONVERSATION_JSON_TOOL_META)
     auth_mode = str(config.api.auth) if config is not None else None
     meta["ai-memory-hub/auth"] = _tool_policy(tool_name).auth_meta(auth_mode=auth_mode)
@@ -313,6 +330,17 @@ def _validate_tool_registration(handlers: dict[str, ToolFn]) -> None:
         if missing_policies:
             problems.append(f"policies missing for {sorted(missing_policies)}")
         raise ValueError("MCP tool registration is incomplete: " + "; ".join(problems))
+
+
+def _tool_handlers_for_profile(
+    handlers: dict[str, ToolFn], profile: MCPToolProfile
+) -> dict[str, ToolFn]:
+    if profile == MCPToolProfile.SIMPLE:
+        return {
+            exposed_name: handlers[handler_name]
+            for exposed_name, handler_name in _SIMPLE_TOOL_ALIASES.items()
+        }
+    return handlers
 
 
 def _envelope(
@@ -1803,10 +1831,16 @@ def create_mcp_server(*, config: HubConfig, agent: BaseIngestionAgent):
 
     mcp = FastMCP(
         "ai-memory-hub",
-        instructions=SERVER_INSTRUCTIONS,
+        instructions=(
+            SIMPLE_SERVER_INSTRUCTIONS
+            if config.mcp.tool_profile == MCPToolProfile.SIMPLE
+            else SERVER_INSTRUCTIONS
+        ),
         list_page_size=config.mcp.list_page_size,
     )
-    handlers = build_tool_handlers(agent, config=config)
+    handlers = _tool_handlers_for_profile(
+        build_tool_handlers(agent, config=config), config.mcp.tool_profile
+    )
     _validate_tool_registration(handlers)
 
     for tool_name, tool_fn in handlers.items():

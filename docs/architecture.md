@@ -414,7 +414,16 @@ storage:
 interfaces:
   mcp: true
   api: true
+
+mcp:
+  tool_profile: advanced
 ```
 
 See `project_status.md` for the current implementation classification and
 `plans.md` for the issue-backed planning policy.
+
+The `advanced` MCP tool profile is the default and preserves the complete current tool
+surface. The opt-in `simple` preview registers only `memory_save` and `memory_ask`.
+`memory_save` aliases the existing insert handler, so the profile does not create a
+second ingestion path, change HTTP routing, or delete internal search, retrieval, fact,
+or profile capabilities.

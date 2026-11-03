@@ -14,8 +14,11 @@ def _event_data_json(event_stream_body: str) -> dict[str, object]:
     raise AssertionError("No event-stream data payload found")
 
 
-def _mcp_client() -> TestClient:
-    app = create_app(config={"interfaces": {"mcp": True, "api": False}})
+def _mcp_client(*, tool_profile: str | None = None) -> TestClient:
+    config: dict[str, object] = {"interfaces": {"mcp": True, "api": False}}
+    if tool_profile is not None:
+        config["mcp"] = {"tool_profile": tool_profile}
+    app = create_app(config=config)
     return TestClient(app)
 
 
@@ -89,6 +92,7 @@ def test_mcp_initialize_and_tools_list_with_session() -> None:
         assert isinstance(tools, list)
         tool_names = {tool["name"] for tool in tools if isinstance(tool, dict) and "name" in tool}
         assert {"memory_validate", "memory_insert", "memory_search", "memory_retrieve"}.issubset(tool_names)
+        assert "memory_save" not in tool_names
         tools_by_name = {tool["name"]: tool for tool in tools if isinstance(tool, dict) and "name" in tool}
         for tool in tools:
             if not isinstance(tool, dict):
@@ -164,6 +168,30 @@ def test_mcp_initialize_and_tools_list_with_session() -> None:
             assert limit_schema["minimum"] == 1
             assert limit_schema["maximum"] == 100
             assert "concise" in limit_schema["description"]
+
+
+def test_mcp_simple_tool_profile_lists_only_save_and_ask() -> None:
+    with _mcp_client(tool_profile="simple") as client:
+        headers = _init_headers(client)
+        response = client.post(
+            "/mcp/",
+            json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+            headers=headers,
+        )
+
+    assert response.status_code == 200
+    result = _event_data_json(response.text)["result"]
+    assert isinstance(result, dict)
+    tools = result.get("tools")
+    assert isinstance(tools, list)
+    assert {tool["name"] for tool in tools if isinstance(tool, dict)} == {
+        "memory_save",
+        "memory_ask",
+    }
+    tools_by_name = {tool["name"]: tool for tool in tools if isinstance(tool, dict)}
+    save = tools_by_name["memory_save"]
+    assert save["annotations"]["readOnlyHint"] is False
+    assert save["inputSchema"]["properties"]["conversation_json"]["type"] == "object"
 
 
 def test_mcp_tools_list_cursor_pagination_is_stable() -> None:

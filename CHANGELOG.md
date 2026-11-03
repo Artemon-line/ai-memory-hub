@@ -6,6 +6,10 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+- Added `mcp.tool_profile`: `advanced` remains the default full MCP tool surface,
+  while the opt-in `simple` preview registers only `memory_save` and `memory_ask`.
+  The save name aliases the existing insert handler without changing HTTP endpoints
+  or internal ingestion and retrieval capabilities.
 - Verified that DeepSeek web exposes per-conversation public shares and a
   separate account-wide data ZIP, not a native per-conversation JSON download;
   documented the observed contracts and added privacy-safe diagnostics that

@@ -6,7 +6,13 @@ from pathlib import Path
 import pytest
 
 import memory.config as config_module
-from memory.config import HubConfig, ensure_token_hash_secret, load_config, parse_config
+from memory.config import (
+    HubConfig,
+    MCPToolProfile,
+    ensure_token_hash_secret,
+    load_config,
+    parse_config,
+)
 
 
 def _write_config(path: Path, *, embeddings: str, dimension: int) -> None:
@@ -93,6 +99,17 @@ def test_embedding_endpoint_batch_limits_are_bounded_and_configurable() -> None:
         parse_config({"embedding_endpoint": {"max_batch_size": 0}})
     with pytest.raises(ValueError):
         parse_config({"embedding_endpoint": {"max_batch_input_bytes": 0}})
+
+
+def test_mcp_tool_profile_defaults_to_advanced_and_accepts_simple() -> None:
+    assert parse_config({}).mcp.tool_profile == MCPToolProfile.ADVANCED
+    assert (
+        parse_config({"mcp": {"tool_profile": "simple"}}).mcp.tool_profile
+        == MCPToolProfile.SIMPLE
+    )
+
+    with pytest.raises(ValueError, match="tool_profile"):
+        parse_config({"mcp": {"tool_profile": "unknown"}})
 
 
 def test_oauth_refresh_and_client_registration_ttl_config() -> None:
