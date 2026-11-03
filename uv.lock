@@ -115,7 +115,7 @@ requires-dist = [
     { name = "lancedb", specifier = ">=0.40.0" },
     { name = "mcp", specifier = ">=2.2.0" },
     { name = "opensearch-py", marker = "extra == 'opensearch'", specifier = ">=2.7.0" },
-    { name = "opentelemetry-api", marker = "extra == 'observability'", specifier = ">=1.29.0" },
+    { name = "opentelemetry-api", marker = "extra == 'observability'", specifier = ">=1.45.2" },
     { name = "opentelemetry-exporter-otlp-proto-grpc", marker = "extra == 'observability'", specifier = ">=1.45.1" },
     { name = "opentelemetry-instrumentation-dbapi", marker = "extra == 'observability'", specifier = ">=0.50b0" },
     { name = "opentelemetry-instrumentation-fastapi", marker = "extra == 'observability'", specifier = ">=0.50b0" },
