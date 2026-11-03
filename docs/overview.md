@@ -1411,6 +1411,9 @@ interfaces:
   mcp: true
   api: true
 
+mcp:
+  tool_profile: advanced
+
 paths:
   data_dir: ./data
   logs_dir: ./logs
@@ -1421,6 +1424,13 @@ embedding_endpoint:
   max_batch_size: 128
   max_batch_input_bytes: 1000000
 ```
+
+`mcp.tool_profile` defaults to `advanced`, which exposes every current MCP tool. Set it
+to `simple` to preview a two-tool surface containing only `memory_save` and
+`memory_ask`. The save name aliases the existing `memory_insert` handler rather than
+creating another ingestion path. This setting filters MCP tool registration only; it
+does not disable HTTP endpoints or remove the specialized internal implementations
+used by ask. Invalid profile names fail configuration validation.
 
 `max_batch_size` and `max_batch_input_bytes` bound each HTTP embedding request
 by input count and serialized UTF-8 JSON input-array bytes. Ingestion processes

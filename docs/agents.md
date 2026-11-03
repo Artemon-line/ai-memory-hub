@@ -49,6 +49,15 @@ Implemented:
   `memory_profile_get`, `memory_lookup`, `memory_fact_supersede`,
   `memory_pending_approve`, `memory_pending_reject`, `memory_project_list`,
   `memory_project_default_get`, and `memory_project_get`.
+
+The default `mcp.tool_profile: advanced` exposes every tool listed above and preserves
+the current MCP contract. The opt-in preview `mcp.tool_profile: simple` registers only
+`memory_save` and `memory_ask`. `memory_save` is an exposure alias for the existing
+`memory_insert` handler, so validation, save intent, deduplication, review routing, and
+storage behavior stay on the same ingestion path. Tool profiles affect MCP tool
+registration only; HTTP endpoints and internal retrieval implementations are unchanged.
+Unsupported profile values fail configuration validation.
+
 - MCP resources: `memory://conversation/example`, `memory://conversation/{id}`,
   `memory://search/{query}`, `memory://timeline/{day}`, `memory://health`.
 - MCP prompts: `save_conversation`, `search_memory`, `ask_memory`,

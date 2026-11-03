@@ -244,6 +244,25 @@ MCP endpoint:
 http://127.0.0.1:8000/mcp/
 ```
 
+MCP exposes the full current tool set by default. To preview the smaller agent-facing
+surface, set `mcp.tool_profile` in `config.yaml`:
+
+```yaml
+mcp:
+  tool_profile: advanced # Default; exposes every current MCP tool.
+```
+
+```yaml
+mcp:
+  tool_profile: simple # Opt-in preview; exposes only memory_save and memory_ask.
+```
+
+`memory_save` is an MCP exposure alias for the existing `memory_insert` ingestion
+behavior; it does not create a second write path. The `simple` profile changes only
+MCP tool registration; HTTP endpoints, MCP resources and prompts, and the hub's
+internal search, retrieval, fact, and profile implementations remain available.
+Unknown profile values fail configuration validation.
+
 For user-facing MCP setup, use the local stack example with
 `api.auth: oauth_resource_server` and open `/connect`. The Connect UI shows the
 active MCP URL, configured passport providers, sign-in status, short-lived hub

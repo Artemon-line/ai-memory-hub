@@ -712,8 +712,9 @@ def test_mcp_tool_policies_cover_registered_handlers() -> None:
     agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
     handlers = build_tool_handlers(agent)
 
-    assert set(handlers) == set(mcp_server.TOOL_DESCRIPTIONS)
-    assert set(handlers) == set(mcp_server.MCP_TOOL_POLICIES)
+    expected_public_names = set(handlers) | {"memory_save"}
+    assert expected_public_names == set(mcp_server.TOOL_DESCRIPTIONS)
+    assert expected_public_names == set(mcp_server.MCP_TOOL_POLICIES)
 
 
 @pytest.mark.asyncio

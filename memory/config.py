@@ -40,6 +40,11 @@ class InsertPolicy(StrEnum):
     REVIEW_PENDING = "review_pending"
 
 
+class MCPToolProfile(StrEnum):
+    ADVANCED = "advanced"
+    SIMPLE = "simple"
+
+
 class ProvidersConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
@@ -643,6 +648,7 @@ class MCPConfig(BaseModel):
     host: str = "127.0.0.1"
     port: int = 8765
     list_page_size: int | None = Field(default=100, ge=1)
+    tool_profile: MCPToolProfile = MCPToolProfile.ADVANCED
 
 
 class APITokenConfig(BaseModel):

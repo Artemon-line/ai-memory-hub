@@ -169,6 +169,7 @@ schema:
 mcp:
   host: '127.0.0.1'
   port: 8765
+  tool_profile: advanced # Default; exposes every current MCP tool.
 
 # -------------------------
 # API SERVER SETTINGS
