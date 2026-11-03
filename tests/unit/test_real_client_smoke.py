@@ -127,8 +127,9 @@ def test_responses_gateway_waits_for_opencode_mcp_discovery() -> None:
             "input": [{"type": "message", "content": "go"}],
             "tools": [
                 {"type": "function", "name": "execute"},
-                {"type": "function", "name": "experimental_image_generate"},
                 {"type": "function", "name": "shell"},
+                {"type": "function", "name": "skill"},
+                {"type": "function", "name": "subagent"},
             ],
         }
     )
@@ -136,6 +137,28 @@ def test_responses_gateway_waits_for_opencode_mcp_discovery() -> None:
     output = response["output"][0]
     assert output["name"] == "shell"
     assert "time.sleep(2)" in output["arguments"]
+
+
+def test_responses_gateway_uses_opencode_execute_for_code_mode_mcp() -> None:
+    response = real_client_smoke._openai_responses_response(
+        {
+            "input": [
+                {"type": "message", "content": "go"},
+                {"type": "function_call", "name": "shell", "id": "fc_amh_mcp_warmup"},
+            ],
+            "tools": [
+                {"type": "function", "name": "execute"},
+                {"type": "function", "name": "shell"},
+                {"type": "function", "name": "skill"},
+                {"type": "function", "name": "subagent"},
+            ],
+        }
+    )
+
+    output = response["output"][0]
+    arguments = json.loads(output["arguments"])
+    assert output["name"] == "execute"
+    assert 'tools["ai-memory-hub"].memory_validate' in arguments["code"]
 
 
 def test_tool_sequence_ignores_names_in_injected_mcp_instructions() -> None:
@@ -288,7 +311,6 @@ def test_opencode_has_a_headless_local_gateway_command(tmp_path: Path) -> None:
     assert config["provider"]["local-smoke"]["npm"] == "@ai-sdk/openai"
     assert config["provider"]["local-smoke"]["options"]["apiKey"] == "{env:AMH_REAL_CLIENT_TEST_API_KEY}"
     assert config["mcp"]["servers"]["ai-memory-hub"]["url"] == "http://127.0.0.1:8000/mcp/"
-    assert config["mcp"]["servers"]["ai-memory-hub"]["codemode"] is False
 
 
 def test_run_harness_removes_temporary_workspace(tmp_path: Path, monkeypatch) -> None:

@@ -346,7 +346,6 @@ def _client_spec(*, name: str, hub_url: str, gateway_url: str, workspace: Path) 
                         "ai-memory-hub": {
                             "type": "remote",
                             "url": mcp_url,
-                            "codemode": False,
                         }
                     }
                 },
@@ -640,15 +639,10 @@ def _openai_responses_response(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _opencode_mcp_is_still_starting(tool_name: str, payload: dict[str, Any]) -> bool:
-    exposed_names = {
-        str(tool["name"])
-        for tool in payload.get("tools", [])
-        if isinstance(tool, dict) and isinstance(tool.get("name"), str)
-    }
-    is_opencode = "experimental_image_generate" in exposed_names and "execute" in exposed_names
+    exposed_names = _responses_tool_names(payload)
     has_memory_tool = any(name == tool_name or name.endswith(f"_{tool_name}") for name in exposed_names)
     already_waited = "amh_mcp_warmup" in json.dumps(payload.get("input", []))
-    return tool_name.startswith("memory_") and is_opencode and not has_memory_tool and not already_waited
+    return tool_name.startswith("memory_") and _is_opencode_payload(payload) and not has_memory_tool and not already_waited
 
 
 def _opencode_mcp_warmup_call() -> dict[str, Any]:
@@ -662,7 +656,20 @@ def _opencode_mcp_warmup_call() -> dict[str, Any]:
 
 
 def _openai_responses_tool_call(tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
-    arguments = json.dumps(_tool_input(tool_name, payload))
+    tool_input = _tool_input(tool_name, payload)
+    if tool_name.startswith("memory_") and _is_opencode_payload(payload):
+        exposed_names = _responses_tool_names(payload)
+        has_direct_tool = any(name == tool_name or name.endswith(f"_{tool_name}") for name in exposed_names)
+        if not has_direct_tool:
+            code = f'return await tools["ai-memory-hub"].{tool_name}({json.dumps(tool_input)});'
+            return {
+                "type": "function_call",
+                "id": f"fc_execute_{tool_name}",
+                "call_id": f"call_execute_{tool_name}",
+                "name": "execute",
+                "arguments": json.dumps({"code": code}),
+            }
+    arguments = json.dumps(tool_input)
     exposed_name = next(
         (
             str(tool["name"])
@@ -689,6 +696,18 @@ def _openai_responses_tool_call(tool_name: str, payload: dict[str, Any]) -> dict
         "name": tool_name,
         "arguments": arguments,
     }
+
+
+def _responses_tool_names(payload: dict[str, Any]) -> set[str]:
+    return {
+        str(tool["name"])
+        for tool in payload.get("tools", [])
+        if isinstance(tool, dict) and isinstance(tool.get("name"), str)
+    }
+
+
+def _is_opencode_payload(payload: dict[str, Any]) -> bool:
+    return {"execute", "shell", "skill", "subagent"}.issubset(_responses_tool_names(payload))
 
 
 def _openai_responses_stream_events(response: dict[str, Any]) -> Iterable[dict[str, Any]]:
