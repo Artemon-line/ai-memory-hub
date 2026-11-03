@@ -144,7 +144,7 @@ class ExternalOIDCValidator:
             email = _claim_value(claims, self._config.email_claim)
             if not isinstance(email, str) or "@" not in email:
                 return False
-            if claims.get("email_verified") is False:
+            if claims.get("email_verified") is not True:
                 return False
             domain = email.rsplit("@", 1)[1].lower()
             if domain not in self._config.allowed_domains:
