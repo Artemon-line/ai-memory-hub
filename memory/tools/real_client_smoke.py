@@ -324,20 +324,53 @@ def _client_spec(*, name: str, hub_url: str, gateway_url: str, workspace: Path) 
     if name == "opencode":
         config_home = workspace / "opencode-home"
         config_home.mkdir(parents=True, exist_ok=True)
+        config_path = config_home / "opencode.json"
         _write_json(
-            config_home / "opencode.json",
+            config_path,
             {
-                "provider": {"local-smoke": {"npm": "", "options": {"baseURL": f"{gateway_url.rstrip('/')}/v1"}}},
-                "mcp": {"ai-memory-hub": {"type": "remote", "url": mcp_url}},
+                "$schema": "https://opencode.ai/config.json",
+                "model": "local-smoke/amh-smoke-model",
+                "provider": {
+                    "local-smoke": {
+                        "npm": "@ai-sdk/openai",
+                        "name": "AI Memory Hub smoke gateway",
+                        "options": {
+                            "apiKey": "{env:AMH_REAL_CLIENT_TEST_API_KEY}",
+                            "baseURL": f"{gateway_url.rstrip('/')}/v1",
+                        },
+                        "models": {"amh-smoke-model": {"name": "AI Memory Hub smoke model"}},
+                    }
+                },
+                "mcp": {
+                    "servers": {
+                        "ai-memory-hub": {
+                            "type": "remote",
+                            "url": mcp_url,
+                            "codemode": False,
+                        }
+                    }
+                },
             },
         )
         return ClientSpec(
             name=name,
             executable="opencode",
             command_env=env_name,
-            default_command=None,
-            env={"OPENCODE_CONFIG_DIR": str(config_home)},
-            notes="opencode status is documented but not enabled until a reliable headless command is validated.",
+            default_command=(
+                "opencode",
+                "run",
+                "--standalone",
+                "--model",
+                "local-smoke/amh-smoke-model",
+                "{prompt}",
+            ),
+            env={
+                "AMH_REAL_CLIENT_TEST_API_KEY": "test-key",
+                "OPENCODE_CONFIG": str(config_path),
+                "OPENCODE_CONFIG_DIR": str(config_home),
+                "OPENCODE_DISABLE_AUTOUPDATE": "true",
+            },
+            notes="Runs OpenCode non-interactively against the local Responses gateway and MCP server.",
         )
     if name == "gemini":
         return ClientSpec(
@@ -355,12 +388,13 @@ def _resolve_command(spec: ClientSpec, *, prompt: str, artifact_dir: Path) -> li
     template = os.environ.get(spec.command_env)
     prompt_file = artifact_dir / f"{spec.name}.prompt.txt"
     _write_text(prompt_file, prompt)
-    if template:
-        return [
-            part.format(prompt=prompt, prompt_file=str(prompt_file), artifact_dir=str(artifact_dir))
-            for part in shlex.split(template)
-        ]
-    return list(spec.default_command) if spec.default_command is not None else None
+    command = shlex.split(template) if template else spec.default_command
+    if command is None:
+        return None
+    return [
+        part.format(prompt=prompt, prompt_file=str(prompt_file), artifact_dir=str(artifact_dir))
+        for part in command
+    ]
 
 
 def _start_hub(*, hub_url: str, workspace: Path, artifact_dir: Path) -> subprocess.Popen[str]:
@@ -569,7 +603,10 @@ def _openai_responses_response(payload: dict[str, Any]) -> dict[str, Any]:
     tool_name = _next_tool_name(payload.get("input", []))
     output: list[dict[str, Any]]
     if tool_name:
-        output = [_openai_responses_tool_call(tool_name, payload)]
+        if _opencode_mcp_is_still_starting(tool_name, payload):
+            output = [_opencode_mcp_warmup_call()]
+        else:
+            output = [_openai_responses_tool_call(tool_name, payload)]
     else:
         output = [
             {
@@ -602,14 +639,46 @@ def _openai_responses_response(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _opencode_mcp_is_still_starting(tool_name: str, payload: dict[str, Any]) -> bool:
+    exposed_names = {
+        str(tool["name"])
+        for tool in payload.get("tools", [])
+        if isinstance(tool, dict) and isinstance(tool.get("name"), str)
+    }
+    is_opencode = "experimental_image_generate" in exposed_names and "execute" in exposed_names
+    has_memory_tool = any(name == tool_name or name.endswith(f"_{tool_name}") for name in exposed_names)
+    already_waited = "amh_mcp_warmup" in json.dumps(payload.get("input", []))
+    return tool_name.startswith("memory_") and is_opencode and not has_memory_tool and not already_waited
+
+
+def _opencode_mcp_warmup_call() -> dict[str, Any]:
+    return {
+        "type": "function_call",
+        "id": "fc_amh_mcp_warmup",
+        "call_id": "call_amh_mcp_warmup",
+        "name": "shell",
+        "arguments": json.dumps({"command": 'python -c "import time; time.sleep(2)"'}),
+    }
+
+
 def _openai_responses_tool_call(tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
     arguments = json.dumps(_tool_input(tool_name, payload))
+    exposed_name = next(
+        (
+            str(tool["name"])
+            for tool in payload.get("tools", [])
+            if isinstance(tool, dict)
+            and isinstance(tool.get("name"), str)
+            and (tool["name"] == tool_name or tool["name"].endswith(f"_{tool_name}"))
+        ),
+        tool_name,
+    )
     if tool_name.startswith("memory_"):
         return {
             "type": "function_call",
             "id": f"fc_mcp__ai_memory_hub_{tool_name}",
             "call_id": f"call_mcp__ai_memory_hub_{tool_name}",
-            "name": tool_name,
+            "name": exposed_name,
             "namespace": "mcp__ai_memory_hub",
             "arguments": arguments,
         }
@@ -798,6 +867,16 @@ def _anthropic_messages_response(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _next_tool_name(messages: Any) -> str | None:
+    if isinstance(messages, list):
+        messages = [
+            message
+            for message in messages
+            if not (
+                isinstance(message, dict)
+                and message.get("type") == "message"
+                and message.get("role") in {"developer", "system"}
+            )
+        ]
     text = json.dumps(messages).lower()
     sequence = (
         "memory_validate",

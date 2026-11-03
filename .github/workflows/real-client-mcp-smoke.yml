@@ -31,15 +31,24 @@ jobs:
         with:
           enable-cache: true
 
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        with:
+          node-version: '24'
+
       - name: Install dependencies
         run: uv sync --dev
+
+      - name: Install pinned OpenCode CLI
+        run: npm install --global @opencode/cli@2.2.5
 
       - name: Run real-client MCP smoke harness
         env:
           PYTHONHASHSEED: '0'
         run: >
           uv run python -m memory.tools.real_client_smoke
-          --require-any-success
+          --client opencode
+          --require-success-for opencode
           --artifact-dir artifacts/real-client-mcp-smoke
 
       - name: Upload real-client smoke artifacts
