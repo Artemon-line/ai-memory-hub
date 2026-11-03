@@ -106,8 +106,14 @@ def test_text_logging_includes_context_fields() -> None:
 
 
 def test_access_logs_can_be_disabled() -> None:
-    configure_logging(LoggingConfig(access_logs=False))
+    access_logger = logging.getLogger("uvicorn.access")
+    original_disabled = access_logger.disabled
+    try:
+        configure_logging(LoggingConfig(access_logs=False))
 
-    assert logging.getLogger("uvicorn.access").disabled is True
+        assert access_logger.disabled is True
 
-    configure_logging(LoggingConfig(access_logs=True))
+        configure_logging(LoggingConfig(access_logs=True))
+        assert access_logger.disabled is False
+    finally:
+        access_logger.disabled = original_disabled

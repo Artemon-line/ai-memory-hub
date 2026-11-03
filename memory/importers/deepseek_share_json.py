@@ -46,7 +46,7 @@ class DeepSeekShareJsonImporter(ConversationImporter):
             raise ValueError("DeepSeek share JSON contains no messages")
 
         messages: list[dict[str, str]] = []
-        timestamps: list[float] = []
+        timestamps: list[datetime] = []
         for index, raw_message in enumerate(raw_messages):
             if not isinstance(raw_message, dict):
                 raise ValueError(f"DeepSeek message {index + 1} must be an object")
@@ -57,7 +57,10 @@ class DeepSeekShareJsonImporter(ConversationImporter):
             messages.append({"role": role, "text": text_content})
             timestamp = raw_message.get("inserted_at")
             if isinstance(timestamp, int | float):
-                timestamps.append(float(timestamp))
+                try:
+                    timestamps.append(datetime.fromtimestamp(float(timestamp), UTC))
+                except (OSError, OverflowError, ValueError):
+                    pass
 
         metadata: dict[str, Any] = {
             "importer": self.name,
@@ -77,7 +80,7 @@ class DeepSeekShareJsonImporter(ConversationImporter):
         if isinstance(resolved_title, str) and resolved_title.strip():
             payload["title"] = resolved_title.strip()
         if timestamps:
-            payload["timestamp"] = datetime.fromtimestamp(min(timestamps), UTC).isoformat()
+            payload["timestamp"] = min(timestamps).isoformat()
         return [payload]
 
 

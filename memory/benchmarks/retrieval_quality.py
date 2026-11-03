@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -75,6 +76,13 @@ def run_evaluation(
 ) -> dict[str, Any]:
     if top_k < 1:
         raise ValueError("top_k must be positive")
+    for name, value in {
+        "min_precision_at_1": min_precision_at_1,
+        "min_recall_at_k": min_recall_at_k,
+        "min_mrr": min_mrr,
+    }.items():
+        if not math.isfinite(value):
+            raise ValueError(f"{name} must be finite")
 
     conversations = _representative_conversations()
     cases = _representative_cases(top_k=top_k)
@@ -161,26 +169,21 @@ def _evaluate(
     tuned: bool,
     top_k: int,
 ) -> dict[str, Any]:
-    previous_runtime = mvp_ingestion._RUNTIME
     query_indexes = {case.query: index for index, case in enumerate(cases)}
-    try:
-        mvp_ingestion.configure_runtime(
-            runtime=mvp_ingestion.RuntimeDependencies(
-                embedding_provider=EvaluationEmbedder(query_indexes),  # type: ignore[arg-type]
-                metadata_store=EvaluationMetadataStore(conversations),
-                vector_store=EvaluationVectorStore(cases),
-                health_state={"mode": "evaluation", "vector_fallback_active": False},
-                retrieval_vector_score_threshold=7.5 if tuned else 1000.0,
-                retrieval_keyword_enabled=tuned,
-                retrieval_keyword_candidate_limit=50,
-                retrieval_keyword_weight=0.25 if tuned else 0.0,
-                retrieval_metadata_weight=0.15 if tuned else 0.0,
-                retrieval_candidate_multiplier=3,
-            )
-        )
+    runtime = mvp_ingestion.RuntimeDependencies(
+        embedding_provider=EvaluationEmbedder(query_indexes),  # type: ignore[arg-type]
+        metadata_store=EvaluationMetadataStore(conversations),
+        vector_store=EvaluationVectorStore(cases),
+        health_state={"mode": "evaluation", "vector_fallback_active": False},
+        retrieval_vector_score_threshold=7.5 if tuned else 1000.0,
+        retrieval_keyword_enabled=tuned,
+        retrieval_keyword_candidate_limit=50,
+        retrieval_keyword_weight=0.25 if tuned else 0.0,
+        retrieval_metadata_weight=0.15 if tuned else 0.0,
+        retrieval_candidate_multiplier=3,
+    )
+    with mvp_ingestion.runtime_context(runtime):
         rows = [_evaluate_case(case, top_k=top_k) for case in cases]
-    finally:
-        mvp_ingestion._RUNTIME = previous_runtime
 
     return {"cases": rows, "summary": _summarize(rows)}
 

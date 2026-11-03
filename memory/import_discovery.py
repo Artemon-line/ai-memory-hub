@@ -416,24 +416,29 @@ class _CopilotCliAdapter(SourceAdapter):
 
     def inspect(self, path: Path) -> _InspectedHeader | None:
         records = self._record_reader.read(path)
-        terminal = any(
-            record.get(ArtifactRecordKey.TYPE) == ArtifactRecordType.SESSION_SHUTDOWN
-            for record in records
-        )
+        terminal = False
+        header: _InspectedHeader | None = None
         for record in records:
-            if record.get(ArtifactRecordKey.TYPE) != ArtifactRecordType.SESSION_START:
+            record_type = record.get(ArtifactRecordKey.TYPE)
+            if record_type == ArtifactRecordType.SESSION_SHUTDOWN:
+                terminal = True
                 continue
+            if record_type != ArtifactRecordType.SESSION_START:
+                continue
+            terminal = False
             data = record.get(ArtifactRecordKey.DATA)
             if not isinstance(data, dict):
                 return None
-            header = _header(
+            parsed_header = _header(
                 data.get(ArtifactRecordKey.SESSION_ID),
                 data.get(ArtifactRecordKey.START_TIME)
                 or record.get(ArtifactRecordKey.TIMESTAMP),
             )
-            if header is not None:
-                return _InspectedHeader(header.session_id, header.timestamp, terminal)
-        return None
+            if header is None and parsed_header is not None:
+                header = parsed_header
+        if header is None:
+            return None
+        return _InspectedHeader(header.session_id, header.timestamp, terminal)
 
 
 class _PiFamilyAdapter(SourceAdapter):

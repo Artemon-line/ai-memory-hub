@@ -5,6 +5,7 @@ import json
 from fastapi.testclient import TestClient
 
 from memory.api.server import create_app
+from tests.mcp_protocol import initialize_mcp_session
 
 
 def _event_data_json(event_stream_body: str) -> dict[str, object]:
@@ -19,28 +20,9 @@ def _mcp_client() -> TestClient:
     return TestClient(app)
 
 
-def _init_headers(client: TestClient) -> dict[str, str]:
-    headers = {"Accept": "application/json, text/event-stream"}
-    initialize_payload = {
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "initialize",
-        "params": {
-            "protocolVersion": "2025-06-18",
-            "capabilities": {},
-            "clientInfo": {"name": "pytest", "version": "0.1"},
-        },
-    }
-    response = client.post("/mcp/", json=initialize_payload, headers=headers)
-    assert response.status_code == 200
-    session_id = response.headers.get("mcp-session-id")
-    assert session_id
-    return {**headers, "Mcp-Session-Id": session_id}
-
-
 def test_mcp_resources_list_and_read_conversation_resource() -> None:
     with _mcp_client() as client:
-        headers = _init_headers(client)
+        headers = initialize_mcp_session(client)
         list_response = client.post(
             "/mcp/",
             json={"jsonrpc": "2.0", "id": 2, "method": "resources/list", "params": {}},
@@ -81,7 +63,7 @@ def test_mcp_resources_list_and_read_conversation_resource() -> None:
 
 def test_mcp_resource_templates_list_non_empty() -> None:
     with _mcp_client() as client:
-        headers = _init_headers(client)
+        headers = initialize_mcp_session(client)
         templates_response = client.post(
             "/mcp/",
             json={

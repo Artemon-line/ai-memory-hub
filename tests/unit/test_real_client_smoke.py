@@ -110,6 +110,70 @@ def test_responses_gateway_requests_fact_search_after_ask() -> None:
     )
 
 
+def test_responses_gateway_uses_the_clients_exposed_mcp_tool_name() -> None:
+    response = real_client_smoke._openai_responses_response(
+        {
+            "input": [{"type": "message", "content": "go"}],
+            "tools": [{"type": "function", "name": "ai-memory-hub_memory_validate"}],
+        }
+    )
+
+    assert response["output"][0]["name"] == "ai-memory-hub_memory_validate"
+
+
+def test_responses_gateway_waits_for_opencode_mcp_discovery() -> None:
+    response = real_client_smoke._openai_responses_response(
+        {
+            "input": [{"type": "message", "content": "go"}],
+            "tools": [
+                {"type": "function", "name": "execute"},
+                {"type": "function", "name": "shell"},
+                {"type": "function", "name": "skill"},
+                {"type": "function", "name": "subagent"},
+            ],
+        }
+    )
+
+    output = response["output"][0]
+    assert output["name"] == "shell"
+    assert "time.sleep(2)" in output["arguments"]
+
+
+def test_responses_gateway_uses_opencode_execute_for_code_mode_mcp() -> None:
+    response = real_client_smoke._openai_responses_response(
+        {
+            "input": [
+                {"type": "message", "content": "go"},
+                {"type": "function_call", "name": "shell", "id": "fc_amh_mcp_warmup"},
+            ],
+            "tools": [
+                {"type": "function", "name": "execute"},
+                {"type": "function", "name": "shell"},
+                {"type": "function", "name": "skill"},
+                {"type": "function", "name": "subagent"},
+            ],
+        }
+    )
+
+    output = response["output"][0]
+    arguments = json.loads(output["arguments"])
+    assert output["name"] == "execute"
+    assert 'tools["ai-memory-hub"].memory_validate' in arguments["code"]
+
+
+def test_tool_sequence_ignores_names_in_injected_mcp_instructions() -> None:
+    messages = [
+        {"type": "message", "role": "user", "content": "go"},
+        {
+            "type": "message",
+            "role": "developer",
+            "content": "Use memory_validate, memory_insert, memory_search, memory_retrieve, memory_ask, and memory_fact_search.",
+        },
+    ]
+
+    assert real_client_smoke._next_tool_name(messages) == "memory_validate"
+
+
 def test_real_client_smoke_retrieve_uses_concise_response_format() -> None:
     arguments = real_client_smoke._tool_input(
         "memory_retrieve",
@@ -183,14 +247,70 @@ def test_summary_is_written_for_all_skipped_clients(tmp_path: Path, monkeypatch)
         client_timeout=1,
         require_configured=False,
         require_success_for=[],
+        allow_all_skipped=True,
     )
 
     result = real_client_smoke.run_harness(args)
     real_client_smoke._write_json(tmp_path / "summary.json", real_client_smoke._result_to_dict(result))
 
     summary = json.loads((tmp_path / "summary.json").read_text(encoding="utf-8"))
-    assert summary["status"] == "ok"
+    assert summary["status"] == "skipped"
     assert summary["clients"][0]["status"] == "skipped"
+
+
+def test_all_skipped_clients_fail_without_explicit_local_opt_out() -> None:
+    results = [
+        real_client_smoke.ClientResult("claude", "skipped", "not configured", [])
+    ]
+
+    assert (
+        real_client_smoke._aggregate_status(results, require_success_for=())
+        == "failed"
+    )
+    assert (
+        real_client_smoke._aggregate_status(
+            results, require_success_for=(), allow_all_skipped=True
+        )
+        == "skipped"
+    )
+
+
+def test_real_client_workflow_explicitly_requires_a_success() -> None:
+    workflow = (
+        Path(__file__).parents[2] / ".github/workflows/real-client-mcp-smoke.yml"
+    ).read_text(encoding="utf-8")
+
+    assert "npm install --global @opencode/cli@2.2.5" in workflow
+    assert "--client opencode" in workflow
+    assert "--require-success-for opencode" in workflow
+
+
+def test_opencode_has_a_headless_local_gateway_command(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    artifact_dir = tmp_path / "artifacts"
+    spec = real_client_smoke._client_spec(
+        name="opencode",
+        gateway_url="http://127.0.0.1:9000",
+        hub_url="http://127.0.0.1:8000",
+        workspace=workspace,
+    )
+
+    command = real_client_smoke._resolve_command(
+        spec, prompt="Use the memory tools.", artifact_dir=artifact_dir
+    )
+    config = json.loads(Path(spec.env["OPENCODE_CONFIG"]).read_text(encoding="utf-8"))
+
+    assert command == [
+        "opencode",
+        "run",
+        "--standalone",
+        "--model",
+        "local-smoke/amh-smoke-model",
+        "Use the memory tools.",
+    ]
+    assert config["provider"]["local-smoke"]["npm"] == "@ai-sdk/openai"
+    assert config["provider"]["local-smoke"]["options"]["apiKey"] == "{env:AMH_REAL_CLIENT_TEST_API_KEY}"
+    assert config["mcp"]["servers"]["ai-memory-hub"]["url"] == "http://127.0.0.1:8000/mcp/"
 
 
 def test_run_harness_removes_temporary_workspace(tmp_path: Path, monkeypatch) -> None:
@@ -217,11 +337,12 @@ def test_run_harness_removes_temporary_workspace(tmp_path: Path, monkeypatch) ->
         client_timeout=1,
         require_configured=False,
         require_success_for=[],
+        allow_all_skipped=True,
     )
 
     result = real_client_smoke.run_harness(args)
 
-    assert result.status == "ok"
+    assert result.status == "skipped"
     assert artifact_dir.exists()
     assert not workspace.exists()
     assert terminated == [gateway_process, hub_process]
@@ -254,6 +375,7 @@ def test_run_harness_removes_temporary_workspace_after_startup_failure(
         client_timeout=1,
         require_configured=False,
         require_success_for=[],
+        allow_all_skipped=True,
     )
 
     with pytest.raises(RuntimeError, match="gateway failed"):

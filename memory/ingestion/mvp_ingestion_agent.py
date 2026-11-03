@@ -318,10 +318,12 @@ class MVPIngestionAgent(BaseIngestionAgent):
         return await self._call_service(self._service.project_get, project_id, owner_id=owner_id)
 
     async def authenticate_bearer_token(self, token: str) -> str | None:
-        return self._service.authenticate_bearer_token(token)
+        return await self._call_service(self._service.authenticate_bearer_token, token)
 
     async def authenticate_bearer_token_context(self, token: str) -> dict[str, object] | None:
-        return self._service.authenticate_bearer_token_context(token)
+        return await self._call_service(
+            self._service.authenticate_bearer_token_context, token
+        )
 
     async def find_or_create_oauth_identity(
         self,
@@ -333,13 +335,15 @@ class MVPIngestionAgent(BaseIngestionAgent):
         email: str | None = None,
         display_name: str | None = None,
     ) -> dict[str, object]:
-        return self._service.find_or_create_oauth_identity(
+        return await self._call_service(
+            self._service.find_or_create_oauth_identity,
             provider=provider,
             provider_subject=provider_subject,
             user_id=user_id,
             username=username,
             email=email,
             display_name=display_name,
+            memory_write=True,
         )
 
     async def create_web_session(
@@ -350,18 +354,22 @@ class MVPIngestionAgent(BaseIngestionAgent):
         csrf_token_hash: str,
         expires_at: str,
     ) -> dict[str, object]:
-        return self._service.create_web_session(
+        return await self._call_service(
+            self._service.create_web_session,
             session_id_hash=session_id_hash,
             user_id=user_id,
             csrf_token_hash=csrf_token_hash,
             expires_at=expires_at,
+            memory_write=True,
         )
 
     async def web_session_for_hash(self, session_id_hash: str) -> dict[str, object] | None:
-        return self._service.web_session_for_hash(session_id_hash)
+        return await self._call_service(self._service.web_session_for_hash, session_id_hash)
 
     async def revoke_web_session(self, session_id_hash: str) -> bool:
-        return self._service.revoke_web_session(session_id_hash)
+        return await self._call_service(
+            self._service.revoke_web_session, session_id_hash, memory_write=True
+        )
 
     async def create_auth_token(
         self,
@@ -372,16 +380,20 @@ class MVPIngestionAgent(BaseIngestionAgent):
         expires_at: str | None = None,
         scopes: list[str] | None = None,
     ) -> dict[str, object]:
-        return self._service.create_auth_token(
+        return await self._call_service(
+            self._service.create_auth_token,
             owner_id=owner_id,
             token=token,
             token_display_name=token_display_name,
             expires_at=expires_at,
             scopes=scopes,
+            memory_write=True,
         )
 
     async def revoke_auth_token(self, token_id: str) -> dict[str, object] | None:
-        return self._service.revoke_auth_token(token_id)
+        return await self._call_service(
+            self._service.revoke_auth_token, token_id, memory_write=True
+        )
 
     async def create_oauth_client(
         self,
@@ -392,22 +404,30 @@ class MVPIngestionAgent(BaseIngestionAgent):
         expires_at: str,
         max_active_clients: int,
     ) -> dict[str, object]:
-        return self._service.create_oauth_client(
+        return await self._call_service(
+            self._service.create_oauth_client,
             client_id=client_id,
             client_name=client_name,
             redirect_uris=redirect_uris,
             expires_at=expires_at,
             max_active_clients=max_active_clients,
+            memory_write=True,
         )
 
     async def oauth_client(self, client_id: str) -> dict[str, object] | None:
-        return self._service.oauth_client(client_id)
+        return await self._call_service(self._service.oauth_client, client_id)
 
     async def create_oauth_authorization_code(self, **kwargs: object) -> None:
-        self._service.create_oauth_authorization_code(**kwargs)
+        await self._call_service(
+            self._service.create_oauth_authorization_code,
+            memory_write=True,
+            **kwargs,
+        )
 
     async def consume_oauth_authorization_code(self, code: str) -> dict[str, object] | None:
-        return self._service.consume_oauth_authorization_code(code)
+        return await self._call_service(
+            self._service.consume_oauth_authorization_code, code, memory_write=True
+        )
 
     async def create_oauth_refresh_token(
         self,
@@ -421,7 +441,8 @@ class MVPIngestionAgent(BaseIngestionAgent):
         access_token_id: str | None,
         expires_at: str,
     ) -> dict[str, object]:
-        return self._service.create_oauth_refresh_token(
+        return await self._call_service(
+            self._service.create_oauth_refresh_token,
             refresh_token=refresh_token,
             token_family_id=token_family_id,
             client_id=client_id,
@@ -430,19 +451,36 @@ class MVPIngestionAgent(BaseIngestionAgent):
             resource=resource,
             access_token_id=access_token_id,
             expires_at=expires_at,
+            memory_write=True,
         )
 
     async def oauth_refresh_token(self, refresh_token: str) -> dict[str, object] | None:
-        return self._service.oauth_refresh_token(refresh_token)
+        return await self._call_service(self._service.oauth_refresh_token, refresh_token)
 
     async def consume_oauth_refresh_token(self, refresh_token: str) -> dict[str, object] | None:
-        return self._service.consume_oauth_refresh_token(refresh_token)
+        return await self._call_service(
+            self._service.consume_oauth_refresh_token,
+            refresh_token,
+            memory_write=True,
+        )
 
     async def revoke_oauth_refresh_token(self, refresh_token: str) -> bool:
-        return self._service.revoke_oauth_refresh_token(refresh_token)
+        return await self._call_service(
+            self._service.revoke_oauth_refresh_token,
+            refresh_token,
+            memory_write=True,
+        )
 
     async def revoke_oauth_refresh_token_family(self, token_family_id: str) -> bool:
-        return self._service.revoke_oauth_refresh_token_family(token_family_id)
+        return await self._call_service(
+            self._service.revoke_oauth_refresh_token_family,
+            token_family_id,
+            memory_write=True,
+        )
 
     async def revoke_oauth_authorization_for_access_token(self, access_token: str) -> bool:
-        return self._service.revoke_oauth_authorization_for_access_token(access_token)
+        return await self._call_service(
+            self._service.revoke_oauth_authorization_for_access_token,
+            access_token,
+            memory_write=True,
+        )

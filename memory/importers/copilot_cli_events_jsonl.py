@@ -86,7 +86,7 @@ class CopilotCliEventsJsonlImporter(ConversationImporter):
         records = _parse_records(text)
         messages: list[dict[str, str]] = []
         message_times: list[datetime] = []
-        seen_message_ids: set[str] = set()
+        seen_message_ids: set[tuple[str, str]] = set()
         provenance: dict[str, str] = {}
         event_title: str | None = None
         session_time: datetime | None = None
@@ -111,11 +111,7 @@ class CopilotCliEventsJsonlImporter(ConversationImporter):
             content = parsed_message.data.content
             if not content.strip():
                 continue
-            message_id = (
-                parsed_message.data.messageId
-                or parsed_message.id
-                or parsed_message.data.interactionId
-            )
+            message_id = _message_identity(parsed_message)
             if message_id is not None and message_id in seen_message_ids:
                 continue
             if message_id is not None:
@@ -153,6 +149,19 @@ class CopilotCliEventsJsonlImporter(ConversationImporter):
         if timestamp is not None:
             payload["timestamp"] = timestamp.isoformat()
         return [payload]
+
+
+def _message_identity(message: _MessageEvent) -> tuple[str, str] | None:
+    if message.data.messageId is not None:
+        return ("messageId", message.data.messageId)
+    if message.id is not None:
+        return ("id", message.id)
+    if message.data.interactionId is not None:
+        return (
+            f"interactionId:{message.type}",
+            message.data.interactionId,
+        )
+    return None
 
 
 def _parse_records(text: str) -> list[tuple[dict[str, Any], int]]:

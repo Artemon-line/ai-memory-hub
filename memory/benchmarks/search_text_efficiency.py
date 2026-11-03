@@ -2,12 +2,23 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from typing import Any
 
 from memory.ingestion import mvp_ingestion
 
 _FACT_COUNT = 120
 _CONVERSATION_COUNT = 3
+
+
+class _ConstructionCountingCache(dict[int, str]):
+    def __init__(self) -> None:
+        super().__init__()
+        self.constructions = 0
+
+    def __setitem__(self, key: int, value: str) -> None:
+        self.constructions += 1
+        super().__setitem__(key, value)
 
 
 def run_benchmark() -> dict[str, Any]:
@@ -34,7 +45,7 @@ def run_benchmark() -> dict[str, Any]:
         }
         for index in range(_FACT_COUNT)
     ]
-    conversation_search_texts: dict[int, str] = {}
+    conversation_search_texts = _ConstructionCountingCache()
 
     ranked = mvp_ingestion._rank_facts_by_text_query(
         facts,
@@ -44,7 +55,7 @@ def run_benchmark() -> dict[str, Any]:
     )
 
     previous_constructions = _FACT_COUNT
-    optimized_constructions = len(conversation_search_texts)
+    optimized_constructions = conversation_search_texts.constructions
     return {
         "measurement": "deterministic_work_amplification",
         "fixture": {
@@ -92,7 +103,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         assert_thresholds(report)
     except AssertionError as exc:
-        print(str(exc))
+        print(str(exc), file=sys.stderr)
         return 1
     return 0
 

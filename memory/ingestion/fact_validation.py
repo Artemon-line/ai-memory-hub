@@ -107,15 +107,23 @@ _TEMPORARY_RE = re.compile(
     r"\b(?:for\s+now|temporarily|temporary|today|this\s+(?:week|month)|until\b[^.?!\n]{0,80})",
     re.IGNORECASE,
 )
+_CLAUSE_BOUNDARY_RE = re.compile(
+    r"[.?!;\n]+|,?\s*\b(?:but|yet|while|although)\b\s*",
+    re.IGNORECASE,
+)
 
 
 def classify_assertion(text: str, span: tuple[int, int]) -> AssertionType:
     start, end = span
-    clause_start = max(text.rfind(separator, 0, start) for separator in ".?!\n") + 1
-    clause_end_candidates = [
-        position for separator in ".?!\n" if (position := text.find(separator, end)) >= 0
-    ]
-    clause_end = min(clause_end_candidates) if clause_end_candidates else len(text)
+    boundaries = list(_CLAUSE_BOUNDARY_RE.finditer(text))
+    clause_start = max(
+        (match.end() for match in boundaries if match.end() <= start),
+        default=0,
+    )
+    clause_end = min(
+        (match.start() for match in boundaries if match.start() >= end),
+        default=len(text),
+    )
     clause = text[clause_start:clause_end]
     relative_start = max(0, start - clause_start)
     if _inside_quotes(clause, relative_start):
@@ -164,7 +172,10 @@ def validate_fact_candidate(
         return None
 
     assertion = classify_assertion(text, (evidence.start, evidence.end))
-    if str(extraction.get("rule_identifier", "")).startswith("correction:"):
+    trusted_correction = extraction.pop("_trusted_correction", False) is True
+    if trusted_correction and str(extraction.get("rule_identifier", "")).startswith(
+        "correction:"
+    ):
         assertion = AssertionType.ASSERTED
     if assertion in {AssertionType.NEGATED, AssertionType.HYPOTHETICAL}:
         return None

@@ -5,6 +5,7 @@ import gc
 import hashlib
 import json
 import sqlite3
+import sys
 import threading
 from collections import Counter
 from collections.abc import Callable, Sequence
@@ -184,7 +185,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         assert_thresholds(report)
     except AssertionError as exc:
-        print(str(exc))
+        print(str(exc), file=sys.stderr)
         return 1
     return 0
 
@@ -196,7 +197,6 @@ def _run_level(
     retrieval_cases: list[dict[str, Any]],
     query_requests: int,
 ) -> dict[str, Any]:
-    original_runtime = mvp_ingestion._RUNTIME
     with TemporaryDirectory(prefix="ai-memory-hub-concurrency-") as temp_dir:
         metadata_store = _BenchmarkMetadataStore(f"{temp_dir}/metadata.db")
         vector_store = InMemoryVectorStore(dimension=_EMBEDDING_DIMENSION)
@@ -216,10 +216,10 @@ def _run_level(
             retrieval_vector_score_threshold=2.0,
             retrieval_keyword_enabled=True,
         )
+        service = mvp_ingestion.MVPIngestionService(runtime)
         try:
-            mvp_ingestion.configure_runtime(runtime=runtime)
             insert = _measure_concurrent(
-                operation=lambda index: mvp_ingestion.ingest_messages(
+                operation=lambda index: service.ingest_messages(
                     deepcopy(conversations[index])
                 ),
                 requests=len(conversations),
@@ -227,14 +227,14 @@ def _run_level(
             )
             search = _measure_concurrent(
                 operation=lambda index: _run_search_case(
-                    retrieval_cases[index % len(retrieval_cases)]
+                    service, retrieval_cases[index % len(retrieval_cases)]
                 ),
                 requests=query_requests,
                 concurrency=concurrency,
             )
             ask = _measure_concurrent(
                 operation=lambda index: _run_ask_case(
-                    retrieval_cases[index % len(retrieval_cases)]
+                    service, retrieval_cases[index % len(retrieval_cases)]
                 ),
                 requests=query_requests,
                 concurrency=concurrency,
@@ -271,7 +271,6 @@ def _run_level(
                 },
             }
         finally:
-            mvp_ingestion._RUNTIME = original_runtime
             del runtime
             gc.collect()
 
@@ -322,17 +321,21 @@ def _measure_concurrent(
     }
 
 
-def _run_search_case(case: dict[str, Any]) -> dict[str, Any]:
-    return mvp_ingestion.search(
-        str(case["query"]),
+def _run_search_case(
+    service: mvp_ingestion.MVPIngestionService, case: dict[str, Any]
+) -> dict[str, Any]:
+    return service.search(
+        query=str(case["query"]),
         top_k=5,
         tags=case.get("filters", {}).get("tags"),
     )
 
 
-def _run_ask_case(case: dict[str, Any]) -> dict[str, Any]:
-    return mvp_ingestion.ask(
-        str(case["query"]),
+def _run_ask_case(
+    service: mvp_ingestion.MVPIngestionService, case: dict[str, Any]
+) -> dict[str, Any]:
+    return service.ask(
+        question=str(case["query"]),
         top_k=5,
         tags=case.get("filters", {}).get("tags"),
     )
