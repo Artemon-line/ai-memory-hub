@@ -1310,6 +1310,10 @@ releases may additionally use generated notes, but the release summary here
 should describe the supported public behavior for each tagged release.</p>
 <h2 id="unreleased">Unreleased</h2>
 <ul>
+<li>Added <code>mcp.tool_profile</code>: <code>advanced</code> remains the default full MCP tool surface,
+  while the opt-in <code>simple</code> preview registers only <code>memory_save</code> and <code>memory_ask</code>.
+  The save name aliases the existing insert handler without changing HTTP endpoints
+  or internal ingestion and retrieval capabilities.</li>
 <li>Verified that DeepSeek web exposes per-conversation public shares and a
   separate account-wide data ZIP, not a native per-conversation JSON download;
   documented the observed contracts and added privacy-safe diagnostics that

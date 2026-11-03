@@ -1748,6 +1748,15 @@ results in the current Codex task is context injection.</p>
   <code>memory_profile_get</code>, <code>memory_lookup</code>, <code>memory_fact_supersede</code>,
   <code>memory_pending_approve</code>, <code>memory_pending_reject</code>, <code>memory_project_list</code>,
   <code>memory_project_default_get</code>, and <code>memory_project_get</code>.</li>
+</ul>
+<p>The default <code>mcp.tool_profile: advanced</code> exposes every tool listed above and preserves
+the current MCP contract. The opt-in preview <code>mcp.tool_profile: simple</code> registers only
+<code>memory_save</code> and <code>memory_ask</code>. <code>memory_save</code> is an exposure alias for the existing
+<code>memory_insert</code> handler, so validation, save intent, deduplication, review routing, and
+storage behavior stay on the same ingestion path. Tool profiles affect MCP tool
+registration only; HTTP endpoints and internal retrieval implementations are unchanged.
+Unsupported profile values fail configuration validation.</p>
+<ul>
 <li>MCP resources: <code>memory://conversation/example</code>, <code>memory://conversation/{id}</code>,
   <code>memory://search/{query}</code>, <code>memory://timeline/{day}</code>, <code>memory://health</code>.</li>
 <li>MCP prompts: <code>save_conversation</code>, <code>search_memory</code>, <code>ask_memory</code>,

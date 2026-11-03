@@ -1846,9 +1846,17 @@ examples use provider-local Containerfiles when extra SDKs are required.</p>
 <span class="nt">interfaces</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">mcp</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 <span class="w">  </span><span class="nt">api</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+
+<span class="nt">mcp</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">tool_profile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">advanced</span>
 </code></pre></div>
 <p>See <code>project_status.md</code> for the current implementation classification and
 <code>plans.md</code> for the issue-backed planning policy.</p>
+<p>The <code>advanced</code> MCP tool profile is the default and preserves the complete current tool
+surface. The opt-in <code>simple</code> preview registers only <code>memory_save</code> and <code>memory_ask</code>.
+<code>memory_save</code> aliases the existing insert handler, so the profile does not create a
+second ingestion path, change HTTP routing, or delete internal search, retrieval, fact,
+or profile capabilities.</p>
 
 
 

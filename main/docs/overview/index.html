@@ -3314,6 +3314,9 @@ available in <code>example.config.yaml</code>.</p>
 <span class="w">  </span><span class="nt">mcp</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 <span class="w">  </span><span class="nt">api</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 
+<span class="nt">mcp</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">tool_profile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">advanced</span>
+
 <span class="nt">paths</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">data_dir</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">./data</span>
 <span class="w">  </span><span class="nt">logs_dir</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">./logs</span>
@@ -3324,6 +3327,12 @@ available in <code>example.config.yaml</code>.</p>
 <span class="w">  </span><span class="nt">max_batch_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">128</span>
 <span class="w">  </span><span class="nt">max_batch_input_bytes</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1000000</span>
 </code></pre></div>
+<p><code>mcp.tool_profile</code> defaults to <code>advanced</code>, which exposes every current MCP tool. Set it
+to <code>simple</code> to preview a two-tool surface containing only <code>memory_save</code> and
+<code>memory_ask</code>. The save name aliases the existing <code>memory_insert</code> handler rather than
+creating another ingestion path. This setting filters MCP tool registration only; it
+does not disable HTTP endpoints or remove the specialized internal implementations
+used by ask. Invalid profile names fail configuration validation.</p>
 <p><code>max_batch_size</code> and <code>max_batch_input_bytes</code> bound each HTTP embedding request
 by input count and serialized UTF-8 JSON input-array bytes. Ingestion processes
 the batches in source order and does not write any vectors until every batch
