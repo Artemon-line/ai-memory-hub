@@ -23,6 +23,12 @@ def test_retrieval_quality_evaluation_rejects_invalid_top_k() -> None:
         run_evaluation(top_k=0)
 
 
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_retrieval_quality_rejects_non_finite_thresholds(value: float) -> None:
+    with pytest.raises(ValueError, match="finite"):
+        run_evaluation(min_precision_at_1=value)
+
+
 def test_retrieval_quality_threshold_failures_are_explicit() -> None:
     report = run_evaluation(min_precision_at_1=1.1)
 

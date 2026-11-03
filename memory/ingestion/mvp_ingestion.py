@@ -614,6 +614,9 @@ _RUNTIME: RuntimeDependencies | None = None
 _RUNTIME_OVERRIDE: ContextVar[RuntimeDependencies | None] = ContextVar(
     "amh_mvp_runtime_override", default=None
 )
+_SEARCH_OVERRIDE: ContextVar[Callable[..., dict[str, Any]] | None] = ContextVar(
+    "amh_mvp_search_override", default=None
+)
 _AUDIT_CONTEXT: ContextVar[AuditContext] = ContextVar("amh_audit_context", default=AuditContext())
 
 
@@ -1287,6 +1290,15 @@ def runtime_context(runtime: RuntimeDependencies) -> Iterator[None]:
         yield
     finally:
         _RUNTIME_OVERRIDE.reset(token)
+
+
+@contextmanager
+def search_context(search_operation: Callable[..., dict[str, Any]]) -> Iterator[None]:
+    token = _SEARCH_OVERRIDE.set(search_operation)
+    try:
+        yield
+    finally:
+        _SEARCH_OVERRIDE.reset(token)
 
 
 class MVPIngestionService:
@@ -4955,8 +4967,9 @@ def _search_for_ask(
     query_plan: RetrievalQueryPlan | None = None,
 ) -> dict[str, Any]:
     filters = filters or ConversationFilters()
+    search_operation = _SEARCH_OVERRIDE.get() or search
     try:
-        return search(
+        return search_operation(
             query=question,
             top_k=top_k,
             result_mode=result_mode,
@@ -4976,7 +4989,7 @@ def _search_for_ask(
     except TypeError:
         if result_mode != SearchResultMode.CHUNKS:
             raise
-        return search(query=question, top_k=top_k)
+        return search_operation(query=question, top_k=top_k)
 
 
 def _with_query_plan_diagnostics(
@@ -5890,6 +5903,7 @@ def _extract_message_facts(
                     source_role=source_role,
                     evidence_span=correction.span,
                     rule_identifier="correction:direct",
+                    trusted_correction=True,
                 ),
             )
         )
@@ -6225,6 +6239,7 @@ def _fact_extraction_metadata(
     rule_identifier: str,
     extractor_name: str = "deterministic_rules",
     extractor_version: str = "1",
+    trusted_correction: bool = False,
 ) -> dict[str, Any]:
     return {
         "assertion_type": classify_assertion(text, evidence_span).value,
@@ -6236,6 +6251,7 @@ def _fact_extraction_metadata(
         "extractor_name": extractor_name,
         "extractor_version": extractor_version,
         "rule_identifier": rule_identifier,
+        "_trusted_correction": trusted_correction,
     }
 
 
@@ -6254,6 +6270,7 @@ def _fact(
     extractor_name: str,
     extractor_version: str,
     rule_identifier: str,
+    _trusted_correction: bool = False,
 ) -> dict[str, Any]:
     now = _utc_now_iso()
     source_id = str(conversation.get("id", ""))
@@ -6270,6 +6287,10 @@ def _fact(
         FactField.RULE_IDENTIFIER.value: rule_identifier,
         FactField.SOURCE_ROLE.value: source_role or "",
     }
+    if _trusted_correction:
+        normalized_qualifiers[_FactQualifierKey.EXTRACTION.value][
+            "_trusted_correction"
+        ] = True
     normalized_qualifiers.update(_save_intent_qualifiers(conversation))
     object_normalized, normalization = _normalize_fact_object(
         predicate=predicate, object_value=object_value

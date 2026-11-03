@@ -225,10 +225,10 @@ def _payload(
         parsed = _parse_message(record, location=location)
         if parsed is None or parsed.uuid in seen_uuids:
             continue
-        seen_uuids.add(parsed.uuid)
         content = _message_text(parsed.message, location=location)
         if content is None:
             continue
+        seen_uuids.add(parsed.uuid)
         messages.append({"role": parsed.type, "text": content})
         timestamp = _timestamp(parsed.timestamp, field=f"{location} timestamp")
         if timestamp is not None:

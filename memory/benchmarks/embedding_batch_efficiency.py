@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from typing import Any
 
 from memory.ingestion import mvp_ingestion
@@ -23,7 +24,6 @@ class _BoundedEmbeddingProvider:
 
 
 def run_benchmark() -> dict[str, Any]:
-    original_runtime = mvp_ingestion._RUNTIME
     provider = _BoundedEmbeddingProvider()
     runtime = mvp_ingestion.RuntimeDependencies(
         embedding_provider=provider,
@@ -41,11 +41,8 @@ def run_benchmark() -> dict[str, Any]:
         }
         for index, text in enumerate(_TEXTS)
     ]
-    try:
-        mvp_ingestion.configure_runtime(runtime=runtime)
+    with mvp_ingestion.runtime_context(runtime):
         embeddings = mvp_ingestion.embed_chunks(chunks)
-    finally:
-        mvp_ingestion._RUNTIME = original_runtime
 
     largest_batch = max(len(batch) for batch in provider.calls)
     previous_largest_batch = len(_TEXTS)
@@ -88,7 +85,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         assert_thresholds(report)
     except AssertionError as exc:
-        print(str(exc))
+        print(str(exc), file=sys.stderr)
         return 1
     return 0
 

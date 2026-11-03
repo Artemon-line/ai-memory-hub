@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import sys
 from dataclasses import dataclass
 from typing import Any
 
@@ -78,7 +79,6 @@ class _CountingMetadataStore:
 
 def run_benchmark() -> dict[str, Any]:
     """Measure source-conversation reads for fact ranking and projection."""
-    original_runtime = mvp_ingestion._RUNTIME
     ledger = _ReadLedger()
     store = _CountingMetadataStore(ledger)
     runtime = mvp_ingestion.RuntimeDependencies(
@@ -87,11 +87,8 @@ def run_benchmark() -> dict[str, Any]:
         vector_store=object(),
         health_state={"mode": "ok"},
     )
-    try:
-        mvp_ingestion.configure_runtime(runtime=runtime)
+    with mvp_ingestion.runtime_context(runtime):
         result = mvp_ingestion.fact_search(query="benchmark record")
-    finally:
-        mvp_ingestion._RUNTIME = original_runtime
 
     previous_single_reads = _FACT_COUNT * 2
     optimized_read_calls = ledger.single_read_calls + ledger.batch_read_calls
@@ -145,7 +142,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         assert_thresholds(report)
     except AssertionError as exc:
-        print(str(exc))
+        print(str(exc), file=sys.stderr)
         return 1
     return 0
 

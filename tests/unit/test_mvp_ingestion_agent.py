@@ -123,6 +123,54 @@ async def test_mvp_ingestion_agent_offloads_blocking_insert(
 
 
 @pytest.mark.asyncio
+async def test_mvp_ingestion_agent_offloads_blocking_auth_reads(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
+    auth_started = threading.Event()
+    release_auth = threading.Event()
+
+    def slow_authenticate(token: str) -> str | None:
+        auth_started.set()
+        assert release_auth.wait(timeout=5.0)
+        return "owner" if token == "token" else None
+
+    monkeypatch.setattr(agent._service, "authenticate_bearer_token", slow_authenticate)
+
+    auth_task = asyncio.create_task(agent.authenticate_bearer_token("token"))
+    assert await asyncio.wait_for(asyncio.to_thread(auth_started.wait), timeout=5.0)
+    try:
+        await asyncio.wait_for(asyncio.sleep(0), timeout=1.0)
+        assert not auth_task.done()
+    finally:
+        release_auth.set()
+
+    assert await auth_task == "owner"
+
+
+@pytest.mark.asyncio
+async def test_mvp_ingestion_agent_marks_auth_mutations_as_writes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
+    calls: list[bool] = []
+
+    async def record_call(operation, *args, memory_write=False, **kwargs):
+        calls.append(memory_write)
+        return operation(*args, **kwargs)
+
+    monkeypatch.setattr(agent, "_call_service", record_call)
+    monkeypatch.setattr(
+        agent._service,
+        "revoke_web_session",
+        lambda _session_id_hash: True,
+    )
+
+    assert await agent.revoke_web_session("session-hash") is True
+    assert calls == [True]
+
+
+@pytest.mark.asyncio
 async def test_mvp_ingestion_agent_serializes_memory_writes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

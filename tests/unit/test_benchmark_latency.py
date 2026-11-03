@@ -57,3 +57,9 @@ def test_cold_warm_summary_rejects_invalid_measurements(
 def test_latency_summary_rejects_negative_samples() -> None:
     with pytest.raises(ValueError, match="non-negative"):
         summarize_latency_ms([1.0, -1.0])
+
+
+@pytest.mark.parametrize("sample", [float("nan"), float("inf"), float("-inf")])
+def test_latency_summary_rejects_non_finite_samples(sample: float) -> None:
+    with pytest.raises(ValueError, match="finite"):
+        summarize_latency_ms([1.0, sample])

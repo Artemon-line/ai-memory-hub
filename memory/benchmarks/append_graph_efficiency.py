@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from copy import deepcopy
 from typing import Any
 
@@ -35,7 +36,6 @@ _APPEND_PAYLOAD = {
 
 
 def run_benchmark() -> dict[str, Any]:
-    original_runtime = mvp_ingestion._RUNTIME
     original_extract = mvp_ingestion.extract_memory_graph
     ledger = _WorkLedger()
     metadata_store = _CountingMetadataStore(ledger)
@@ -70,16 +70,15 @@ def run_benchmark() -> dict[str, Any]:
     )
     try:
         mvp_ingestion.extract_memory_graph = counting_extract
-        mvp_ingestion.configure_runtime(runtime=runtime)
-        mvp_ingestion.ingest_messages(deepcopy(_BASE_PAYLOAD))
-        calls.clear()
-        result = mvp_ingestion.ingest_messages(deepcopy(_APPEND_PAYLOAD))
-        relationships = mvp_ingestion.graph_relationship_search(include_superseded=True)[
-            "results"
-        ]
+        with mvp_ingestion.runtime_context(runtime):
+            mvp_ingestion.ingest_messages(deepcopy(_BASE_PAYLOAD))
+            calls.clear()
+            result = mvp_ingestion.ingest_messages(deepcopy(_APPEND_PAYLOAD))
+            relationships = mvp_ingestion.graph_relationship_search(
+                include_superseded=True
+            )["results"]
     finally:
         mvp_ingestion.extract_memory_graph = original_extract
-        mvp_ingestion._RUNTIME = original_runtime
 
     previous_messages_scanned = len(_APPEND_PAYLOAD["messages"])
     messages_scanned = sum(call["messages_scanned"] for call in calls)
@@ -122,7 +121,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         assert_thresholds(report)
     except AssertionError as exc:
-        print(str(exc))
+        print(str(exc), file=sys.stderr)
         return 1
     return 0
 

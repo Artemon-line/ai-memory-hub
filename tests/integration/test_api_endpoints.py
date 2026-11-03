@@ -196,7 +196,10 @@ def _oauth_client() -> TestClient:
 
 
 def _external_oidc_client(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    *,
+    allowed_domains: list[str] | None = None,
 ) -> tuple[TestClient, RSAKey, SQLiteMetadataStore]:
     key = RSAKey.generate_key(2048, parameters={"kid": "key-a", "alg": "RS256"})
 
@@ -224,6 +227,7 @@ def _external_oidc_client(
                 "oidc": {
                     "issuer": "https://keycloak.example.test/realms/home",
                     "client_id": "ai-memory-hub",
+                    "allowed_domains": allowed_domains or [],
                     "allowed_roles": ["memory-user"],
                     "role_scopes": {"memory-writer": ["memory:write"]},
                 },
@@ -235,7 +239,12 @@ def _external_oidc_client(
     return TestClient(app), key, store
 
 
-def _external_oidc_token(key: RSAKey, **claims: object) -> str:
+def _external_oidc_token(
+    key: RSAKey,
+    *,
+    omit_claims: tuple[str, ...] = (),
+    **claims: object,
+) -> str:
     now = int(time.time())
     payload: dict[str, object] = {
         "iss": "https://keycloak.example.test/realms/home",
@@ -251,6 +260,8 @@ def _external_oidc_token(key: RSAKey, **claims: object) -> str:
         "exp": now + 300,
         **claims,
     }
+    for claim in omit_claims:
+        payload.pop(claim, None)
     return jwt.encode({"alg": "RS256", "kid": "key-a"}, payload, key)
 
 
@@ -1278,6 +1289,33 @@ def test_external_oidc_auth_uses_provider_metadata_and_keycloak_role_scopes(
     assert identity[1] == "keycloak-user-a"
     assert identity[2].startswith("oidc:")
     assert identity[3:] == ("alice", "alice@example.test", "Alice Example")
+
+
+def test_external_oidc_domain_allowlist_rejects_unverified_identity_before_sync(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    client, key, store = _external_oidc_client(
+        monkeypatch,
+        tmp_path,
+        allowed_domains=["example.test"],
+    )
+
+    response = client.post(
+        "/memory/search",
+        json={"query": "hello"},
+        headers={
+            "Authorization": (
+                "Bearer "
+                + _external_oidc_token(key, omit_claims=("email_verified",))
+            )
+        },
+    )
+
+    assert response.status_code == 401
+    with sqlite3.connect(store.db_path) as conn:
+        identity_count = conn.execute("SELECT COUNT(*) FROM oauth_identities").fetchone()
+    assert identity_count == (0,)
 
 
 def test_external_oidc_refreshes_changed_profile_claims_without_changing_owner(

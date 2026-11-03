@@ -578,8 +578,11 @@ def _clean_text(value: str) -> str:
 
 
 def _names_in_text(text: str, names: Iterable[str]) -> list[str]:
-    folded = text.casefold()
-    return [name for name in names if name.casefold() in folded]
+    return [
+        name
+        for name in names
+        if re.search(rf"(?<!\w){re.escape(name)}(?!\w)", text, re.IGNORECASE)
+    ]
 
 
 def _optional_str(value: Any) -> str | None:

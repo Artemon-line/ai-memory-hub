@@ -42,9 +42,15 @@ def parse_schema_override(raw: bytes | str) -> dict[str, Any]:
         if len(text.encode("utf-8")) > MAX_SCHEMA_BYTES:
             raise ValueError(f"schema exceeds {MAX_SCHEMA_BYTES} bytes")
     try:
-        value = json.loads(text, object_pairs_hook=_unique_object)
+        value = json.loads(
+            text,
+            object_pairs_hook=_unique_object,
+            parse_constant=_reject_non_finite_number,
+        )
     except json.JSONDecodeError as exc:
         raise ValueError("schema must be valid JSON") from exc
+    except RecursionError as exc:
+        raise ValueError("schema nesting is too deep") from exc
     if not isinstance(value, dict):
         raise ValueError("schema must be a JSON object")
     _validate_bounds(value)
@@ -88,10 +94,16 @@ def stamp_import_provenance(
             payload["metadata"] = metadata
         metadata["import_parser"] = parser
         metadata["import_schema_applied"] = schema is not None
+        metadata.pop("import_schema_fingerprint", None)
+        metadata.pop("import_schema_version", None)
         if fingerprint is not None:
             metadata["import_schema_fingerprint"] = fingerprint
         if isinstance(version, int):
             metadata["import_schema_version"] = version
+
+
+def _reject_non_finite_number(value: str) -> None:
+    raise ValueError(f"schema contains non-finite number {value}")
 
 
 def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:

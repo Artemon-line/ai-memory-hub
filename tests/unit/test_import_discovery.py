@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import shutil
 from datetime import datetime, timedelta, timezone
@@ -146,6 +147,44 @@ def test_terminal_copilot_artifact_is_safe_without_waiting(tmp_path: Path) -> No
         environment={DiscoveryEnvironmentVariable.COPILOT_HOME: str(root)}, home=tmp_path
     ).discover_latest(DiscoverySource.COPILOT_CLI, now=_NOW)
 
+    assert "terminal" in discovered.safe_reason
+
+
+def test_copilot_discovery_uses_latest_lifecycle_event(tmp_path: Path) -> None:
+    root = tmp_path / "copilot"
+    artifact = root / "session-state/id/events.jsonl"
+    artifact.parent.mkdir(parents=True)
+    start = {
+        "type": "session.start",
+        "data": {
+            "sessionId": "resumed-session",
+            "startTime": "2026-10-18T11:00:00Z",
+        },
+    }
+    shutdown = {"type": "session.shutdown", "data": {}}
+    artifact.write_text(
+        "\n".join(json.dumps(record) for record in (start, shutdown, start)),
+        encoding="utf-8",
+    )
+    recent = (_NOW - timedelta(seconds=10)).timestamp()
+    os.utime(artifact, (recent, recent))
+    service = build_discovery_service(
+        environment={DiscoveryEnvironmentVariable.COPILOT_HOME: str(root)},
+        home=tmp_path,
+    )
+
+    with pytest.raises(DiscoveryError, match="may still be active"):
+        service.discover_latest(DiscoverySource.COPILOT_CLI, now=_NOW)
+
+    artifact.write_text(
+        artifact.read_text(encoding="utf-8") + "\n" + json.dumps(shutdown),
+        encoding="utf-8",
+    )
+    os.utime(artifact, (recent, recent))
+
+    discovered = service.discover_latest(DiscoverySource.COPILOT_CLI, now=_NOW)
+
+    assert discovered.session_id == "resumed-session"
     assert "terminal" in discovered.safe_reason
 
 

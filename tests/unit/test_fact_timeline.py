@@ -67,6 +67,22 @@ def test_fact_timeline_uses_fact_timestamp_when_source_memory_is_missing() -> No
     assert latest[TemporalFactField.AUTHOR.value] == "unknown"
 
 
+def test_fact_timeline_history_does_not_depend_on_unique_fact_ids() -> None:
+    facts = [
+        _fact("", "old missing id", "memory-old"),
+        _fact("", "new missing id", "memory-new"),
+    ]
+    memories = {
+        "memory-old": _memory("memory-old", source="codex", timestamp="2026-01-01T00:00:00Z"),
+        "memory-new": _memory("memory-new", source="codex", timestamp="2026-02-01T00:00:00Z"),
+    }
+
+    projection = FactTimelineProjector(memories.get).project(facts)
+
+    assert [entry.value for entry in projection.latest_entries] == ["new missing id"]
+    assert [entry.value for entry in projection.historical_entries] == ["old missing id"]
+
+
 def _fact(fact_id: str, value: str, source_conversation_id: str) -> dict[str, Any]:
     return {
         FactField.ID.value: fact_id,
