@@ -51,7 +51,7 @@ postgres = [
     "pg8000>=1.31.5",
 ]
 pinecone = [
-    "pinecone>=7.0.0",
+    "pinecone>=10.2.0",
 ]
 qdrant = [
     "qdrant-client>=1.20.0",
