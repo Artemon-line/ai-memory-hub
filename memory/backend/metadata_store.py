@@ -19,6 +19,7 @@ from memory.backend.errors import (
     ConcurrentAppendError,
     NotSupportedError,
     OAuthClientQuotaExceeded,
+    OAuthProviderStateQuotaExceeded,
 )
 from memory.backend.handoff_records import (
     prepare_handoff_record,
@@ -355,6 +356,27 @@ class SQLiteMetadataStore:
                     FOREIGN KEY(client_id) REFERENCES oauth_clients(client_id),
                     FOREIGN KEY(owner_id) REFERENCES users(id)
                 )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS oauth_provider_states (
+                    state_hash TEXT PRIMARY KEY,
+                    provider TEXT NOT NULL,
+                    browser_session_hash TEXT NOT NULL,
+                    nonce TEXT NOT NULL,
+                    code_verifier TEXT NOT NULL,
+                    state_data TEXT NOT NULL,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TEXT NOT NULL,
+                    consumed_at TEXT
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_oauth_provider_states_browser
+                ON oauth_provider_states(browser_session_hash, expires_at)
                 """
             )
             self._ensure_column(conn, "auth_tokens", "token_id", "TEXT")
@@ -1111,7 +1133,114 @@ class SQLiteMetadataStore:
                 ),
             )
 
-    def consume_oauth_authorization_code(self, code: str) -> dict[str, Any] | None:
+    def create_oauth_provider_state(
+        self,
+        *,
+        state: str,
+        provider: str,
+        browser_session_id: str,
+        nonce: str,
+        code_verifier: str,
+        state_data: dict[str, object],
+        expires_at: str,
+        max_active_states: int,
+        max_global_active_states: int,
+    ) -> None:
+        state_hash = _hash_oauth_ephemeral_secret(state, purpose="state")
+        browser_hash = _hash_oauth_ephemeral_secret(
+            browser_session_id, purpose="browser-session"
+        )
+        state_json = json.dumps(state_data, separators=(",", ":"))
+        with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute(
+                """
+                DELETE FROM oauth_provider_states
+                WHERE consumed_at IS NOT NULL OR expires_at <= CURRENT_TIMESTAMP
+                """
+            )
+            global_active_count = conn.execute(
+                """
+                SELECT COUNT(*) FROM oauth_provider_states
+                WHERE consumed_at IS NULL
+                  AND expires_at > CURRENT_TIMESTAMP
+                """
+            ).fetchone()[0]
+            if int(global_active_count) >= max_global_active_states:
+                raise OAuthProviderStateQuotaExceeded(
+                    "global active OAuth provider state quota exceeded"
+                )
+            active_count = conn.execute(
+                """
+                SELECT COUNT(*) FROM oauth_provider_states
+                WHERE browser_session_hash = ?
+                  AND consumed_at IS NULL
+                  AND expires_at > CURRENT_TIMESTAMP
+                """,
+                (browser_hash,),
+            ).fetchone()[0]
+            if int(active_count) >= max_active_states:
+                raise OAuthProviderStateQuotaExceeded(
+                    "active OAuth provider state quota exceeded"
+                )
+            conn.execute(
+                """
+                INSERT INTO oauth_provider_states
+                    (state_hash, provider, browser_session_hash, nonce,
+                     code_verifier, state_data, expires_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    state_hash,
+                    str(provider),
+                    browser_hash,
+                    str(nonce),
+                    str(code_verifier),
+                    state_json,
+                    expires_at,
+                ),
+            )
+
+    def consume_oauth_provider_state(
+        self, *, state: str, provider: str, browser_session_id: str
+    ) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                UPDATE oauth_provider_states
+                SET consumed_at = CURRENT_TIMESTAMP
+                WHERE state_hash = ?
+                  AND provider = ?
+                  AND browser_session_hash = ?
+                  AND consumed_at IS NULL
+                  AND expires_at > CURRENT_TIMESTAMP
+                RETURNING nonce, code_verifier, state_data, created_at, expires_at
+                """,
+                (
+                    _hash_oauth_ephemeral_secret(state, purpose="state"),
+                    str(provider),
+                    _hash_oauth_ephemeral_secret(
+                        browser_session_id, purpose="browser-session"
+                    ),
+                ),
+            ).fetchone()
+        if row is None:
+            return None
+        result = dict(row)
+        state_data = json.loads(str(result.pop("state_data")))
+        if not isinstance(state_data, dict):
+            return None
+        state_data.update(result)
+        return state_data
+
+    def consume_oauth_authorization_code(
+        self,
+        code: str,
+        *,
+        client_id: str,
+        redirect_uri: str,
+        code_challenge: str,
+    ) -> dict[str, Any] | None:
         code_hash = _hash_bearer_token(code)
         with self._connect() as conn:
             row = conn.execute(
@@ -1119,12 +1248,15 @@ class SQLiteMetadataStore:
                 UPDATE oauth_authorization_codes
                 SET consumed_at = CURRENT_TIMESTAMP
                 WHERE code_hash = ?
+                  AND client_id = ?
+                  AND redirect_uri = ?
+                  AND code_challenge = ?
                   AND consumed_at IS NULL
                   AND expires_at > CURRENT_TIMESTAMP
                 RETURNING client_id, owner_id, redirect_uri, code_challenge,
                           resource, scope, created_at, expires_at
                 """,
-                (code_hash,),
+                (code_hash, str(client_id), str(redirect_uri), str(code_challenge)),
             ).fetchone()
         return dict(row) if row is not None else None
 
@@ -2882,6 +3014,16 @@ def _hash_bearer_token(token: str) -> str:
         _PBKDF2_SHA256_ITERATIONS,
     ).hex()
     return "pbkdf2-sha256:" + digest
+
+
+def _hash_oauth_ephemeral_secret(token: str, *, purpose: str) -> str:
+    if not isinstance(token, str) or not token:
+        raise ValueError("OAuth ephemeral secret must be a non-empty string")
+    secret = os.environ.get("AMH_TOKEN_HASH_SECRET") or "default"
+    digest = hashlib.sha256(
+        f"ai-memory-hub:oauth:{purpose}:{secret}:{token}".encode("utf-8")
+    ).hexdigest()
+    return "sha256:" + digest
 
 
 def _new_token_id() -> str:

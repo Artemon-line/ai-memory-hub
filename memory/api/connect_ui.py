@@ -44,7 +44,7 @@ def register_connect_routes(app: FastAPI, *, agent: BaseIngestionAgent, config: 
         return
 
     service = ConnectService(agent=agent, config=config)
-    oauth = ConnectOAuthRegistry(config)
+    oauth = ConnectOAuthRegistry(config, agent=agent)
     app.add_middleware(
         SessionMiddleware,
         secret_key=session_secret(config),

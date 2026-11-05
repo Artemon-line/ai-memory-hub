@@ -9,6 +9,7 @@ from memory.backend.contracts import ProviderCapabilities
 from memory.backend.errors import (
     ConcurrentAppendError,
     OAuthClientQuotaExceeded,
+    OAuthProviderStateQuotaExceeded,
     SchemaVersionError,
 )
 from memory.backend.handoff_records import (
@@ -24,6 +25,7 @@ from memory.backend.metadata_store import (
     IndexState,
     _default_project_id,
     _hash_bearer_token,
+    _hash_oauth_ephemeral_secret,
     _new_token_id,
     _normalize_email,
     _normalize_token_scopes,
@@ -225,6 +227,23 @@ CREATE TABLE IF NOT EXISTS oauth_authorization_codes (
     expires_at TIMESTAMPTZ NOT NULL,
     consumed_at TIMESTAMPTZ NULL
 )
+"""
+CREATE_OAUTH_PROVIDER_STATES_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS oauth_provider_states (
+    state_hash TEXT PRIMARY KEY,
+    provider TEXT NOT NULL,
+    browser_session_hash TEXT NOT NULL,
+    nonce TEXT NOT NULL,
+    code_verifier TEXT NOT NULL,
+    state_data JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL,
+    consumed_at TIMESTAMPTZ NULL
+)
+"""
+CREATE_OAUTH_PROVIDER_STATES_BROWSER_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_oauth_provider_states_browser
+ON oauth_provider_states(browser_session_hash, expires_at)
 """
 CREATE_PROJECTS_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS projects (
@@ -504,6 +523,8 @@ class PostgresMetadataStore:
                 cur.execute(CREATE_OAUTH_REFRESH_TOKENS_FAMILY_INDEX_SQL)
                 cur.execute(CREATE_OAUTH_REFRESH_TOKEN_FAMILIES_TABLE_SQL)
                 cur.execute(CREATE_OAUTH_AUTHORIZATION_CODES_TABLE_SQL)
+                cur.execute(CREATE_OAUTH_PROVIDER_STATES_TABLE_SQL)
+                cur.execute(CREATE_OAUTH_PROVIDER_STATES_BROWSER_INDEX_SQL)
                 cur.execute(CREATE_PROJECTS_TABLE_SQL)
                 cur.execute(CREATE_PROJECT_MEMBERSHIPS_TABLE_SQL)
                 cur.execute(CREATE_DEFAULT_PROJECT_OWNER_INDEX_SQL)
@@ -1015,7 +1036,130 @@ class PostgresMetadataStore:
                     ),
                 )
 
-    def consume_oauth_authorization_code(self, code: str) -> dict[str, Any] | None:
+    def create_oauth_provider_state(
+        self,
+        *,
+        state: str,
+        provider: str,
+        browser_session_id: str,
+        nonce: str,
+        code_verifier: str,
+        state_data: dict[str, object],
+        expires_at: str,
+        max_active_states: int,
+        max_global_active_states: int,
+    ) -> None:
+        state_hash = _hash_oauth_ephemeral_secret(state, purpose="state")
+        browser_hash = _hash_oauth_ephemeral_secret(
+            browser_session_id, purpose="browser-session"
+        )
+        state_json = json.dumps(state_data, separators=(",", ":"))
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT pg_advisory_xact_lock(hashtext(%s))",
+                    ("amh:oauth-provider-state:global",),
+                )
+                cur.execute(
+                    "SELECT pg_advisory_xact_lock(hashtext(%s))", (browser_hash,)
+                )
+                cur.execute(
+                    """
+                    DELETE FROM oauth_provider_states
+                    WHERE consumed_at IS NOT NULL OR expires_at <= NOW()
+                    """
+                )
+                cur.execute(
+                    """
+                    SELECT COUNT(*) FROM oauth_provider_states
+                    WHERE consumed_at IS NULL
+                      AND expires_at > NOW()
+                    """
+                )
+                global_count_row = cur.fetchone()
+                if (
+                    global_count_row is None
+                    or int(global_count_row[0]) >= max_global_active_states
+                ):
+                    raise OAuthProviderStateQuotaExceeded(
+                        "global active OAuth provider state quota exceeded"
+                    )
+                cur.execute(
+                    """
+                    SELECT COUNT(*) FROM oauth_provider_states
+                    WHERE browser_session_hash = %s
+                      AND consumed_at IS NULL
+                      AND expires_at > NOW()
+                    """,
+                    (browser_hash,),
+                )
+                count_row = cur.fetchone()
+                if count_row is None or int(count_row[0]) >= max_active_states:
+                    raise OAuthProviderStateQuotaExceeded(
+                        "active OAuth provider state quota exceeded"
+                    )
+                cur.execute(
+                    """
+                    INSERT INTO oauth_provider_states
+                        (state_hash, provider, browser_session_hash, nonce,
+                         code_verifier, state_data, expires_at)
+                    VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s)
+                    """,
+                    (
+                        state_hash,
+                        str(provider),
+                        browser_hash,
+                        str(nonce),
+                        str(code_verifier),
+                        state_json,
+                        expires_at,
+                    ),
+                )
+
+    def consume_oauth_provider_state(
+        self, *, state: str, provider: str, browser_session_id: str
+    ) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE oauth_provider_states
+                    SET consumed_at = NOW()
+                    WHERE state_hash = %s
+                      AND provider = %s
+                      AND browser_session_hash = %s
+                      AND consumed_at IS NULL
+                      AND expires_at > NOW()
+                    RETURNING nonce, code_verifier, state_data::text,
+                              created_at::text, expires_at::text
+                    """,
+                    (
+                        _hash_oauth_ephemeral_secret(state, purpose="state"),
+                        str(provider),
+                        _hash_oauth_ephemeral_secret(
+                            browser_session_id, purpose="browser-session"
+                        ),
+                    ),
+                )
+                row = cur.fetchone()
+        if row is None:
+            return None
+        keys = ("nonce", "code_verifier", "state_data", "created_at", "expires_at")
+        result = dict(zip(keys, row, strict=True))
+        state_data = json.loads(str(result.pop("state_data")))
+        if not isinstance(state_data, dict):
+            return None
+        state_data.update(result)
+        return state_data
+
+    def consume_oauth_authorization_code(
+        self,
+        code: str,
+        *,
+        client_id: str,
+        redirect_uri: str,
+        code_challenge: str,
+    ) -> dict[str, Any] | None:
         code_hash = _hash_bearer_token(code)
         with self._connect() as conn:
             with conn.cursor() as cur:
@@ -1024,12 +1168,15 @@ class PostgresMetadataStore:
                     UPDATE oauth_authorization_codes
                     SET consumed_at = NOW()
                     WHERE code_hash = %s
+                      AND client_id = %s
+                      AND redirect_uri = %s
+                      AND code_challenge = %s
                       AND consumed_at IS NULL
                       AND expires_at > NOW()
                     RETURNING client_id, owner_id, redirect_uri, code_challenge,
                               resource, scope, created_at::text, expires_at::text
                     """,
-                    (code_hash,),
+                    (code_hash, str(client_id), str(redirect_uri), str(code_challenge)),
                 )
                 row = cur.fetchone()
         if row is None:

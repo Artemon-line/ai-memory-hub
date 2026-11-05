@@ -424,9 +424,39 @@ class MVPIngestionAgent(BaseIngestionAgent):
             **kwargs,
         )
 
-    async def consume_oauth_authorization_code(self, code: str) -> dict[str, object] | None:
+    async def create_oauth_provider_state(self, **kwargs: object) -> None:
+        await self._call_service(
+            self._service.create_oauth_provider_state,
+            memory_write=True,
+            **kwargs,
+        )
+
+    async def consume_oauth_provider_state(
+        self, *, state: str, provider: str, browser_session_id: str
+    ) -> dict[str, object] | None:
         return await self._call_service(
-            self._service.consume_oauth_authorization_code, code, memory_write=True
+            self._service.consume_oauth_provider_state,
+            state=state,
+            provider=provider,
+            browser_session_id=browser_session_id,
+            memory_write=True,
+        )
+
+    async def consume_oauth_authorization_code(
+        self,
+        code: str,
+        *,
+        client_id: str,
+        redirect_uri: str,
+        code_challenge: str,
+    ) -> dict[str, object] | None:
+        return await self._call_service(
+            self._service.consume_oauth_authorization_code,
+            code,
+            client_id=client_id,
+            redirect_uri=redirect_uri,
+            code_challenge=code_challenge,
+            memory_write=True,
         )
 
     async def create_oauth_refresh_token(

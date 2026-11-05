@@ -1,8 +1,19 @@
 from __future__ import annotations
 
+import pytest
+
 from memory.config import parse_config
 from memory.observability.metrics import metrics
 from memory.observability.privacy import debug_payload_snippet
+
+
+@pytest.fixture(autouse=True)
+def _isolate_metrics_state():
+    metrics.reset()
+    try:
+        yield
+    finally:
+        metrics.reset()
 
 
 def test_debug_payload_snippet_is_disabled_by_default() -> None:
@@ -26,8 +37,6 @@ def test_debug_payload_snippet_requires_flag_and_redacts() -> None:
 
 
 def test_metric_labels_redact_secret_like_values() -> None:
-    metrics.reset()
-
     metrics.increment(
         "memory_embedding_failures_total",
         provider="openai",

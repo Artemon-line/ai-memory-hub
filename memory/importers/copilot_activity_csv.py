@@ -64,13 +64,7 @@ class CopilotActivityCsvImporter(ConversationImporter):
         payloads: list[dict[str, Any]] = []
         for conversation in order:
             rows = grouped[conversation]
-            rows.sort(
-                key=lambda item: (
-                    item[0],
-                    0 if item[2]["role"] == "user" else 1,
-                    item[1],
-                )
-            )
+            rows.sort(key=lambda item: (item[0], item[1]))
             payloads.append(
                 {
                     "source": source or "microsoft-copilot",

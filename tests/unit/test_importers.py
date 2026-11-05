@@ -956,13 +956,13 @@ def test_copilot_activity_csv_fixture_is_grouped_and_chronological() -> None:
     ]
     assert payloads[0]["timestamp"] == "2026-04-12T10:05:00+00:00"
     assert [message["role"] for message in payloads[0]["messages"]] == [
-        "user",
         "assistant",
         "user",
         "assistant",
+        "user",
     ]
-    assert payloads[1]["messages"][0]["text"].endswith("emoji 🥣.")
-    assert "```text\nmix for 30 seconds\n```" in payloads[1]["messages"][1]["text"]
+    assert payloads[1]["messages"][1]["text"].endswith("emoji 🥣.")
+    assert "```text\nmix for 30 seconds\n```" in payloads[1]["messages"][0]["text"]
     assert payloads[0]["metadata"] == {
         "importer": "copilot-activity-csv",
         "platform": "web",
@@ -987,7 +987,7 @@ Screenshot help,2026-09-22T11:53:00,Human,What should I do next?
 
 def test_copilot_activity_csv_preserves_source_order_for_equal_sort_keys() -> None:
     text = """Conversation,Time,Author,Message
-Same time,2026-09-22T11:52:14,Human,First
+Same time,2026-09-22T11:52:14,AI,First
 Same time,2026-09-22T11:52:14,Human,Second
 """
 

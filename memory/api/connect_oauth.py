@@ -15,18 +15,23 @@ from memory.api.connect_service import (
     normalize_passport_provider,
     passport_provider_config,
     provider_callback_url,
+    utc_after,
 )
+from memory.backend.errors import OAuthProviderStateQuotaExceeded
 from memory.config import HubConfig
+from memory.ingestion.base_agent import BaseIngestionAgent
 
 OAUTH_STATE_TTL_SECONDS = 600
-OAUTH_STATE_MAX_RECORDS = 128
+OAUTH_STATE_MAX_RECORDS = 8
+OAUTH_STATE_GLOBAL_MAX_RECORDS = 512
 OIDC_CACHE_TTL_SECONDS = 300
 OIDC_CLOCK_SKEW_SECONDS = 60
 
 
 class ConnectOAuthRegistry:
-    def __init__(self, config: HubConfig) -> None:
+    def __init__(self, config: HubConfig, *, agent: BaseIngestionAgent) -> None:
         self.config = config
+        self.agent = agent
         self._oidc_metadata_cache: dict[str, tuple[int, dict[str, object]]] = {}
         self._jwks_cache: dict[str, tuple[int, dict[str, object]]] = {}
 
@@ -47,19 +52,23 @@ class ConnectOAuthRegistry:
         state = _nonce()
         nonce = _nonce()
         code_verifier = _nonce()
-        provider_state: dict[str, object] = {
-            "provider": provider_name,
-            "nonce": nonce,
-            "code_verifier": code_verifier,
-            "created_at": int(time.time()),
-        }
-        if state_data:
-            provider_state.update(state_data)
-        states = _provider_states(request)
-        _prune_provider_states(states)
-        if len(states) >= OAUTH_STATE_MAX_RECORDS:
-            _drop_oldest_provider_state(states)
-        states[state] = provider_state
+        browser_session_id = _browser_session_id(request, create=True)
+        try:
+            await self.agent.create_oauth_provider_state(
+                state=state,
+                provider=provider_name,
+                browser_session_id=browser_session_id,
+                nonce=nonce,
+                code_verifier=code_verifier,
+                state_data=dict(state_data or {}),
+                expires_at=utc_after(OAUTH_STATE_TTL_SECONDS),
+                max_active_states=OAUTH_STATE_MAX_RECORDS,
+                max_global_active_states=OAUTH_STATE_GLOBAL_MAX_RECORDS,
+            )
+        except OAuthProviderStateQuotaExceeded as exc:
+            raise HTTPException(
+                status_code=429, detail="Too many pending OAuth authorizations"
+            ) from exc
         query = urlencode(
             {
                 "response_type": "code",
@@ -125,13 +134,15 @@ class ConnectOAuthRegistry:
         state = request.query_params.get("state")
         if not state:
             raise HTTPException(status_code=400, detail="Invalid OAuth state")
-        data = _provider_states(request).pop(str(state), None)
-        if not isinstance(data, dict) or data.get("provider") != provider:
+        browser_session_id = _browser_session_id(request, create=False)
+        if not browser_session_id:
             raise HTTPException(status_code=400, detail="Invalid OAuth state")
-        created_at = data.get("created_at")
-        if not isinstance(created_at, int) or created_at + OAUTH_STATE_TTL_SECONDS <= int(
-            time.time()
-        ):
+        data = await self.agent.consume_oauth_provider_state(
+            state=str(state),
+            provider=provider,
+            browser_session_id=browser_session_id,
+        )
+        if not isinstance(data, dict):
             raise HTTPException(status_code=400, detail="Invalid OAuth state")
         request.state.oauth_provider_state_data = data
         return data
@@ -278,30 +289,15 @@ class ConnectOAuthRegistry:
         return payload
 
 
-def _provider_states(request: Request) -> dict[str, dict[str, object]]:
-    if not hasattr(request.app.state, "oauth_provider_states"):
-        request.app.state.oauth_provider_states = {}
-    return request.app.state.oauth_provider_states
-
-
-def _prune_provider_states(states: dict[str, dict[str, object]]) -> None:
-    now = int(time.time())
-    expired = []
-    for state, data in states.items():
-        created_at = data.get("created_at")
-        if not isinstance(created_at, int) or created_at + OAUTH_STATE_TTL_SECONDS <= now:
-            expired.append(state)
-    for state in expired:
-        states.pop(state, None)
-
-
-def _drop_oldest_provider_state(states: dict[str, dict[str, object]]) -> None:
-    def created_at_for(state: str) -> int:
-        created_at = states[state].get("created_at")
-        return created_at if isinstance(created_at, int) else 0
-
-    oldest_state = min(states, key=created_at_for)
-    states.pop(oldest_state, None)
+def _browser_session_id(request: Request, *, create: bool) -> str:
+    value = request.session.get("oauth_browser_session_id")
+    if isinstance(value, str) and value:
+        return value
+    if not create:
+        return ""
+    value = _nonce()
+    request.session["oauth_browser_session_id"] = value
+    return value
 
 
 def _jwt_payload(token: str) -> dict[str, object] | None:

@@ -23,3 +23,7 @@ class VectorDimensionError(StorageError):
 
 class OAuthClientQuotaExceeded(StorageError):
     """Raised when the active dynamic OAuth client quota is exhausted."""
+
+
+class OAuthProviderStateQuotaExceeded(StorageError):
+    """Raised when one browser has too many active OAuth provider states."""
