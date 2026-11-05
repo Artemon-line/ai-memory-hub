@@ -1391,8 +1391,16 @@ class MVPIngestionService:
     def create_oauth_authorization_code(self, **kwargs: Any) -> None:
         return self._call(create_oauth_authorization_code, **kwargs)
 
-    def consume_oauth_authorization_code(self, code: str) -> dict[str, object] | None:
-        return self._call(consume_oauth_authorization_code, code)
+    def create_oauth_provider_state(self, **kwargs: Any) -> None:
+        return self._call(create_oauth_provider_state, **kwargs)
+
+    def consume_oauth_provider_state(self, **kwargs: Any) -> dict[str, object] | None:
+        return self._call(consume_oauth_provider_state, **kwargs)
+
+    def consume_oauth_authorization_code(
+        self, code: str, **kwargs: Any
+    ) -> dict[str, object] | None:
+        return self._call(consume_oauth_authorization_code, code, **kwargs)
 
     def create_oauth_refresh_token(self, **kwargs: Any) -> dict[str, object]:
         return self._call(create_oauth_refresh_token, **kwargs)
@@ -7744,11 +7752,36 @@ def create_oauth_authorization_code(**kwargs: object) -> None:
     store.create_oauth_authorization_code(**kwargs)
 
 
-def consume_oauth_authorization_code(code: str) -> dict[str, object] | None:
+def create_oauth_provider_state(**kwargs: object) -> None:
+    store = _runtime().metadata_store
+    if not hasattr(store, "create_oauth_provider_state"):
+        raise NotImplementedError("metadata store does not support oauth provider states")
+    store.create_oauth_provider_state(**kwargs)
+
+
+def consume_oauth_provider_state(**kwargs: object) -> dict[str, object] | None:
+    store = _runtime().metadata_store
+    if not hasattr(store, "consume_oauth_provider_state"):
+        raise NotImplementedError("metadata store does not support oauth provider states")
+    return store.consume_oauth_provider_state(**kwargs)
+
+
+def consume_oauth_authorization_code(
+    code: str,
+    *,
+    client_id: str,
+    redirect_uri: str,
+    code_challenge: str,
+) -> dict[str, object] | None:
     store = _runtime().metadata_store
     if not hasattr(store, "consume_oauth_authorization_code"):
         raise NotImplementedError("metadata store does not support oauth authorization codes")
-    return store.consume_oauth_authorization_code(code)
+    return store.consume_oauth_authorization_code(
+        code,
+        client_id=client_id,
+        redirect_uri=redirect_uri,
+        code_challenge=code_challenge,
+    )
 
 
 def create_oauth_refresh_token(

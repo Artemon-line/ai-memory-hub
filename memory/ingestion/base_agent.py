@@ -261,7 +261,34 @@ class BaseIngestionAgent(ABC):
     ) -> None:
         raise NotImplementedError("create_oauth_authorization_code is not implemented")
 
-    async def consume_oauth_authorization_code(self, code: str) -> dict[str, object] | None:
+    async def create_oauth_provider_state(
+        self,
+        *,
+        state: str,
+        provider: str,
+        browser_session_id: str,
+        nonce: str,
+        code_verifier: str,
+        state_data: dict[str, object],
+        expires_at: str,
+        max_active_states: int,
+        max_global_active_states: int,
+    ) -> None:
+        raise NotImplementedError("create_oauth_provider_state is not implemented")
+
+    async def consume_oauth_provider_state(
+        self, *, state: str, provider: str, browser_session_id: str
+    ) -> dict[str, object] | None:
+        raise NotImplementedError("consume_oauth_provider_state is not implemented")
+
+    async def consume_oauth_authorization_code(
+        self,
+        code: str,
+        *,
+        client_id: str,
+        redirect_uri: str,
+        code_challenge: str,
+    ) -> dict[str, object] | None:
         raise NotImplementedError("consume_oauth_authorization_code is not implemented")
 
     async def create_oauth_refresh_token(

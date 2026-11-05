@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -87,7 +88,24 @@ def validate_plugin_enrichment_output(payload: dict[str, Any]) -> dict[str, Any]
 
 
 def _reject_forbidden_keys(payload: dict[str, Any]) -> None:
-    found = FORBIDDEN_PLUGIN_OUTPUT_KEYS.intersection(payload)
+    found: set[str] = set()
+    stack: list[Any] = [payload]
+    visited: set[int] = set()
+    while stack:
+        value = stack.pop()
+        if not isinstance(value, (Mapping, list, tuple)):
+            continue
+        identity = id(value)
+        if identity in visited:
+            continue
+        visited.add(identity)
+        if isinstance(value, Mapping):
+            found.update(
+                key for key in value if isinstance(key, str) and key in FORBIDDEN_PLUGIN_OUTPUT_KEYS
+            )
+            stack.extend(value.values())
+        else:
+            stack.extend(value)
     if found:
         blocked = ", ".join(sorted(found))
         raise ValueError(f"plugin output may not set protected or unsafe keys: {blocked}")

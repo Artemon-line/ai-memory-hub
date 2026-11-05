@@ -253,12 +253,11 @@ def _pkce_challenge(verifier: str) -> str:
     return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
 
 
-def _mcp_oauth_token_response(
+def _mcp_oauth_authorization_code(
     client: TestClient,
     *,
     state: str = "test-state",
     redirect_uri: str = "http://127.0.0.1:49152/oauth/callback",
-    redeem_client: TestClient | None = None,
 ) -> dict[str, object]:
     verifier = f"{state}-pkce-verifier-abcdefghijklmnopqrstuvwxyz0123456789"
     register = client.post(
@@ -292,6 +291,7 @@ def _mcp_oauth_token_response(
     assert google_state is not None
 
     browser = TestClient(client.app, base_url="https://memory.example.com")
+    browser.cookies.update(client.cookies)
     callback = browser.get(
         f"/auth/google/callback?code=fake-code&state={google_state.group(1)}",
         follow_redirects=False,
@@ -299,23 +299,43 @@ def _mcp_oauth_token_response(
     approval = _approve_pending_authorization(browser, callback)
     redirect = urlparse(approval.headers["location"])
     params = parse_qs(redirect.query)
+    assert approval.status_code == 303
+    assert params["state"] == [state]
+    return {
+        "client_id": client_id,
+        "code": params["code"][0],
+        "redirect_uri": redirect_uri,
+        "verifier": verifier,
+    }
+
+
+def _mcp_oauth_token_response(
+    client: TestClient,
+    *,
+    state: str = "test-state",
+    redirect_uri: str = "http://127.0.0.1:49152/oauth/callback",
+    redeem_client: TestClient | None = None,
+) -> dict[str, object]:
+    authorization = _mcp_oauth_authorization_code(
+        client,
+        state=state,
+        redirect_uri=redirect_uri,
+    )
     token = (redeem_client or client).post(
         "/oauth/token",
         data={
             "grant_type": "authorization_code",
-            "code": params["code"][0],
+            "code": authorization["code"],
             "redirect_uri": redirect_uri,
-            "client_id": client_id,
-            "code_verifier": verifier,
+            "client_id": authorization["client_id"],
+            "code_verifier": authorization["verifier"],
         },
     )
-    assert approval.status_code == 303
-    assert params["state"] == [state]
     assert token.status_code == 200
     return {
-        "client_id": client_id,
+        "client_id": authorization["client_id"],
         "redirect_uri": redirect_uri,
-        "verifier": verifier,
+        "verifier": authorization["verifier"],
         "token": token.json(),
     }
 
@@ -914,7 +934,7 @@ def test_google_callback_creates_session_and_hub_token_for_memory_access(
     assert stored_csrf_hash.startswith("pbkdf2-sha256:")
 
 
-def test_google_callback_allows_client_launched_browser_without_session_cookie(
+def test_google_callback_rejects_browser_without_matching_session_cookie(
     tmp_path, monkeypatch
 ) -> None:
     client = _client(tmp_path, monkeypatch, allowed_domains=["example.com"])
@@ -924,13 +944,7 @@ def test_google_callback_allows_client_launched_browser_without_session_cookie(
 
     browser = TestClient(client.app, base_url="https://memory.example.com")
     callback = browser.get(f"/auth/google/callback?code=fake-code&state={state.group(1)}")
-    with sqlite3.connect(tmp_path / "metadata.sqlite3") as conn:
-        session_count = conn.execute("SELECT COUNT(*) FROM web_sessions").fetchone()[0]
-        token_count = conn.execute("SELECT COUNT(*) FROM auth_tokens").fetchone()[0]
-
-    assert callback.status_code == 200
-    assert session_count == 1
-    assert token_count == 1
+    assert callback.status_code == 400
 
 
 def test_oauth_authorization_code_flow_issues_mcp_bearer_token(tmp_path, monkeypatch) -> None:
@@ -969,6 +983,7 @@ def test_oauth_authorization_code_flow_issues_mcp_bearer_token(tmp_path, monkeyp
     assert google_state is not None
 
     browser = TestClient(client.app, base_url="https://memory.example.com")
+    browser.cookies.update(client.cookies)
     callback = browser.get(
         f"/auth/google/callback?code=fake-code&state={google_state.group(1)}",
         follow_redirects=False,
@@ -1041,6 +1056,7 @@ def test_oauth_root_aliases_support_codex_no_discovery_fallback(tmp_path, monkey
     assert google_state is not None
 
     browser = TestClient(client.app, base_url="https://memory.example.com")
+    browser.cookies.update(client.cookies)
     callback = browser.get(
         f"/auth/google/callback?code=fake-code&state={google_state.group(1)}",
         follow_redirects=False,
@@ -1336,6 +1352,21 @@ def test_oauth_authorization_code_can_be_redeemed_by_another_app_instance(
 
     assert isinstance(flow["token"], dict)
     assert str(flow["token"]["access_token"])
+
+
+def test_oauth_provider_state_can_be_consumed_by_another_app_instance(
+    tmp_path, monkeypatch
+) -> None:
+    issuer = _client(tmp_path, monkeypatch)
+    redeemer = _client(tmp_path, monkeypatch)
+    start = issuer.get("/auth/google", follow_redirects=False)
+    state = parse_qs(urlparse(start.headers["location"]).query)["state"][0]
+    redeemer.cookies.update(issuer.cookies)
+
+    callback = redeemer.get(f"/auth/google/callback?code=fake-code&state={state}")
+
+    assert start.status_code == 303
+    assert callback.status_code == 200
 
 
 def test_oauth_refresh_token_rotates_and_reuse_revokes_family(tmp_path, monkeypatch) -> None:
@@ -1748,7 +1779,11 @@ def test_google_login_uses_provider_pkce_s256_and_token_verifier(tmp_path, monke
     assert params["code_challenge_method"] == ["S256"]
     assert params["code_challenge"] == [_pkce_challenge(code_verifier)]
     assert code_verifier not in start.headers["location"]
-    assert client.app.state.oauth_provider_states == {}
+    with sqlite3.connect(tmp_path / "metadata.sqlite3") as conn:
+        active_states = conn.execute(
+            "SELECT COUNT(*) FROM oauth_provider_states WHERE consumed_at IS NULL"
+        ).fetchone()[0]
+    assert active_states == 0
 
 
 def test_google_callback_rejects_unsigned_id_token(tmp_path, monkeypatch) -> None:
@@ -1792,21 +1827,30 @@ def test_google_callback_rejects_expired_state(tmp_path, monkeypatch) -> None:
     client = _client(tmp_path, monkeypatch)
     start = client.get("/auth/google", follow_redirects=False)
     state = parse_qs(urlparse(start.headers["location"]).query)["state"][0]
-    client.app.state.oauth_provider_states[state]["created_at"] = int(time.time()) - 601
+    with sqlite3.connect(tmp_path / "metadata.sqlite3") as conn:
+        conn.execute(
+            "UPDATE oauth_provider_states SET expires_at = ?",
+            ("2000-01-01T00:00:00+00:00",),
+        )
 
     response = client.get(f"/auth/google/callback?code=fake-code&state={state}")
 
     assert response.status_code == 400
 
 
-def test_google_oauth_state_store_is_capped(tmp_path, monkeypatch) -> None:
+def test_google_oauth_state_quota_is_per_browser(tmp_path, monkeypatch) -> None:
     client = _client(tmp_path, monkeypatch)
 
-    for _ in range(140):
+    for _ in range(8):
         response = client.get("/auth/google", follow_redirects=False)
         assert response.status_code == 303
 
-    assert len(client.app.state.oauth_provider_states) <= 128
+    rejected = client.get("/auth/google", follow_redirects=False)
+    other_browser = TestClient(client.app, base_url="https://memory.example.com")
+    independent = other_browser.get("/auth/google", follow_redirects=False)
+
+    assert rejected.status_code == 429
+    assert independent.status_code == 303
 
 
 def test_oauth_registered_client_quota_is_enforced_in_durable_storage(
@@ -1833,6 +1877,38 @@ def test_oauth_registered_client_quota_is_enforced_in_durable_storage(
     assert rejected.status_code == 400
     assert rejected.json()["detail"]["error"] == "invalid_client_metadata"
     assert durable_count == 128
+
+
+@pytest.mark.parametrize(
+    ("field", "wrong_value"),
+    [
+        ("client_id", "wrong-client"),
+        ("redirect_uri", "http://127.0.0.1:49152/wrong"),
+        ("code_verifier", "wrong-verifier-abcdefghijklmnopqrstuvwxyz0123456789"),
+        ("code_verifier", "malformed"),
+    ],
+)
+def test_oauth_authorization_code_binding_mismatch_does_not_consume_code(
+    tmp_path, monkeypatch, field: str, wrong_value: str
+) -> None:
+    client = _client(tmp_path, monkeypatch, allowed_domains=["example.com"])
+    authorization = _mcp_oauth_authorization_code(client, state=f"mismatch-{field}")
+    correct_form = {
+        "grant_type": "authorization_code",
+        "code": authorization["code"],
+        "redirect_uri": authorization["redirect_uri"],
+        "client_id": authorization["client_id"],
+        "code_verifier": authorization["verifier"],
+    }
+    wrong_form = dict(correct_form)
+    wrong_form[field] = wrong_value
+
+    rejected = client.post("/oauth/token", data=wrong_form)
+    accepted = client.post("/oauth/token", data=correct_form)
+
+    assert rejected.status_code == 400
+    assert rejected.json()["error"] == "invalid_grant"
+    assert accepted.status_code == 200
 
 
 def test_oauth_authorization_code_is_single_use(tmp_path, monkeypatch) -> None:
@@ -1867,6 +1943,7 @@ def test_oauth_authorization_code_is_single_use(tmp_path, monkeypatch) -> None:
     google_state = re.search(r"[?&]state=([^&]+)", authorize.headers["location"])
     assert google_state is not None
     browser = TestClient(client.app, base_url="https://memory.example.com")
+    browser.cookies.update(client.cookies)
     callback = browser.get(
         f"/auth/google/callback?code=fake-code&state={google_state.group(1)}",
         follow_redirects=False,

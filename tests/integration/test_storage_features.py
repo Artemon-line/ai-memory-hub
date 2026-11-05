@@ -22,6 +22,7 @@ from memory.backend.errors import (
     ConcurrentAppendError,
     NotSupportedError,
     OAuthClientQuotaExceeded,
+    OAuthProviderStateQuotaExceeded,
     SchemaVersionError,
     VectorDimensionError,
 )
@@ -797,18 +798,108 @@ def test_sqlite_oauth_authorization_code_is_shared_and_atomically_consumed(
         expires_at="2999-01-01T00:00:00+00:00",
     )
 
+    mismatched = redeemer.consume_oauth_authorization_code(
+        "amh_code_shared_secret",
+        client_id="wrong-client",
+        redirect_uri="http://127.0.0.1/callback",
+        code_challenge="a" * 43,
+    )
+
     with ThreadPoolExecutor(max_workers=2) as executor:
         results = list(
             executor.map(
-                lambda store: store.consume_oauth_authorization_code("amh_code_shared_secret"),
+                lambda store: store.consume_oauth_authorization_code(
+                    "amh_code_shared_secret",
+                    client_id="amh_client_code",
+                    redirect_uri="http://127.0.0.1/callback",
+                    code_challenge="a" * 43,
+                ),
                 (issuer, redeemer),
             )
         )
 
+    assert mismatched is None
     assert sum(result is not None for result in results) == 1
     record = next(result for result in results if result is not None)
     assert record["client_id"] == "amh_client_code"
     assert record["owner_id"] == "jane"
+
+
+def test_sqlite_oauth_provider_state_is_browser_bound_shared_and_single_use(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "metadata.sqlite3"
+    issuer = SQLiteMetadataStore(database)
+    redeemer = SQLiteMetadataStore(database)
+    issuer.create_oauth_provider_state(
+        state="provider-state-secret",
+        provider="google",
+        browser_session_id="browser-a",
+        nonce="provider-nonce",
+        code_verifier="provider-verifier",
+        state_data={"return_to": "/connect"},
+        expires_at="2999-01-01T00:00:00+00:00",
+        max_active_states=8,
+        max_global_active_states=512,
+    )
+
+    wrong_browser = redeemer.consume_oauth_provider_state(
+        state="provider-state-secret",
+        provider="google",
+        browser_session_id="browser-b",
+    )
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(
+            executor.map(
+                lambda store: store.consume_oauth_provider_state(
+                    state="provider-state-secret",
+                    provider="google",
+                    browser_session_id="browser-a",
+                ),
+                (issuer, redeemer),
+            )
+        )
+
+    assert wrong_browser is None
+    assert sum(result is not None for result in results) == 1
+    record = next(result for result in results if result is not None)
+    assert record["nonce"] == "provider-nonce"
+    assert record["code_verifier"] == "provider-verifier"
+    assert record["return_to"] == "/connect"
+
+
+def test_sqlite_oauth_provider_state_global_quota_cannot_be_reset_by_new_browser(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteMetadataStore(tmp_path / "metadata.sqlite3")
+    common = {
+        "provider": "google",
+        "nonce": "provider-nonce",
+        "code_verifier": "provider-verifier",
+        "state_data": {},
+        "expires_at": "2999-01-01T00:00:00+00:00",
+        "max_active_states": 8,
+        "max_global_active_states": 1,
+    }
+    store.create_oauth_provider_state(
+        state="provider-state-a",
+        browser_session_id="browser-a",
+        **common,
+    )
+
+    with pytest.raises(OAuthProviderStateQuotaExceeded):
+        store.create_oauth_provider_state(
+            state="provider-state-b",
+            browser_session_id="browser-b",
+            **common,
+        )
+
+    with sqlite3.connect(tmp_path / "metadata.sqlite3") as conn:
+        rows = conn.execute(
+            "SELECT state_hash, browser_session_hash FROM oauth_provider_states"
+        ).fetchall()
+    assert len(rows) == 1
+    assert all(value.startswith("sha256:") for value in rows[0])
 
 
 def test_sqlite_oauth_client_quota_is_atomic(tmp_path: Path) -> None:

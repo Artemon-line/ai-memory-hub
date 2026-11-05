@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import hmac
 import ipaddress
 import logging
 import re
@@ -161,18 +160,21 @@ def register_oauth_authorization_routes(
                     "unsupported_grant_type",
                     "Only authorization_code and refresh_token are supported",
                 )
-            code = str(form.get("code") or "")
-            record = await service.agent.consume_oauth_authorization_code(code)
-            if record is None:
-                raise _oauth_error("invalid_grant", "Authorization code is invalid or expired")
-            if form.get("client_id") != record["client_id"]:
-                raise _oauth_error("invalid_grant", "client_id does not match authorization code")
-            if form.get("redirect_uri") != record["redirect_uri"]:
-                raise _oauth_error(
-                    "invalid_grant", "redirect_uri does not match authorization code"
-                )
-            if not _pkce_verifier_matches(str(form.get("code_verifier") or ""), record):
+            verifier = str(form.get("code_verifier") or "")
+            if not PKCE_VERIFIER_PATTERN.fullmatch(verifier):
                 raise _oauth_error("invalid_grant", "PKCE verification failed")
+            code = str(form.get("code") or "")
+            record = await service.agent.consume_oauth_authorization_code(
+                code,
+                client_id=str(form.get("client_id") or ""),
+                redirect_uri=str(form.get("redirect_uri") or ""),
+                code_challenge=_pkce_challenge(verifier),
+            )
+            if record is None:
+                raise _oauth_error(
+                    "invalid_grant",
+                    "Authorization code is invalid, expired, or does not match request",
+                )
 
             return await _issue_access_and_refresh_tokens(
                 service=service,
@@ -552,13 +554,9 @@ def _is_loopback_host(hostname: str) -> bool:
         return False
 
 
-def _pkce_verifier_matches(verifier: str, record: dict[str, object]) -> bool:
-    if not PKCE_VERIFIER_PATTERN.fullmatch(verifier):
-        return False
+def _pkce_challenge(verifier: str) -> str:
     digest = hashlib.sha256(verifier.encode("ascii")).digest()
-    challenge = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
-    expected = str(record["code_challenge"])
-    return hmac.compare_digest(challenge, expected)
+    return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
 
 
 def _session(request: Request) -> dict[str, Any]:

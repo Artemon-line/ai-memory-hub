@@ -18,9 +18,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
+      apt=3.0.4 \
       bsdutils=1:2.41.5-0+deb13u1 \
       gzip=1.13-1+deb13u1 \
       libblkid1=2.41.5-0+deb13u1 \
+      libapt-pkg7.0=3.0.4 \
       liblastlog2-2=2.41.5-0+deb13u1 \
       libmount1=2.41.5-0+deb13u1 \
       libpcre2-8-0=10.46-1~deb13u3 \

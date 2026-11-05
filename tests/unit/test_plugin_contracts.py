@@ -52,3 +52,21 @@ def test_plugin_enrichment_output_requires_list_fields() -> None:
 def test_plugin_enrichment_output_rejects_auth_bypass_keys() -> None:
     with pytest.raises(ValueError, match="protected or unsafe"):
         validate_plugin_enrichment_output({"entities": [], "authorization": "Bearer secret"})
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"facts": [{"owner_id": "another-user"}]},
+        {"entities": [{"metadata": {"token": "secret"}}]},
+        {"relationships": [[{"authorization": "Bearer secret"}]]},
+        {"summaries": [{"messages": [{"metadata": {"screenshot_data": "secret"}}]}]},
+    ],
+)
+def test_plugin_enrichment_output_rejects_nested_protected_keys(
+    payload: dict[str, object],
+) -> None:
+    with pytest.raises(ValueError, match="protected or unsafe") as exc_info:
+        validate_plugin_enrichment_output(payload)
+
+    assert "secret" not in str(exc_info.value)
