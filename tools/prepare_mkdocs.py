@@ -6,6 +6,11 @@ import sys
 import tomllib
 from datetime import date
 from pathlib import Path
+from typing import Any
+
+import markdown
+from mkdocs import utils as mkdocs_utils
+from mkdocs.config import load_config
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPOSITORY_ROOT) not in sys.path:
@@ -18,6 +23,12 @@ ROOT_DOC_FILES = (
     "CONTRIBUTING.md",
     "SECURITY.md",
 )
+
+# Python-Markdown's link processors repeatedly rescan bracket-heavy input. These
+# limits keep docs builds bounded while leaving ample room for ordinary prose.
+_MARKDOWN_LINK_PROCESSOR_COUNT = 3
+_MAX_MARKDOWN_BRACKET_WORK_PER_BLOCK = 1_000_000
+_MAX_MARKDOWN_BRACKET_WORK_PER_FILE = 2_000_000
 
 
 def prepare_docs(source_root: Path, output_dir: Path) -> None:
@@ -39,6 +50,111 @@ def prepare_docs(source_root: Path, output_dir: Path) -> None:
     _copy_docs(source_root, output_dir)
     if _is_project_checkout(source_root):
         _write_importer_compatibility(source_root, output_dir)
+    _validate_markdown_complexity(source_root, output_dir)
+
+
+def _validate_markdown_complexity(source_root: Path, output_dir: Path) -> None:
+    extensions, extension_configs = _markdown_configuration(source_root)
+    markdown_paths = (
+        path
+        for path in output_dir.rglob("*")
+        if path.is_file() and mkdocs_utils.is_markdown_file(path.name)
+    )
+    for markdown_path in sorted(markdown_paths):
+        text = markdown_path.read_text(encoding="utf-8")
+        relative_path = markdown_path.relative_to(output_dir).as_posix()
+        file_work = 0
+
+        for start_line, block in _markdown_prose_blocks(
+            text,
+            extensions,
+            extension_configs,
+        ):
+            block_work = _markdown_bracket_work(block)
+            if block_work > _MAX_MARKDOWN_BRACKET_WORK_PER_BLOCK:
+                raise ValueError(
+                    f"unsafe Markdown complexity in {relative_path}:{start_line}: "
+                    f"estimated bracket scan work {block_work:,} exceeds the "
+                    f"per-block limit {_MAX_MARKDOWN_BRACKET_WORK_PER_BLOCK:,}; "
+                    "balance brackets, split the prose, or move bracket-heavy "
+                    "literal content into a fenced code block"
+                )
+            file_work += block_work
+
+        if file_work > _MAX_MARKDOWN_BRACKET_WORK_PER_FILE:
+            raise ValueError(
+                f"unsafe Markdown complexity in {relative_path}: estimated bracket "
+                f"scan work {file_work:,} exceeds the per-file limit "
+                f"{_MAX_MARKDOWN_BRACKET_WORK_PER_FILE:,}; balance brackets, split "
+                "the content across files, or use fenced code blocks for literals"
+            )
+
+
+def _markdown_configuration(
+    source_root: Path,
+) -> tuple[list[str], dict[str, dict[str, Any]]]:
+    config_path = source_root / "mkdocs.yml"
+    if not config_path.is_file():
+        return ["pymdownx.highlight", "pymdownx.superfences"], {}
+
+    config = load_config(config_file=str(config_path))
+    return list(config["markdown_extensions"]), dict(config["mdx_configs"] or {})
+
+
+def _markdown_prose_blocks(
+    text: str,
+    extensions: list[str],
+    extension_configs: dict[str, dict[str, Any]],
+) -> list[tuple[int, str]]:
+    parser = markdown.Markdown(
+        extensions=extensions,
+        extension_configs=extension_configs,
+    )
+    lines = text.splitlines()
+    for preprocessor in parser.preprocessors:
+        lines = preprocessor.run(lines)
+
+    blocks: list[tuple[int, str]] = []
+    block_lines: list[str] = []
+    block_start = 1
+
+    def flush_block() -> None:
+        nonlocal block_lines
+        if block_lines:
+            blocks.append((block_start, "\n".join(block_lines)))
+            block_lines = []
+
+    for line_number, line in enumerate(lines, start=1):
+        if not line.strip():
+            flush_block()
+        else:
+            if not block_lines:
+                block_start = line_number
+            block_lines.append(line)
+
+    flush_block()
+    return blocks
+
+
+def _markdown_bracket_work(text: str) -> int:
+    openers: list[int] = []
+    work = 0
+    backslash_run = 0
+
+    for index, character in enumerate(text):
+        if character == "\\":
+            backslash_run += 1
+            continue
+
+        escaped = backslash_run % 2 == 1
+        backslash_run = 0
+        if character == "[" and not escaped:
+            openers.append(index)
+        elif character == "]" and not escaped and openers:
+            work += index - openers.pop()
+
+    work += sum(len(text) - opener for opener in openers)
+    return work * _MARKDOWN_LINK_PROCESSOR_COUNT
 
 
 def _is_project_checkout(source_root: Path) -> bool:
