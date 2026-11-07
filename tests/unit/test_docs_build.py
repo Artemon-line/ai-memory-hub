@@ -95,6 +95,8 @@ def test_prepare_docs_checks_every_mkdocs_page_suffix(
 
 
 def test_prepare_docs_allows_normal_markdown_and_fenced_literals(tmp_path: Path) -> None:
+    pytest.importorskip("markdown")
+    pytest.importorskip("mkdocs")
     readme = (
         "# Project\n\n"
         + "[documentation](https://example.com)\n" * 1_000

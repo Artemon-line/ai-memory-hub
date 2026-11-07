@@ -8,10 +8,6 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-import markdown
-from mkdocs import utils as mkdocs_utils
-from mkdocs.config import load_config
-
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPOSITORY_ROOT))
@@ -29,6 +25,7 @@ ROOT_DOC_FILES = (
 _MARKDOWN_LINK_PROCESSOR_COUNT = 3
 _MAX_MARKDOWN_BRACKET_WORK_PER_BLOCK = 1_000_000
 _MAX_MARKDOWN_BRACKET_WORK_PER_FILE = 2_000_000
+_MKDOCS_MARKDOWN_SUFFIXES = (".markdown", ".mdown", ".mkdn", ".mkd", ".md")
 
 
 def prepare_docs(source_root: Path, output_dir: Path) -> None:
@@ -58,7 +55,7 @@ def _validate_markdown_complexity(source_root: Path, output_dir: Path) -> None:
     markdown_paths = (
         path
         for path in output_dir.rglob("*")
-        if path.is_file() and mkdocs_utils.is_markdown_file(path.name)
+        if path.is_file() and path.name.endswith(_MKDOCS_MARKDOWN_SUFFIXES)
     )
     for markdown_path in sorted(markdown_paths):
         text = markdown_path.read_text(encoding="utf-8")
@@ -95,8 +92,16 @@ def _markdown_configuration(
 ) -> tuple[list[str], dict[str, dict[str, Any]]]:
     config_path = source_root / "mkdocs.yml"
     if not config_path.is_file():
+        try:
+            import markdown  # noqa: F401
+        except ModuleNotFoundError:
+            return [], {}
         return ["pymdownx.highlight", "pymdownx.superfences"], {}
 
+    try:
+        from mkdocs.config import load_config
+    except ModuleNotFoundError:
+        return [], {}
     config = load_config(config_file=str(config_path))
     return list(config["markdown_extensions"]), dict(config["mdx_configs"] or {})
 
@@ -106,13 +111,16 @@ def _markdown_prose_blocks(
     extensions: list[str],
     extension_configs: dict[str, dict[str, Any]],
 ) -> list[tuple[int, str]]:
-    parser = markdown.Markdown(
-        extensions=extensions,
-        extension_configs=extension_configs,
-    )
     lines = text.splitlines()
-    for preprocessor in parser.preprocessors:
-        lines = preprocessor.run(lines)
+    if extensions:
+        import markdown
+
+        parser = markdown.Markdown(
+            extensions=extensions,
+            extension_configs=extension_configs,
+        )
+        for preprocessor in parser.preprocessors:
+            lines = preprocessor.run(lines)
 
     blocks: list[tuple[int, str]] = []
     block_lines: list[str] = []
