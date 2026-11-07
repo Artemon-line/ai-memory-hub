@@ -78,6 +78,20 @@ def test_provider_observations_require_exact_case_coverage(
         quality_gate.run_evaluation(observations_path=observations_path)
 
 
+@pytest.mark.parametrize("sample_count", [0, 1, 9])
+def test_provider_observations_require_one_latency_sample_per_retrieval(
+    tmp_path, sample_count: int
+) -> None:
+    corpus = quality_gate.load_corpus()
+    observations = quality_gate._run_deterministic_provider(corpus)
+    observations["latency_ms"] = [1.0] * sample_count
+    observations_path = tmp_path / "observations.json"
+    observations_path.write_text(json.dumps(observations), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="latency_ms coverage mismatch"):
+        quality_gate.run_evaluation(observations_path=observations_path)
+
+
 @pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
 def test_quality_gate_rejects_non_finite_thresholds(value: float) -> None:
     with pytest.raises(ValueError, match="finite"):

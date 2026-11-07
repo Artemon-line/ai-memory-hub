@@ -107,15 +107,39 @@ _TEMPORARY_RE = re.compile(
     r"\b(?:for\s+now|temporarily|temporary|today|this\s+(?:week|month)|until\b[^.?!\n]{0,80})",
     re.IGNORECASE,
 )
+_CLAUSE_MODIFIER_START = (
+    r"(?:do(?:es)?\s+not|don['’]t|doesn['’]t|didn['’]t|never|no\s+longer|"
+    r"is\s+not|isn['’]t|am\s+not|not|if|hypothetically|suppose|assuming|"
+    r"would|could|might|may|maybe|perhaps|probably|possibly|for\s+now|temporarily)"
+)
+_PRONOUN_CLAUSE_START = (
+    r"(?:i|we|you|he|she|they|it)\s+"
+    r"(?:am|are|is|was|were|do|does|did|have|has|had|can|will|shall|"
+    r"like|likes|liked|prefer|prefers|preferred|own|owns|owned|"
+    r"use|uses|used|want|wants|wanted|need|needs|needed)"
+)
+_NOUN_CLAUSE_START = (
+    r"(?:(?:the\s+)?(?:[a-z][\w'’\-]*\s+){1,4}"
+    r"(?:is|are|was|were|has|have|had|does|do))"
+)
+_LEADING_MODIFIER_ONLY_RE = re.compile(
+    r"(?:for\s+now|temporarily|temporary|today|this\s+(?:week|month)|"
+    r"maybe|perhaps|probably|possibly|hypothetically|suppose|assuming|if\b[^,]*)",
+    re.IGNORECASE,
+)
 _CLAUSE_BOUNDARY_RE = re.compile(
-    r"[.?!;\n]+|,?\s*\b(?:but|yet|while|although)\b\s*",
+    r"[.?!;\n]+"
+    r"|,?\s*\b(?:but|yet|while|although)\b\s*"
+    r"|,\s*\bso\b\s*"
+    rf"|,\s*(?=(?:(?:and|or)\s+)?(?:{_CLAUSE_MODIFIER_START}|{_PRONOUN_CLAUSE_START}|{_NOUN_CLAUSE_START})\b)"
+    rf"|\s+\b(?:and|or)\b\s+(?=(?:{_CLAUSE_MODIFIER_START}|{_PRONOUN_CLAUSE_START})\b)",
     re.IGNORECASE,
 )
 
 
 def classify_assertion(text: str, span: tuple[int, int]) -> AssertionType:
     start, end = span
-    boundaries = list(_CLAUSE_BOUNDARY_RE.finditer(text))
+    boundaries = _clause_boundaries(text)
     clause_start = max(
         (match.end() for match in boundaries if match.end() <= start),
         default=0,
@@ -137,6 +161,18 @@ def classify_assertion(text: str, span: tuple[int, int]) -> AssertionType:
     if _TEMPORARY_RE.search(clause):
         return AssertionType.TEMPORARY
     return AssertionType.ASSERTED
+
+
+def _clause_boundaries(text: str) -> list[re.Match[str]]:
+    boundaries: list[re.Match[str]] = []
+    previous_end = 0
+    for match in _CLAUSE_BOUNDARY_RE.finditer(text):
+        segment = text[previous_end : match.start()].strip()
+        if match.group().strip() == "," and _LEADING_MODIFIER_ONLY_RE.fullmatch(segment):
+            continue
+        boundaries.append(match)
+        previous_end = match.end()
+    return boundaries
 
 
 def validate_fact_candidate(
