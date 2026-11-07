@@ -77,13 +77,16 @@ class ArtifactRecordKey(StrEnum):
 
 class ArtifactRecordType(StrEnum):
     ASSISTANT = "assistant"
+    ASSISTANT_MESSAGE = "assistant.message"
     SESSION = "session"
     SESSION_META = "session_meta"
+    SESSION_RESUME = "session.resume"
     SESSION_SHUTDOWN = "session.shutdown"
     SESSION_START = "session.start"
     SYSTEM = "system"
     TITLE = "title"
     USER = "user"
+    USER_MESSAGE = "user.message"
 
 
 class DiscoveryResultKey(StrEnum):
@@ -423,9 +426,18 @@ class _CopilotCliAdapter(SourceAdapter):
             if record_type == ArtifactRecordType.SESSION_SHUTDOWN:
                 terminal = True
                 continue
-            if record_type != ArtifactRecordType.SESSION_START:
+            if record_type in {
+                ArtifactRecordType.SESSION_START,
+                ArtifactRecordType.SESSION_RESUME,
+                ArtifactRecordType.USER_MESSAGE,
+                ArtifactRecordType.ASSISTANT_MESSAGE,
+            }:
+                terminal = False
+            if record_type not in {
+                ArtifactRecordType.SESSION_START,
+                ArtifactRecordType.SESSION_RESUME,
+            }:
                 continue
-            terminal = False
             data = record.get(ArtifactRecordKey.DATA)
             if not isinstance(data, dict):
                 return None

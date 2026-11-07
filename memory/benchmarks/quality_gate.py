@@ -400,6 +400,16 @@ def _validate_observation_coverage(
                 f"duplicates={duplicates}, missing={missing}, unknown={unknown}"
             )
 
+    latency_values = observations.get("latency_ms")
+    if not isinstance(latency_values, list):
+        raise ValueError("observations latency_ms must be a list")
+    expected_latency_samples = len(corpus["retrieval_cases"])
+    if len(latency_values) != expected_latency_samples:
+        raise ValueError(
+            "observations latency_ms coverage mismatch: "
+            f"expected={expected_latency_samples}, observed={len(latency_values)}"
+        )
+
 
 def _threshold_failures(metrics: Mapping[str, Any], thresholds: Mapping[str, float]) -> list[str]:
     measured = {
