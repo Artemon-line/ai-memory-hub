@@ -10,6 +10,7 @@ import pytest
 
 from memory.import_discovery import (
     DISCOVERY_PROVIDERS,
+    JSONL_INSPECTION_LIMIT_BYTES,
     DiscoveryEnvironmentVariable,
     DiscoveryError,
     DiscoverySource,
@@ -259,6 +260,39 @@ def test_copilot_resume_after_shutdown_is_treated_as_active(tmp_path: Path) -> N
 
     assert discovered.session_id == "resumed-session"
     assert "terminal" in discovered.safe_reason
+
+
+def test_copilot_terminal_state_falls_back_when_bounded_tail_is_incomplete(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "copilot"
+    artifact = root / "session-state/id/events.jsonl"
+    artifact.parent.mkdir(parents=True)
+    start = {
+        "type": "session.start",
+        "data": {
+            "sessionId": "active-large-session",
+            "startTime": "2026-10-18T11:00:00Z",
+        },
+    }
+    shutdown = {"type": "session.shutdown", "data": {}}
+    active_message = {
+        "type": "user.message",
+        "data": {"content": "x" * (JSONL_INSPECTION_LIMIT_BYTES + 1)},
+    }
+    artifact.write_text(
+        "\n".join(json.dumps(record) for record in (start, shutdown, active_message)),
+        encoding="utf-8",
+    )
+    recent = (_NOW - timedelta(seconds=10)).timestamp()
+    os.utime(artifact, (recent, recent))
+    service = build_discovery_service(
+        environment={DiscoveryEnvironmentVariable.COPILOT_HOME: str(root)},
+        home=tmp_path,
+    )
+
+    with pytest.raises(DiscoveryError, match="may still be active"):
+        service.discover_latest(DiscoverySource.COPILOT_CLI, now=_NOW)
 
 
 def test_copilot_resume_only_artifact_is_discoverable_after_inactivity(

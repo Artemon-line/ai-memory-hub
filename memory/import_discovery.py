@@ -419,20 +419,9 @@ class _CopilotCliAdapter(SourceAdapter):
 
     def inspect(self, path: Path) -> _InspectedHeader | None:
         records = self._record_reader.read(path)
-        terminal = False
         header: _InspectedHeader | None = None
         for record in records:
             record_type = record.get(ArtifactRecordKey.TYPE)
-            if record_type == ArtifactRecordType.SESSION_SHUTDOWN:
-                terminal = True
-                continue
-            if record_type in {
-                ArtifactRecordType.SESSION_START,
-                ArtifactRecordType.SESSION_RESUME,
-                ArtifactRecordType.USER_MESSAGE,
-                ArtifactRecordType.ASSISTANT_MESSAGE,
-            }:
-                terminal = False
             if record_type not in {
                 ArtifactRecordType.SESSION_START,
                 ArtifactRecordType.SESSION_RESUME,
@@ -450,7 +439,50 @@ class _CopilotCliAdapter(SourceAdapter):
                 header = parsed_header
         if header is None:
             return None
+        terminal = _latest_copilot_session_state(path) == ArtifactRecordType.SESSION_SHUTDOWN
         return _InspectedHeader(header.session_id, header.timestamp, terminal)
+
+
+_COPILOT_SESSION_STATE_TYPES = {
+    ArtifactRecordType.SESSION_START,
+    ArtifactRecordType.SESSION_RESUME,
+    ArtifactRecordType.SESSION_SHUTDOWN,
+    ArtifactRecordType.USER_MESSAGE,
+    ArtifactRecordType.ASSISTANT_MESSAGE,
+}
+
+
+def _latest_copilot_session_state(path: Path) -> ArtifactRecordType | None:
+    """Return the latest ordered state visible in a complete bounded tail."""
+    with path.open("rb") as handle:
+        handle.seek(0, os.SEEK_END)
+        size = handle.tell()
+        tail_start = max(0, size - JSONL_INSPECTION_LIMIT_BYTES)
+        if tail_start:
+            handle.seek(tail_start - 1)
+            starts_at_line_boundary = handle.read(1) in {b"\n", b"\r"}
+        else:
+            starts_at_line_boundary = True
+        handle.seek(tail_start)
+        tail = handle.read(JSONL_INSPECTION_LIMIT_BYTES)
+
+    if not starts_at_line_boundary:
+        _partial_line, separator, tail = tail.partition(b"\n")
+        if not separator:
+            return None
+
+    latest: ArtifactRecordType | None = None
+    for raw_line in tail.splitlines():
+        try:
+            record = json.loads(raw_line)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            continue
+        if not isinstance(record, dict):
+            continue
+        record_type = record.get(ArtifactRecordKey.TYPE)
+        if record_type in _COPILOT_SESSION_STATE_TYPES:
+            latest = ArtifactRecordType(record_type)
+    return latest
 
 
 class _PiFamilyAdapter(SourceAdapter):
