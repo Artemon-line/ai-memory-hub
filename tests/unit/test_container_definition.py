@@ -465,7 +465,15 @@ def test_docker_publish_attests_published_image() -> None:
     assert 'git checkout --detach "refs/tags/${RELEASE_TAG}"' in workflow
     assert "Build local image for release scan" in workflow
     assert "Scan release image before push" in workflow
-    assert "exit-code: \"1\"" in workflow
+    assert (
+        "ghcr.io/aquasecurity/trivy@"
+        "sha256:be1190afcb28352bfddc4ddeb71470835d16462af68d310f9f4bca710961a41e"
+        in workflow
+    )
+    assert "--severity CRITICAL,HIGH" in workflow
+    assert "--ignore-unfixed" in workflow
+    assert "--exit-code 1" in workflow
+    assert "/var/run/docker.sock:/var/run/docker.sock" in workflow
     assert "Smoke published image" in workflow
     assert '"${IMAGE}@${DIGEST}"' in workflow
     assert "127.0.0.1:8000:8000" in workflow
