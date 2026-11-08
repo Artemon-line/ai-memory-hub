@@ -5,10 +5,15 @@
     "aliases": []
   },
   {
-    "version": "1.0.0-beta.1",
-    "title": "1.0.0-beta.1",
+    "version": "1.0.1-beta",
+    "title": "1.0.1-beta",
     "aliases": [
       "latest"
     ]
+  },
+  {
+    "version": "1.0.0-beta.1",
+    "title": "1.0.0-beta.1",
+    "aliases": []
   }
 ]
