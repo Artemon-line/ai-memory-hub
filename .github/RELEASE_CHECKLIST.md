@@ -17,7 +17,7 @@ from typed source records. There is no checked-in matrix or manual update step.
 ## Required Local Checks
 
 ```bash
-uv run python tools/validate_release_version.py v1.0.0-beta
+uv run python tools/validate_release_version.py v1.0.1-beta
 ```
 
 Ruff, Pyright, Bruno file validation, strict docs build, and release tag policy
@@ -53,7 +53,7 @@ debugging failures or preparing an offline release candidate.
 
 ## Stable Release
 
-- [ ] Publish `v0.1.0`.
+- [ ] Publish the intended stable tag, such as `v1.0.1`.
 - [ ] Confirm Docker version tags and `latest` were pushed.
 - [ ] Confirm the image digest is present in the release notes.
 - [ ] Confirm the docs site root opens this release through the `latest` alias.

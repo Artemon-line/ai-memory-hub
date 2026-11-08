@@ -83,6 +83,8 @@ nav:
       - Planned Features: docs/planned_features.md
       - Documentation And Planning: docs/plans.md
   - Project:
+      - Release Notes:
+          - 1.0.1 beta: docs/releases/1.0.1-beta.md
       - Changelog: CHANGELOG.md
       - Contributing: CONTRIBUTING.md
       - Code Of Conduct: CODE_OF_CONDUCT.md
