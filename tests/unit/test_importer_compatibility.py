@@ -93,7 +93,7 @@ def test_docs_preparation_generates_matrix_without_checked_in_copy(tmp_path: Pat
     prepare_docs(_ROOT, output_dir)
 
     report = (output_dir / "docs" / "importer_compatibility.md").read_text(encoding="utf-8")
-    assert "Generated for ai-memory-hub `1.0.0` on " in report
+    assert "Generated for ai-memory-hub `1.0.1` on " in report
     assert not (_ROOT / "docs" / "importer_compatibility.md").exists()
 
 

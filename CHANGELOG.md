@@ -6,6 +6,11 @@ should describe the supported public behavior for each tagged release.
 
 ## Unreleased
 
+## 1.0.1-beta - 2026-11-08
+
+See the [1.0.1 beta release notes](docs/releases/1.0.1-beta.md) for highlights,
+upgrade guidance, and copy-paste examples.
+
 - Added `mcp.tool_profile`: `advanced` remains the default full MCP tool surface,
   while the opt-in `simple` preview registers only `memory_save` and `memory_ask`.
   The save name aliases the existing insert handler without changing HTTP endpoints
