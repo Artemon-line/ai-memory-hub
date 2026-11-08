@@ -144,6 +144,7 @@ def test_public_docs_keep_beta_history_append_only() -> None:
 
     assert "append-only memory history" in text
     assert "destructive memory update/delete" in text
-    assert "archive/restore does not ship in `v1.0.0-beta`" in text
+    assert "archive/restore does not ship" in text
+    assert "`v1.0.1-beta`" in text
     assert "review/delete" not in text
     assert "review/deletion" not in text
