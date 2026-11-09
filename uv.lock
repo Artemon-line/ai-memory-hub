@@ -135,7 +135,7 @@ requires-dist = [
     { name = "redis", marker = "extra == 'redis'", specifier = ">=8.1.0" },
     { name = "tiktoken", marker = "extra == 'tokenizer'", specifier = ">=0.14.0" },
     { name = "turbopuffer", marker = "extra == 'turbopuffer'", specifier = ">=2.9.0" },
-    { name = "typesense", marker = "extra == 'typesense'", specifier = ">=0.21.0" },
+    { name = "typesense", marker = "extra == 'typesense'", specifier = ">=2.1.1" },
     { name = "uvicorn", specifier = ">=0.54.0" },
     { name = "weaviate-client", marker = "extra == 'weaviate'", specifier = ">=4.23.0" },
 ]
@@ -2979,15 +2979,15 @@ wheels = [
 
 [[package]]
 name = "typesense"
-version = "2.0.0"
+version = "2.1.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/69/92/ca06da7ad7e771804fe21fdcfbc99d24079bedb9ab0ceaedac7ea1001263/typesense-2.0.0.tar.gz", hash = "sha256:9a306e328bf0c0030679c154730ec142efbf07fd0c33845b3efae10291e983e7", size = 79292, upload-time = "2026-02-16T16:37:56.647Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5c/25/5e582ea98ffe6df71e9db8c4288a9bc9179efbace1d49a371e716ffd93f1/typesense-2.1.1.tar.gz", hash = "sha256:5d1fded865ecf9a9e564a4e6b8aa9229c34287e958dc3b16eec408376d142a42", size = 97341, upload-time = "2026-10-23T09:23:19.964Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b6/a5/a392604f3eeed45d3d72f8f10b45a80082a826338609e62187d9e3614001/typesense-2.0.0-py3-none-any.whl", hash = "sha256:7eecc672e4049f7b5777e1cf1e7900d2d1ae2d28a670eda6545b568d1cde1700", size = 140736, upload-time = "2026-02-16T16:37:55.256Z" },
+    { url = "https://files.pythonhosted.org/packages/38/22/d848100d45976e612865251f89607d941199003d24a622b8afc5b9503b88/typesense-2.1.1-py3-none-any.whl", hash = "sha256:e37f799be67cc3a948ac756826e0c2451882a61d37d4da6235a4a80c2436afd6", size = 160564, upload-time = "2026-10-23T09:23:18.461Z" },
 ]
 
 [[package]]

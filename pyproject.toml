@@ -69,7 +69,7 @@ vespa = [
     "pyvespa>=1.2.9",
 ]
 typesense = [
-    "typesense>=0.21.0",
+    "typesense>=2.1.1",
 ]
 weaviate = [
     "weaviate-client>=4.23.0",
