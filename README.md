@@ -16,42 +16,44 @@ Provider live checks:
 
 Local-first memory for AI agents.
 
-`ai-memory-hub` gives Codex, opencode, Claude, Copilot, and other agent clients a
-shared memory backend through MCP and HTTP. Store conversations once, then search,
-retrieve, and ask over them from any compatible client.
+`ai-memory-hub` gives Codex, OpenCode, Claude, Copilot, Gemini, Pi, Hermes, and
+other agent clients a shared memory backend through MCP and HTTP. Import completed
+conversations without spending model-context tokens, then search, retrieve, ask,
+and resume work from any compatible client.
 
 ```text
-                         +------------------+
+ Agent session files          MCP clients             HTTP / Connect UI
+ Codex, Claude, Copilot,   memory_save / ask /       explicit imports and
+ Pi, OpenCode, Gemini...   search / handoffs         application clients
+          |                       |                         |
+          +-----------------------+-------------------------+
+                                  |
+                         +--------v---------+
                          |  ai-memory-hub   |
-                         | local/LAN/hosted |
-                         +---------+--------+
-                                   |
-              HTTP API + MCP + auth + storage contract
-                                   |
-        +--------------------------+--------------------------+
-        |                          |                          |
-  Codex plugin              Browser extension           Other clients
-  skills / MCP setup        Chrome/Edge/etc.            agents, CLIs, apps
-        |                          |                          |
-        |                          |                          |
-  capture + retrieval       capture + retrieval         capture + retrieval
-  context injection         context injection           context injection
+                         | validate, dedupe |
+                         | embed, authorize |
+                         | retrieve, answer |
+                         +--------+---------+
+                                  |
+                    metadata store + vector store
 ```
 
-Adapters do not own memory. Adapters own capture and context injection. The hub
-owns storage, retrieval, auth, permissions, and memory quality.
+Import hooks and clients only transport data and requests. The hub owns schema
+validation, normalization, hashing, deduplication, embedding, storage,
+retrieval, auth, permissions, and memory quality.
 
 Terminology:
 
-- Capture: an adapter sends selected conversation, page, note, or code context
-  into the hub.
+- Import: a CLI, hook, Connect UI, or HTTP client sends a completed conversation
+  artifact to an explicit source parser. The artifact does not need to enter an
+  agent's model context.
 - Ingestion: the hub validates, normalizes, deduplicates, enriches, embeds, and
-  stores captured content. Fully indexed exact duplicates return the canonical
-  memory ID without repeating derived-record, embedding, metadata, or vector
-  writes.
+  stores imported or directly saved content. Fully indexed exact duplicates
+  return the canonical memory ID without repeating derived-record, embedding,
+  metadata, or vector writes.
 - Retrieval: the hub returns relevant memories, facts, citations, or answers.
-- Context injection: an adapter places retrieved memory into the active agent,
-  browser, editor, or CLI session.
+- Handoff: one client stores a durable, cited checkpoint that another client can
+  retrieve and resume without replaying the full conversation.
 
 ## Why It Exists
 
@@ -61,10 +63,11 @@ in your own local storage and exposes it through stable interfaces.
 
 It is built for:
 
+- Zero-token transport of completed sessions from supported agent harnesses
 - Cross-client handoff between agent tools
 - Local-first project and profile memory
-- MCP-native workflows
-- Deterministic capture, ingestion, retrieval, and context injection boundaries
+- MCP-native save, search, ask, and handoff workflows
+- Deterministic import, ingestion, reconciliation, and retrieval boundaries
 - SQLite/LanceDB by default, with optional Postgres, MongoDB, and vector-store providers
 - Bring-your-own embedding model, local or hosted
 
@@ -100,6 +103,11 @@ Containerfiles so they install only the extras needed by that example.
 
 ## What It Does
 
+- Imports completed conversations from Codex, Claude Code, GitHub Copilot CLI,
+  Pi/Oh My Pi, OpenCode, Gemini CLI, Hermes, DeepSeek Harness, Qwen Code,
+  Factory Droid, and supported export formats
+- Safely reconciles repeated and growing session imports without duplicating
+  already indexed content or silently merging divergent histories
 - Stores structured conversations with validation and deduplication
 - Searches semantic memory with conversation-aware grouping
 - Answers questions with concise MCP defaults or detailed citations,
@@ -277,6 +285,65 @@ To use an external OpenID Connect provider such as Keycloak, select
 through discovery/JWKS and maps provider roles to memory scopes; see the
 [external OIDC guide](docs/external_oidc.md).
 
+## Zero-token Conversation Imports
+
+"Zero-token" describes the transport path: the completed session file is sent
+directly to the hub instead of being pasted into, summarized by, or read through
+an agent's model context. Parsing, embedding, and storage still happen inside
+the hub and use the resources configured for those operations.
+
+Import the newest supported local session from a harness with stable session
+files:
+
+```bash
+uv run aim import latest codex
+uv run aim import latest claude-code
+uv run aim import latest copilot-cli
+uv run aim import latest pi
+uv run aim import latest oh-my-pi
+```
+
+Interactive discovery shows the resolved source, session ID, timestamp, and
+path before asking for confirmation. Automation must opt in explicitly:
+
+```bash
+uv run aim import latest codex --non-interactive --json
+```
+
+For an exported or explicitly selected artifact, choose its parser rather than
+asking the hub to guess from a filename:
+
+```bash
+uv run aim import codex-rollout-jsonl /path/to/rollout.jsonl --json
+
+curl -fsS -X POST http://127.0.0.1:8000/memory/import \
+  -H "Authorization: Bearer $MEMORY_API_TOKEN" \
+  -F "parser=codex-rollout-jsonl" \
+  -F "file=@/path/to/rollout.jsonl;type=application/x-ndjson"
+```
+
+| Source | Accepted artifact | Parser |
+| --- | --- | --- |
+| Codex CLI or app | Rollout JSONL | `codex-rollout-jsonl` |
+| Claude Code | Session JSONL | `claude-code-session-jsonl` |
+| GitHub Copilot CLI | `events.jsonl` | `copilot-cli-events-jsonl` |
+| Pi, Oh My Pi, or legacy OpenClaw | Version 3 session JSONL | `pi-session-jsonl` |
+| OpenCode | Sanitized session export | `opencode-session-json` |
+| Gemini CLI | Shared/exported session JSON | `gemini-cli-session-json` |
+| Hermes Agent | `hermes sessions export` JSONL | `hermes-session-jsonl` |
+| DeepSeek Harness | Extracted root session JSONL | `deepseek-harness-session-jsonl` |
+| Microsoft Copilot, DeepSeek web, Qwen Code, Factory Droid, or readable text | Supported export | See the importer guide |
+
+Retries are safe: exact repeats deduplicate, growing sessions append only their
+new tail, and conflicting histories fail instead of being silently combined.
+Opt-in end-of-session hooks are available for Codex and Claude Code; explicit
+closed-export recipes cover OpenCode, Gemini CLI, Hermes, DeepSeek Harness, Pi,
+and legacy OpenClaw formats. No background watcher is required.
+
+See [Importing conversations](docs/importing_conversations.md) for every parser,
+discovery rule, and reconciliation guarantee, and
+[Zero-token import hooks](docs/import_hooks.md) for safe setup and removal.
+
 ## Common Workflows
 
 Use the CLI during development:
@@ -406,23 +473,20 @@ provider fixture matrix, smoke commands, CI coverage, and hosted-provider notes.
 
 - [Published documentation (latest release)](https://artemon-line.github.io/ai-memory-hub/)
 - [Main branch preview (experimental)](https://artemon-line.github.io/ai-memory-hub/main/)
-- [Technical overview](docs/overview.md)
 - [Architecture](docs/architecture.md)
 - [Agent integration](docs/agents.md)
-- [Roadmap](docs/roadmap.md)
-- [Project status and remaining work](docs/project_status.md)
-- [Real-client MCP smoke plan](docs/real_client_mcp_smoke_plan.md)
-- [Documentation and planning](docs/plans.md)
-- [Release CI gap analysis](docs/release_ci_gap_analysis.md)
-- [Release security scan notes](docs/release_security_scan_notes.md)
-- [Repository governance settings](docs/repository_governance_settings.md)
-- [Release promotion assets](docs/release_promotion_assets.md)
+- [Importing conversations](docs/importing_conversations.md)
+- [Zero-token import hooks](docs/import_hooks.md)
+- [Connect UI and OAuth](docs/connect_ui.md)
+- [External OpenID Connect](docs/external_oidc.md)
+- [Storage provider examples](docs/storage_provider_examples.md)
+- [Features](docs/features.md)
+- [Release notes](docs/releases/1.0.1-beta.md)
 - [Changelog](CHANGELOG.md)
 - [Contributing guide](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)
-- [Project promotion plan](docs/project_promotion_plan.md)
-- [Storage provider examples](docs/storage_provider_examples.md)
-- [Planned features](docs/planned_features.md)
+- [Release CI gap analysis](docs/release_ci_gap_analysis.md)
+- [Release security scan notes](docs/release_security_scan_notes.md)
 
 Build the docs locally:
 
@@ -434,23 +498,23 @@ uv run python -m mkdocs build --strict
 
 ## Status
 
-The project currently includes deterministic append-only ingestion, MCP
-tools/resources/prompts, HTTP endpoints, CLI commands, fact-backed answers,
+`v1.0.1-beta` includes deterministic append-only ingestion, zero-token import
+paths for supported agent harnesses and exports, MCP tools/resources/prompts,
+HTTP endpoints, CLI commands, durable handoffs, fact-backed answers,
 sensitive-content quarantine, SQLite/Postgres/MongoDB metadata,
 LanceDB/Qdrant/Milvus/Weaviate/PGVector/MongoDB Atlas/Elasticsearch/OpenSearch/
 Redis/Vespa/Typesense/Pinecone/Turbopuffer/in-memory vectors, token-budgeted
 ask, container CI, provider live-test CI, and GitHub Pages docs publishing.
 
-Planned work includes broader importers, richer summaries, admin-only
-archive/retention workflows, provider-specific index compatibility checks, and
-release publishing. General destructive memory update/delete workflows are not
-part of `v1.0.0-beta`; corrections should be represented as new memory, fact
+General destructive memory update/delete workflows are not part of
+`v1.0.1-beta`; corrections should be represented as new memory, fact
 supersession, or explicit governance events over immutable history.
 
-Known first-release limits: ai-memory-hub does not ship as a hosted memory
-service, production-quality retrieval requires a bring-your-own embedding model,
-browser extensions are planned as separate adapters, UI dashboards/SDKs are
-future work, and archive/restore does not ship in `v1.0.0-beta`.
+Known beta limits: ai-memory-hub does not ship as a hosted memory service,
+production-quality retrieval requires a bring-your-own embedding model, the
+Connect UI is for setup and imports rather than general memory administration,
+there is no first-party SDK, and archive/restore does not ship in
+`v1.0.1-beta`.
 
 ## Contributing
 

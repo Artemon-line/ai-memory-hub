@@ -6,8 +6,9 @@ def test_readme_first_screen_positions_project_for_release() -> None:
     first_screen = "\n".join(readme.splitlines()[:24])
 
     assert "Local-first memory for AI agents." in first_screen
-    assert "Codex, opencode, Claude, Copilot" in first_screen
+    assert "Codex, OpenCode, Claude, Copilot" in first_screen
     assert "shared memory backend through MCP and HTTP" in first_screen
+    assert "without spending model-context tokens" in first_screen
 
 
 def test_readme_quick_start_has_source_and_docker_paths() -> None:
@@ -35,15 +36,16 @@ def test_readme_mcp_and_security_guidance_are_visible_before_lan_docs() -> None:
     assert "api.auth: oauth_resource_server" in readme
 
 
-def test_readme_known_first_release_limits_are_explicit() -> None:
+def test_readme_known_beta_limits_are_explicit() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
 
-    limitations = readme.index("Known first-release limits")
+    limitations = readme.index("Known beta limits")
     assert "does not ship as a hosted memory" in readme[limitations:]
     assert "bring-your-own embedding model" in readme[limitations:]
-    assert "browser extensions are planned as separate adapters" in readme[limitations:]
-    assert "UI dashboards" in readme[limitations:]
-    assert "SDKs are\nfuture work" in readme[limitations:]
+    assert "Connect UI is for setup and imports" in readme[limitations:]
+    assert "there is no first-party SDK" in readme[limitations:]
+    assert "archive/restore does not ship" in readme[limitations:]
+    assert "`v1.0.1-beta`" in readme[limitations:]
 
 
 def test_release_assets_do_not_market_unreleased_surfaces_as_shipped() -> None:
