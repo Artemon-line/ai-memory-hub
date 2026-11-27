@@ -40,6 +40,42 @@ def test_deterministic_plan_covers_tags_thread_handoff_intent_and_exact_terms() 
     assert plan.exact_terms == ("vector filters",)
 
 
+@pytest.mark.parametrize(
+    ("query", "expected_source"),
+    [
+        ("What was I asking Hermes three months ago?", "hermes"),
+        ("What GPU did I discuss with DeepSeek?", "deepseek"),
+        ("Find my DeepSeek Harness conversations about inference", "deepseek-harness"),
+    ],
+)
+def test_deterministic_plan_recognizes_agent_source_language(
+    query: str, expected_source: str
+) -> None:
+    plan = plan_retrieval_query(query, now=datetime(2026, 11, 27, 15, 30, tzinfo=UTC))
+
+    assert plan.filters.source == expected_source
+
+
+def test_months_ago_is_one_calendar_month_and_historical_question_intent() -> None:
+    plan = plan_retrieval_query(
+        "What was I asking Hermes three months ago?",
+        now=datetime(2026, 11, 27, 15, 30, tzinfo=UTC),
+    )
+
+    assert plan.intent == RetrievalIntent.HISTORICAL_USER_QUESTIONS
+    assert plan.filters.date_from == "2026-08-01T00:00:00Z"
+    assert plan.filters.date_to == "2026-08-31T23:59:59.999999Z"
+    assert plan.temporal_preference == TemporalPreference.HISTORICAL
+
+
+def test_past_months_remains_a_rolling_range() -> None:
+    now = datetime(2026, 11, 27, 15, 30, tzinfo=UTC)
+    plan = plan_retrieval_query("What did I discuss in the past three months?", now=now)
+
+    assert plan.filters.date_from == "2026-08-29T15:30:00Z"
+    assert plan.filters.date_to == "2026-11-27T15:30:00Z"
+
+
 def test_explicit_filters_are_authoritative_and_tags_only_narrow() -> None:
     plan = plan_retrieval_query(
         "my Codex discussions tagged retrieval since 2026-01-01",

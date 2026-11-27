@@ -2093,6 +2093,120 @@ def test_ask_applies_conversation_filters_before_answering() -> None:
     assert "Amber" not in result["answer"]
 
 
+def test_ask_returns_bounded_cited_historical_user_questions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configure_stubs(retrieval_vector_score_threshold=0.0)
+
+    def historical_conversation(
+        memory_id: str,
+        *,
+        source: str,
+        timestamp: str,
+        thread_id: str,
+        messages: list[dict[str, str]],
+    ) -> dict[str, Any]:
+        conversation = _valid_conversation()
+        conversation.update(
+            {
+                "id": memory_id,
+                "source": source,
+                "timestamp": timestamp,
+                "messages": messages,
+            }
+        )
+        conversation["metadata"]["thread_id"] = thread_id
+        return conversation
+
+    in_range = historical_conversation(
+        "11111111-1111-4111-8111-111111111111",
+        source="hermes",
+        timestamp="2026-08-24T10:00:00Z",
+        thread_id="hermes-august",
+        messages=[
+            {"role": "user", "text": "What does Hermes think about my project?"},
+            {"role": "assistant", "text": "The assistant answer must not be returned."},
+            {"role": "user", "text": "Which release marker should I use?"},
+        ],
+    )
+    duplicate = historical_conversation(
+        "22222222-2222-4222-8222-222222222222",
+        source="hermes",
+        timestamp="2026-08-25T10:00:00Z",
+        thread_id="hermes-august",
+        messages=[
+            {"role": "user", "text": "What does Hermes think about my project?"},
+        ],
+    )
+    out_of_range = historical_conversation(
+        "33333333-3333-4333-8333-333333333333",
+        source="hermes",
+        timestamp="2026-07-24T10:00:00Z",
+        thread_id="hermes-july",
+        messages=[{"role": "user", "text": "Out-of-range Hermes question?"}],
+    )
+    wrong_source = historical_conversation(
+        "44444444-4444-4444-8444-444444444444",
+        source="codex",
+        timestamp="2026-08-24T10:00:00Z",
+        thread_id="codex-august",
+        messages=[{"role": "user", "text": "Wrong-source project question?"}],
+    )
+    for conversation in (in_range, duplicate, out_of_range, wrong_source):
+        mvp_ingestion.ingest_messages(conversation)
+
+    monkeypatch.setattr(
+        mvp_ingestion,
+        "_answer_from_facts",
+        lambda *args, **kwargs: pytest.fail("historical intent must skip fact projection"),
+    )
+    result = mvp_ingestion.ask(
+        "What was I asking Hermes three months ago?",
+        top_k=5,
+        _now=datetime(2026, 11, 27, 15, 30, tzinfo=UTC),
+    )
+
+    assert [item["text"] for item in result["answer"]] == [
+        "What does Hermes think about my project?",
+        "Which release marker should I use?",
+    ]
+    assert all(row["role"] == "user" for row in result["results"])
+    assert len(result["citations"]) == 2
+    assert result["citations"][0] == {
+        "id": in_range["id"],
+        "chunk_index": 0,
+        "source": "hermes",
+        "timestamp": "2026-08-24T10:00:00Z",
+        "thread_id": "hermes-august",
+    }
+    assert result["interpreted_scope"] == {
+        "source": "hermes",
+        "date_from": "2026-08-01T00:00:00Z",
+        "date_to": "2026-08-31T23:59:59.999999Z",
+        "intent": "historical_user_questions",
+    }
+
+
+def test_historical_ask_does_not_broaden_empty_interpreted_scope() -> None:
+    _configure_stubs(retrieval_vector_score_threshold=0.0)
+    conversation = _valid_conversation()
+    conversation["source"] = "codex"
+    conversation["timestamp"] = "2026-08-24T10:00:00Z"
+    conversation["messages"] = [{"role": "user", "text": "A distractor question?"}]
+    mvp_ingestion.ingest_messages(conversation)
+
+    result = mvp_ingestion.ask(
+        "What was I asking Hermes three months ago?",
+        _now=datetime(2026, 11, 27, 15, 30, tzinfo=UTC),
+    )
+
+    assert result["answer"] == []
+    assert result["citations"] == []
+    assert result["answer_basis"] == "not_found"
+    assert result["interpreted_scope"]["source"] == "hermes"
+    assert result["interpreted_scope"]["date_from"] == "2026-08-01T00:00:00Z"
+
+
 def test_search_pushes_trusted_project_scope_before_vector_top_k() -> None:
     metadata, vectors = _configure_stubs(retrieval_keyword_enabled=False)
     vectors.supports_filters = True
