@@ -92,7 +92,11 @@ from memory.ingestion.imported_session import (
     IMPORTED_SESSION_IDENTITY_KEY,
     stamp_imported_session_identity,
 )
-from memory.ingestion.query_planning import RetrievalQueryPlan, plan_retrieval_query
+from memory.ingestion.query_planning import (
+    RetrievalIntent,
+    RetrievalQueryPlan,
+    plan_retrieval_query,
+)
 from memory.ingestion.retrieval_ranking import SemanticReranker, rank_candidate_lists
 from memory.ingestion.summary_models import (
     GeneratedSummary,
@@ -458,6 +462,7 @@ class _AskResponseKey(StrEnum):
     CONTEXT_TRUNCATED = "context_truncated"
     TOKENIZER_USED = "tokenizer_used"
     HANDOFF = "handoff"
+    INTERPRETED_SCOPE = "interpreted_scope"
 
 
 class _AskResponseStatus(StrEnum):
@@ -3894,23 +3899,28 @@ def search(
         )
         lexical_rows.append(row)
 
-    graph_rows, graph_diagnostics = _graph_candidate_rows(
-        query=semantic_query,
-        owner_id=owner_id,
-        project_id=effective_project_id,
-        existing_keys=set(),
-        score=runtime.retrieval_vector_score_threshold,
-        limit=top_k,
-    )
-    fact_rows = _fact_candidate_rows(
-        semantic_query,
-        owner_id=owner_id,
-        project_id=effective_project_id,
-        memory_status=status_filter,
-        filters=filters,
-        limit=fact_candidate_limit,
-        score=runtime.retrieval_vector_score_threshold,
-    )
+    if query_plan.intent == RetrievalIntent.HISTORICAL_USER_QUESTIONS:
+        graph_rows: list[dict[str, Any]] = []
+        graph_diagnostics = {"enabled": False, "candidate_count": 0}
+        fact_rows: list[dict[str, Any]] = []
+    else:
+        graph_rows, graph_diagnostics = _graph_candidate_rows(
+            query=semantic_query,
+            owner_id=owner_id,
+            project_id=effective_project_id,
+            existing_keys=set(),
+            score=runtime.retrieval_vector_score_threshold,
+            limit=top_k,
+        )
+        fact_rows = _fact_candidate_rows(
+            semantic_query,
+            owner_id=owner_id,
+            project_id=effective_project_id,
+            memory_status=status_filter,
+            filters=filters,
+            limit=fact_candidate_limit,
+            score=runtime.retrieval_vector_score_threshold,
+        )
     candidate_lists = {
         "dense": dense_rows,
         "lexical": lexical_rows,
@@ -4742,6 +4752,7 @@ def ask(
     source_client: str | None = None,
     source_session_id: str | None = None,
     include_query_plan: bool = False,
+    _now: datetime | None = None,
 ) -> dict[str, Any]:
     _validate_result_mode(result_mode)
     runtime = _runtime()
@@ -4759,20 +4770,26 @@ def ask(
         },
         planner=runtime.query_planner,
         planner_timeout_seconds=runtime.query_planner_timeout_seconds,
+        now=_now,
     )
     filters = ConversationFilters.from_options(**query_plan.filters.model_dump())
     effective_project_id = _resolve_project(
         owner_id=owner_id, project_id=project_id, required_role=PROJECT_ROLE_READER
     )
     status_filter = _validate_memory_status_filter(memory_status)
-    fact_answer = None if result_mode == SearchResultMode.HANDOFF else _answer_from_facts(
-        question,
-        top_k=top_k,
-        result_mode=result_mode,
-        owner_id=owner_id,
-        project_id=effective_project_id,
-        filters=filters,
-        include_context=False,
+    fact_answer = (
+        None
+        if result_mode == SearchResultMode.HANDOFF
+        or query_plan.intent == RetrievalIntent.HISTORICAL_USER_QUESTIONS
+        else _answer_from_facts(
+            question,
+            top_k=top_k,
+            result_mode=result_mode,
+            owner_id=owner_id,
+            project_id=effective_project_id,
+            filters=filters,
+            include_context=False,
+        )
     )
     if (
         fact_answer is not None
@@ -4811,6 +4828,24 @@ def ask(
         query_plan=query_plan,
     )
     matches = search_result.get("results", [])
+    if query_plan.intent == RetrievalIntent.HISTORICAL_USER_QUESTIONS:
+        result = _historical_user_questions_result(matches, top_k=top_k)
+        _record_audit_event(
+            "memory.asked",
+            owner_id=owner_id,
+            project_id=effective_project_id,
+            outcome="ok" if result["citations"] else "not_found",
+            metadata={
+                "question_hash": _audit_hash(question),
+                "top_k": top_k,
+                "result_count": len(result["results"]),
+                "answer_basis": result["answer_basis"],
+                "memory_status": status_filter,
+            },
+        )
+        return _with_query_plan_diagnostics(
+            result, query_plan=query_plan, include=include_query_plan
+        )
     if result_mode == SearchResultMode.HANDOFF:
         token_budget = (
             max_context_tokens
@@ -5003,9 +5038,107 @@ def _search_for_ask(
 def _with_query_plan_diagnostics(
     payload: dict[str, Any], *, query_plan: RetrievalQueryPlan, include: bool
 ) -> dict[str, Any]:
+    payload[_AskResponseKey.INTERPRETED_SCOPE.value] = {
+        "source": query_plan.filters.source,
+        "date_from": query_plan.filters.date_from,
+        "date_to": query_plan.filters.date_to,
+        "intent": query_plan.intent.value,
+    }
     if include:
         payload.setdefault("diagnostics", {})["query_plan"] = query_plan.diagnostics()
     return payload
+
+
+def _historical_user_questions_result(
+    matches: Sequence[dict[str, Any]], *, top_k: int
+) -> dict[str, Any]:
+    items: list[dict[str, Any]] = []
+    citations: list[dict[str, Any]] = []
+    selected_rows: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    bounded_limit = max(0, top_k)
+    if bounded_limit == 0:
+        matches = ()
+    for row in matches:
+        conversation = row.get("conversation")
+        if not isinstance(conversation, dict):
+            continue
+        memory_id = str(conversation.get("id") or row.get("id") or "")
+        timestamp = str(conversation.get("timestamp") or "")
+        source = str(conversation.get("source") or "")
+        thread_id = _thread_id_from_conversation(conversation)
+        messages = conversation.get("messages")
+        if not isinstance(messages, list):
+            continue
+        for chunk_index, message in enumerate(messages):
+            if not isinstance(message, dict) or str(message.get("role", "")).casefold() != "user":
+                continue
+            text = redact_secrets(" ".join(str(message.get("text", "")).split()))
+            if not text:
+                continue
+            text = _truncate_summary_text(text, limit=600)
+            identity = (thread_id, text.casefold())
+            if identity in seen:
+                continue
+            seen.add(identity)
+            citation = {
+                "id": memory_id,
+                "chunk_index": chunk_index,
+                "source": source,
+                "timestamp": timestamp,
+                "thread_id": thread_id,
+            }
+            item = {
+                "date": timestamp[:10] if timestamp else None,
+                "text": text,
+                "citation": citation,
+            }
+            items.append(item)
+            citations.append(citation)
+            selected_rows.append(
+                {
+                    **row,
+                    "id": memory_id,
+                    "chunk_index": chunk_index,
+                    "role": "user",
+                    "text": text,
+                }
+            )
+            if len(items) >= bounded_limit:
+                break
+        if len(items) >= bounded_limit:
+            break
+
+    found = bool(items)
+    return _enum_keyed_payload(
+        {
+            _AskResponseKey.STATUS: _AskResponseStatus.OK.value,
+            _AskResponseKey.RESULTS: selected_rows,
+            _AskResponseKey.ANSWER: items,
+            _AskResponseKey.CITATIONS: citations,
+            _AskResponseKey.CONFIDENCE: "high" if found else "none",
+            _AskResponseKey.CONFIDENCE_REASON: (
+                "User-authored questions were selected from the exact interpreted scope."
+                if found
+                else "No user-authored questions matched the exact interpreted scope."
+            ),
+            _AskResponseKey.ANSWER_BASIS: (
+                _AskAnswerBasis.DIRECT_MEMORY.value
+                if found
+                else _AskAnswerBasis.NOT_FOUND.value
+            ),
+            _AskResponseKey.PROVENANCE: _provenance_from_matches(
+                selected_rows, citations
+            ),
+            _AskResponseKey.EVIDENCE: _chunk_evidence_from_matches(selected_rows),
+            _AskResponseKey.STRUCTURED_EVIDENCE: _enum_keyed_payload(
+                {
+                    _StructuredEvidenceKey.FACTS: [],
+                    _StructuredEvidenceKey.RESULTS: selected_rows,
+                }
+            ),
+        }
+    )
 
 
 def _next_chunk_index(conversation: dict[str, Any], *, fallback_start_index: int) -> int:

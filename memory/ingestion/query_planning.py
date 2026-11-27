@@ -15,6 +15,7 @@ class RetrievalIntent(StrEnum):
     FACT = "fact"
     TIMELINE = "timeline"
     HANDOFF = "handoff"
+    HISTORICAL_USER_QUESTIONS = "historical_user_questions"
 
 
 class TemporalPreference(StrEnum):
@@ -134,11 +135,18 @@ _SOURCE_ALIASES = {
     "codex": "codex",
     "codex cli": "codex-cli",
     "opencode": "opencode",
+    "hermes": "hermes",
+    "hermes agent": "hermes",
+    "deepseek": "deepseek",
+    "deepseek harness": "deepseek-harness",
 }
 _SOURCE_PATTERN = re.compile(
-    r"\b(?:(?:from|in)\s+(?:my\s+)?|my\s+)"
-    r"(?P<source>chatgpt|claude(?:\s+code)?|codex(?:\s+cli)?|opencode)"
-    r"\s+(?:conversation|conversations|discussion|discussions|memory|memories|session|sessions)\b",
+    r"\b(?:"
+    r"(?:(?:from|in)\s+(?:my\s+)?|my\s+)"
+    r"(?P<source_with_context>chatgpt|claude(?:\s+code)?|codex(?:\s+cli)?|opencode|hermes(?:\s+agent)?|deepseek(?:\s+harness)?)"
+    r"\s+(?:conversation|conversations|discussion|discussions|memory|memories|session|sessions)"
+    r"|(?:with|from|asking)\s+(?P<source_direct>chatgpt|claude(?:\s+code)?|codex(?:\s+cli)?|opencode|hermes(?:\s+agent)?|deepseek(?:\s+harness)?)"
+    r")\b",
     re.IGNORECASE,
 )
 _EXPLICIT_RANGE_PATTERN = re.compile(
@@ -148,7 +156,11 @@ _EXPLICIT_RANGE_PATTERN = re.compile(
 _SINCE_PATTERN = re.compile(r"\b(?:since|after)\s+(?P<date>\d{4}-\d{2}-\d{2})\b", re.IGNORECASE)
 _BEFORE_PATTERN = re.compile(r"\b(?:before|until)\s+(?P<date>\d{4}-\d{2}-\d{2})\b", re.IGNORECASE)
 _RELATIVE_PATTERN = re.compile(
-    r"\b(?:in|from|during)?\s*(?P<period>today|yesterday|last\s+week|last\s+month|past\s+\d+\s+(?:days?|weeks?|months?))\b",
+    r"\b(?:in|from|during)?\s*(?P<period>today|yesterday|last\s+week|last\s+month|past\s+(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(?:days?|weeks?|months?))\b",
+    re.IGNORECASE,
+)
+_CALENDAR_MONTH_AGO_PATTERN = re.compile(
+    r"\b(?:in|from|during)?\s*(?P<count>\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+months?\s+ago\b",
     re.IGNORECASE,
 )
 _TAG_PATTERN = re.compile(r"(?<!\w)(?:tag:|tagged\s+|#)(?P<tag>[A-Za-z0-9][A-Za-z0-9_.-]{0,127})", re.IGNORECASE)
@@ -162,7 +174,26 @@ _LATEST_PATTERN = re.compile(r"\b(?:latest|current|newest|most\s+recent)\b", re.
 _HISTORICAL_PATTERN = re.compile(r"\b(?:historical|history|older|previous|formerly)\b", re.IGNORECASE)
 _TIMELINE_PATTERN = re.compile(r"\b(?:timeline|chronology|over\s+time|changed?)\b", re.IGNORECASE)
 _FACT_PATTERN = re.compile(r"\b(?:fact|facts|what\s+is|who\s+is|which\s+is)\b", re.IGNORECASE)
+_HISTORICAL_USER_QUESTIONS_PATTERN = re.compile(
+    r"\b(?:what|which)\s+(?:questions?\s+)?(?:was|were|did)\s+(?:i|we)\s+(?:asking|ask|discussing)\b",
+    re.IGNORECASE,
+)
 _QUOTED_PATTERN = re.compile(r"[\"']([^\"']{1,256})[\"']")
+
+_NUMBER_WORDS = {
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+    "eleven": 11,
+    "twelve": 12,
+}
 
 
 def plan_retrieval_query(
@@ -203,7 +234,10 @@ def _deterministic_plan(query: str, now: datetime) -> RetrievalQueryPlan:
     source: str | None = None
     source_match = _SOURCE_PATTERN.search(working)
     if source_match:
-        source = _SOURCE_ALIASES[source_match.group("source").lower().replace("  ", " ")]
+        source_name = source_match.group("source_with_context") or source_match.group(
+            "source_direct"
+        )
+        source = _SOURCE_ALIASES[" ".join(source_name.lower().split())]
         working = _remove_match(working, source_match)
 
     date_from: str | None = None
@@ -222,8 +256,14 @@ def _deterministic_plan(query: str, now: datetime) -> RetrievalQueryPlan:
         if before_match:
             date_to = _day_end(before_match.group("date"))
             working = _remove_match(working, before_match)
+        calendar_month_match = _CALENDAR_MONTH_AGO_PATTERN.search(working)
         relative_match = _RELATIVE_PATTERN.search(working)
-        if relative_match:
+        if calendar_month_match:
+            date_from, date_to = _calendar_month_range(
+                _parse_count(calendar_month_match.group("count")), now
+            )
+            working = _remove_match(working, calendar_month_match)
+        elif relative_match:
             date_from, date_to = _relative_range(relative_match.group("period"), now)
             working = _remove_match(working, relative_match)
 
@@ -243,6 +283,8 @@ def _deterministic_plan(query: str, now: datetime) -> RetrievalQueryPlan:
 
     if handoff_only:
         intent = RetrievalIntent.HANDOFF
+    elif _HISTORICAL_USER_QUESTIONS_PATTERN.search(query):
+        intent = RetrievalIntent.HISTORICAL_USER_QUESTIONS
     elif _TIMELINE_PATTERN.search(query):
         intent = RetrievalIntent.TIMELINE
     elif _FACT_PATTERN.search(query):
@@ -380,14 +422,33 @@ def _relative_range(period: str, now: datetime) -> tuple[str, str]:
         end = this_month - timedelta(microseconds=1)
         start = end.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     else:
-        count_match = re.search(r"(\d+)\s+(day|week|month)", normalized)
+        count_match = re.search(
+            r"(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(day|week|month)",
+            normalized,
+        )
         if count_match is None:
             return None, None  # type: ignore[return-value]
-        count = min(int(count_match.group(1)), 3650)
+        count = min(_parse_count(count_match.group(1)), 3650)
         unit = count_match.group(2)
         days = count * {"day": 1, "week": 7, "month": 30}[unit]
         start, end = now - timedelta(days=days), now
     return _isoformat(start), _isoformat(end)
+
+
+def _calendar_month_range(months_ago: int, now: datetime) -> tuple[str, str]:
+    month_index = now.year * 12 + now.month - 1 - min(months_ago, 1200)
+    year, zero_based_month = divmod(month_index, 12)
+    start = datetime(year, zero_based_month + 1, 1, tzinfo=UTC)
+    if start.month == 12:
+        next_month = datetime(start.year + 1, 1, 1, tzinfo=UTC)
+    else:
+        next_month = datetime(start.year, start.month + 1, 1, tzinfo=UTC)
+    return _isoformat(start), _isoformat(next_month - timedelta(microseconds=1))
+
+
+def _parse_count(value: str) -> int:
+    normalized = value.casefold()
+    return int(normalized) if normalized.isdigit() else _NUMBER_WORDS[normalized]
 
 
 def _day_start(value: str) -> str:

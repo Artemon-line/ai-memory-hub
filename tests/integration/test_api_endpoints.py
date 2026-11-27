@@ -2113,6 +2113,51 @@ def test_memory_ask() -> None:
     assert body["citations"][0]["text"] == body["results"][0]["text"]
 
 
+def test_memory_ask_returns_historical_user_questions_with_interpreted_scope() -> None:
+    client = _client()
+    hermes = _conversation()
+    hermes["source"] = "hermes"
+    hermes["timestamp"] = "2026-08-24T10:00:00Z"
+    hermes["metadata"]["thread_id"] = "hermes-august"
+    hermes["messages"] = [
+        {"role": "user", "text": "Which fictional GPU should the project use?"},
+        {"role": "assistant", "text": "This answer must not appear as a question item."},
+        {"role": "user", "text": "What benchmark should I run next?"},
+    ]
+    distractor = _conversation()
+    distractor["id"] = "22222222-2222-4222-8222-222222222222"
+    distractor["source"] = "codex"
+    distractor["timestamp"] = "2026-08-24T10:00:00Z"
+    distractor["messages"] = [{"role": "user", "text": "Wrong source question?"}]
+    client.post("/memory/insert", json=hermes)
+    client.post("/memory/insert", json=distractor)
+
+    ask = client.post(
+        "/memory/ask",
+        json={
+            "question": (
+                "What was I asking Hermes from 2026-08-01 to 2026-08-31?"
+            ),
+            "top_k": 5,
+        },
+    )
+
+    assert ask.status_code == 200
+    body = ask.json()
+    assert [item["text"] for item in body["answer"]] == [
+        "Which fictional GPU should the project use?",
+        "What benchmark should I run next?",
+    ]
+    assert len(body["citations"]) == 2
+    assert body["citations"][0]["source"] == "hermes"
+    assert body["interpreted_scope"] == {
+        "source": "hermes",
+        "date_from": "2026-08-01T00:00:00Z",
+        "date_to": "2026-08-31T23:59:59.999999Z",
+        "intent": "historical_user_questions",
+    }
+
+
 def test_memory_ask_accepts_conversation_filters() -> None:
     client = _client()
     first = _conversation()

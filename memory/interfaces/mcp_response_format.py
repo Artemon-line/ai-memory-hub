@@ -31,6 +31,7 @@ class MCPPayloadKey(StrEnum):
     RETURNED = "returned"
     OMITTED = "omitted"
     LIMIT = "limit"
+    INTERPRETED_SCOPE = "interpreted_scope"
 
 
 _SEARCH_ROW_KEYS: tuple[str | StrEnum, ...] = (
@@ -114,6 +115,7 @@ _CONCISE_ASK_KEYS: tuple[str | StrEnum, ...] = (
     MCPPayloadKey.CONFIDENCE_REASON,
     MCPPayloadKey.ANSWER_BASIS,
     MCPPayloadKey.LATEST,
+    MCPPayloadKey.INTERPRETED_SCOPE,
 )
 _CONCISE_RETRIEVE_MESSAGE_LIMIT = 6
 _CONCISE_RETRIEVE_MESSAGE_TEXT_LIMIT = 800
