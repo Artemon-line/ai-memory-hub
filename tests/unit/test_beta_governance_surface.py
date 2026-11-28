@@ -9,6 +9,7 @@ from memory.interfaces.mcp_server import build_tool_handlers
 
 EXPECTED_MEMORY_ROUTES = {
     ("POST", "/memory/insert"),
+    ("POST", "/memory/save"),
     ("POST", "/memory/search"),
     ("POST", "/memory/retrieve"),
     ("POST", "/memory/ask"),
@@ -25,6 +26,7 @@ EXPECTED_MEMORY_ROUTES = {
 EXPECTED_MCP_TOOLS = {
     "memory_validate",
     "memory_insert",
+    "memory_save",
     "memory_search",
     "memory_retrieve",
     "memory_ask",

@@ -37,6 +37,7 @@ from memory.ingestion.save_intent import (
     SaveIntentError,
     validate_insert_save_intent,
 )
+from memory.ingestion.save_receipt import save_receipt
 from memory.ingestion.thread_models import (
     MCPResponseFormat,
     SearchResultMode,
@@ -61,7 +62,7 @@ logger = logging.getLogger(__name__)
 MCP_LOGGER_NAME = "ai-memory-hub.mcp"
 MCP_LOG_NOTIFICATION_LIMIT = 100
 _MCP_LOG_NOTIFICATION_COUNT_ATTR = "_amh_mcp_log_notification_count"
-_SIMPLE_TOOL_ALIASES = {"memory_save": "memory_insert", "memory_ask": "memory_ask"}
+_SIMPLE_TOOL_NAMES = ("memory_save", "memory_ask")
 ConversationJsonArg = Annotated[
     Any, Field(json_schema_extra={"type": "object", "additionalProperties": True})
 ]
@@ -143,9 +144,10 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
     ),
     "memory_save": (
         "Validate and save one complete conversation into local memory. Requires the "
-        "`memory:write` auth scope when MCP auth is enabled. This simple-profile name "
-        "uses the same ingestion behavior as memory_insert. Include metadata.save_intent "
-        "when the user asked to save, confirmed saving, or enabled auto-save."
+        "`memory:write` auth scope when MCP auth is enabled. Include metadata.save_intent "
+        "when the user asked to save, confirmed saving, or enabled auto-save. Save a "
+        "correction as a new event with metadata.correction.corrects_memory_id; do not "
+        "mutate the earlier memory or projected facts."
     ),
     "memory_search": (
         "Read-only search of existing memory by text query. Optional filters: source, source_client, "
@@ -336,10 +338,7 @@ def _tool_handlers_for_profile(
     handlers: dict[str, ToolFn], profile: MCPToolProfile
 ) -> dict[str, ToolFn]:
     if profile == MCPToolProfile.SIMPLE:
-        return {
-            exposed_name: handlers[handler_name]
-            for exposed_name, handler_name in _SIMPLE_TOOL_ALIASES.items()
-        }
+        return {name: handlers[name] for name in _SIMPLE_TOOL_NAMES}
     return handlers
 
 
@@ -384,6 +383,12 @@ def _with_envelope_defaults(data: dict[str, Any]) -> dict[str, Any]:
         payload["results"] = redact_content_hashes(payload["results"])
 
     return payload
+
+
+def _memory_save_receipt(data: dict[str, Any]) -> dict[str, Any]:
+    """Return the bounded public receipt for a completed save operation."""
+    receipt = save_receipt(data)
+    return _envelope(**receipt)
 
 
 def _insufficient_scope_error(
@@ -1009,16 +1014,18 @@ def build_tool_handlers(
             )
         return _envelope(status="ok", valid=True)
 
-    async def memory_insert(
+    async def save_memory(
         conversation_json: ConversationJsonArg,
         project_id: str | None = None,
         ctx: FastMCPContext | None = None,
+        *,
+        tool_name: str,
     ) -> dict[str, Any]:
         scope_error = require_scope(WRITE_SCOPE)
         if scope_error is not None:
             await _emit_mcp_tool_log(
                 ctx,
-                tool_name="memory_insert",
+                tool_name=tool_name,
                 status="error",
                 error_code="insufficient_scope",
             )
@@ -1091,7 +1098,7 @@ def build_tool_handlers(
             error_code = _ingest_value_error_code(error_message)
             await _emit_mcp_tool_log(
                 ctx,
-                tool_name="memory_insert",
+                tool_name=tool_name,
                 status="error",
                 error_code=error_code,
             )
@@ -1102,28 +1109,31 @@ def build_tool_handlers(
             )
         except PermissionError as exc:
             return await _mcp_permission_denied_response(
-                ctx, tool_name="memory_insert", exc=exc
+                ctx, tool_name=tool_name, exc=exc
             )
         except Exception as exc:
+            failure_code = (
+                "save_failed" if tool_name == "memory_save" else "insert_failed"
+            )
             if _is_permission_denied_exception(exc):
                 return await _mcp_permission_denied_response(
-                    ctx, tool_name="memory_insert", exc=exc
+                    ctx, tool_name=tool_name, exc=exc
                 )
             _log_mcp_tool_failure(
-                operation="memory_insert",
-                error_code="insert_failed",
+                operation=tool_name,
+                error_code=failure_code,
                 exc=exc,
                 mcp_tool_call_id=_mcp_tool_call_id(ctx),
             )
             await _emit_mcp_tool_log(
                 ctx,
-                tool_name="memory_insert",
+                tool_name=tool_name,
                 status="error",
-                error_code="insert_failed",
+                error_code=failure_code,
             )
             return _envelope(
                 status="error",
-                error_code="insert_failed",
+                error_code=failure_code,
                 error_message=redact_secrets(str(exc)),
             )
 
@@ -1135,6 +1145,27 @@ def build_tool_handlers(
             deduplicated=payload.get("deduplicated", False),
         )
         return payload
+
+    async def memory_insert(
+        conversation_json: ConversationJsonArg,
+        project_id: str | None = None,
+        ctx: FastMCPContext | None = None,
+    ) -> dict[str, Any]:
+        return await save_memory(
+            conversation_json, project_id, ctx, tool_name="memory_insert"
+        )
+
+    async def memory_save(
+        conversation_json: ConversationJsonArg,
+        project_id: str | None = None,
+        ctx: FastMCPContext | None = None,
+    ) -> dict[str, Any]:
+        result = await save_memory(
+            conversation_json, project_id, ctx, tool_name="memory_save"
+        )
+        if result.get("status") == "error":
+            return result
+        return _memory_save_receipt(result)
 
     async def memory_search(
         query: str,
@@ -1804,6 +1835,7 @@ def build_tool_handlers(
     handlers: dict[str, ToolFn] = {
         "memory_validate": memory_validate,
         "memory_insert": memory_insert,
+        "memory_save": memory_save,
         "memory_search": memory_search,
         "memory_retrieve": memory_retrieve,
         "memory_ask": memory_ask,

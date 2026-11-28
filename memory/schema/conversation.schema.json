@@ -116,6 +116,25 @@
           ],
           "description": "Client-declared reason for saving this memory. Required when memory.insert_policy is require_save_intent. Under review_pending, missing save_intent stores the memory pending approval."
         },
+        "correction": {
+          "type": "object",
+          "description": "Identifies this immutable memory event as a correction of an earlier memory. The correction text in messages remains the source of truth for normal fact projection.",
+          "properties": {
+            "corrects_memory_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Canonical ID of the earlier memory corrected by this event."
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000,
+              "description": "Optional short explanation of the correction."
+            }
+          },
+          "required": ["corrects_memory_id"],
+          "additionalProperties": false
+        },
         "model": {
           "type": "string",
           "description": "Model used to generate assistant messages (e.g., gpt-4.1, claude-3-opus)."

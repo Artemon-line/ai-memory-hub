@@ -44,6 +44,7 @@ from memory.ingestion.save_intent import (
     SaveIntentError,
     validate_insert_save_intent,
 )
+from memory.ingestion.save_receipt import save_receipt
 from memory.ingestion.thread_models import SearchResultMode
 from memory.interfaces.mcp_server import create_mcp_server
 from memory.observability.logging import configure_logging
@@ -509,14 +510,28 @@ def _register_api_routes(
         )
         return result
 
-    async def memory_insert(
-        conversation_json: InsertRequest, request: Request
+    async def save_request(
+        conversation_json: InsertRequest,
+        request: Request,
+        *,
+        operation: str,
+        compact_receipt: bool,
     ) -> dict[str, Any]:
+        def validation_detail(message: str) -> str | dict[str, str]:
+            if not compact_receipt:
+                return message
+            return {"error_code": "invalid_input", "error_message": message}
+
         try:
             conversation_payload = conversation_json.model_dump(exclude_none=True)
-            return await execute_insert(prepare_insert_payload(conversation_payload), request)
+            result = await execute_insert(
+                prepare_insert_payload(conversation_payload), request
+            )
+            return save_receipt(result) if compact_receipt else result
         except jsonschema.ValidationError as exc:
-            raise HTTPException(status_code=400, detail=exc.message) from exc
+            raise HTTPException(
+                status_code=400, detail=validation_detail(exc.message)
+            ) from exc
         except SaveIntentError as exc:
             raise HTTPException(
                 status_code=400,
@@ -529,11 +544,34 @@ def _register_api_routes(
             raise HTTPException(status_code=403, detail=str(exc)) from exc
         except ValueError as exc:
             status_code = 409 if str(exc).startswith("concurrent_append_conflict") else 400
-            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+            raise HTTPException(
+                status_code=status_code, detail=validation_detail(str(exc))
+            ) from exc
         except Exception as exc:
-            raise provider_failure("insert", "insert_failed", exc) from exc
+            raise provider_failure(operation, f"{operation}_failed", exc) from exc
+
+    async def memory_insert(
+        conversation_json: InsertRequest, request: Request
+    ) -> dict[str, Any]:
+        return await save_request(
+            conversation_json,
+            request,
+            operation="insert",
+            compact_receipt=False,
+        )
+
+    async def memory_save(
+        conversation_json: InsertRequest, request: Request
+    ) -> dict[str, Any]:
+        return await save_request(
+            conversation_json,
+            request,
+            operation="save",
+            compact_receipt=True,
+        )
 
     app.post("/memory/insert")(memory_insert)
+    app.post("/memory/save")(memory_save)
 
     async def memory_import(request: Request) -> dict[str, Any]:
         try:
@@ -900,7 +938,7 @@ def _reject_raw_capture_artifacts(payload: dict[str, Any]) -> None:
     found = _raw_capture_artifact_paths(payload)
     if found:
         raise ValueError(
-            "raw browser capture artifacts are not accepted by /memory/insert: "
+            "raw browser capture artifacts are not accepted by memory save endpoints: "
             + ", ".join(found)
         )
 

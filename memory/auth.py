@@ -288,6 +288,7 @@ def required_scopes_for_request(request: Request) -> set[str]:
     if path in {
         "/memory/import",
         "/memory/insert",
+        "/memory/save",
         "/memory/facts/supersede",
         "/memory/pending/approve",
         "/memory/pending/reject",
