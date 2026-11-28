@@ -1427,8 +1427,9 @@ embedding_endpoint:
 
 `mcp.tool_profile` defaults to `advanced`, which exposes every current MCP tool. Set it
 to `simple` to preview a two-tool surface containing only `memory_save` and
-`memory_ask`. The save name aliases the existing `memory_insert` handler rather than
-creating another ingestion path. This setting filters MCP tool registration only; it
+`memory_ask`. The save operation is a first-class adapter over the existing ingestion
+internals and returns a bounded canonical receipt rather than creating another storage
+path. This setting filters MCP tool registration only; it
 does not disable HTTP endpoints or remove the specialized internal implementations
 used by ask. Invalid profile names fail configuration validation.
 

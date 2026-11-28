@@ -343,6 +343,44 @@ def test_api_initial_thread_then_mcp_append_by_upstream_thread_metadata(
     ]
 
 
+def test_memory_save_receipts_cover_append_and_deduplication(tmp_path: Path) -> None:
+    first_message = {"role": "user", "text": "canonical save first amber"}
+    second_message = {"role": "assistant", "text": "canonical save second cobalt"}
+    initial = _conversation(
+        text="unused",
+        source="codex",
+        upstream_thread_id="canonical-save-thread",
+        messages=[first_message],
+    )
+    continuation = _conversation(
+        text="unused",
+        source="codex",
+        upstream_thread_id="canonical-save-thread",
+        messages=[first_message, second_message],
+    )
+    continuation.pop("id")
+
+    with _client(tmp_path) as client:
+        created = client.post("/memory/save", json=initial)
+        headers = _initialize_mcp(client)
+        appended = _call_tool(
+            client,
+            headers,
+            request_id=2,
+            name="memory_save",
+            arguments={"conversation_json": continuation},
+        )
+        duplicate = client.post("/memory/save", json=continuation)
+
+    assert created.json()["outcome"] == "created"
+    assert appended["id"] == initial["id"]
+    assert appended["outcome"] == "appended"
+    assert appended["appended_messages"] == 1
+    assert duplicate.json()["id"] == initial["id"]
+    assert duplicate.json()["outcome"] == "deduplicated"
+    assert duplicate.json()["deduplicated"] is True
+
+
 def test_concurrent_compatible_api_snapshots_preserve_ordered_suffix(
     tmp_path: Path,
 ) -> None:

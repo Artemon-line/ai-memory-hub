@@ -44,7 +44,7 @@ results in the current Codex task is context injection.
 
 Implemented:
 
-- MCP tools: `memory_validate`, `memory_insert`, `memory_search`,
+- MCP tools: `memory_validate`, `memory_insert`, `memory_save`, `memory_search`,
   `memory_retrieve`, `memory_ask`, `memory_fact_search`,
   `memory_profile_get`, `memory_lookup`, `memory_fact_supersede`,
   `memory_pending_approve`, `memory_pending_reject`, `memory_project_list`,
@@ -52,10 +52,12 @@ Implemented:
 
 The default `mcp.tool_profile: advanced` exposes every tool listed above and preserves
 the current MCP contract. The opt-in preview `mcp.tool_profile: simple` registers only
-`memory_save` and `memory_ask`. `memory_save` is an exposure alias for the existing
-`memory_insert` handler, so validation, save intent, deduplication, review routing, and
-storage behavior stay on the same ingestion path. Tool profiles affect MCP tool
-registration only; HTTP endpoints and internal retrieval implementations are unchanged.
+`memory_save` and `memory_ask`. `memory_save` is the canonical validate-and-store
+handler and returns a bounded receipt while reusing the established validation, save
+intent, authorization, deduplication, append, review, redaction, metrics, and audit
+internals. It is also available at `POST /memory/save`. Tool profiles affect MCP tool
+registration only; legacy beta endpoints and internal retrieval implementations remain
+available until their dedicated removal phase.
 Unsupported profile values fail configuration validation.
 
 - MCP resources: `memory://conversation/example`, `memory://conversation/{id}`,
@@ -95,6 +97,8 @@ Planned or partial:
   Redis, Vespa, or data files.
 - Omit `id` unless the user or upstream system requires a specific UUID.
 - Treat the returned `id` as canonical for retrieve/search citations.
+- Prefer one `memory_save` call for new integrations; it validates internally and does
+  not require a preceding `memory_validate` call.
 - Call `memory_validate` before `memory_insert` when using MCP.
 - Include full user and assistant turns that should be remembered. You may add a short factual `metadata.summary` retrieval hint, but do not use it instead of `messages`.
 - Do not call `memory_insert` for ordinary user statements unless the user asked to save them, confirmed a save, or explicitly enabled client auto-save. When saving intentionally, include `metadata.save_intent` with `explicit_user_request`, `user_confirmed`, or `client_auto_save`. Servers configured with `memory.insert_policy: require_save_intent` reject inserts without this marker. Servers configured with `memory.insert_policy: review_pending` hold unmarked inserts outside default reads until approval.
@@ -105,8 +109,9 @@ Planned or partial:
 - When retrieved memory is used for context injection, cite or summarize the
   relevant memory rather than silently blending it into the answer.
 - Do not request destructive memory update/delete behavior for `v1.0.0-beta`.
-  Treat stored memories as append-only history; corrections should be new
-  memories, fact supersession, or explicit governance/review events.
+  Treat stored memories as append-only history; corrections should be new memories
+  with `metadata.correction.corrects_memory_id`, fact supersession, or explicit
+  governance/review events.
 - Do not assume memory is English-only. Multilingual retrieval is available when
   the hub's configured embedding model supports the relevant languages.
 - Do not change the hub embedding model for an existing persistent vector index

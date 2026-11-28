@@ -91,8 +91,13 @@ def test_mcp_initialize_and_tools_list_with_session() -> None:
         tools = result.get("tools")
         assert isinstance(tools, list)
         tool_names = {tool["name"] for tool in tools if isinstance(tool, dict) and "name" in tool}
-        assert {"memory_validate", "memory_insert", "memory_search", "memory_retrieve"}.issubset(tool_names)
-        assert "memory_save" not in tool_names
+        assert {
+            "memory_validate",
+            "memory_insert",
+            "memory_save",
+            "memory_search",
+            "memory_retrieve",
+        }.issubset(tool_names)
         tools_by_name = {tool["name"]: tool for tool in tools if isinstance(tool, dict) and "name" in tool}
         for tool in tools:
             if not isinstance(tool, dict):
@@ -103,7 +108,7 @@ def test_mcp_initialize_and_tools_list_with_session() -> None:
             properties = schema.get("properties", {})
             assert isinstance(properties, dict)
             assert "ctx" not in properties
-        for tool_name in ("memory_validate", "memory_insert"):
+        for tool_name in ("memory_validate", "memory_insert", "memory_save"):
             tool = tools_by_name[tool_name]
             schema = tool["inputSchema"]
             conversation_schema = schema["properties"]["conversation_json"]

@@ -712,7 +712,7 @@ def test_mcp_tool_policies_cover_registered_handlers() -> None:
     agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=_runtime())
     handlers = build_tool_handlers(agent)
 
-    expected_public_names = set(handlers) | {"memory_save"}
+    expected_public_names = set(handlers)
     assert expected_public_names == set(mcp_server.TOOL_DESCRIPTIONS)
     assert expected_public_names == set(mcp_server.MCP_TOOL_POLICIES)
 
@@ -781,6 +781,87 @@ async def test_mcp_tool_handlers_generate_id_when_missing() -> None:
     memory_id = insert_result["id"]
     assert isinstance(memory_id, str)
     assert memory_id == runtime.metadata_store.get(memory_id)["id"]
+
+
+@pytest.mark.asyncio
+async def test_memory_save_validates_stores_and_returns_bounded_receipt() -> None:
+    runtime = _runtime()
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=runtime)
+    handlers = build_tool_handlers(agent)
+    payload = _conversation()
+
+    created = await handlers["memory_save"](payload)
+    duplicate = await handlers["memory_save"](_conversation())
+
+    expected_keys = {
+        "status",
+        "id",
+        "results",
+        "cursor",
+        "error_code",
+        "error_message",
+        "outcome",
+        "deduplicated",
+        "appended_messages",
+        "review_state",
+    }
+    assert set(created) == expected_keys
+    assert created["status"] == "ok"
+    assert created["outcome"] == "created"
+    assert created["review_state"] == "active"
+    assert runtime.metadata_store.get(created["id"]) is not None
+    assert duplicate["outcome"] == "deduplicated"
+    assert duplicate["deduplicated"] is True
+
+
+@pytest.mark.asyncio
+async def test_memory_save_returns_actionable_validation_error() -> None:
+    agent = MVPIngestionAgent(
+        config={"providers": {"agent": "mvp"}}, runtime=_runtime()
+    )
+
+    result = await build_tool_handlers(agent)["memory_save"](
+        {"messages": "private payload text"}
+    )
+
+    assert result["status"] == "error"
+    assert result["error_code"] == "invalid_input"
+    assert "messages" in result["error_message"]
+    assert "private payload text" not in str(result)
+
+
+@pytest.mark.asyncio
+async def test_memory_save_stores_correction_event_and_updates_normal_projection() -> None:
+    runtime = _runtime()
+    agent = MVPIngestionAgent(config={"providers": {"agent": "mvp"}}, runtime=runtime)
+    handlers = build_tool_handlers(agent)
+    save = handlers["memory_save"]
+    original = _conversation()
+    original["messages"] = [{"role": "user", "text": "My favorite food is avocado toast."}]
+    correction = _conversation_two()
+    correction["messages"] = [
+        {
+            "role": "user",
+            "text": "Actually, my favorite food is pizza, not avocado toast.",
+        }
+    ]
+    correction["metadata"] = {
+        "imported_at": "2026-01-02T00:00:00Z",
+        "correction": {"corrects_memory_id": original["id"]},
+    }
+
+    await save(original)
+    result = await save(correction)
+    facts = await agent.fact_search(subject="user", predicate="favorite_food")
+    answer = await handlers["memory_ask"]("What is my favorite food?")
+
+    stored = runtime.metadata_store.get(result["id"])
+    assert stored["metadata"]["correction"] == {
+        "corrects_memory_id": original["id"]
+    }
+    assert [fact["object"] for fact in facts["results"]] == ["pizza"]
+    assert "pizza" in answer["answer"].lower()
+    assert "avocado toast" not in answer["answer"].lower()
 
 
 @pytest.mark.asyncio

@@ -265,11 +265,13 @@ mcp:
   tool_profile: simple # Opt-in preview; exposes only memory_save and memory_ask.
 ```
 
-`memory_save` is an MCP exposure alias for the existing `memory_insert` ingestion
-behavior; it does not create a second write path. The `simple` profile changes only
-MCP tool registration; HTTP endpoints, MCP resources and prompts, and the hub's
-internal search, retrieval, fact, and profile implementations remain available.
-Unknown profile values fail configuration validation.
+`memory_save` is the canonical validate-and-store operation. It uses the existing
+ingestion internals for save intent, authorization, deduplication, append repair,
+review routing, redaction, metrics, and auditing, and returns a compact receipt with
+the canonical ID, outcome, appended-message count, and review state. It is also
+available at `POST /memory/save`. The `simple` profile changes only MCP tool
+registration; legacy beta operations remain available until the contract-removal
+phase. Unknown profile values fail configuration validation.
 
 For user-facing MCP setup, use the local stack example with
 `api.auth: oauth_resource_server` and open `/connect`. The Connect UI shows the

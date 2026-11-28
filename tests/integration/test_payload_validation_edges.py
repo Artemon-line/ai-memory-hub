@@ -502,6 +502,7 @@ def test_api_and_mcp_validation_errors_do_not_echo_sensitive_payload_text(
 
     with _client(tmp_path) as client:
         api_insert = client.post("/memory/insert", json=invalid_payload)
+        api_save = client.post("/memory/save", json=invalid_payload)
         headers = _initialize_mcp(client)
         mcp_insert = _call_tool(
             client,
@@ -510,12 +511,23 @@ def test_api_and_mcp_validation_errors_do_not_echo_sensitive_payload_text(
             name="memory_insert",
             arguments={"conversation_json": invalid_payload},
         )
+        mcp_save = _call_tool(
+            client,
+            headers,
+            request_id=3,
+            name="memory_save",
+            arguments={"conversation_json": invalid_payload},
+        )
 
-    assert api_insert.status_code == 400
-    assert secret not in api_insert.text
-    assert mcp_insert["status"] == "error"
-    assert mcp_insert["error_code"] == "invalid_input"
-    assert secret not in json.dumps(mcp_insert)
+    for response in (api_insert, api_save):
+        assert response.status_code == 400
+        assert secret not in response.text
+    assert api_save.json()["detail"]["error_code"] == "invalid_input"
+    assert "messages" in api_save.json()["detail"]["error_message"]
+    for result in (mcp_insert, mcp_save):
+        assert result["status"] == "error"
+        assert result["error_code"] == "invalid_input"
+        assert secret not in json.dumps(result)
 
 
 def test_api_and_mcp_use_configured_conversation_schema(tmp_path: Path) -> None:
@@ -593,6 +605,26 @@ def test_api_and_mcp_require_save_intent_when_policy_is_strict(tmp_path: Path) -
     assert mcp_insert["error_code"] == "save_intent_required"
     assert "metadata.save_intent" in mcp_insert["error_message"]
     assert secret_text not in json.dumps(mcp_insert)
+
+
+def test_memory_save_enforces_save_intent_policy(tmp_path: Path) -> None:
+    payload = _conversation(text="Canonical save intent policy phrase.")
+
+    with _strict_save_intent_client(tmp_path) as client:
+        api_save = client.post("/memory/save", json=payload)
+        headers = _initialize_mcp(client)
+        mcp_save = _call_tool(
+            client,
+            headers,
+            request_id=2,
+            name="memory_save",
+            arguments={"conversation_json": payload},
+        )
+
+    assert api_save.status_code == 400
+    assert api_save.json()["detail"]["error_code"] == "save_intent_required"
+    assert mcp_save["status"] == "error"
+    assert mcp_save["error_code"] == "save_intent_required"
 
 
 def test_api_and_mcp_accept_known_save_intents_when_policy_is_strict(
@@ -728,6 +760,19 @@ def test_review_pending_api_insert_is_hidden_until_approved(tmp_path: Path) -> N
     assert memory_id in {
         fact["source_conversation_id"] for fact in approved_profile.json()["facts"]
     }
+
+
+def test_memory_save_reports_pending_review_state(tmp_path: Path) -> None:
+    with _review_pending_client(tmp_path) as client:
+        response = client.post(
+            "/memory/save",
+            json=_conversation(text="Pending canonical save receipt."),
+        )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "pending_review"
+    assert response.json()["outcome"] == "pending_review"
+    assert response.json()["review_state"] == "pending_review"
 
 
 def test_sensitive_content_api_insert_is_quarantined_and_hidden(tmp_path: Path) -> None:

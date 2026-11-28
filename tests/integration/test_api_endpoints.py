@@ -415,9 +415,15 @@ def test_bearer_auth_enforces_stored_token_scopes(tmp_path) -> None:
         json=_conversation(),
         headers=read_only_headers,
     )
+    save = client.post(
+        "/memory/save",
+        json=_conversation(),
+        headers=read_only_headers,
+    )
 
     assert search.status_code == 200
     assert insert.status_code == 403
+    assert save.status_code == 403
     assert 'error="insufficient_scope"' in insert.headers["www-authenticate"]
     assert 'scope="memory:write"' in insert.headers["www-authenticate"]
 
@@ -429,6 +435,7 @@ def test_bearer_auth_protects_memory_routes_without_credentials(tmp_path) -> Non
         ("GET", "/memory/projects/default", None),
         ("GET", "/memory/projects/shared-321", None),
         ("POST", "/memory/insert", _conversation()),
+        ("POST", "/memory/save", _conversation()),
         ("POST", "/memory/search", {"query": "hello"}),
         ("POST", "/memory/retrieve", {"id": "11111111-1111-4111-8111-111111111111"}),
         ("POST", "/memory/ask", {"question": "hello?"}),
@@ -479,6 +486,21 @@ def test_memory_insert_200() -> None:
     response = client.post("/memory/insert", json=_conversation())
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+
+
+def test_memory_save_200_returns_bounded_receipt() -> None:
+    client = _client()
+    response = client.post("/memory/save", json=_conversation())
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "ok",
+        "id": response.json()["id"],
+        "outcome": "created",
+        "deduplicated": False,
+        "appended_messages": 0,
+        "review_state": "active",
+    }
 
 
 def test_health_and_ready_are_public_and_redacted() -> None:

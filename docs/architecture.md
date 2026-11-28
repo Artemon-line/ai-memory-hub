@@ -424,6 +424,6 @@ See `project_status.md` for the current implementation classification and
 
 The `advanced` MCP tool profile is the default and preserves the complete current tool
 surface. The opt-in `simple` preview registers only `memory_save` and `memory_ask`.
-`memory_save` aliases the existing insert handler, so the profile does not create a
-second ingestion path, change HTTP routing, or delete internal search, retrieval, fact,
-or profile capabilities.
+`memory_save` is a first-class adapter over the existing ingestion internals and returns
+a bounded canonical save receipt, so it does not create a second storage path. The
+profile does not delete internal search, retrieval, fact, or profile capabilities.
